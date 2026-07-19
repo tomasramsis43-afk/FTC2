@@ -3853,6 +3853,15 @@
       <table id="zt-vat-table" style="width:100%;"></table>
     </div>
 
+    <!-- مطابقة صناديق نموذج الإقرار في بوابة الهيئة -->
+    <div class="panel" style="margin-top:14px;">
+      <h3 style="margin:0 0 4px;">🧾 مطابقة صناديق نموذج الإقرار (بوابة هيئة الزكاة والضريبة والجمارك)</h3>
+      <p class="hint" style="margin:0 0 10px;">الجدول التالي مرتّب بنفس ترتيب صناديق نموذج إقرار ضريبة القيمة المضافة في بوابة الهيئة، لتسهيل نسخ كل رقم لصندوقه مباشرة عند التعبئة. جميع مبيعات ومشتريات المركز حالياً محلية وخاضعة للنسبة الأساسية (15%)، لذلك تظهر بقية الصناديق (الصفرية/المعفاة/الاستيراد والتصدير) بصفر — إن وُجدت لديك عمليات من هذه الأنواع تحتاج مراجعة محاسب مختص لإدراجها يدوياً قبل التقديم.</p>
+      <div class="table-scroll">
+        <table id="zt-vat-boxes-table" style="width:100%;"></table>
+      </div>
+    </div>
+
     <!-- حساب الزكاة -->
     <div class="panel" style="margin-top:14px;">
       <h3 style="margin:0 0 4px;">حساب الزكاة (تقديري)</h3>
@@ -4126,6 +4135,87 @@
       <div class="empty-state" id="acc-journal-empty" style="">
         <div class="big">🧾</div>
         لا توجد قيود يدوية مسجّلة بعد
+      </div>
+    </div>
+
+    <!-- ============ دليل الحسابات والقيود اليومية بنظام القيد المزدوج (وحدة إضافية مستقلة) ============ -->
+    <div class="panel" style="border-right:4px solid var(--navy); margin-top:14px;">
+      <h3 style="margin:0 0 4px;">📒 دليل الحسابات والقيود اليومية (محاسبة مزدوجة)</h3>
+      <p class="hint" style="margin:0 0 12px;">وحدة محاسبة مزدوجة كاملة (دليل حسابات + قيود يومية مدين/دائن متوازنة + دفتر أستاذ عام + ميزان مراجعة) لتوثيق أي عمليات محاسبية بالطريقة الرسمية، بشكل مستقل عن التقارير التلقائية أعلاه (قائمة الدخل والميزانية العمومية) التي تُبنى تلقائياً من حركات الخزنة والعملاء والمشتريات.</p>
+
+      <h4 style="margin:16px 0 8px; color:var(--navy);">دليل الحسابات</h4>
+      <div class="formgrid" style="margin-bottom:10px;">
+        <div class="field"><label>رمز الحساب</label><input type="text" id="coa-code" placeholder="مثال: 1000" class="mono"></div>
+        <div class="field"><label>اسم الحساب</label><input type="text" id="coa-name" placeholder="مثال: النقدية والبنوك"></div>
+        <div class="field"><label>التصنيف</label>
+          <select id="coa-type">
+            <option value="asset">أصول</option>
+            <option value="liability">خصوم</option>
+            <option value="equity">حقوق ملكية</option>
+            <option value="revenue">إيرادات</option>
+            <option value="expense">مصروفات</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-add-account">+ إضافة حساب</button>
+      <div class="table-scroll table-scroll-compact" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>الرمز</th><th>اسم الحساب</th><th>التصنيف</th><th></th></tr></thead>
+          <tbody id="coa-list-body"></tbody>
+        </table>
+      </div>
+
+      <h4 style="margin:22px 0 8px; color:var(--navy);">قيد يومية جديد</h4>
+      <div class="formgrid" style="margin-bottom:10px;">
+        <div class="field"><label>التاريخ</label><input type="date" id="de-date"></div>
+        <div class="field full"><label>البيان</label><input type="text" id="de-desc" placeholder="مثال: سداد إيجار المركز لشهر يوليو"></div>
+      </div>
+      <div class="table-scroll table-scroll-compact">
+        <table>
+          <thead><tr><th style="min-width:200px;">الحساب</th><th style="width:130px;">مدين</th><th style="width:130px;">دائن</th><th style="width:40px;"></th></tr></thead>
+          <tbody id="de-lines"></tbody>
+        </table>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
+        <button class="btn btn-ghost btn-sm" id="btn-de-addline">+ إضافة سطر</button>
+        <div class="computed" id="de-totals" style="margin:0;"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-de-save" style="margin-top:10px;">حفظ القيد</button>
+
+      <h4 style="margin:22px 0 8px; color:var(--navy);">سجل القيود اليومية</h4>
+      <div class="table-scroll table-scroll-compact">
+        <table>
+          <thead><tr><th>التاريخ</th><th>البيان</th><th>إجمالي مدين</th><th>إجمالي دائن</th><th></th></tr></thead>
+          <tbody id="de-entries-body"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="de-entries-empty" style="display:none;">
+        <div class="big">📒</div>
+        لا توجد قيود يومية مسجّلة بعد
+      </div>
+
+      <h4 style="margin:22px 0 8px; color:var(--navy);">دفتر الأستاذ العام</h4>
+      <div class="formgrid" style="margin-bottom:10px;">
+        <div class="field"><label>الحساب</label><select id="gl-account"></select></div>
+        <div class="field"><label>من تاريخ</label><input type="date" id="gl-from"></div>
+        <div class="field"><label>إلى تاريخ</label><input type="date" id="gl-to"></div>
+      </div>
+      <div class="table-scroll table-scroll-compact">
+        <table>
+          <thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+          <tbody id="gl-table-body"></tbody>
+        </table>
+      </div>
+
+      <h4 style="margin:22px 0 8px; color:var(--navy);">ميزان المراجعة (من القيود اليومية المزدوجة)</h4>
+      <div class="formgrid" style="margin-bottom:10px; max-width:260px;">
+        <div class="field"><label>كما في تاريخ</label><input type="date" id="tb2-asof"></div>
+      </div>
+      <div class="table-scroll table-scroll-compact">
+        <table>
+          <thead><tr><th>الرمز</th><th>الحساب</th><th>التصنيف</th><th>مدين</th><th>دائن</th></tr></thead>
+          <tbody id="tb2-table-body"></tbody>
+        </table>
       </div>
     </div>
 
@@ -5295,6 +5385,8 @@ let bankReconShowMatched = false; // تبديل عرض الحركات المطا
 let deletedInvoices = []; // سجل فواتير العملاء المحذوفة (حذف منطقي) — يحتفظ برقم الفاتورة التسلسلي والسبب دون إعادة استخدام الرقم أبداً
 let courseSessions = [];
 let journalEntries = [];
+let chartOfAccounts = []; // دليل الحسابات: {id, code, name, type} — type ∈ asset/liability/equity/revenue/expense
+let journalDE = []; // القيود اليومية بنظام القيد المزدوج: {id, date, description, lines:[{accountId, debit, credit}], createdAt}
 let suppliers = [];
 let purchases = [];
 let manualSalesInvoices = []; // فواتير مبيعات ضريبية يدوية (مبيعات لا ترتبط بفاتورة دورة تدريبية داخل شيت العملاء)
@@ -5709,6 +5801,15 @@ async function loadData(){
     journalEntries = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ journalEntries = []; }
   try{
+    const r = await window.storage.get('chartOfAccounts', false);
+    chartOfAccounts = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ chartOfAccounts = []; }
+  seedChartOfAccountsIfEmpty();
+  try{
+    const r = await window.storage.get('journalDE', false);
+    journalDE = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ journalDE = []; }
+  try{
     const r = await window.storage.get('suppliers', false);
     suppliers = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ suppliers = []; }
@@ -5815,6 +5916,12 @@ async function saveCompanyTransfers(){
 async function saveJournalEntries(){
   try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
 }
+async function saveChartOfAccounts(){
+  try{ await window.storage.set('chartOfAccounts', JSON.stringify(chartOfAccounts), false); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
+}
+async function saveJournalDE(){
+  try{ await window.storage.set('journalDE', JSON.stringify(journalDE), false); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
+}
 async function saveSuppliers(){
   try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
 }
@@ -5835,7 +5942,8 @@ function gatherFullBackupData(){
     _createdAt: new Date().toISOString(),
     clients, settings, bagStock, vaultTx, courseSessions,
     users, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
-    suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments
+    suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments,
+    chartOfAccounts, journalDE
   };
 }
 function downloadFullBackup(auto){
@@ -5886,10 +5994,14 @@ async function restoreFullBackup(file){
   vaultDenomTx = data.vaultDenomTx || [];
   manualSalesInvoices = data.manualSalesInvoices || [];
   zakatAdjustments = data.zakatAdjustments || {};
+  chartOfAccounts = data.chartOfAccounts || [];
+  seedChartOfAccountsIfEmpty();
+  journalDE = data.journalDE || [];
   await Promise.allSettled([
     saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
     saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
-    saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments()
+    saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
+    saveChartOfAccounts(), saveJournalDE()
   ]);
   await logAudit('edit','الإعدادات', 'تمت استعادة كل بيانات البرنامج من ملف نسخة احتياطية');
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();
@@ -12282,16 +12394,33 @@ function accPeriodLabel(period){
   return {year:'السنة كاملة', q1:'الربع الأول', q2:'الربع الثاني', q3:'الربع الثالث', q4:'الربع الرابع'}[period] || 'السنة كاملة';
 }
 
-/* ---- الإقرار الضريبي (ضريبة القيمة المضافة): ضريبة المخرجات من فواتير الدورات، ضريبة المدخلات من المشتريات ---- */
+/* ---- الإقرار الضريبي (ضريبة القيمة المضافة): ضريبة المخرجات من فواتير الدورات + الفواتير اليدوية − مردودات المبيعات، ضريبة المدخلات من المشتريات ---- */
 function buildVatReturn(from, to){
-  // ضريبة المخرجات: فواتير الدورات التي لها رقم فاتورة وقيمة فعلية بالإيصال، حسب تاريخ صدور الفاتورة
-  const salesRows = courseInvoiceClients().filter(c=>{
+  // ضريبة المخرجات: فواتير الدورات (رقم فاتورة + قيمة فعلية بالإيصال، حسب تاريخ صدور الفاتورة) + فواتير المبيعات اليدوية
+  const courseRows = courseInvoiceClients().filter(c=>{
     const d = c.receiptIssueDate || '';
     return num(c.receiptActualValue) > 0 && d && d>=from && d<=to;
-  });
-  const salesGross = salesRows.reduce((s,c)=> s+num(c.receiptActualValue), 0);
-  const outputVat = salesRows.reduce((s,c)=> s+courseInvoiceVat(c.receiptActualValue), 0);
-  const salesNet = salesGross - outputVat;
+  }).map(c=>({
+    source:'course', date: c.receiptIssueDate, name: c.name||'', clientId: c.clientId||'', invoice: c.invoice||'',
+    totalInclVat: num(c.receiptActualValue), vat: courseInvoiceVat(c.receiptActualValue)
+  }));
+  const manualRows = manualSalesInvoices.filter(m=> m.date && m.date>=from && m.date<=to).map(m=>({
+    source:'manual', date: m.date, name: m.name||'', clientId:'', invoice: formatManualSalesInvoiceNo(m.invoiceNo||0),
+    totalInclVat: num(m.total), vat: num(m.total) - (num(m.total)/1.15)
+  }));
+  const salesRows = courseRows.concat(manualRows);
+  const salesGross = salesRows.reduce((s,r)=> s+r.totalInclVat, 0);
+  const outputVatGross = salesRows.reduce((s,r)=> s+r.vat, 0);
+
+  // مردودات المبيعات (استرجاعات) خلال نفس الفترة
+  const returnRows = vaultTx.filter(t=>t.type==='out' && t.isReturn && inRange(t.date, from, to))
+    .map(t=>({ date:t.date, name:t.clientName||t.clientId||'—', amount:num(t.amount), vat: num(t.amount)-(num(t.amount)/1.15) }))
+    .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+  const returnsGross = returnRows.reduce((s,r)=> s+r.amount, 0);
+  const returnsVat = returnRows.reduce((s,r)=> s+r.vat, 0);
+
+  const outputVat = outputVatGross - returnsVat;
+  const salesNet = (salesGross - outputVatGross) - (returnsGross - returnsVat);
 
   // ضريبة المدخلات: فواتير الشراء حسب تاريخ الشراء
   const purchaseRows = (typeof purchases!=='undefined' ? purchases : []).filter(p=> p.date && p.date>=from && p.date<=to);
@@ -12300,9 +12429,9 @@ function buildVatReturn(from, to){
   const purchasesGross = purchasesNet + inputVat;
 
   const netVat = outputVat - inputVat;
-  salesRows.sort((a,b)=> String(a.receiptIssueDate||'').localeCompare(String(b.receiptIssueDate||'')));
+  salesRows.sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
   purchaseRows.sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
-  return { salesRows, purchaseRows, salesGross, salesNet, outputVat, purchasesGross, purchasesNet, inputVat, netVat };
+  return { salesRows, returnRows, purchaseRows, salesGross, salesNet, outputVat, returnsGross, returnsVat, purchasesGross, purchasesNet, inputVat, netVat };
 }
 function renderVatReturnTable(from, to){
   const table = $('#acc-vat-table');
@@ -12310,10 +12439,11 @@ function renderVatReturnTable(from, to){
   const r = buildVatReturn(from, to);
   const row = (label, value, opts)=> `<tr style="${opts&&opts.bold?'font-weight:800; border-top:1px solid var(--border);':(opts&&opts.muted?'color:var(--text-muted);':'')}"><td style="${opts&&opts.indent?'padding-right:22px;':''}">${label}</td><td class="mono" style="text-align:left;">${fmt(value)}</td></tr>`;
   table.innerHTML = `<tbody>
-    <tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">المبيعات (ضريبة المخرجات) — ${r.salesRows.length} فاتورة</td></tr>
+    <tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">المبيعات (ضريبة المخرجات) — ${r.salesRows.length} فاتورة${r.returnRows.length?` · ${r.returnRows.length} مردود`:''}</td></tr>
     ${row('إجمالي المبيعات شامل الضريبة', r.salesGross, {indent:true, muted:true})}
-    ${row('إجمالي المبيعات بدون الضريبة', r.salesNet, {indent:true, muted:true})}
-    ${row('إجمالي ضريبة المخرجات (15%)', r.outputVat, {bold:true})}
+    ${row('يُخصم: مردودات مبيعات (شامل الضريبة)', -r.returnsGross, {indent:true, muted:true})}
+    ${row('إجمالي المبيعات بدون الضريبة (بعد المردودات)', r.salesNet, {indent:true, muted:true})}
+    ${row('صافي ضريبة المخرجات (15%)', r.outputVat, {bold:true})}
     <tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">المشتريات (ضريبة المدخلات) — ${r.purchaseRows.length} فاتورة</td></tr>
     ${row('إجمالي المشتريات شامل الضريبة', r.purchasesGross, {indent:true, muted:true})}
     ${row('إجمالي المشتريات بدون الضريبة', r.purchasesNet, {indent:true, muted:true})}
@@ -12327,20 +12457,21 @@ $('#btn-export-vat')?.addEventListener('click', ()=>{
   const r = buildVatReturn(from, to);
   const summaryRows = [
     {'البند':'إجمالي المبيعات شامل الضريبة', 'القيمة':r.salesGross},
-    {'البند':'إجمالي المبيعات بدون الضريبة', 'القيمة':r.salesNet},
-    {'البند':'إجمالي ضريبة المخرجات (15%)', 'القيمة':r.outputVat},
+    {'البند':'يُخصم: مردودات مبيعات (شامل الضريبة)', 'القيمة':-r.returnsGross},
+    {'البند':'إجمالي المبيعات بدون الضريبة (بعد المردودات)', 'القيمة':r.salesNet},
+    {'البند':'صافي ضريبة المخرجات (15%)', 'القيمة':r.outputVat},
     {'البند':'إجمالي المشتريات شامل الضريبة', 'القيمة':r.purchasesGross},
     {'البند':'إجمالي المشتريات بدون الضريبة', 'القيمة':r.purchasesNet},
     {'البند':'إجمالي ضريبة المدخلات (15%)', 'القيمة':r.inputVat},
     {'البند': r.netVat>=0 ? 'صافي الضريبة المستحقة للهيئة' : 'صافي الضريبة الدائنة (لصالحك)', 'القيمة':Math.abs(r.netVat)},
   ];
-  const salesDetailRows = r.salesRows.map(c=>{
-    const vat = courseInvoiceVat(c.receiptActualValue);
-    return {
-      'التاريخ': c.receiptIssueDate||'', 'العميل': c.name||'', 'رقم الهوية': c.clientId||'', 'رقم الفاتورة': c.invoice||'',
-      'القيمة بدون الضريبة': num(c.receiptActualValue) - vat, 'الضريبة': vat, 'الإجمالي': num(c.receiptActualValue),
-    };
-  });
+  const salesDetailRows = r.salesRows.map(c=>({
+    'التاريخ': c.date||'', 'العميل': c.name||'', 'رقم الهوية': c.clientId||'', 'رقم الفاتورة': c.invoice||'', 'المصدر': c.source==='manual'?'يدوي':'فاتورة دورة',
+    'القيمة بدون الضريبة': c.totalInclVat - c.vat, 'الضريبة': c.vat, 'الإجمالي': c.totalInclVat,
+  }));
+  const returnsDetailRows = r.returnRows.map(t=>({
+    'التاريخ': t.date||'', 'العميل': t.name||'', 'القيمة بدون الضريبة': t.amount - t.vat, 'الضريبة': t.vat, 'الإجمالي': t.amount,
+  }));
   const purchaseDetailRows = r.purchaseRows.map(p=>({
     'التاريخ': p.date||'', 'المورد': p.supplierName||'', 'رقم الفاتورة': p.invoiceNo||'',
     'القيمة بدون الضريبة': num(p.subtotal), 'الضريبة': num(p.taxAmount), 'الإجمالي': num(p.total),
@@ -12348,6 +12479,7 @@ $('#btn-export-vat')?.addEventListener('click', ()=>{
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'ملخص الإقرار');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(salesDetailRows), 'تفاصيل المبيعات');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(returnsDetailRows), 'تفاصيل المردودات');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(purchaseDetailRows), 'تفاصيل المشتريات');
   XLSX.writeFile(wb, `الإقرار_الضريبي_${from}_${to}.xlsx`);
 });
@@ -12568,6 +12700,7 @@ function renderAccounting(){
   renderTrialBalanceTable(asOf, bs, incomeStmt);
   renderQuarterlyTable(year);
   renderJournalTable();
+  renderDoubleEntryModule();
 }
 ['#acc-year','#acc-period'].forEach(sel=>{ if($(sel)) $(sel).addEventListener('change', renderAccounting); });
 
@@ -12599,6 +12732,263 @@ $('#acc-journal-body')?.addEventListener('click', async e=>{
   renderAccounting();
   showToast('تم حذف القيد');
 });
+
+/* ============ دليل الحسابات والقيود اليومية بنظام القيد المزدوج ============ */
+const ACCOUNT_TYPES = [
+  {value:'asset', label:'أصول'},
+  {value:'liability', label:'خصوم'},
+  {value:'equity', label:'حقوق ملكية'},
+  {value:'revenue', label:'إيرادات'},
+  {value:'expense', label:'مصروفات'},
+];
+function accountTypeLabel(t){ return (ACCOUNT_TYPES.find(x=>x.value===t)||{}).label || t; }
+function accountNormalBalance(t){ return (t==='asset'||t==='expense') ? 'debit' : 'credit'; }
+function seedChartOfAccountsIfEmpty(){
+  if(chartOfAccounts && chartOfAccounts.length) return;
+  chartOfAccounts = [
+    {id:uid(), code:'1000', name:'النقدية والبنوك', type:'asset'},
+    {id:uid(), code:'1100', name:'حسابات مدينة (ذمم العملاء)', type:'asset'},
+    {id:uid(), code:'1200', name:'مخزون الحقائب التدريبية', type:'asset'},
+    {id:uid(), code:'1500', name:'الأصول الثابتة', type:'asset'},
+    {id:uid(), code:'1590', name:'مجمع الإهلاك', type:'asset'},
+    {id:uid(), code:'2000', name:'حسابات دائنة (ذمم الموردين)', type:'liability'},
+    {id:uid(), code:'2100', name:'ضريبة القيمة المضافة المستحقة', type:'liability'},
+    {id:uid(), code:'2200', name:'مصروفات مستحقة', type:'liability'},
+    {id:uid(), code:'2300', name:'قروض', type:'liability'},
+    {id:uid(), code:'3000', name:'رأس المال', type:'equity'},
+    {id:uid(), code:'3100', name:'الأرباح المرحّلة', type:'equity'},
+    {id:uid(), code:'4000', name:'إيرادات الدورات التدريبية', type:'revenue'},
+    {id:uid(), code:'4100', name:'إيرادات أخرى', type:'revenue'},
+    {id:uid(), code:'5000', name:'مصروفات تشغيلية', type:'expense'},
+    {id:uid(), code:'5100', name:'مصروف الإهلاك', type:'expense'},
+    {id:uid(), code:'5200', name:'تكلفة الحقائب التدريبية', type:'expense'},
+  ];
+}
+function sortedChartOfAccounts(){ return chartOfAccounts.slice().sort((a,b)=> String(a.code||'').localeCompare(String(b.code||''), 'en')); }
+function accountOptionsHtml(selectedId){
+  return sortedChartOfAccounts().map(a=> `<option value="${a.id}" ${a.id===selectedId?'selected':''}>${escapeHtml(a.code)} — ${escapeHtml(a.name)}</option>`).join('');
+}
+function renderChartOfAccountsTable(){
+  const tbody = $('#coa-list-body');
+  if(!tbody) return;
+  const usedIds = new Set();
+  journalDE.forEach(e=> (e.lines||[]).forEach(l=> usedIds.add(l.accountId)));
+  tbody.innerHTML = sortedChartOfAccounts().map(a=> `<tr>
+    <td class="mono">${escapeHtml(a.code)}</td><td>${escapeHtml(a.name)}</td><td>${accountTypeLabel(a.type)}</td>
+    <td><button class="btn btn-ghost btn-sm" data-coa-del="${a.id}" ${usedIds.has(a.id)?'disabled title="لا يمكن حذف حساب مستخدم في قيود يومية"':''}>حذف</button></td>
+  </tr>`).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد حسابات — أضف أول حساب أعلاه</td></tr>`;
+}
+function refreshAccountSelectOptions(){
+  const glSel = $('#gl-account');
+  if(glSel){ const cur = glSel.value; glSel.innerHTML = accountOptionsHtml(); if(cur && chartOfAccounts.some(a=>a.id===cur)) glSel.value = cur; }
+  document.querySelectorAll('#de-lines .de-line-account').forEach(sel=>{
+    const cur = sel.value; sel.innerHTML = accountOptionsHtml(); if(cur && chartOfAccounts.some(a=>a.id===cur)) sel.value = cur;
+  });
+}
+$('#btn-add-account')?.addEventListener('click', async ()=>{
+  const code = $('#coa-code').value.trim();
+  const name = $('#coa-name').value.trim();
+  const type = $('#coa-type').value;
+  if(!code){ showToast('أدخل رمز الحساب'); return; }
+  if(!name){ showToast('أدخل اسم الحساب'); return; }
+  if(chartOfAccounts.some(a=>a.code===code)){ showToast('يوجد حساب آخر بنفس الرمز'); return; }
+  chartOfAccounts.push({ id: uid(), code, name, type });
+  await saveChartOfAccounts();
+  await logAudit('add','المحاسبة', `تمت إضافة حساب لدليل الحسابات: ${code} — ${name} (${accountTypeLabel(type)})`);
+  $('#coa-code').value=''; $('#coa-name').value='';
+  showToast('تمت إضافة الحساب');
+  renderChartOfAccountsTable();
+  refreshAccountSelectOptions();
+});
+$('#coa-list-body')?.addEventListener('click', async e=>{
+  const btn = e.target.closest('[data-coa-del]');
+  if(!btn || btn.disabled) return;
+  const a = chartOfAccounts.find(x=>x.id===btn.dataset.coaDel);
+  if(!a) return;
+  if(!await customConfirm(`هل تريد حذف الحساب "${a.code} — ${a.name}"؟`)) return;
+  chartOfAccounts = chartOfAccounts.filter(x=>x.id!==a.id);
+  await saveChartOfAccounts();
+  await logAudit('delete','المحاسبة', `تم حذف حساب من دليل الحسابات: ${a.code} — ${a.name}`);
+  renderChartOfAccountsTable();
+  refreshAccountSelectOptions();
+  showToast('تم حذف الحساب');
+});
+
+function deLineRowHtml(){
+  return `<tr data-de-line>
+    <td><select class="de-line-account">${accountOptionsHtml()}</select></td>
+    <td><input type="number" step="0.01" class="de-line-debit" placeholder="0"></td>
+    <td><input type="number" step="0.01" class="de-line-credit" placeholder="0"></td>
+    <td><button type="button" class="btn btn-ghost btn-sm" data-de-removeline>×</button></td>
+  </tr>`;
+}
+function resetDELinesForm(){
+  const tbody = $('#de-lines');
+  if(!tbody) return;
+  tbody.innerHTML = deLineRowHtml() + deLineRowHtml();
+  computeDETotals();
+}
+function computeDETotals(){
+  const totalsEl = $('#de-totals');
+  let debit=0, credit=0;
+  document.querySelectorAll('#de-lines .de-line-debit').forEach(i=> debit += num(i.value));
+  document.querySelectorAll('#de-lines .de-line-credit').forEach(i=> credit += num(i.value));
+  const diff = debit - credit;
+  const balanced = Math.abs(diff) < 0.01 && debit > 0;
+  if(totalsEl){
+    totalsEl.innerHTML = `<span>إجمالي مدين: <b class="mono">${fmt(debit)}</b> · إجمالي دائن: <b class="mono">${fmt(credit)}</b> · ${balanced ? '<b style="color:var(--teal,#0f8a6b);">✅ القيد متوازن</b>' : `<b style="color:var(--red);">⚠️ غير متوازن (الفرق ${fmt(Math.abs(diff))})</b>`}</span>`;
+  }
+  return { debit, credit, balanced };
+}
+$('#de-lines')?.addEventListener('input', e=>{
+  if(e.target.classList.contains('de-line-debit') && num(e.target.value)>0){
+    const row = e.target.closest('tr'); const c = row?.querySelector('.de-line-credit'); if(c) c.value='';
+  }
+  if(e.target.classList.contains('de-line-credit') && num(e.target.value)>0){
+    const row = e.target.closest('tr'); const d = row?.querySelector('.de-line-debit'); if(d) d.value='';
+  }
+  computeDETotals();
+});
+$('#de-lines')?.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-de-removeline]');
+  if(!btn) return;
+  const tbody = $('#de-lines');
+  if(tbody.querySelectorAll('tr').length <= 2){ showToast('يجب أن يحتوي القيد على سطرين على الأقل'); return; }
+  btn.closest('tr').remove();
+  computeDETotals();
+});
+$('#btn-de-addline')?.addEventListener('click', ()=>{
+  $('#de-lines')?.insertAdjacentHTML('beforeend', deLineRowHtml());
+});
+$('#de-date') && ($('#de-date').value = todayISO());
+$('#btn-de-save')?.addEventListener('click', async ()=>{
+  if(!chartOfAccounts.length){ showToast('أضف حسابات لدليل الحسابات أولاً'); return; }
+  const date = $('#de-date').value || todayISO();
+  const description = $('#de-desc').value.trim();
+  if(!description){ showToast('أدخل بياناً موجزاً للقيد'); return; }
+  const lines = [];
+  document.querySelectorAll('#de-lines tr[data-de-line]').forEach(row=>{
+    const accountId = row.querySelector('.de-line-account')?.value;
+    const debit = num(row.querySelector('.de-line-debit')?.value);
+    const credit = num(row.querySelector('.de-line-credit')?.value);
+    if(accountId && (debit>0 || credit>0)) lines.push({ accountId, debit, credit });
+  });
+  if(lines.length < 2){ showToast('أدخل سطرين على الأقل بحساب ومبلغ (مدين أو دائن)'); return; }
+  const totalDebit = lines.reduce((s,l)=>s+l.debit,0);
+  const totalCredit = lines.reduce((s,l)=>s+l.credit,0);
+  if(Math.abs(totalDebit-totalCredit) >= 0.01){ showToast('القيد غير متوازن — يجب أن يتساوى إجمالي المدين مع إجمالي الدائن'); return; }
+  journalDE.push({ id: uid(), createdAt: Date.now(), date, description, lines });
+  await saveJournalDE();
+  await logAudit('add','المحاسبة', `تمت إضافة قيد يومية: ${description} بمبلغ ${fmt(totalDebit)} ﷼ (${lines.length} سطور)`);
+  $('#de-desc').value = '';
+  resetDELinesForm();
+  showToast('تم حفظ القيد اليومية');
+  renderDoubleEntryModule();
+});
+function renderJournalDEList(){
+  const tbody = $('#de-entries-body');
+  if(!tbody) return;
+  const sorted = journalDE.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  tbody.innerHTML = sorted.map(e=>{
+    const totalDebit = (e.lines||[]).reduce((s,l)=>s+num(l.debit),0);
+    const totalCredit = (e.lines||[]).reduce((s,l)=>s+num(l.credit),0);
+    const linesDetail = (e.lines||[]).map(l=>{
+      const acc = chartOfAccounts.find(a=>a.id===l.accountId);
+      const accLabel = acc ? `${escapeHtml(acc.code)} — ${escapeHtml(acc.name)}` : '—';
+      return `${accLabel}: ${l.debit>0?('مدين '+fmt(l.debit)):('دائن '+fmt(l.credit))}`;
+    }).join(' · ');
+    return `<tr>
+      <td class="mono">${escapeHtml(formatDateDisplay(e.date)||e.date||'—')}</td>
+      <td>${escapeHtml(e.description||'—')}<div class="hint" style="margin:2px 0 0;">${linesDetail}</div></td>
+      <td class="mono">${fmt(totalDebit)}</td>
+      <td class="mono">${fmt(totalCredit)}</td>
+      <td><button class="btn btn-ghost btn-sm" data-de-del="${e.id}">حذف</button></td>
+    </tr>`;
+  }).join('');
+  $('#de-entries-empty') && ($('#de-entries-empty').style.display = sorted.length ? 'none' : '');
+}
+$('#de-entries-body')?.addEventListener('click', async e=>{
+  const btn = e.target.closest('[data-de-del]');
+  if(!btn) return;
+  const entry = journalDE.find(x=>x.id===btn.dataset.deDel);
+  if(!entry) return;
+  if(!await customConfirm('هل تريد حذف هذا القيد اليومية؟')) return;
+  journalDE = journalDE.filter(x=>x.id!==entry.id);
+  await saveJournalDE();
+  await logAudit('delete','المحاسبة', `تم حذف قيد يومية: ${entry.description||''}`);
+  renderDoubleEntryModule();
+  showToast('تم حذف القيد');
+});
+function renderGeneralLedgerDE(){
+  const tbody = $('#gl-table-body');
+  if(!tbody) return;
+  const accountId = $('#gl-account')?.value;
+  const from = $('#gl-from')?.value || '';
+  const to = $('#gl-to')?.value || '';
+  const acc = chartOfAccounts.find(a=>a.id===accountId);
+  if(!acc){ tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">أضف حساباً لدليل الحسابات لعرض حركته</td></tr>`; return; }
+  const normal = accountNormalBalance(acc.type);
+  let rows = [];
+  journalDE.forEach(entry=> (entry.lines||[]).forEach(l=>{
+    if(l.accountId===accountId) rows.push({ date: entry.date, description: entry.description, debit: num(l.debit), credit: num(l.credit) });
+  }));
+  rows = rows.filter(r=> inRange(r.date, from, to)).sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+  let balance = 0;
+  const body = rows.map(r=>{
+    balance += normal==='debit' ? (r.debit - r.credit) : (r.credit - r.debit);
+    return `<tr>
+      <td class="mono">${escapeHtml(formatDateDisplay(r.date)||r.date||'—')}</td>
+      <td>${escapeHtml(r.description||'—')}</td>
+      <td class="mono">${r.debit?fmt(r.debit):''}</td>
+      <td class="mono">${r.credit?fmt(r.credit):''}</td>
+      <td class="mono" style="font-weight:700;">${fmt(balance)}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = body || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد حركات على هذا الحساب ضمن الفترة المحددة</td></tr>`;
+}
+['#gl-account','#gl-from','#gl-to'].forEach(sel=> $(sel)?.addEventListener('change', renderGeneralLedgerDE));
+function renderTrialBalanceDE2(){
+  const tbody = $('#tb2-table-body');
+  if(!tbody) return;
+  const asOf = $('#tb2-asof')?.value || '';
+  const balances = {};
+  journalDE.filter(e=> !asOf || (e.date||'') <= asOf).forEach(e=>{
+    (e.lines||[]).forEach(l=>{
+      if(!balances[l.accountId]) balances[l.accountId] = {debit:0, credit:0};
+      balances[l.accountId].debit += num(l.debit);
+      balances[l.accountId].credit += num(l.credit);
+    });
+  });
+  const active = sortedChartOfAccounts().filter(a=> balances[a.id] && (balances[a.id].debit || balances[a.id].credit));
+  let totalDebit=0, totalCredit=0;
+  const rowsHtml = active.map(a=>{
+    const b = balances[a.id];
+    const normal = accountNormalBalance(a.type);
+    const net = normal==='debit' ? (b.debit-b.credit) : (b.credit-b.debit);
+    const debitCol = normal==='debit' ? Math.max(0,net) : Math.max(0,-net);
+    const creditCol = normal==='credit' ? Math.max(0,net) : Math.max(0,-net);
+    totalDebit += debitCol; totalCredit += creditCol;
+    return `<tr>
+      <td class="mono">${escapeHtml(a.code)}</td><td>${escapeHtml(a.name)}</td><td>${accountTypeLabel(a.type)}</td>
+      <td class="mono">${debitCol?fmt(debitCol):''}</td><td class="mono">${creditCol?fmt(creditCol):''}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = (rowsHtml || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد قيود يومية مسجّلة بعد</td></tr>`)
+    + (active.length ? `<tr style="font-weight:800; border-top:2px solid var(--navy);"><td colspan="3">الإجمالي</td><td class="mono">${fmt(totalDebit)}</td><td class="mono">${fmt(totalCredit)}</td></tr>` : '');
+}
+$('#tb2-asof')?.addEventListener('change', renderTrialBalanceDE2);
+function renderDoubleEntryModule(){
+  if(!$('#view-accounting')) return;
+  renderChartOfAccountsTable();
+  if($('#de-lines') && !$('#de-lines').querySelector('tr')) resetDELinesForm();
+  computeDETotals();
+  renderJournalDEList();
+  refreshAccountSelectOptions();
+  if($('#gl-account') && !$('#gl-account').value && chartOfAccounts.length) $('#gl-account').value = sortedChartOfAccounts()[0].id;
+  renderGeneralLedgerDE();
+  if($('#tb2-asof') && !$('#tb2-asof').value) $('#tb2-asof').value = todayISO();
+  renderTrialBalanceDE2();
+}
 
 function csvDownload(filename, rows){
   const csv = '\uFEFF'+rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -12658,13 +13048,15 @@ $('#btn-print-income')?.addEventListener('click', ()=> printAccountingReport('ق
 $('#btn-print-balance')?.addEventListener('click', ()=> printAccountingReport('الميزانية العمومية (قائمة المركز المالي)', '#acc-balance-table', {asOfOnly:true}));
 $('#btn-print-quarterly')?.addEventListener('click', ()=> printAccountingReport('مقارنة ربع سنوية للسنة المالية', '#acc-quarterly-table'));
 $('#btn-print-trial')?.addEventListener('click', ()=> printAccountingReport('ميزان المراجعة', '#acc-trial-table', {asOfOnly:true}));
-/* جدولا تفاصيل الفواتير (مبيعات ثم مشتريات) لطباعة الإقرار الضريبي: رقم الفاتورة، تاريخ الفاتورة، الضريبة، القيمة بدون الضريبة فقط */
+/* جداول تفاصيل الفواتير (مبيعات ثم مردودات ثم مشتريات) لطباعة الإقرار الضريبي: رقم الفاتورة، تاريخ الفاتورة، الضريبة، القيمة بدون الضريبة فقط */
 function buildVatDetailTablesHtml(r){
   const salesBody = r.salesRows.map(c=>{
-    const vat = courseInvoiceVat(c.receiptActualValue);
-    const net = num(c.receiptActualValue) - vat;
-    const total = net + vat;
-    return `<tr><td class="mono">${escapeHtml(c.invoice||'—')}</td><td class="mono">${escapeHtml(formatDateDisplay(c.receiptIssueDate)||'')}</td><td class="mono">${fmt(vat)}</td><td class="mono">${fmt(net)}</td><td class="mono">${fmt(total)}</td></tr>`;
+    const net = c.totalInclVat - c.vat;
+    return `<tr><td class="mono">${escapeHtml(c.invoice||'—')}</td><td class="mono">${escapeHtml(formatDateDisplay(c.date)||'')}</td><td class="mono">${fmt(c.vat)}</td><td class="mono">${fmt(net)}</td><td class="mono">${fmt(c.totalInclVat)}</td></tr>`;
+  }).join('');
+  const returnsBody = (r.returnRows||[]).map(t=>{
+    const net = t.amount - t.vat;
+    return `<tr><td class="mono">—</td><td class="mono">${escapeHtml(formatDateDisplay(t.date)||'')}</td><td class="mono">${fmt(t.vat)}</td><td class="mono">${fmt(net)}</td><td class="mono">${fmt(t.amount)}</td></tr>`;
   }).join('');
   const purchaseBody = r.purchaseRows.map(p=>{
     const net = num(p.subtotal);
@@ -12676,14 +13068,46 @@ function buildVatDetailTablesHtml(r){
   return `
     <h3 style="margin:22px 0 6px;">تفاصيل فواتير المبيعات (${r.salesRows.length})</h3>
     <table><thead>${head}</thead><tbody>${salesBody || `<tr><td colspan="5" style="text-align:center;">لا توجد فواتير</td></tr>`}</tbody></table>
+    ${(r.returnRows && r.returnRows.length) ? `
+    <h3 style="margin:22px 0 6px;">تفاصيل مردودات المبيعات (${r.returnRows.length})</h3>
+    <table><thead>${head}</thead><tbody>${returnsBody}</tbody></table>` : ''}
     <h3 style="margin:22px 0 6px;">تفاصيل فواتير المشتريات (${r.purchaseRows.length})</h3>
     <table><thead>${head}</thead><tbody>${purchaseBody || `<tr><td colspan="5" style="text-align:center;">لا توجد فواتير</td></tr>`}</tbody></table>
+  `;
+}
+/* جدول صناديق نموذج الإقرار الرسمي كـ HTML جاهز للطباعة (نفس ترتيب بوابة الهيئة) */
+function buildVatBoxesTableHtml(r){
+  const head = `<tr><th style="width:40px;">#</th><th>البيان</th><th>القيمة (بدون ضريبة)</th><th>الضريبة</th></tr>`;
+  const box = (n, label, value, vat, bold)=> `<tr style="${bold?'font-weight:800;':''}">
+    <td class="mono">${n}</td><td>${label}</td>
+    <td class="mono">${value===null?'—':fmt(value)}</td>
+    <td class="mono">${vat===null?'—':fmt(vat)}</td>
+  </tr>`;
+  return `
+    <h3 style="margin:22px 0 6px;">مطابقة صناديق نموذج الإقرار (بوابة الهيئة)</h3>
+    <table><thead>${head}</thead><tbody>
+      <tr><td colspan="4" style="font-weight:800;">المبيعات</td></tr>
+      ${box('1', 'المبيعات المحلية الخاضعة للنسبة الأساسية (15%)', r.salesNet, r.outputVat)}
+      ${box('2', 'المبيعات الخاضعة لآلية الاحتساب العكسي المحلي', 0, 0)}
+      ${box('3', 'المبيعات المحلية الخاضعة لنسبة الصفر', 0, null)}
+      ${box('4', 'الصادرات', 0, null)}
+      ${box('5', 'المبيعات المعفاة', 0, null)}
+      ${box('—', 'إجمالي المبيعات وضريبة المخرجات', r.salesNet, r.outputVat, true)}
+      <tr><td colspan="4" style="font-weight:800;">المشتريات</td></tr>
+      ${box('6', 'المشتريات المحلية الخاضعة للنسبة الأساسية (15%)', r.purchasesNet, r.inputVat)}
+      ${box('7', 'الواردات الخاضعة للضريبة المدفوعة عند الجمارك', 0, 0)}
+      ${box('8', 'الواردات الخاضعة للضريبة بموجب آلية الاحتساب العكسي', 0, 0)}
+      ${box('9', 'المشتريات الخاضعة لنسبة الصفر', 0, null)}
+      ${box('10', 'المشتريات المعفاة', 0, null)}
+      ${box('—', 'إجمالي المشتريات وضريبة المدخلات', r.purchasesNet, r.inputVat, true)}
+      ${box('11', r.netVat>=0 ? 'صافي الضريبة المستحقة للهيئة' : 'صافي الضريبة الدائنة (لصالحك)', null, Math.abs(r.netVat), true)}
+    </tbody></table>
   `;
 }
 $('#btn-print-vat')?.addEventListener('click', ()=>{
   const { from, to } = accSelectedRange();
   const r = buildVatReturn(from, to);
-  printAccountingReport('الإقرار الضريبي (ضريبة القيمة المضافة)', '#acc-vat-table', { extraHtml: buildVatDetailTablesHtml(r) });
+  printAccountingReport('الإقرار الضريبي (ضريبة القيمة المضافة)', '#acc-vat-table', { extraHtml: buildVatBoxesTableHtml(r) + buildVatDetailTablesHtml(r) });
 });
 $('#btn-export-accounting-full')?.addEventListener('click', ()=>{
   const { year, from, to, asOf } = accSelectedRange();
@@ -16022,6 +16446,36 @@ function renderZtVatTable(from, to){
   </tbody>`;
   return r;
 }
+/* جدول مطابقة صناديق نموذج الإقرار الرسمي في بوابة الهيئة (نفس ترتيب النموذج: مبيعات ثم مشتريات ثم صافي الضريبة) */
+function renderZtVatBoxesTable(from, to){
+  const table = $('#zt-vat-boxes-table');
+  if(!table) return;
+  const r = buildZatcaVatReturn(from, to);
+  const head = `<thead><tr><th style="width:50px;">#</th><th>البيان</th><th style="text-align:left;">القيمة (بدون ضريبة)</th><th style="text-align:left;">الضريبة</th></tr></thead>`;
+  const box = (n, label, value, vat, opts)=> `<tr style="${opts&&opts.bold?'font-weight:800; border-top:2px solid var(--navy);':''}">
+    <td class="mono">${n}</td><td>${label}</td>
+    <td class="mono" style="text-align:left;">${value===null?'—':fmt(value)}</td>
+    <td class="mono" style="text-align:left;">${vat===null?'—':fmt(vat)}</td>
+  </tr>`;
+  table.innerHTML = `${head}<tbody>
+    <tr><td colspan="4" style="padding-top:12px; font-weight:800; color:var(--navy);">المبيعات</td></tr>
+    ${box('1', 'المبيعات المحلية الخاضعة للنسبة الأساسية (15%)', r.salesNet, r.outputVat)}
+    ${box('2', 'المبيعات الخاضعة لآلية الاحتساب العكسي المحلي', 0, 0)}
+    ${box('3', 'المبيعات المحلية الخاضعة لنسبة الصفر', 0, null)}
+    ${box('4', 'الصادرات', 0, null)}
+    ${box('5', 'المبيعات المعفاة', 0, null)}
+    ${box('—', 'إجمالي المبيعات وضريبة المخرجات', r.salesNet, r.outputVat, {bold:true})}
+    <tr><td colspan="4" style="padding-top:12px; font-weight:800; color:var(--navy);">المشتريات</td></tr>
+    ${box('6', 'المشتريات المحلية الخاضعة للنسبة الأساسية (15%)', r.purchasesNet, r.inputVat)}
+    ${box('7', 'الواردات الخاضعة للضريبة المدفوعة عند الجمارك', 0, 0)}
+    ${box('8', 'الواردات الخاضعة للضريبة بموجب آلية الاحتساب العكسي', 0, 0)}
+    ${box('9', 'المشتريات الخاضعة لنسبة الصفر', 0, null)}
+    ${box('10', 'المشتريات المعفاة', 0, null)}
+    ${box('—', 'إجمالي المشتريات وضريبة المدخلات', r.purchasesNet, r.inputVat, {bold:true})}
+    <tr><td colspan="4" style="padding-top:12px;"></td></tr>
+    ${box('11', r.netVat>=0 ? 'صافي ضريبة القيمة المضافة المستحقة للهيئة' : 'صافي ضريبة القيمة المضافة الدائنة (لصالحك)', null, Math.abs(r.netVat), {bold:true})}
+  </tbody>`;
+}
 
 /* ---- الزكاة (تقديري): وعاء الزكاة ≈ حقوق الملكية + القروض طويلة الأجل − صافي الأصول الثابتة، مع تعديلات يدوية ---- */
 function computeZakat(asOf, year){
@@ -16077,6 +16531,7 @@ function renderZatca(){
   renderZtReturnsTable(from, to);
   renderZtPurchasesTable(from, to);
   renderZtVatTable(from, to);
+  renderZtVatBoxesTable(from, to);
   renderZtZakatTable(asOf, year);
 }
 ['#zt-year','#zt-period'].forEach(sel=> $(sel)?.addEventListener('change', renderZatca));
