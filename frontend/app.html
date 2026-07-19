@@ -4371,7 +4371,7 @@
         <div class="field full" style="margin-top:-8px;"><div class="hint" style="margin:0;">يُعبَّى تلقائياً حسب الجنسية المختارة أعلاه (سعر ثابت للسعوديين، وسعر آخر لغير السعوديين — نفس الفارق على كل أنواع الدورات) — يمكن تعديله يدوياً بعد ذلك.</div></div>
         <div class="field"><label>مصدر الحقيبة</label>
           <select id="f-bagsource">
-            <option value="buy"> مطلوب الشراء</option>
+            <option value="buy">مطلوب الشراء</option>
             <option value="stock">تسليم من المخزون المتوفر</option>
             <option value="own">العميل معه حقيبته الخاصة (بدون شراء)</option>
           </select>
@@ -7852,7 +7852,7 @@ function openModal(id){
   $('#f-baginvoice').value = c?.bagInvoice || '';
   $('#f-date').value = c?.date || '';
   $('#f-courseprice').value = c?.coursePrice ?? '';
-  $('#f-bagsource').value = c?.bagSource || 'stock';
+  $('#f-bagsource').value = c?.bagSource || 'buy';
   $('#f-bagprice').value = c ? (c.bagPrice ?? '') : settings.bagPrice;
   $('#f-discount').value = c?.discount ?? 0;
   $('#f-paid').value = c?.paid ?? 0;
