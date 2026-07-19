@@ -4065,6 +4065,44 @@
       <div id="acc-cashflow-check" style="margin-top:10px;"></div>
     </div>
 
+    <!-- ============ الذمم المدينة والدائنة (أعمار الديون) ============ -->
+    <div class="panel" style="border-right:4px solid var(--navy);">
+      <h3 style="margin:0 0 4px;">👥 الذمم المدينة والدائنة (أعمار الديون)</h3>
+      <div class="field" style="max-width:220px; margin-bottom:10px;">
+        <label>كما في تاريخ</label><input type="date" id="arap-asof">
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin:10px 0 6px;">
+        <h4 style="margin:0; color:var(--navy);">ذمم العملاء المدينة (Accounts Receivable)</h4>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="btn-export-ar">تصدير CSV</button>
+          <button class="btn btn-gold btn-sm" id="btn-print-ar">طباعة PDF</button>
+        </div>
+      </div>
+      <div class="grid-cards" id="ar-summary-cards" style="margin-bottom:10px;"></div>
+      <div class="table-scroll">
+        <table id="ar-table">
+          <thead><tr><th>العميل</th><th>رقم الهوية</th><th>الجوال</th><th>تاريخ الاستحقاق</th><th>أيام التأخر</th><th>المتبقي</th><th>الفئة العمرية</th></tr></thead>
+          <tbody id="ar-table-body"></tbody>
+        </table>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin:22px 0 6px;">
+        <h4 style="margin:0; color:var(--navy);">ذمم الموردين الدائنة (Accounts Payable)</h4>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="btn-export-ap">تصدير CSV</button>
+          <button class="btn btn-gold btn-sm" id="btn-print-ap">طباعة PDF</button>
+        </div>
+      </div>
+      <div class="grid-cards" id="ap-summary-cards" style="margin-bottom:10px;"></div>
+      <div class="table-scroll">
+        <table id="ap-table">
+          <thead><tr><th>المورد</th><th>رقم الفاتورة</th><th>تاريخ الفاتورة</th><th>أيام التأخر</th><th>المبلغ</th><th>الفئة العمرية</th></tr></thead>
+          <tbody id="ap-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="panel" style="border-right:4px solid var(--gold-dark);">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px;">
         <h3 style="margin:0;">الإقرار الضريبي (ضريبة القيمة المضافة)</h3>
@@ -12612,6 +12650,113 @@ $('#btn-print-cashflow')?.addEventListener('click', ()=>{
   printAccountingReport('قائمة التدفقات النقدية', '#acc-cashflow-table');
 });
 
+/* ---- الذمم المدينة والدائنة (أعمار الديون) ---- */
+function daysBetweenISO(fromIso, toIso){
+  if(!fromIso || !toIso) return 0;
+  const a = new Date(fromIso+'T00:00:00'), b = new Date(toIso+'T00:00:00');
+  return Math.round((b-a) / 86400000);
+}
+function agingBucket(days){
+  if(days<=30) return '0–30 يوم';
+  if(days<=60) return '31–60 يوم';
+  if(days<=90) return '61–90 يوم';
+  return 'أكثر من 90 يوم';
+}
+function buildARAging(asOf){
+  const rows = clients.filter(c=>!c.suspended && !c.cancelled).map(c=>{
+    const bal = Math.max(0, total(c) - paidTotalAsOf(c, asOf));
+    if(bal<=0) return null;
+    const dueDate = c.clientType==='company' && num(c.creditDays)>0 ? addDaysISO(c.date||asOf, num(c.creditDays)) : (c.date||asOf);
+    const days = Math.max(0, daysBetweenISO(dueDate, asOf));
+    return { name:c.name||'—', clientId:c.clientId||'—', phone:c.phone||'—', dueDate, days, amount: bal, bucket: agingBucket(days) };
+  }).filter(Boolean).sort((a,b)=> b.days - a.days);
+  const buckets = {'0–30 يوم':0, '31–60 يوم':0, '61–90 يوم':0, 'أكثر من 90 يوم':0};
+  rows.forEach(r=> buckets[r.bucket] += r.amount);
+  const total_ = rows.reduce((s,r)=>s+r.amount,0);
+  return { rows, buckets, total: total_ };
+}
+function buildAPAging(asOf){
+  const rows = purchases.filter(p=> p.status==='unpaid' && (p.date||'')<=asOf).map(p=>{
+    const days = Math.max(0, daysBetweenISO(p.date||asOf, asOf));
+    return { supplierName:p.supplierName||'—', invoiceNo:p.invoiceNo||'—', date:p.date||'', days, amount:num(p.total), bucket: agingBucket(days) };
+  }).sort((a,b)=> b.days - a.days);
+  const buckets = {'0–30 يوم':0, '31–60 يوم':0, '61–90 يوم':0, 'أكثر من 90 يوم':0};
+  rows.forEach(r=> buckets[r.bucket] += r.amount);
+  const total_ = rows.reduce((s,r)=>s+r.amount,0);
+  return { rows, buckets, total: total_ };
+}
+function agingCardsHtml(data){
+  return `
+    <div class="card"><div class="k">الإجمالي</div><div class="v">${fmt(data.total)}</div></div>
+    <div class="card"><div class="k">0–30 يوم</div><div class="v teal">${fmt(data.buckets['0–30 يوم'])}</div></div>
+    <div class="card"><div class="k">31–60 يوم</div><div class="v gold">${fmt(data.buckets['31–60 يوم'])}</div></div>
+    <div class="card"><div class="k">61–90 يوم</div><div class="v gold">${fmt(data.buckets['61–90 يوم'])}</div></div>
+    <div class="card"><div class="k">أكثر من 90 يوم</div><div class="v red">${fmt(data.buckets['أكثر من 90 يوم'])}</div></div>
+  `;
+}
+function renderARAging(asOf){
+  const data = buildARAging(asOf);
+  $('#ar-summary-cards') && ($('#ar-summary-cards').innerHTML = agingCardsHtml(data));
+  const tbody = $('#ar-table-body');
+  if(tbody){
+    tbody.innerHTML = data.rows.map(r=> `<tr>
+      <td>${escapeHtml(r.name)}</td><td class="mono">${escapeHtml(r.clientId)}</td><td class="mono">${escapeHtml(r.phone)}</td>
+      <td class="mono">${escapeHtml(formatDateDisplay(r.dueDate)||r.dueDate||'—')}</td>
+      <td class="mono" style="${r.days>90?'color:var(--red); font-weight:700;':''}">${r.days}</td>
+      <td class="mono">${fmt(r.amount)}</td><td>${r.bucket}</td>
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد ذمم مدينة حتى هذا التاريخ</td></tr>`;
+  }
+  return data;
+}
+function renderAPAging(asOf){
+  const data = buildAPAging(asOf);
+  $('#ap-summary-cards') && ($('#ap-summary-cards').innerHTML = agingCardsHtml(data));
+  const tbody = $('#ap-table-body');
+  if(tbody){
+    tbody.innerHTML = data.rows.map(r=> `<tr>
+      <td>${escapeHtml(r.supplierName)}</td><td class="mono">${escapeHtml(r.invoiceNo)}</td>
+      <td class="mono">${escapeHtml(formatDateDisplay(r.date)||r.date||'—')}</td>
+      <td class="mono" style="${r.days>90?'color:var(--red); font-weight:700;':''}">${r.days}</td>
+      <td class="mono">${fmt(r.amount)}</td><td>${r.bucket}</td>
+    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد ذمم دائنة غير مسددة حتى هذا التاريخ</td></tr>`;
+  }
+  return data;
+}
+function renderARAPModule(){
+  if(!$('#view-accounting')) return;
+  if($('#arap-asof') && !$('#arap-asof').value) $('#arap-asof').value = todayISO();
+  const asOf = $('#arap-asof')?.value || todayISO();
+  renderARAging(asOf);
+  renderAPAging(asOf);
+}
+$('#arap-asof')?.addEventListener('change', renderARAPModule);
+$('#btn-export-ar')?.addEventListener('click', ()=>{
+  const asOf = $('#arap-asof')?.value || todayISO();
+  const data = buildARAging(asOf);
+  csvDownload(`ذمم_العملاء_المدينة_${asOf}.csv`, [
+    ['العميل','رقم الهوية','الجوال','تاريخ الاستحقاق','أيام التأخر','المتبقي','الفئة العمرية'],
+    ...data.rows.map(r=>[r.name, r.clientId, r.phone, r.dueDate, r.days, r.amount, r.bucket])
+  ]);
+});
+$('#btn-print-ar')?.addEventListener('click', ()=>{
+  const asOf = $('#arap-asof')?.value || todayISO();
+  renderARAging(asOf);
+  printAccountingReport(`ذمم العملاء المدينة كما في ${formatDateDisplay(asOf)||asOf}`, '#ar-table');
+});
+$('#btn-export-ap')?.addEventListener('click', ()=>{
+  const asOf = $('#arap-asof')?.value || todayISO();
+  const data = buildAPAging(asOf);
+  csvDownload(`ذمم_الموردين_الدائنة_${asOf}.csv`, [
+    ['المورد','رقم الفاتورة','تاريخ الفاتورة','أيام التأخر','المبلغ','الفئة العمرية'],
+    ...data.rows.map(r=>[r.supplierName, r.invoiceNo, r.date, r.days, r.amount, r.bucket])
+  ]);
+});
+$('#btn-print-ap')?.addEventListener('click', ()=>{
+  const asOf = $('#arap-asof')?.value || todayISO();
+  renderAPAging(asOf);
+  printAccountingReport(`ذمم الموردين الدائنة كما في ${formatDateDisplay(asOf)||asOf}`, '#ap-table');
+});
+
 function renderAccSummaryCards(bs, ni, rev, exp){
   $('#acc-summary-cards').innerHTML = `
     <div class="card"><div class="k">إجمالي الأصول</div><div class="v teal">${fmt(bs.totalAssets)}</div></div>
@@ -12784,6 +12929,7 @@ function renderAccounting(){
   renderBalanceSheetTable(asOf, bs);
   renderVatReturnTable(from, to);
   renderCashFlowTable(from, to);
+  renderARAPModule();
   renderTrialBalanceTable(asOf, bs, incomeStmt);
   renderQuarterlyTable(year);
   renderJournalTable();
