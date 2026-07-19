@@ -36,6 +36,14 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+/* ---------------- التحقق من كود الترخيص (لا يتطلب تسجيل دخول) ---------------- */
+const { validateLicenseKey } = require('./license');
+app.post('/api/license/validate', (req, res) => {
+  const { licenseKey } = req.body || {};
+  const result = validateLicenseKey(licenseKey);
+  res.json(result);
+});
+
 /* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */
 // GET /api/storage/:key  -> { key, value, version }
 app.get('/api/storage/:key', requireAuth, async (req, res) => {
