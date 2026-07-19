@@ -1,0 +1,313 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { pool, ensureSchema } = require('./db');
+const { signToken, requireAuth, requireRole, verifyPassword } = require('./auth');
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
+
+/* ---------------- تسجيل الدخول ---------------- */
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
+  }
+  try {
+    const r = await pool.query('SELECT * FROM server_users WHERE username = $1', [username.trim()]);
+    const user = r.rows[0];
+    if (!user) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    const token = signToken(user);
+    // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
+    // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
+    res.json({
+      token,
+      username: user.username,
+      role: user.role || 'staff',
+      user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */
+// GET /api/storage/:key  -> { key, value, version }
+app.get('/api/storage/:key', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
+    if (!r.rows[0]) return res.json({ key: req.params.key, value: null, version: 0 });
+    res.json({ key: req.params.key, value: r.rows[0].value, version: r.rows[0].version });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّرت قراءة البيانات' });
+  }
+});
+
+// PUT /api/storage/:key  body: { value, version } -> { key, value, version }
+// يستخدم Optimistic Concurrency: يرفض الحفظ (409) إن كان شخص آخر قد عدّل نفس
+// المفتاح بعد آخر قراءة معروفة لهذا الجهاز، بدل الكتابة فوق تعديله بصمت.
+app.put('/api/storage/:key', requireAuth, async (req, res) => {
+  const { value } = req.body || {};
+  const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
+  try {
+    const existing = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
+    if (!existing.rows[0]) {
+      const ins = await pool.query(
+        `INSERT INTO kv_store (key, value, version, updated_by) VALUES ($1, $2, 1, $3)
+         RETURNING value, version`,
+        [req.params.key, value, req.user.username]
+      );
+      return res.json({ key: req.params.key, value: ins.rows[0].value, version: ins.rows[0].version });
+    }
+    if (existing.rows[0].version !== knownVersion) {
+      return res.status(409).json({
+        error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
+        currentVersion: existing.rows[0].version,
+      });
+    }
+    const upd = await pool.query(
+      `UPDATE kv_store SET value = $1, version = version + 1, updated_at = now(), updated_by = $2
+       WHERE key = $3 RETURNING value, version`,
+      [value, req.user.username, req.params.key]
+    );
+    res.json({ key: req.params.key, value: upd.rows[0].value, version: upd.rows[0].version });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حفظ البيانات' });
+  }
+});
+
+app.delete('/api/storage/:key', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM kv_store WHERE key = $1', [req.params.key]);
+    res.json({ key: req.params.key, deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر الحذف' });
+  }
+});
+
+app.get('/api/storage', requireAuth, async (req, res) => {
+  const prefix = req.query.prefix || '';
+  try {
+    const r = await pool.query('SELECT key FROM kv_store WHERE key LIKE $1', [prefix + '%']);
+    res.json({ keys: r.rows.map(x => x.key) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب القائمة' });
+  }
+});
+
+/* ---------------- قراءة فواتير الدورات من ملفات حقيقية (PDF/صور) بالذكاء الاصطناعي ----------------
+   تستقبل مجموعة ملفات (Base64)، وترسل كل ملف لـ Claude API لاستخراج البيانات المطبوعة داخله فقط
+   (رقم الهوية، رقم الفاتورة، تاريخ الفاتورة، القيمة الفعلية). لا شيء يُحفظ هنا في قاعدة البيانات —
+   فقط استخراج وإرجاع النتائج للواجهة، التي تعرضها للمراجعة اليدوية قبل الحفظ النهائي (بنفس منطق
+   ونموذج التحقق المستخدم أصلاً في "تحديث/استيراد فواتير الدورات دفعة واحدة"). */
+const invoiceReadJsonParser = express.json({ limit: '40mb' });
+
+const CI_EXTRACT_SYSTEM_PROMPT = `أنت مساعد استخراج بيانات من فواتير/إيصالات دورات تدريبية سعودية.
+سيصلك ملف فاتورة أو إيصال واحد (صورة أو PDF). استخرج منه فقط ما هو مكتوب صراحةً داخل الملف:
+- nationalId: رقم الهوية/الإقامة للمتدرب إن وُجد مكتوباً بوضوح (أرقام فقط بدون مسافات أو رموز)
+- invoiceNo: رقم الفاتورة أو رقم الإيصال
+- date: تاريخ إصدار الفاتورة بصيغة YYYY-MM-DD
+- actualValue: القيمة الإجمالية الفعلية المدفوعة (رقم فقط بدون رمز عملة)
+- clientNameOnInvoice: اسم العميل كما هو مكتوب في الفاتورة إن وُجد
+لا تخترع أي قيمة غير موجودة فعلياً في الملف — إن لم يظهر حقل بوضوح اجعله null.
+أجب بصيغة JSON فقط بدون أي نص أو علامات \`\`\`json، بالشكل التالي بالضبط:
+{"nationalId": "...", "invoiceNo": "...", "date": "...", "actualValue": 0, "clientNameOnInvoice": "...", "confidence": "high|medium|low"}`;
+
+async function extractInvoiceFile(f) {
+  const mime = String(f.mimeType || '').toLowerCase();
+  const isPdf = mime === 'application/pdf';
+  const isImage = mime.startsWith('image/');
+  const fileName = f.name || 'ملف';
+  if (!f.dataBase64 || (!isPdf && !isImage)) {
+    return { fileName, error: 'صيغة ملف غير مدعومة (يجب أن تكون صورة أو PDF)' };
+  }
+  const contentBlock = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.dataBase64 } }
+    : { type: 'image', source: { type: 'base64', media_type: mime, data: f.dataBase64 } };
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        system: CI_EXTRACT_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'استخرج البيانات من هذه الفاتورة.' }] }],
+      }),
+    });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      return { fileName, error: `تعذّرت قراءة الملف (HTTP ${r.status})`, detail: errText.slice(0, 200) };
+    }
+    const data = await r.json();
+    const rawText = (data.content || []).map(b => b.text || '').join('').trim();
+    const cleaned = rawText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return {
+      fileName,
+      nationalId: parsed.nationalId ? String(parsed.nationalId).trim() : null,
+      invoiceNo: parsed.invoiceNo ? String(parsed.invoiceNo).trim() : null,
+      date: parsed.date || null,
+      actualValue: parsed.actualValue !== null && parsed.actualValue !== undefined && parsed.actualValue !== '' ? Number(parsed.actualValue) : null,
+      clientNameOnInvoice: parsed.clientNameOnInvoice || null,
+      confidence: parsed.confidence || 'unknown',
+    };
+  } catch (e) {
+    return { fileName, error: 'تعذّر تحليل استجابة الذكاء الاصطناعي' };
+  }
+}
+
+app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, async (req, res) => {
+  const files = Array.isArray(req.body?.files) ? req.body.files : [];
+  if (!files.length) return res.status(400).json({ error: 'لم يتم إرسال أي ملفات' });
+  if (files.length > 30) return res.status(400).json({ error: 'الحد الأقصى 30 ملفاً في المرة الواحدة' });
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
+  }
+  // معالجة بحد أقصى 3 ملفات بالتوازي في نفس الوقت لتفادي إغراق الـ API
+  const results = [];
+  const queue = [...files];
+  async function worker() {
+    while (queue.length) {
+      const f = queue.shift();
+      results.push(await extractInvoiceFile(f));
+    }
+  }
+  try {
+    await Promise.all([worker(), worker(), worker()]);
+    res.json({ results });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّرت معالجة الملفات' });
+  }
+});
+
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+/* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
+const zatca = require('./zatca/lib');
+
+// حالة التسجيل الحالية (بدون أي بيانات حسّاسة) — تُستخدم لعرض حالة الربط في الواجهة
+app.get('/api/zatca/status', requireAuth, async (req, res) => {
+  const environment = req.query.environment || 'sandbox';
+  try {
+    const row = await zatca.loadActiveEgsRow(environment);
+    res.json(zatca.publicStatus(row));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب حالة الربط مع الهيئة' });
+  }
+});
+
+// تسجيل/تحديث EGS والحصول على شهادة الامتثال (compliance CSID) — يتطلب OTP من بوابة فاتورة
+app.post('/api/zatca/onboard', requireAuth, requireRole('admin'), async (req, res) => {
+  const { environment = 'sandbox', otp, orgProfile } = req.body || {};
+  if (!otp || !orgProfile) return res.status(400).json({ error: 'يلزم إرسال OTP وبيانات المنشأة (orgProfile)' });
+  try {
+    const result = await zatca.onboard({ environment, otp, orgProfile });
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'فشل التسجيل مع الهيئة', detail: e.message });
+  }
+});
+
+// طلب شهادة الإنتاج (PCSID) بعد اجتياز فحوصات التوافق
+app.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), async (req, res) => {
+  const { environment = 'sandbox', complianceRequestId } = req.body || {};
+  if (!complianceRequestId) return res.status(400).json({ error: 'يلزم إرسال complianceRequestId' });
+  try {
+    const result = await zatca.issueProductionCsid({ environment, complianceRequestId });
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'فشل الحصول على شهادة الإنتاج', detail: e.message });
+  }
+});
+
+// إرسال فاتورة مبيعات (تُبنى من الواجهة الأمامية بنفس أرقام الفاتورة المطبوعة)
+app.post('/api/zatca/invoice', requireAuth, async (req, res) => {
+  const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime } = req.body || {};
+  if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
+    return res.status(400).json({ error: 'بيانات الفاتورة غير مكتملة' });
+  }
+  try {
+    if (clientType === 'company') {
+      await zatca.logUnsupportedStandardInvoice({ sourceRef, documentType: 'invoice', createdBy: req.user.username });
+      return res.json({ status: 'not_supported_yet', message: 'الفواتير الضريبية القياسية (B2B) غير مفعّلة بعد في هذا الربط' });
+    }
+    const result = await zatca.submitSimplifiedInvoice({
+      environment, sourceRef, documentType: 'invoice', lineItems, issueDate, issueTime,
+      createdBy: req.user.username,
+    });
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إرسال الفاتورة للهيئة', detail: e.message });
+  }
+});
+
+// إرسال إشعار دائن (مردود مبيعات)
+app.post('/api/zatca/return', requireAuth, async (req, res) => {
+  const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime, canceledInvoiceNumber, reason } = req.body || {};
+  if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
+    return res.status(400).json({ error: 'بيانات المردود غير مكتملة' });
+  }
+  try {
+    if (clientType === 'company') {
+      await zatca.logUnsupportedStandardInvoice({ sourceRef, documentType: 'credit_note', createdBy: req.user.username });
+      return res.json({ status: 'not_supported_yet', message: 'إشعارات الدائن القياسية (B2B) غير مفعّلة بعد في هذا الربط' });
+    }
+    const result = await zatca.submitSimplifiedInvoice({
+      environment, sourceRef, documentType: 'credit_note', lineItems, issueDate, issueTime,
+      cancelation: {
+        canceled_invoice_number: canceledInvoiceNumber || '',
+        payment_method: zatca.ZATCAPaymentMethods.CASH,
+        reason: reason || 'مردود مبيعات',
+      },
+      createdBy: req.user.username,
+    });
+    res.json(result);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إرسال المردود للهيئة', detail: e.message });
+  }
+});
+
+/* ---------------- استضافة واجهة البرنامج (نفس ملف HTML) ---------------- */
+// نمنع المتصفح من تخزين app.html في الكاش لفترة طويلة، حتى يصل أي تحديث جديد
+// للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'app.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+ensureSchema()
+  .then(() => {
+    app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
+  })
+  .catch(e => {
+    console.error('❌ تعذّر تجهيز قاعدة البيانات:', e);
+    process.exit(1);
+  });
