@@ -177,6 +177,27 @@
   }
   nav.tabs button svg{width:18px; height:18px; flex:none; stroke:currentColor;}
   nav.tabs button span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  /* ---------- قائمة "العملاء" المنسدلة لأنواع الدورات ---------- */
+  .nav-flyout-wrap{position:relative; display:flex; align-items:stretch; gap:2px;}
+  .nav-flyout-wrap > button[data-view]{flex:1; min-width:0;}
+  .nav-caret{flex:none; width:26px; display:flex; align-items:center; justify-content:center; background:transparent; border:none; border-radius:8px; color:#9AA1B0; cursor:pointer; padding:0;}
+  .nav-caret:hover{background:rgba(255,255,255,.08); color:#fff;}
+  .nav-caret svg{width:13px; height:13px; transition:transform .15s ease;}
+  .nav-flyout-wrap.open .nav-caret svg{transform:rotate(180deg);}
+  .nav-submenu{
+    position:absolute; top:0; right:100%; margin-right:8px;
+    min-width:190px; max-width:260px;
+    background:var(--navy-dark); border:1px solid rgba(255,255,255,.14); border-radius:10px;
+    box-shadow:var(--shadow-hover); padding:6px; display:none; z-index:60;
+  }
+  .nav-submenu.show{display:block; animation:popIn .18s cubic-bezier(.22,.9,.32,1);}
+  .nav-submenu button{display:block; width:100%; text-align:right; background:transparent; border:none; color:#C9D4DE; padding:8px 10px; border-radius:7px; font-family:inherit; font-size:13px; cursor:pointer;}
+  .nav-submenu button:hover{background:rgba(255,255,255,.08); color:#fff;}
+  .nav-submenu .nav-submenu-empty{color:#8B93A0; font-size:12px; padding:8px 10px;}
+  @media(max-width:900px){
+    .nav-submenu{position:static; margin:4px 0 6px; box-shadow:none; border-color:rgba(255,255,255,.1);}
+  }
   nav.tabs button.active{background:color-mix(in srgb, var(--gold) 14%, transparent); color:var(--gold); font-weight:700; border-inline-start-color:var(--gold);}
   nav.tabs button:not(.active):hover{background:rgba(255,255,255,.06); color:#fff;}
 
@@ -471,7 +492,11 @@
   <div class="layout">
   <nav class="tabs">
     <button data-view="dashboard" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><span data-i18n="navDashboard">لوحة التحكم</span></button>
-    <button data-view="clients" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.8 14.7c2.6.2 4.7 2.3 4.7 5.3"></path></svg><span data-i18n="navClients">العملاء</span></button>
+    <div class="nav-flyout-wrap" id="nav-clients-flyout">
+      <button data-view="clients" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.8 14.7c2.6.2 4.7 2.3 4.7 5.3"></path></svg><span data-i18n="navClients">العملاء</span></button>
+      <button type="button" class="nav-caret" id="btn-clients-courses-toggle" title="تصفية العملاء حسب نوع الدورة" aria-label="تصفية العملاء حسب نوع الدورة" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="nav-submenu" id="clients-courses-submenu"></div>
+    </div>
     <button data-view="companies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="11" height="18"></rect><path d="M8 7h3M8 11h3M8 15h3"></path><path d="M15 9h5v12h-5"></path></svg><span data-i18n="navCompanies">تحويلات الشركات</span></button>
     <button data-view="courses" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5v-13z"></path><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H13v16h5.5c.8 0 1.5-.7 1.5-1.5v-13z"></path></svg><span data-i18n="navCourses">الدورات</span></button>
     <button data-view="courseinvoices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h4"></path><circle cx="17.5" cy="17.5" r="3"></circle><path d="M16.3 17.5l.9.9 1.6-1.7"></path></svg><span>فواتير الدورات</span></button>
@@ -530,7 +555,7 @@
       <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
       <button class="btn btn-primary btn-sm" id="btn-bulk-update">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
       <button class="btn btn-primary btn-sm" id="btn-refnum-bulk">📋 استيراد الرقم المرجعي (جدول)</button>
-      <button class="btn btn-danger btn-sm" id="btn-bulk-delete">🗑 حذف عملاء (جدول)</button>
+      <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table">🗑 حذف عملاء (جدول)</button>
       <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
       <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
       <button class="btn btn-gold" id="btn-bulk-add">+ إضافة عدة عملاء</button>
@@ -543,7 +568,7 @@
       <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-selection">إلغاء التحديد</button>
       <span class="spacer"></span>
       <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-send-message">📨 إرسال رسالة واتساب للمحدد</button>
-      <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete">🗑 حذف المحدد</button>
+      <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete-selected">🗑 حذف المحدد</button>
     </div>
     <div class="panel" style="padding:0;">
       <div class="table-scroll">
@@ -7549,7 +7574,7 @@ $('#btn-clear-selection').addEventListener('click', ()=>{
   selectedClientIds.clear();
   renderTable();
 });
-$('#btn-bulk-delete').addEventListener('click', async ()=>{
+$('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
   const ids = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
   if(!ids.length){ showToast('لا يوجد عملاء محددين'); return; }
   const namesPreview = clients.filter(c=>ids.includes(c.id)).slice(0,5).map(c=>c.name).join('، ');
@@ -8601,7 +8626,7 @@ function openBulkDeleteModal(){
   $('#bulk-delete-overlay').classList.add('show'); SoundFX.open();
 }
 function closeBulkDeleteModal(){ $('#bulk-delete-overlay').classList.remove('show'); }
-$('#btn-bulk-delete').addEventListener('click', openBulkDeleteModal);
+$('#btn-bulk-delete-table').addEventListener('click', openBulkDeleteModal);
 $('#btn-bulk-delete-cancel').addEventListener('click', closeBulkDeleteModal);
 $('#bulk-delete-overlay').addEventListener('click', e=>{ if(e.target.id==='bulk-delete-overlay') closeBulkDeleteModal(); });
 $('#btn-bulk-delete-row').addEventListener('click', addBulkDeleteRow);
@@ -16309,6 +16334,55 @@ $('#btn-export-zatca')?.addEventListener('click', ()=>{
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(purchasesDetail), 'المشتريات');
   XLSX.writeFile(wb, `الإقرار_الضريبي_والزكاة_${from}_${to}.xlsx`);
 });
+
+/* ---------------- قائمة "العملاء" المنسدلة لأنواع الدورات ----------------
+   تظهر بجانب زر "العملاء" في القائمة الجانبية وتسرد أنواع الدورات المعرَّفة في الإعدادات (settings.courses)؛
+   الضغط على أي نوع دورة ينقل لتبويب العملاء مباشرة ويطبّق فلتر "نوع الدورة" على هذا النوع تحديداً. */
+const clientsFlyoutWrap = $('#nav-clients-flyout');
+const clientsCaretBtn = $('#btn-clients-courses-toggle');
+const clientsCourseSubmenu = $('#clients-courses-submenu');
+
+function closeClientsCourseSubmenu(){
+  clientsCourseSubmenu?.classList.remove('show');
+  clientsFlyoutWrap?.classList.remove('open');
+  clientsCaretBtn?.setAttribute('aria-expanded','false');
+}
+function renderClientsCourseSubmenu(){
+  if(!clientsCourseSubmenu) return;
+  const courses = settings.courses || [];
+  let html = `<button type="button" data-course-filter="">كل الدورات</button>`;
+  if(courses.length){
+    html += courses.map(c=>`<button type="button" data-course-filter="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`).join('');
+  } else {
+    html += `<div class="nav-submenu-empty">لا توجد أنواع دورات معرَّفة بعد</div>`;
+  }
+  clientsCourseSubmenu.innerHTML = html;
+}
+clientsCaretBtn?.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const wasOpen = clientsCourseSubmenu?.classList.contains('show');
+  closeClientsCourseSubmenu();
+  if(!wasOpen){
+    renderClientsCourseSubmenu();
+    clientsCourseSubmenu.classList.add('show');
+    clientsFlyoutWrap.classList.add('open');
+    clientsCaretBtn.setAttribute('aria-expanded','true');
+  }
+});
+clientsCourseSubmenu?.addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-course-filter]');
+  if(!btn) return;
+  const courseName = btn.dataset.courseFilter;
+  document.querySelector('nav.tabs button[data-view="clients"]')?.click();
+  const sel = $('#filter-course');
+  if(sel) sel.value = courseName;
+  renderTable();
+  closeClientsCourseSubmenu();
+});
+document.addEventListener('click', (e)=>{
+  if(clientsCourseSubmenu?.classList.contains('show') && !clientsFlyoutWrap.contains(e.target)) closeClientsCourseSubmenu();
+});
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeClientsCourseSubmenu(); });
 
 (async function bootWithLicense(){
   try{
