@@ -14206,9 +14206,8 @@ function printCompanyStatement(companyId){
       <td class="mono">${fmt(num(tr.courseValue))}</td>
       <td class="mono">${fmt(num(tr.bagValue))}</td>
       <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-      <td>${tr.posted ? 'تم الترحيل' : 'لم يُرحَّل'}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="10" style="text-align:center; color:${PRINT_PALETTE.muted};">لا يوجد متدربون مضافون بعد</td></tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center; color:${PRINT_PALETTE.muted};">لا يوجد متدربون مضافون بعد</td></tr>`;
 
   const win = openPrintTarget();
   win.document.write(`
@@ -14243,14 +14242,13 @@ function printCompanyStatement(companyId){
     </table>
     <h3>المتدربون (${allTrainees.length} — تم الترحيل للبنك: ${totalPosted})</h3>
     <table>
-      <thead><tr><th>تاريخ الحوالة</th><th>رقم الهوية</th><th>الاسم</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th></tr></thead>
+      <thead><tr><th>تاريخ الحوالة</th><th>رقم الهوية</th><th>الاسم</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th></tr></thead>
       <tbody>${traineesRows}</tbody>
       ${allTrainees.length ? `<tfoot><tr>
         <td colspan="6" style="text-align:left;">الإجمالي</td>
         <td class="mono">${fmt(allTrainees.reduce((s,x)=>s+num(x.tr.courseValue),0))}</td>
         <td class="mono">${fmt(allTrainees.reduce((s,x)=>s+num(x.tr.bagValue),0))}</td>
         <td class="mono">${fmt(allTrainees.reduce((s,x)=>s+num(x.tr.courseValue)+num(x.tr.bagValue),0))}</td>
-        <td></td>
       </tr></tfoot>` : ''}
     </table>
     ${printDocFooterButton()}
