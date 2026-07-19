@@ -179,25 +179,23 @@
   nav.tabs button span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   /* ---------- قائمة "العملاء" المنسدلة لأنواع الدورات ---------- */
-  .nav-flyout-wrap{position:relative; display:flex; align-items:stretch; gap:2px;}
-  .nav-flyout-wrap > button[data-view]{flex:1; min-width:0;}
+  .nav-flyout-wrap{display:flex; flex-direction:column;}
+  .nav-flyout-row{display:flex; align-items:stretch; gap:2px;}
+  .nav-flyout-row > button[data-view]{flex:1; min-width:0;}
   .nav-caret{flex:none; width:26px; display:flex; align-items:center; justify-content:center; background:transparent; border:none; border-radius:8px; color:#9AA1B0; cursor:pointer; padding:0;}
   .nav-caret:hover{background:rgba(255,255,255,.08); color:#fff;}
   .nav-caret svg{width:13px; height:13px; transition:transform .15s ease;}
   .nav-flyout-wrap.open .nav-caret svg{transform:rotate(180deg);}
   .nav-submenu{
-    position:absolute; top:0; right:100%; margin-right:8px;
-    min-width:190px; max-width:260px;
-    background:var(--navy-dark); border:1px solid rgba(255,255,255,.14); border-radius:10px;
-    box-shadow:var(--shadow-hover); padding:6px; display:none; z-index:60;
+    position:static; margin:2px 0 4px;
+    min-width:0; max-width:none; width:100%;
+    background:rgba(0,0,0,.18); border:1px solid rgba(255,255,255,.1); border-radius:8px;
+    box-shadow:none; padding:4px; display:none; z-index:1;
   }
   .nav-submenu.show{display:block; animation:popIn .18s cubic-bezier(.22,.9,.32,1);}
   .nav-submenu button{display:block; width:100%; text-align:right; background:transparent; border:none; color:#C9D4DE; padding:8px 10px; border-radius:7px; font-family:inherit; font-size:13px; cursor:pointer;}
   .nav-submenu button:hover{background:rgba(255,255,255,.08); color:#fff;}
   .nav-submenu .nav-submenu-empty{color:#8B93A0; font-size:12px; padding:8px 10px;}
-  @media(max-width:900px){
-    .nav-submenu{position:static; margin:4px 0 6px; box-shadow:none; border-color:rgba(255,255,255,.1);}
-  }
   nav.tabs button.active{background:color-mix(in srgb, var(--gold) 14%, transparent); color:var(--gold); font-weight:700; border-inline-start-color:var(--gold);}
   nav.tabs button:not(.active):hover{background:rgba(255,255,255,.06); color:#fff;}
 
@@ -493,8 +491,10 @@
   <nav class="tabs">
     <button data-view="dashboard" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><span data-i18n="navDashboard">لوحة التحكم</span></button>
     <div class="nav-flyout-wrap" id="nav-clients-flyout">
-      <button data-view="clients" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.8 14.7c2.6.2 4.7 2.3 4.7 5.3"></path></svg><span data-i18n="navClients">العملاء</span></button>
-      <button type="button" class="nav-caret" id="btn-clients-courses-toggle" title="تصفية العملاء حسب نوع الدورة" aria-label="تصفية العملاء حسب نوع الدورة" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="nav-flyout-row">
+        <button data-view="clients" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.8 14.7c2.6.2 4.7 2.3 4.7 5.3"></path></svg><span data-i18n="navClients">العملاء</span></button>
+        <button type="button" class="nav-caret" id="btn-clients-courses-toggle" title="تصفية العملاء حسب نوع الدورة" aria-label="تصفية العملاء حسب نوع الدورة" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button>
+      </div>
       <div class="nav-submenu" id="clients-courses-submenu"></div>
     </div>
     <button data-view="companies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="11" height="18"></rect><path d="M8 7h3M8 11h3M8 15h3"></path><path d="M15 9h5v12h-5"></path></svg><span data-i18n="navCompanies">تحويلات الشركات</span></button>
