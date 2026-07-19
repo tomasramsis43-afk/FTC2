@@ -1,45 +1,22 @@
 /* ============================================================
    نظام الترخيص وتشفير البيانات المحلية
-   - كل عميل يحصل على كود ترخيص خاص به له تاريخ انتهاء (يُولَّد بأداة
-     منفصلة خاصة بصاحب البرنامج فقط، ولا تُوزَّع مع هذا الملف).
-   - بعد التفعيل، تُشفَّر كل بيانات البرنامج المخزّنة محلياً
-     (localStorage) بمفتاح مُشتق من كود الترخيص نفسه عبر AES-GCM
-     256-bit، بحيث لا تُقرأ البيانات كنص صريح حتى لو فُتح ملف
-     التخزين مباشرة أو نُسخ لجهاز آخر بدون كود الترخيص.
-   - ملاحظة أمانة: بما أن البرنامج بالكامل كود JavaScript يعمل داخل
-     المتصفح، فأي شخص يملك خبرة تقنية عالية ويصل للجهاز فعلياً يمكنه
-     نظرياً فحص الكود أثناء التشغيل. هذا النظام يرفع صعوبة النسخ
-     والاختراق العرضي بشكل كبير جداً، ولا يوجد حل ويب (بدون سيرفر)
-     يمنع ذلك 100%.
+   - التحقق من كود الترخيص أصبح يتم بالكامل على الخادم عبر
+     POST /api/license/validate. سر التوقيع (LICENSE_SECRET) لم يعد
+     موجوداً في هذا الملف إطلاقاً — الخادم فقط هو من يعرفه.
+   - عند نجاح التحقق، يُعيد الخادم مفتاح تشفير AES-256 جاهزاً
+     (مُشتقّاً بنفس الخوارزمية القديمة بالضبط)، فتبقى كل البيانات
+     المشفّرة مسبقاً في قاعدة البيانات قابلة للقراءة دون أي عملية
+     ترحيل (migration).
+   - ملاحظة أمانة: بما أن الواجهة كود JavaScript يعمل داخل المتصفح،
+     فأي شخص يملك خبرة تقنية عالية ويصل للجهاز فعلياً أثناء تشغيل
+     نسخة مُفعَّلة يمكنه نظرياً رصد المفتاح لحظة استلامه من الخادم.
+     هذا أصعب بكثير من مجرد قراءة سر ثابت من الكود المصدري مباشرة،
+     لكنه لا يمنع الوصول 100% — لا يوجد حل ويب (بدون خادم مركزي كامل
+     يفكّ التشفير بنفسه) يضمن ذلك.
    ============================================================ */
-const LICENSE_SECRET = "FahadCenter-2026-x9K2mQ7pR4vL8zN1"; // غيّرها لقيمة سرية خاصة بك وطابقها في أداة توليد الأكواد، ولا تشارك هذا الملف مصدرياً مع أي أحد
 const LICENSE_STORAGE_KEY = "appLicenseKeyV1";
-let ENC_KEY = null; // مفتاح AES-GCM يُشتق من كود الترخيص بعد التفعيل
+let ENC_KEY = null; // مفتاح AES-GCM يصل من الخادم بعد نجاح التحقق من الترخيص
 
-function b32Encode(bytes){
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = 0, value = 0, output = '';
-  for(let i=0;i<bytes.length;i++){
-    value = (value << 8) | bytes[i];
-    bits += 8;
-    while(bits >= 5){ output += alphabet[(value >>> (bits - 5)) & 31]; bits -= 5; }
-  }
-  if(bits > 0) output += alphabet[(value << (5 - bits)) & 31];
-  return output;
-}
-function b32Decode(str){
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  str = (str||'').replace(/=+$/,'').toUpperCase();
-  let bits = 0, value = 0; const out = [];
-  for(let i=0;i<str.length;i++){
-    const idx = alphabet.indexOf(str[i]);
-    if(idx === -1) continue;
-    value = (value << 5) | idx;
-    bits += 5;
-    if(bits >= 8){ out.push((value >>> (bits - 8)) & 0xFF); bits -= 8; }
-  }
-  return new Uint8Array(out);
-}
 function bytesToBase64(bytes){
   let binary = ''; const chunk = 0x8000;
   for(let i=0;i<bytes.length;i+=chunk){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk)); }
@@ -52,48 +29,28 @@ function base64ToBytes(b64){
   return bytes;
 }
 
-async function hmacSign(secret, dataBytes){
-  const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), {name:'HMAC', hash:'SHA-256'}, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', keyMaterial, dataBytes);
-  return new Uint8Array(sig);
-}
-
 async function validateLicenseKey(rawKey){
+  const cleaned = (rawKey||'').replace(/[\s-]/g,'').toUpperCase();
+  if(!cleaned) return {valid:false, reason:'أدخل كود الترخيص'};
   try{
-    const cleaned = (rawKey||'').replace(/[\s-]/g,'').toUpperCase();
-    if(!cleaned) return {valid:false, reason:'أدخل كود الترخيص'};
-    const bytes = b32Decode(cleaned);
-    if(bytes.length < 26) return {valid:false, reason:'صيغة كود الترخيص غير صحيحة'};
-    const payload = bytes.slice(0,16);
-    const sig = bytes.slice(16,26);
-    const expectedSig = (await hmacSign(LICENSE_SECRET, payload)).slice(0,10);
-    let match = sig.length === expectedSig.length;
-    if(match){ for(let i=0;i<sig.length;i++){ if(sig[i] !== expectedSig[i]){ match = false; break; } } }
-    if(!match) return {valid:false, reason:'كود الترخيص غير صحيح'};
-    const payloadStr = new TextDecoder().decode(payload);
-    const clientId = payloadStr.slice(0,8).trim();
-    const expiryStr = payloadStr.slice(8,16);
-    const y = +expiryStr.slice(0,4), m = +expiryStr.slice(4,6), d = +expiryStr.slice(6,8);
-    const expiryDate = new Date(y, m-1, d, 23, 59, 59);
-    if(isNaN(expiryDate.getTime())) return {valid:false, reason:'كود الترخيص غير صحيح'};
-    if(new Date() > expiryDate){
-      const disp = String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+y;
-      return {valid:false, expired:true, reason:'انتهت صلاحية الترخيص بتاريخ '+disp+'. يرجى تجديد الاشتراك.', clientId, expiryDate};
+    const res = await fetch(API_BASE + '/api/license/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licenseKey: cleaned }),
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.valid){
+      return { valid:false, reason: data.reason || 'كود الترخيص غير صحيح', expired: !!data.expired };
     }
-    return {valid:true, clientId, expiryDate};
+    return { valid:true, clientId: data.clientId, expiryDate: data.expiryDate ? new Date(data.expiryDate) : null, encKeyB64: data.encKey };
   }catch(e){
-    return {valid:false, reason:'تعذر التحقق من كود الترخيص'};
+    return { valid:false, reason:'تعذّر الاتصال بالخادم للتحقق من الترخيص' };
   }
 }
 
-async function deriveEncryptionKey(clientId){
-  const salt = new TextEncoder().encode('center-app-storage-salt-v1');
-  const material = clientId + '::' + LICENSE_SECRET; // ثابت طالما نفس العميل، حتى لو تغيّر كود الترخيص عند التجديد
-  const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(material), {name:'PBKDF2'}, false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt, iterations:150000, hash:'SHA-256'},
-    baseKey, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
-  );
+async function importEncryptionKey(encKeyB64){
+  const raw = base64ToBytes(encKeyB64);
+  return crypto.subtle.importKey('raw', raw, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
 }
 
 async function encryptValue(plaintext){
@@ -671,7 +628,7 @@ async function loadData(){
     users = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ users = []; }
   if(!users.length){
-    users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
+    users = []; // لا يوجد مستخدم افتراضي بباسورد معروف؛ الدخول الفعلي يتم عبر تسجيل الدخول على الخادم (serverLogin)
     await saveUsers();
   }
   let rolesBackfilled = false;
@@ -4399,7 +4356,7 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     bankStatementRows = [];
     vaultDenomTx = [];
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-    users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
+    users = []; // لا يوجد مستخدم افتراضي بباسورد معروف؛ الدخول الفعلي يتم عبر تسجيل الدخول على الخادم (serverLogin)
     undoStack = [];
     redoStack = [];
 
@@ -10811,8 +10768,8 @@ $('#server-login-form').addEventListener('submit', async e=>{
   }
 });
 
-async function activateAndStart(clientId){
-  ENC_KEY = await deriveEncryptionKey(clientId);
+async function activateAndStart(clientId, encKeyB64){
+  ENC_KEY = await importEncryptionKey(encKeyB64);
   $('#license-screen').style.display = 'none';
   await ensureServerLoginThenStart();
 }
@@ -10828,7 +10785,7 @@ $('#license-form').addEventListener('submit', async e=>{
     if(result.valid){
       const cleaned = input.replace(/[\s-]/g,'').toUpperCase();
       localStorage.setItem(LICENSE_STORAGE_KEY, cleaned);
-      await activateAndStart(result.clientId);
+      await activateAndStart(result.clientId, result.encKeyB64);
     }else{
       $('#license-error').textContent = result.reason || 'كود الترخيص غير صالح';
       $('#license-error').style.display = 'block';
@@ -11239,7 +11196,7 @@ $('#btn-export-zatca')?.addEventListener('click', ()=>{
     if(storedKey){
       const result = await validateLicenseKey(storedKey);
       if(result.valid){
-        await activateAndStart(result.clientId);
+        await activateAndStart(result.clientId, result.encKeyB64);
         return;
       }
       showLicenseScreen(result.reason);
