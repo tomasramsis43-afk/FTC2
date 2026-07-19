@@ -6776,7 +6776,7 @@ window.addEventListener('resize', ()=>{
 
 /* ---------------- Nav ---------------- */
 const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca'];
-$all('nav.tabs button').forEach(btn=>{
+$all('nav.tabs button[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(currentUserRole==='staff' && RESTRICTED_STAFF_VIEWS.includes(btn.dataset.view)){
       showToast('هذا القسم متاح للمدير فقط');
@@ -6784,7 +6784,7 @@ $all('nav.tabs button').forEach(btn=>{
     }
     SoundFX.nav();
     if(window.innerWidth<=900) closeMobileNav();
-    $all('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    $all('nav.tabs button[data-view]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     $all('section.view').forEach(v=>v.classList.remove('active'));
     $('#view-'+btn.dataset.view).classList.add('active');
@@ -6806,7 +6806,7 @@ $all('nav.tabs button').forEach(btn=>{
 /* إظهار/إخفاء التبويبات المحصورة على المدير فقط حسب صلاحية المستخدم الحالي */
 function applyRolePermissions(){
   const isStaff = currentUserRole==='staff';
-  $all('nav.tabs button').forEach(btn=>{
+  $all('nav.tabs button[data-view]').forEach(btn=>{
     btn.style.display = (isStaff && RESTRICTED_STAFF_VIEWS.includes(btn.dataset.view)) ? 'none' : '';
   });
   // إن كان المستخدم على أحد الأقسام المحظورة (مثلاً بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده للوحة التحكم
