@@ -2777,6 +2777,14 @@ function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, 
     body{font-family:'Tahoma','Arial',sans-serif; color:${p.text}; margin:0; padding:${variant==='table'?'24px':'28px'};}
     .footer-note{margin-top:30px; font-size:11.5px; color:${p.muted}; text-align:center; border-top:1px solid ${p.border}; padding-top:12px;}
     @media print{ .no-print{display:none;} body{padding:10px;} }
+    /* ---------- عرض المستند على شاشة جوال (لا يؤثر على الطباعة الفعلية) ----------
+       المستند مصمم أصلاً لمقاس ورق A4، فبدون هذا الجزء يظهر مصغّراً جداً أو
+       يتطلب تكبيراً يدوياً داخل معاينة الطباعة على الموبايل. */
+    @media screen and (max-width:700px){
+      body{padding:14px; overflow-x:auto;}
+      table{width:max-content; min-width:100%;}
+      th, td{white-space:nowrap;}
+    }
   `;
   if(variant==='table' || variant==='table-center'){
     const cellAlign = variant==='table-center' ? 'center' : 'right';
@@ -2821,11 +2829,21 @@ function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, 
     .sig-grid{display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:50px;}
     .sig-box{text-align:center;}
     .sig-line{border-top:1px solid ${p.text}; margin-top:50px; padding-top:8px; font-size:12.5px;}
+    @media screen and (max-width:700px){
+      .inv-head{flex-wrap:wrap; gap:14px;}
+      .zatca-qr{margin-right:0;}
+      .zatca-qr img{width:84px; height:84px;}
+      .info-grid{grid-template-columns:1fr; gap:10px;}
+      .totals{width:100%;}
+      table.items{font-size:12px;}
+      table.items th, table.items td{padding:7px 8px; font-size:12px;}
+      .sig-grid{grid-template-columns:1fr; gap:36px;}
+    }
   `;
 }
 /* رأس مستند HTML كامل جاهز للطباعة (DOCTYPE + head + style) */
 function printDocHead(title, {accent, borderColor, amountColor, variant, extraCss = ''} = {}){
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${title}</title><style>${printDocStyles({accent, borderColor, amountColor, variant})}${extraCss}</style></head>`;
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><style>${printDocStyles({accent, borderColor, amountColor, variant})}${extraCss}</style></head>`;
 }
 /* زر الطباعة/الحفظ الموحّد أسفل كل مستند */
 function printDocFooterButton(){
