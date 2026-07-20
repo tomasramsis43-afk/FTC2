@@ -4617,8 +4617,8 @@
         <b>محاسب:</b> لوحة التحكم، العملاء، الحركات المالية، المحاسبة، الموازنة، التقارير، المشتريات، الشركات — بدون الإعدادات أو سجل المراجعة أو الحقائب أو الدورات.<br>
         <b>استقبال:</b> لوحة التحكم، العملاء، الدورات، فواتير الدورات، الحقائب فقط — بدون أي وصول للأرقام المالية أو المحاسبة.
       </div>
-      <div class="hint" style="margin-top:10px; border-right:3px solid var(--gold); padding-right:8px;">⚠️ <b>مهم:</b> تسجيل الدخول الفعلي وتحديد الصلاحية يتمّان بالكامل من خلال خادم الدخول المركزي الخاص بالبرنامج (وليس من هذه القائمة الداخلية) — يجب أن يُرجع الخادم قيمة الدور بالضبط (admin / accountant / reception / staff) عند تسجيل الدخول حتى تُطبَّق الصلاحية المطلوبة فعلياً. القائمة هنا للتوثيق والمرجعية فقط.</div>
-      <div class="hint" style="margin-top:14px;">تنبيه: كلمات المرور هنا للتحقق البسيط داخل التطبيق فقط وليست تشفيراً أمنياً قوياً — لا تستخدم كلمة مرور حساسة تستخدمها في مكان آخر.</div>
+      <div class="hint" style="margin-top:10px; border-right:3px solid var(--gold); padding-right:8px;">✅ هذه القائمة أصبحت متصلة مباشرة بخادم الدخول المركزي — أي مستخدم تضيفه هنا يقدر يسجّل دخول فوراً بالصلاحية المحددة. كلمات المرور تُشفَّر (bcrypt) على الخادم قبل التخزين ولا تُحفظ أبداً كنص واضح.</div>
+      <div class="hint" style="margin-top:14px;">لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به (لتفادي فقدان الوصول بالخطأ) — سجّل دخول بحساب مدير آخر أولاً لو احتجت حذفه.</div>
     </div>
     <div class="panel">
       <h3>بيانات النظام</h3>
@@ -9838,14 +9838,25 @@ function renderSettings(){
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
   renderUsersList();
 }
-function renderUsersList(){
-  $('#users-list').innerHTML = users.map((u,i)=>`
-    <div class="tag" style="border-radius:8px; justify-content:space-between; width:100%; margin-bottom:6px;">
-      <span>👤 ${escapeHtml(u.username)}${u.username===currentUser ? ' (أنت)' : ''}
-        <span class="mono" style="font-size:10.5px; color:${u.role==='staff'?'var(--text-muted)':'var(--gold-dark)'}; margin-right:6px;">${u.role==='staff' ? 'موظف' : 'مدير'}</span>
-      </span>
-      <button data-ru="${i}" ${users.length<=1 ? 'disabled title="لا يمكن حذف آخر مستخدم"' : ''}>✕</button>
-    </div>`).join('');
+const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
+async function renderUsersList(){
+  const el = $('#users-list');
+  if(!el) return;
+  el.innerHTML = `<div class="hint">جارٍ تحميل المستخدمين من الخادم...</div>`;
+  try{
+    const res = await fetch(API_BASE + '/api/users', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر جلب المستخدمين');
+    el.innerHTML = (data.users||[]).map(u=>`
+      <div class="tag" style="border-radius:8px; justify-content:space-between; width:100%; margin-bottom:6px;">
+        <span>👤 ${escapeHtml(u.display_name||u.username)} (${escapeHtml(u.username)})${u.username===currentUser ? ' — أنت' : ''}
+          <span class="mono" style="font-size:10.5px; color:${u.role==='admin'?'var(--gold-dark)':'var(--text-muted)'}; margin-right:6px;">${SERVER_ROLE_LABELS[u.role]||u.role}</span>
+        </span>
+        <button data-ru="${escapeHtml(u.username)}" ${u.username===currentUser ? 'disabled title="لا يمكنك حذف حسابك الحالي"' : ''}>✕</button>
+      </div>`).join('') || `<div class="hint">لا يوجد مستخدمون بعد</div>`;
+  }catch(e){
+    el.innerHTML = `<div class="hint" style="color:var(--red);">تعذّر تحميل قائمة المستخدمين: ${escapeHtml(e.message||'')}</div>`;
+  }
 }
 /* ---------------- تحديث البرنامج (نسخة سطح المكتب فقط) ---------------- */
 /* ---------------- إعادة ضبط البرنامج بالكامل (حذف كل البيانات) ---------------- */
@@ -10056,29 +10067,42 @@ $('#restore-backup-input').addEventListener('change', async e=>{
 $('#btn-add-user').addEventListener('click', async ()=>{
   const uname = $('#new-user-name').value.trim();
   const upass = $('#new-user-pass').value;
-  const urole = $('#new-user-role').value === 'admin' ? 'admin' : 'staff';
+  const urole = $('#new-user-role').value;
   if(!uname || !upass){ showToast('أدخل اسم المستخدم وكلمة المرور'); return; }
-  if(users.some(u=>u.username.toLowerCase()===uname.toLowerCase())){ showToast('اسم المستخدم موجود بالفعل'); return; }
-  snapshotState(`إضافة مستخدم: ${uname}`);
-  users.push({username:uname, password:upass, role:urole, createdAt:Date.now()});
-  await saveUsers();
-  await logAudit('add','المستخدمون', `تمت إضافة مستخدم جديد: ${uname} (${urole==='admin'?'مدير':'موظف'})`);
-  $('#new-user-name').value=''; $('#new-user-pass').value='';
-  renderUsersList();
-  showToast('تمت إضافة المستخدم');
+  if(upass.length < 6){ showToast('كلمة المرور يجب ألا تقل عن 6 أحرف'); return; }
+  try{
+    const res = await fetch(API_BASE + '/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+      body: JSON.stringify({ username: uname, password: upass, displayName: uname, role: urole })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر إضافة المستخدم');
+    await logAudit('add','المستخدمون', `تمت إضافة/تحديث مستخدم على الخادم: ${uname} (${SERVER_ROLE_LABELS[urole]||urole})`);
+    $('#new-user-name').value=''; $('#new-user-pass').value='';
+    await renderUsersList();
+    showToast('تمت إضافة المستخدم');
+  }catch(e){
+    showToast(e.message || 'تعذّر إضافة المستخدم');
+  }
 });
 document.addEventListener('click', async e=>{
   if(e.target.dataset.ru!==undefined){
-    const idx = +e.target.dataset.ru;
-    if(users.length<=1) return;
-    const removed = users[idx];
-    if(await customConfirm(`تأكيد حذف المستخدم "${removed.username}"؟`)){
-      snapshotState(`حذف مستخدم: ${removed.username}`);
-      users.splice(idx,1);
-      await saveUsers();
-      await logAudit('delete','المستخدمون', `تم حذف المستخدم: ${removed.username}`);
-      renderUsersList();
-      showToast('تم حذف المستخدم');
+    const username = e.target.dataset.ru;
+    if(await customConfirm(`تأكيد حذف المستخدم "${username}"؟ لن يستطيع تسجيل الدخول بعد ذلك.`)){
+      try{
+        const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username), {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN }
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error || 'تعذّر حذف المستخدم');
+        await logAudit('delete','المستخدمون', `تم حذف مستخدم من الخادم: ${username}`);
+        await renderUsersList();
+        showToast('تم حذف المستخدم');
+      }catch(err){
+        showToast(err.message || 'تعذّر حذف المستخدم');
+      }
     }
   }
 });
