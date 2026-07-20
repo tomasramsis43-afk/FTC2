@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
@@ -7,6 +8,10 @@ const { signToken, requireAuth, requireRole, hashPassword, verifyPassword } = re
 
 const app = express();
 app.use(cors());
+// ضغط كل الاستجابات (gzip) — يقلّل حجم app.html (~1.8MB) واستجابات
+// /api/storage (بيانات العملاء/الحركات المشفّرة كنصوص طويلة) بشكل كبير جداً
+// أثناء النقل عبر الشبكة، بدون أي تأثير على المحتوى أو المنطق.
+app.use(compression());
 app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
 
 /* ---------------- تسجيل الدخول ---------------- */
@@ -117,31 +122,35 @@ app.get('/api/storage/:key', requireAuth, async (req, res) => {
 // PUT /api/storage/:key  body: { value, version } -> { key, value, version }
 // يستخدم Optimistic Concurrency: يرفض الحفظ (409) إن كان شخص آخر قد عدّل نفس
 // المفتاح بعد آخر قراءة معروفة لهذا الجهاز، بدل الكتابة فوق تعديله بصمت.
+// (تحسين أداء: استعلام SQL واحد فقط بدل استعلامين متتاليين — يقلّل زمن كل
+// عملية حفظ تقريباً للنصف، خصوصاً مع اتصال قاعدة بيانات بعيد/بطيء الشبكة).
 app.put('/api/storage/:key', requireAuth, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
-    const existing = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
-    if (!existing.rows[0]) {
-      const ins = await pool.query(
-        `INSERT INTO kv_store (key, value, version, updated_by) VALUES ($1, $2, 1, $3)
-         RETURNING value, version`,
-        [req.params.key, value, req.user.username]
-      );
-      return res.json({ key: req.params.key, value: ins.rows[0].value, version: ins.rows[0].version });
-    }
-    if (existing.rows[0].version !== knownVersion) {
-      return res.status(409).json({
-        error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
-        currentVersion: existing.rows[0].version,
-      });
-    }
-    const upd = await pool.query(
-      `UPDATE kv_store SET value = $1, version = version + 1, updated_at = now(), updated_by = $2
-       WHERE key = $3 RETURNING value, version`,
-      [value, req.user.username, req.params.key]
+    const upsert = await pool.query(
+      `INSERT INTO kv_store (key, value, version, updated_by)
+       VALUES ($1, $2, 1, $3)
+       ON CONFLICT (key) DO UPDATE SET
+         value = EXCLUDED.value,
+         version = kv_store.version + 1,
+         updated_at = now(),
+         updated_by = EXCLUDED.updated_by
+       WHERE kv_store.version = $4
+       RETURNING value, version`,
+      [req.params.key, value, req.user.username, knownVersion]
     );
-    res.json({ key: req.params.key, value: upd.rows[0].value, version: upd.rows[0].version });
+    if (upsert.rows[0]) {
+      return res.json({ key: req.params.key, value: upsert.rows[0].value, version: upsert.rows[0].version });
+    }
+    // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
+    // أو حالة نادرة (سباق بين عملية INSERT أولى من جهازين معاً على نفس المفتاح الجديد).
+    // في الحالتين نرجع للمستخدم الحالة الحقيقية الحالية بدل افتراض تعارض دائماً.
+    const current = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
+    return res.status(409).json({
+      error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
+      currentVersion: current.rows[0] ? current.rows[0].version : 0,
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حفظ البيانات' });
@@ -354,14 +363,23 @@ app.post('/api/zatca/return', requireAuth, async (req, res) => {
 
 /* ---------------- استضافة واجهة البرنامج (نفس ملف HTML) ---------------- */
 // نمنع المتصفح من تخزين app.html في الكاش لفترة طويلة، حتى يصل أي تحديث جديد
-// للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة
+// للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة.
+// بالمقابل، الملفات الثابتة (CSS، الصور، sw.js) نسمح بكاش قصير نسبياً (ساعة واحدة)
+// لتفادي إعادة تحميلها من الصفر مع كل طلب — بدون خطر تقديم نسخة قديمة لفترة طويلة.
 app.use((req, res, next) => {
   if (req.path === '/' || req.path.endsWith('.html')) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   }
   next();
 });
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.use(express.static(path.join(__dirname, '..', 'frontend'), {
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'app.html'));
