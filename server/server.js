@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
-const { signToken, requireAuth, requireRole, verifyPassword } = require('./auth');
+const { signToken, requireAuth, requireRole, hashPassword, verifyPassword } = require('./auth');
 
 const app = express();
 app.use(cors());
@@ -33,6 +33,63 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+/* ---------------- إدارة المستخدمين (للمدير admin فقط) ----------------
+   بديل عن تشغيل seed-user.js يدوياً من الطرفية في كل مرة — نفس المنطق بالضبط لكن عبر API
+   محمي بـ requireRole('admin') على مستوى الخادم نفسه (مش مجرد إخفاء زر في الواجهة). */
+const VALID_SERVER_ROLES = ['admin', 'accountant', 'reception', 'staff'];
+
+// GET /api/users -> قائمة المستخدمين (بدون كلمات المرور المشفّرة أبداً)
+app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT id, username, display_name, role, created_at FROM server_users ORDER BY created_at ASC'
+    );
+    res.json({ users: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب قائمة المستخدمين' });
+  }
+});
+
+// POST /api/users  body: { username, password, displayName, role } -> إنشاء مستخدم جديد أو تحديث كلمة مرور/صلاحية مستخدم موجود
+app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  const { username, password, displayName, role } = req.body || {};
+  if (!username || !username.trim()) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
+  if (!password || password.length < 6) return res.status(400).json({ error: 'كلمة المرور يجب ألا تقل عن 6 أحرف' });
+  const finalRole = VALID_SERVER_ROLES.includes(role) ? role : 'staff';
+  try {
+    const hash = await hashPassword(password);
+    const r = await pool.query(
+      `INSERT INTO server_users (username, password_hash, display_name, role)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash,
+         display_name = COALESCE(EXCLUDED.display_name, server_users.display_name),
+         role = EXCLUDED.role
+       RETURNING id, username, display_name, role, created_at`,
+      [username.trim(), hash, displayName || username.trim(), finalRole]
+    );
+    res.json({ user: r.rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حفظ المستخدم' });
+  }
+});
+
+// DELETE /api/users/:username -> حذف مستخدم (لا يمكن للمدير حذف حسابه الحالي بنفسه لتفادي فقدان الوصول بالخطأ)
+app.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  if (target === req.user.username) {
+    return res.status(400).json({ error: 'لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به' });
+  }
+  try {
+    await pool.query('DELETE FROM server_users WHERE username = $1', [target]);
+    res.json({ username: target, deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف المستخدم' });
   }
 });
 
