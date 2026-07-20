@@ -2344,7 +2344,7 @@ function monthlyClientsDailyReport(yearMonth){
   }
   return { year, month, monthLabel: `${MONTH_NAMES_AR_FULL[month-1]} ${year}`, rows, totalReg, totalCash, totalNetwork, totalBank, totalAmount };
 }
-function printMonthlyClientsReport(yearMonth){
+function monthlyClientsReportBodyHtml(yearMonth){
   const rep = monthlyClientsDailyReport(yearMonth);
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA');
@@ -2359,10 +2359,7 @@ function printMonthlyClientsReport(yearMonth){
       <td class="mono">${fmt(r.bank)}</td>
       <td class="mono" style="font-weight:bold;">${fmt(r.amount)}</td>
     </tr>`).join('');
-  const win = openPrintTarget();
-  win.document.write(`
-  ${printDocHead('تقرير شهري — ' + rep.monthLabel, {variant: 'table'})}
-  <body>
+  return `
     <div class="head">
       <div><h2>تقرير شهري — تسجيلات ومبالغ العملاء</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)} — ${escapeHtml(rep.monthLabel)}</div></div>
       <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
@@ -2381,7 +2378,15 @@ function printMonthlyClientsReport(yearMonth){
           <td class="mono">${fmt(rep.totalAmount)}</td>
         </tr>
       </tbody>
-    </table>
+    </table>`;
+}
+function printMonthlyClientsReport(yearMonth){
+  const rep = monthlyClientsDailyReport(yearMonth);
+  const win = openPrintTarget();
+  win.document.write(`
+  ${printDocHead('تقرير شهري — ' + rep.monthLabel, {variant: 'table'})}
+  <body>
+    ${monthlyClientsReportBodyHtml(yearMonth)}
     ${printDocFooterButton()}
   </body></html>`);
   win.document.close();
@@ -7404,6 +7409,226 @@ $('#btn-send-monthly-wa')?.addEventListener('click', ()=>{
   const key = $('#wa-report-month').value;
   if(!key){ showToast('اختر الشهر أولاً'); return; }
   sendMonthlyReportWhatsapp(key);
+});
+
+/* ============ 4 تقارير PDF شهرية منفصلة عبر مشاركة الجوال (واتساب) ============
+   يولّد كل تقرير كملف PDF حقيقي على جهاز المستخدم (بدون أي سيرفر) عبر html2canvas + jsPDF،
+   ثم يفتح قائمة المشاركة الأصلية بالجوال (Web Share API) مع الملفات الأربعة مرفقة تلقائياً.
+   ملاحظة مهمة: لا يوجد أي رابط أو API يسمح بإرسال ملفات لواتساب تلقائياً بالكامل من صفحة ويب
+   عادية بدون تدخل المستخدم — أقصى شي ممكن هو فتح قائمة المشاركة وعلى المستخدم اختيار واتساب
+   والضغط "إرسال". على الأجهزة/المتصفحات التي لا تدعم مشاركة الملفات، تُنزَّل الملفات الأربعة
+   مباشرة ليرفقها المستخدم يدوياً. */
+
+/* عرض التقرير داخل iframe مخفي خارج الشاشة لالتقاطه بـ html2canvas دون التأثير على واجهة المستخدم */
+function renderReportToOffscreenIframe(fullHtml){
+  return new Promise((resolve, reject)=>{
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed; top:-10000px; left:-10000px; width:900px; height:10px; border:0; background:#fff;';
+    iframe.onload = ()=> resolve(iframe);
+    iframe.onerror = ()=> reject(new Error('تعذّر تحضير التقرير'));
+    document.body.appendChild(iframe);
+    iframe.srcdoc = fullHtml;
+  });
+}
+/* تحويل محتوى HTML لتقرير (نفس تنسيق تقارير الطباعة الحالية) إلى ملف PDF حقيقي متعدد الصفحات عند اللزوم */
+async function htmlBodyToPdfFile(bodyHtml, {title, filename, variant='table'} = {}){
+  if(typeof html2canvas==='undefined' || !window.jspdf){
+    throw new Error('مكتبة توليد PDF غير متوفرة (تحقق من الاتصال بالإنترنت)');
+  }
+  const fullHtml = `${printDocHead(title, {variant})}<body>${bodyHtml}</body></html>`;
+  const iframe = await renderReportToOffscreenIframe(fullHtml);
+  try{
+    await new Promise(r=> setTimeout(r, 200)); // مهلة قصيرة لضبط التخطيط قبل الالتقاط
+    const doc = iframe.contentDocument;
+    const canvas = await html2canvas(doc.body, {
+      scale:2, backgroundColor:'#ffffff', useCORS:true,
+      windowWidth: doc.documentElement.scrollWidth, windowHeight: doc.documentElement.scrollHeight,
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','mm','a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    let heightLeft = imgHeight, position = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    const blob = pdf.output('blob');
+    return new File([blob], filename, {type:'application/pdf'});
+  } finally {
+    iframe.remove();
+  }
+}
+/* تقرير الإقرار الضريبي كمستند مستقل (بدل الاعتماد على جدول معروض بالشاشة، حتى يعمل لأي شهر مباشرة) */
+function vatReturnReportBodyHtml(r, from, to, monthLabel){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA');
+  const row = (label, value, opts)=> `<tr style="${opts&&opts.bold?'font-weight:800; border-top:1px solid #D8DEE6;':(opts&&opts.muted?'color:#66707E;':'')}"><td style="${opts&&opts.indent?'padding-right:22px;':''}">${label}</td><td class="mono" style="text-align:left;">${fmt(value)}</td></tr>`;
+  const summaryHtml = `<table><tbody>
+    <tr><td colspan="2" style="padding-top:14px; font-weight:800;">المبيعات (ضريبة المخرجات) — ${r.salesRows.length} فاتورة${r.returnRows.length?` · ${r.returnRows.length} مردود`:''}</td></tr>
+    ${row('إجمالي المبيعات شامل الضريبة', r.salesGross, {indent:true, muted:true})}
+    ${row('يُخصم: مردودات مبيعات (شامل الضريبة)', -r.returnsGross, {indent:true, muted:true})}
+    ${row('إجمالي المبيعات بدون الضريبة (بعد المردودات)', r.salesNet, {indent:true, muted:true})}
+    ${row('صافي ضريبة المخرجات (15%)', r.outputVat, {bold:true})}
+    <tr><td colspan="2" style="padding-top:14px; font-weight:800;">المشتريات (ضريبة المدخلات) — ${r.purchaseRows.length} فاتورة</td></tr>
+    ${row('إجمالي المشتريات شامل الضريبة', r.purchasesGross, {indent:true, muted:true})}
+    ${row('إجمالي المشتريات بدون الضريبة', r.purchasesNet, {indent:true, muted:true})}
+    ${row('إجمالي ضريبة المدخلات (15%)', r.inputVat, {bold:true})}
+    <tr><td colspan="2" style="padding-top:14px;"></td></tr>
+    ${row(r.netVat>=0 ? 'صافي الضريبة المستحقة للهيئة' : 'صافي الضريبة الدائنة (لصالحك)', Math.abs(r.netVat), {bold:true})}
+  </tbody></table>`;
+  return `
+    <div class="head">
+      <div><h2>الإقرار الضريبي (ضريبة القيمة المضافة)</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)} — ${escapeHtml(monthLabel)}</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">عن الفترة: ${escapeHtml(formatDateDisplay(from))} إلى ${escapeHtml(formatDateDisplay(to))}<br>تاريخ الطباعة: ${escapeHtml(today)}</div>
+    ${summaryHtml}
+    ${buildVatBoxesTableHtml(r)}
+    ${buildVatDetailTablesHtml(r)}`;
+}
+/* تقرير الحركات المالية الصادرة خلال الشهر، باستثناء ما يخص تمويل/شراء مخزون الحقائب */
+function vaultOutReportBodyHtml(from, to, monthLabel){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA');
+  const rows = vaultTx.filter(t=> t.type==='out' && !t.isReturn && inRange(t.date, from, to) && !String(t.category||'').includes('حقائب'))
+    .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+  const total = rows.reduce((s,t)=>s+num(t.amount),0);
+  const rowsHtml = rows.length ? rows.map(t=>`
+    <tr>
+      <td class="mono">${escapeHtml(formatDateDisplay(t.date)||t.date||'—')}</td>
+      <td>${escapeHtml(t.category||'—')}</td>
+      <td>${escapeHtml(t.notes||'—')}</td>
+      <td>${escapeHtml(t.method||'—')}</td>
+      <td>${escapeHtml(t.recipientName||'—')}</td>
+      <td class="mono">${fmt(num(t.amount))}</td>
+    </tr>`).join('') : `<tr><td colspan="6" style="text-align:center; color:#8A94A3; padding:16px;">لا توجد حركات صادرة في هذا الشهر</td></tr>`;
+  return `
+    <div class="head">
+      <div><h2>الحركات المالية الصادرة</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)} — ${escapeHtml(monthLabel)} (عدا ما يخص تمويل/شراء الحقائب)</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">الفترة: ${escapeHtml(formatDateDisplay(from))} إلى ${escapeHtml(formatDateDisplay(to))}<br>تاريخ الطباعة: ${escapeHtml(today)}</div>
+    <table>
+      <thead><tr><th>التاريخ</th><th>التصنيف</th><th>ملاحظات</th><th>طريقة الدفع</th><th>مستلم المبلغ</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        ${rowsHtml}
+        <tr style="font-weight:800; background:#F1F4F7;"><td colspan="5">الإجمالي (${rows.length} حركة)</td><td class="mono">${fmt(total)}</td></tr>
+      </tbody>
+    </table>`;
+}
+/* تقرير الحقائب المشتراة خلال الشهر: قسمان — حقائب أضافها المركز للمخزون، وحقائب اشتراها العملاء مباشرة */
+function bagsPurchasedReportBodyHtml(from, to, monthLabel){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA');
+  const stockRows = bagStock.filter(b=> b.type!=='issue' && b.date && b.date>=from && b.date<=to)
+    .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
+  const stockQtyTotal = stockRows.reduce((s,b)=> s+num(b.qty), 0);
+  const stockTypeLabel = b => (b.type==='withdraw' ? 'سحب' : (b.type==='deposit' ? 'إيداع' : 'إضافة يدوية')) + (b.manualQty ? ' (عدد فعلي)' : '');
+  const stockRowsHtml = stockRows.length ? stockRows.map(b=>`
+    <tr>
+      <td class="mono">${escapeHtml(formatDateDisplay(b.date)||b.date||'—')}</td>
+      <td>${escapeHtml(stockTypeLabel(b))}</td>
+      <td class="mono">${fmt(num(b.amount!==undefined?b.amount:num(b.qty)*num(b.unitPrice)))}</td>
+      <td class="mono">${num(b.qty)>0?'+':''}${num(b.qty)}</td>
+      <td>${escapeHtml(b.method||'—')}</td>
+    </tr>`).join('') : `<tr><td colspan="5" style="text-align:center; color:#8A94A3; padding:16px;">لا توجد عمليات إضافة لمخزون الحقائب في هذا الشهر</td></tr>`;
+
+  const clientRows = clients.filter(c=> ((c.bagSource==='buy' && c.bagStatus==='purchased') || c.bagSource==='stock') && !c.suspended)
+    .map(c=>({ c, purchaseDate: c.bagPurchaseDate || (c.bagSource==='stock' ? c.date : '') }))
+    .filter(r=> r.purchaseDate && r.purchaseDate>=from && r.purchaseDate<=to)
+    .sort((a,b)=> (a.purchaseDate||'').localeCompare(b.purchaseDate||''));
+  const clientValueTotal = clientRows.reduce((s,{c})=>s+num(c.bagPrice),0);
+  const clientRowsHtml = clientRows.length ? clientRows.map(({c,purchaseDate})=>`
+    <tr>
+      <td>${escapeHtml(c.name||'—')}</td>
+      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono">${escapeHtml(c.phone||'—')}</td>
+      <td class="mono">${escapeHtml(c.bagInvoice||'—')}</td>
+      <td class="mono">${escapeHtml(formatDateDisplay(purchaseDate)||purchaseDate||'—')}</td>
+      <td>${c.bagSource==='stock' ? 'من المخزون' : 'شراء مباشر'}</td>
+      <td class="mono">${fmt(num(c.bagPrice))}</td>
+    </tr>`).join('') : `<tr><td colspan="7" style="text-align:center; color:#8A94A3; padding:16px;">لا توجد حقائب اشتراها عملاء في هذا الشهر</td></tr>`;
+
+  return `
+    <div class="head">
+      <div><h2>الحقائب المشتراة</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)} — ${escapeHtml(monthLabel)}</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">الفترة: ${escapeHtml(formatDateDisplay(from))} إلى ${escapeHtml(formatDateDisplay(to))}<br>تاريخ الطباعة: ${escapeHtml(today)}</div>
+    <h3 style="margin:18px 0 8px;">أولاً: حقائب أضافها المركز للمخزون (تمويل/شراء)</h3>
+    <table>
+      <thead><tr><th>التاريخ</th><th>نوع العملية</th><th>المبلغ</th><th>عدد الحقائب (+/-)</th><th>طريقة الدفع</th></tr></thead>
+      <tbody>
+        ${stockRowsHtml}
+        <tr style="font-weight:800; background:#F1F4F7;"><td colspan="3">إجمالي عدد الحقائب المضافة للمخزون</td><td class="mono">${stockQtyTotal>0?'+':''}${stockQtyTotal}</td><td></td></tr>
+      </tbody>
+    </table>
+    <h3 style="margin:22px 0 8px;">ثانياً: عملاء اشتروا حقائبهم (مباشرة أو من المخزون)</h3>
+    <table>
+      <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>رقم الهاتف</th><th>رقم فاتورة الحقيبة</th><th>تاريخ الشراء</th><th>المصدر</th><th>القيمة</th></tr></thead>
+      <tbody>
+        ${clientRowsHtml}
+        <tr style="font-weight:800; background:#F1F4F7;"><td colspan="6">الإجمالي (${clientRows.length} عميل)</td><td class="mono">${fmt(clientValueTotal)}</td></tr>
+      </tbody>
+    </table>`;
+}
+async function generateAndShareFourMonthlyReports(yearMonth){
+  const statusEl = $('#wa4-report-status');
+  const setStatus = msg => { if(statusEl) statusEl.textContent = msg; };
+  const [yStr, mStr] = yearMonth.split('-');
+  const from = `${yStr}-${mStr}-01`;
+  const daysInMonth = new Date(Number(yStr), Number(mStr), 0).getDate();
+  const to = `${yStr}-${mStr}-${String(daysInMonth).padStart(2,'0')}`;
+  const monthLabel = monthLabelAr(yearMonth);
+  const btn = $('#btn-send-4-reports-wa');
+  if(btn) btn.disabled = true;
+  setStatus('⏳ جارٍ توليد التقارير الأربعة... قد يستغرق بضع ثوانٍ');
+  try{
+    const files = [];
+    files.push(await htmlBodyToPdfFile(monthlyClientsReportBodyHtml(yearMonth), {title:'تقرير شهري — '+monthLabel, filename:`تقرير_شهري_تسجيلات_ومبالغ_${yearMonth}.pdf`}));
+    const vatReturn = buildVatReturn(from, to);
+    files.push(await htmlBodyToPdfFile(vatReturnReportBodyHtml(vatReturn, from, to, monthLabel), {title:'الإقرار الضريبي', filename:`الإقرار_الضريبي_${yearMonth}.pdf`}));
+    files.push(await htmlBodyToPdfFile(vaultOutReportBodyHtml(from, to, monthLabel), {title:'الحركات المالية الصادرة', filename:`الحركات_الصادرة_${yearMonth}.pdf`}));
+    files.push(await htmlBodyToPdfFile(bagsPurchasedReportBodyHtml(from, to, monthLabel), {title:'الحقائب المشتراة', filename:`الحقائب_المشتراة_${yearMonth}.pdf`}));
+
+    if(navigator.canShare && navigator.canShare({files})){
+      setStatus('✅ تم توليد الملفات — جارٍ فتح قائمة المشاركة...');
+      await navigator.share({ files, title:`تقارير ${monthLabel}`, text:`4 تقارير شهرية — ${monthLabel}` });
+      setStatus('✅ تم فتح قائمة المشاركة. اختر واتساب واضغط إرسال لإكمال العملية.');
+    } else {
+      files.forEach(f=>{
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(f);
+        a.download = f.name;
+        a.click();
+      });
+      setStatus('⚠️ جهازك/متصفحك لا يدعم مشاركة الملفات مباشرة — تم تنزيل الملفات الأربعة بدلاً من ذلك، أرفقها يدوياً في واتساب.');
+    }
+  }catch(e){
+    if(e && e.name==='AbortError'){
+      setStatus('تم إلغاء المشاركة.');
+    } else {
+      console.error(e);
+      setStatus('❌ حدث خطأ أثناء توليد التقارير: ' + (e.message||e));
+      showToast('تعذّر توليد التقارير، حاول مجدداً');
+    }
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+if($('#wa4-report-month')) $('#wa4-report-month').value = lastCompleteMonthKey();
+$('#btn-send-4-reports-wa')?.addEventListener('click', ()=>{
+  const val = $('#wa4-report-month').value;
+  if(!val){ showToast('اختر الشهر أولاً'); return; }
+  generateAndShareFourMonthlyReports(val);
 });
 
 /* ============ مقارنة سنة بسنة (Year-over-Year) ============ */
