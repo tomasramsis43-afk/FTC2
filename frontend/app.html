@@ -482,6 +482,7 @@
       <button id="btn-redo" type="button" class="icon-btn" title="لا توجد عملية للتقدم إليها" disabled="" style="opacity:.5;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5"></path><path d="M20 12H9a5 5 0 0 0 0 10h1"></path></svg><span>تقدم</span></button>
       <button id="btn-refresh-all" type="button" class="icon-btn" title="تحديث كامل الشيت الحالي (إعادة حساب وعرض كل البيانات والمعادلات)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
       <button id="btn-clear-all-filters" type="button" class="icon-btn" title="إلغاء كل الفلاتر وخانات البحث في الشيت الحالي وإعادة عرض كل البيانات"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"></path><path d="M7 5v13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5"></path><path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M9 10l6 6M15 10l-6 6"></path></svg><span>إلغاء الفلتر</span></button>
+      <button id="btn-global-search" type="button" class="icon-btn" title="بحث شامل في كل الشيتات (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><span>بحث شامل</span></button>
       <button id="btn-lang-toggle" type="button" class="icon-btn">EN</button>
       <button id="btn-sound-toggle" type="button" class="icon-btn" title="كتم المؤثرات الصوتية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"></path><path d="M16 8a5 5 0 0 1 0 8M18.5 5.5a9 9 0 0 1 0 13"></path></svg></button>
       <button id="btn-shortcuts-help" type="button" class="icon-btn" title="اختصارات لوحة المفاتيح (؟)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"></path></svg></button>
@@ -511,6 +512,7 @@
     <button data-view="zatca" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 8h10M7 12h6"></path><circle cx="16.5" cy="15.5" r="3.2"></circle><path d="M15.3 15.5h2.4M16.5 14.3v2.4"></path></svg><span>الفوترة الضريبية والزكاة</span></button>
     <button data-view="reports" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"></path></svg><span data-i18n="navReports">التقارير</span></button>
     <button data-view="accounting" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M8 9h8M8 13h8M8 17h4"></path><circle cx="17.5" cy="17" r="3.4" fill="var(--bg)"></circle><path d="M16.2 17l.9.9 1.6-1.7"></path></svg><span>المحاسبة</span></button>
+    <button data-view="budget" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7"></path><path d="M3 20h18"></path><path d="M6.5 6.5l3.5 3 3-2 4.5 3.5" stroke-dasharray="1 2.6"></path></svg><span>الموازنة والتخطيط</span></button>
     <button data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1z"></path><path d="M8.5 13.5l2 2 4-4.5"></path></svg><span data-i18n="navAudit">سجل المراجعة</span></button>
     <button data-view="settings" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2.4-1.4L14 3h-4l-.16 2.2a7 7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .5.05.95.14 1.4l-2 1.5 2 3.4 2.3-.9c.7.6 1.5 1.1 2.4 1.4L10 21h4l.16-2.2c.9-.3 1.7-.8 2.4-1.4l2.3.9 2-3.4-2-1.5c.09-.45.14-.9.14-1.4z"></path></svg><span data-i18n="navSettings">الإعدادات</span></button>
   </nav>
@@ -519,6 +521,7 @@
 
   <!-- DASHBOARD -->
   <section class="view" id="view-dashboard">
+    <div id="smart-alerts-panel"></div>
     <div class="grid-cards" id="cards"></div>
     <div class="cfo-grid" id="cfo-grid"></div>
     <div class="panel">
@@ -3891,6 +3894,18 @@
     </div>
   </section>
 
+  <div class="overlay" id="global-search-overlay">
+    <div class="modal" style="max-width:640px;">
+      <h3 style="margin:0 0 10px;">بحث شامل</h3>
+      <input type="text" id="global-search-input" placeholder="ابحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة / رقم دورة / مبلغ..." style="width:100%; padding:10px; font-size:14px;" autocomplete="off">
+      <div class="hint" style="margin:8px 0;">يبحث في: العملاء، الحركات المالية، المشتريات — بحد أقصى 8 نتائج لكل قسم.</div>
+      <div id="global-search-results" style="max-height:60vh; overflow-y:auto;"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" id="btn-close-global-search">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="manualsales-overlay">
     <div class="modal" style="max-width:560px;">
       <h3 id="manualsales-modal-title">فاتورة مبيعات يدوية</h3>
@@ -3992,6 +4007,64 @@
     <div class="panel">
       <h3>توزيع مصروفات الفترة حسب التصنيف</h3>
       <div id="chart-report-expense"></div>
+    </div>
+    <div class="panel" style="border-right:4px solid var(--teal);">
+      <h3 style="margin:0 0 6px;">ربحية الدورات حسب النوع (تقديرية)</h3>
+      <div class="hint" style="margin-top:0;">الإيراد محسوب من دخل المركز الفعلي لكل نوع دورة (كل الفترة). المصروف المخصَّص تقدير تناسبي بناءً على حصة كل نوع من إجمالي الإيرادات، لأن معظم المصروفات التشغيلية غير مرتبطة بنوع دورة محدد في سجلاتك — استخدمه كمؤشر تقريبي للمقارنة بين الدورات وليس رقماً محاسبياً دقيقاً.</div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>نوع الدورة</th><th>عدد العملاء</th><th>الإيراد</th><th>المصروف المخصَّص (تقديري)</th><th>الربح التقديري</th><th>هامش الربح</th></tr></thead>
+          <tbody id="course-profit-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel" style="border-right:4px solid var(--gold-dark);">
+      <h3 style="margin:0 0 6px;">تقرير أعمار الديون (Aging Report)</h3>
+      <div class="hint" style="margin-top:0;">يوضح المبالغ المتبقية على العملاء (غير الموقوفين وغير الملغيين) مصنّفة حسب عدد الأيام منذ تاريخ التسجيل — لمتابعة التحصيل بأولوية واضحة.</div>
+      <div class="grid-cards" id="aging-summary-cards"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>العميل</th><th>الجوال</th><th>تاريخ التسجيل</th><th>عدد الأيام</th><th>المتبقي</th></tr></thead>
+          <tbody id="aging-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel" style="border-right:4px solid #25D366;">
+      <h3 style="margin:0 0 6px;">📤 إرسال ملخص شهري عبر واتساب</h3>
+      <div class="toolbar">
+        <div class="field" style="max-width:180px;"><label>الشهر</label><input type="month" id="wa-report-month"></div>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" id="btn-send-monthly-wa">إرسال عبر واتساب</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">سيتم فتح واتساب (ويب أو التطبيق) برسالة الملخص جاهزة — اضغط "إرسال" هناك لإتمام الإرسال. تأكد من إدخال رقم المستلم من الإعدادات أولاً.</div>
+    </div>
+
+    <div class="panel" style="border-right:4px solid var(--navy);">
+      <h3 style="margin:0 0 6px;">مقارنة سنة بسنة (Year-over-Year)</h3>
+      <div class="toolbar">
+        <div class="field" style="max-width:140px;"><label>السنة</label>
+          <select id="yoy-year"></select>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-export-yoy">تصدير Excel</button>
+      </div>
+      <div class="hint" style="margin-top:0;">يقارن كل شهر بنفس الشهر من السنة السابقة، لتقييم النمو الحقيقي بمعزل عن التقلبات الموسمية.</div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>الشهر</th><th>إيراد هذه السنة</th><th>إيراد السنة السابقة</th><th>نسبة النمو</th><th>تسجيلات هذه السنة</th><th>تسجيلات السنة السابقة</th></tr></thead>
+          <tbody id="yoy-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="border-right:4px solid var(--red);">
+      <h3 style="margin:0 0 6px;">حاسبة نقطة التعادل (Break-even)</h3>
+      <div class="hint" style="margin-top:0;">تحسب عدد المتدربين المطلوب تسجيلهم لتغطية المصاريف الثابتة، بناءً على متوسط دخل المركز الفعلي لكل متدرب. المصروف الثابت المقترح تلقائياً هو متوسط آخر 3 أشهر فعلية من الحركات المالية (نوع "صرف") — يمكنك تعديله يدوياً لو عندك رقم أدق (مثلاً استبعاد مصاريف غير متكررة).</div>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field" style="max-width:220px;"><label>المصاريف الشهرية الثابتة</label><input type="number" id="be-fixed-cost" min="0" step="1"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-suggest-fixed-cost">اقترح رقماً من البيانات الفعلية</button>
+      </div>
+      <div class="grid-cards" id="breakeven-cards" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -4281,6 +4354,52 @@
     </div>
   </section>
 
+  <!-- BUDGET / EPM -->
+  <section class="view" id="view-budget">
+    <div class="panel" style="border-right:4px solid var(--navy);">
+      <h3>الموازنة التقديرية والتخطيط المالي</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل حساب من دليل الحسابات، وقارنها تلقائياً بالأرقام الفعلية المسجَّلة في القيود اليومية. هذا القسم متاح للمدير فقط.</p>
+    </div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <div class="field" style="max-width:170px;"><label>السنة</label>
+          <select id="budget-year">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026" selected>2026</option>
+            <option value="2027">2027</option>
+          </select>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-export-budget">تصدير Excel (مخطط وفعلي)</button>
+      </div>
+      <div class="hint" style="margin-top:0;">القيمة الفعلية لكل شهر تُحسب تلقائياً من مجموع القيود اليومية المزدوجة (دليل الحسابات) خلال ذلك الشهر — لا حاجة لإدخالها يدوياً.</div>
+    </div>
+
+    <div class="grid-cards" id="budget-summary-cards"></div>
+
+    <div class="panel" style="border-right:4px solid var(--teal);">
+      <h3 style="margin:0 0 6px;">إدخال الموازنة الشهرية (حسب دليل الحسابات)</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>الحساب</th><th>يناير</th><th>فبراير</th><th>مارس</th><th>أبريل</th><th>مايو</th><th>يونيو</th><th>يوليو</th><th>أغسطس</th><th>سبتمبر</th><th>أكتوبر</th><th>نوفمبر</th><th>ديسمبر</th><th>الإجمالي</th></tr></thead>
+          <tbody id="budget-input-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="border-right:4px solid var(--gold);">
+      <h3 style="margin:0 0 6px;">مقارنة الفعلي بالمخطط (Actual vs Budget)</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>الحساب</th><th>المخطط (سنوي)</th><th>الفعلي (حتى الآن)</th><th>الفرق</th><th>نسبة التحقق</th></tr></thead>
+          <tbody id="budget-compare-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- AUDIT LOG -->
   <section class="view" id="view-audit">
     <div class="panel" style="border-right:4px solid var(--gold);">
@@ -4360,6 +4479,23 @@
         <input type="file" id="restore-backup-input" accept=".json" style="display:none;">
       </div>
       <div class="hint" style="margin-top:10px;">النسخة الاحتياطية التلقائية تُنزَّل تلقائياً كملف على جهازك عند فتح البرنامج إذا مرّت المدة المحددة منذ آخر نسخة — تأكد من مراجعة مجلد التنزيلات لديك بشكل دوري أو نقل الملفات لمكان آمن.</div>
+    </div>
+    <div class="panel" style="border-right:4px solid var(--gold);">
+      <h3 style="margin:0 0 4px;">🔔 إعدادات التنبيهات الذكية</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field" style="max-width:220px;"><label>حد أدنى لرصيد الخزنة + البنك (تنبيه لو أقل)</label><input type="number" id="set-low-balance" min="0" step="1"></div>
+        <div class="field" style="max-width:220px;"><label>تنبيه بالحقائب غير المشتراة بعد (أيام)</label><input type="number" id="set-bag-overdue-days" min="1" step="1"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-save-alert-settings">حفظ الإعداد</button>
+      </div>
+    </div>
+    <div class="panel" style="border-right:4px solid #25D366;">
+      <h3 style="margin:0 0 4px;">📤 التقرير الشهري عبر واتساب</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أدخل رقم واتساب المستلم (بالصيغة الدولية بدون + أو أصفار، مثال: 966501234567). عند بداية كل شهر جديد سيظهر تنبيه في لوحة التحكم لإرسال ملخص الشهر الماضي بضغطة واحدة، ويمكنك أيضاً إرسال ملخص أي شهر يدوياً من شاشة التقارير.</p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field" style="max-width:260px;"><label>رقم واتساب المستلم</label><input type="text" id="set-monthly-wa-number" placeholder="966501234567" dir="ltr"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-save-monthly-wa">حفظ الرقم</button>
+      </div>
     </div>
     <div class="panel" style="border-right:4px solid var(--teal);">
       <h3 style="margin:0 0 4px;">🔗 ربط Power Automate (Webhooks)</h3>
@@ -4468,13 +4604,20 @@
         <div class="field"><label>كلمة المرور</label><input type="text" id="new-user-pass"></div>
         <div class="field"><label>الصلاحية</label>
           <select id="new-user-role">
-            <option value="staff">موظف (صلاحيات محدودة)</option>
+            <option value="staff">موظف عام (صلاحيات محدودة)</option>
+            <option value="accountant">محاسب (الأقسام المالية فقط)</option>
+            <option value="reception">استقبال (تسجيل بيانات فقط، بدون أرقام مالية)</option>
             <option value="admin">مدير (صلاحيات كاملة)</option>
           </select>
         </div>
       </div>
       <button class="btn btn-primary btn-sm" id="btn-add-user">إضافة مستخدم</button>
-      <div class="hint" style="margin-top:10px;">الموظف لا يستطيع الوصول إلى تبويبَي "الإعدادات" و"سجل المراجعة" — بقية الأقسام (العملاء، الدورات، الحقائب، الحركات المالية، التقارير) متاحة له بصلاحية كاملة كالمدير.</div>
+      <div class="hint" style="margin-top:10px;">
+        <b>موظف عام:</b> كل الأقسام ما عدا الإعدادات وسجل المراجعة والمحاسبة والفوترة الضريبية والموازنة.<br>
+        <b>محاسب:</b> لوحة التحكم، العملاء، الحركات المالية، المحاسبة، الموازنة، التقارير، المشتريات، الشركات — بدون الإعدادات أو سجل المراجعة أو الحقائب أو الدورات.<br>
+        <b>استقبال:</b> لوحة التحكم، العملاء، الدورات، فواتير الدورات، الحقائب فقط — بدون أي وصول للأرقام المالية أو المحاسبة.
+      </div>
+      <div class="hint" style="margin-top:10px; border-right:3px solid var(--gold); padding-right:8px;">⚠️ <b>مهم:</b> تسجيل الدخول الفعلي وتحديد الصلاحية يتمّان بالكامل من خلال خادم الدخول المركزي الخاص بالبرنامج (وليس من هذه القائمة الداخلية) — يجب أن يُرجع الخادم قيمة الدور بالضبط (admin / accountant / reception / staff) عند تسجيل الدخول حتى تُطبَّق الصلاحية المطلوبة فعلياً. القائمة هنا للتوثيق والمرجعية فقط.</div>
       <div class="hint" style="margin-top:14px;">تنبيه: كلمات المرور هنا للتحقق البسيط داخل التطبيق فقط وليست تشفيراً أمنياً قوياً — لا تستخدم كلمة مرور حساسة تستخدمها في مكان آخر.</div>
     </div>
     <div class="panel">
@@ -5286,7 +5429,11 @@ async function decryptValue(stored){
 const API_BASE = ''; // فارغ = نفس عنوان الموقع (الخادم يخدم الواجهة والـ API معاً). عدّله فقط لو شغّلت الواجهة من عنوان مختلف عن الخادم.
 let SERVER_AUTH_TOKEN = null; // يُملأ بعد نجاح تسجيل الدخول على الخادم
 let SERVER_AUTH_USERNAME = null; // اسم المستخدم كما أرجعه الخادم عند تسجيل الدخول
-let SERVER_AUTH_ROLE = null; // صلاحية المستخدم (admin/staff) كما أرجعها الخادم — هي المرجع الوحيد للصلاحيات الآن
+let SERVER_AUTH_ROLE = null; // صلاحية المستخدم كما أرجعها الخادم — هي المرجع الوحيد للصلاحيات الآن
+/* الأدوار المدعومة: admin (كامل) / accountant (محاسب: الأقسام المالية فقط) / reception (استقبال: تسجيل بيانات فقط بدون أرقام مالية) / staff (الافتراضي القديم: كل شيء ما عدا الإعدادات والمراجعة والمحاسبة).
+   يجب أن يُرجع الخادم (/api/auth/login) أحد هذه القيم بالضبط في data.role حتى يُفعَّل الدور المطلوب — أي قيمة أخرى أو فارغة تُعامل كـ staff احترازياً. */
+const VALID_ROLES = ['admin','accountant','reception','staff'];
+function normalizeRole(r){ return VALID_ROLES.includes(r) ? r : 'staff'; }
 const _kvVersions = {}; // آخر نسخة (version) معروفة لكل مفتاح، لمنع الكتابة فوق تعديل شخص آخر بصمت
 
 async function serverFetch(path, options = {}) {
@@ -5379,7 +5526,7 @@ async function serverLogin(username, password){
      نفترض "staff" (الأضيق صلاحية) كإجراء أمان احترازي، بدل افتراض "admin" الذي قد يمنح صلاحيات كاملة
      لمستخدم لا يستحقها. يجب أن يُرجع مسار /api/auth/login على الخادم الحقلين username و role. */
   SERVER_AUTH_USERNAME = data.username || username;
-  SERVER_AUTH_ROLE = data.role === 'admin' ? 'admin' : 'staff';
+  SERVER_AUTH_ROLE = normalizeRole(data.role);
   try{
     sessionStorage.setItem('serverAuthToken', data.token);
     sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
@@ -5423,6 +5570,10 @@ const DEFAULT_SETTINGS = {
   autoBackupEnabled: true,
   autoBackupIntervalDays: 7,
   lastAutoBackupAt: null,
+  lowBalanceThreshold: 5000,
+  bagOverdueDays: 14,
+  monthlyReportWhatsapp: '',
+  lastMonthlyReportPromptMonth: null,
   nextVaultSeq: 1,
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
@@ -5442,6 +5593,7 @@ let courseSessions = [];
 let journalEntries = [];
 let chartOfAccounts = []; // دليل الحسابات: {id, code, name, type} — type ∈ asset/liability/equity/revenue/expense
 let journalDE = []; // القيود اليومية بنظام القيد المزدوج: {id, date, description, lines:[{accountId, debit, credit}], createdAt}
+let budgetEntries = []; // الموازنة التقديرية: {id, year, accountId, months:[12 رقم], updatedBy, updatedAt}
 let suppliers = [];
 let purchases = [];
 let manualSalesInvoices = []; // فواتير مبيعات ضريبية يدوية (مبيعات لا ترتبط بفاتورة دورة تدريبية داخل شيت العملاء)
@@ -5787,6 +5939,10 @@ async function loadData(){
     if(settings.darkMode===undefined) settings.darkMode = false;
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;
     if(settings.autoBackupEnabled===undefined) settings.autoBackupEnabled = true;
+    if(settings.lowBalanceThreshold===undefined) settings.lowBalanceThreshold = 5000;
+    if(settings.bagOverdueDays===undefined) settings.bagOverdueDays = 14;
+    if(settings.monthlyReportWhatsapp===undefined) settings.monthlyReportWhatsapp = '';
+    if(settings.lastMonthlyReportPromptMonth===undefined) settings.lastMonthlyReportPromptMonth = null;
     if(!settings.autoBackupIntervalDays) settings.autoBackupIntervalDays = 7;
     if(settings.lastAutoBackupAt===undefined) settings.lastAutoBackupAt = null;
     if(settings.bagFinanceLinkEnabled===undefined) settings.bagFinanceLinkEnabled = true;
@@ -5864,6 +6020,10 @@ async function loadData(){
     const r = await window.storage.get('journalDE', false);
     journalDE = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ journalDE = []; }
+  try{
+    const r = await window.storage.get('budgetEntries', false);
+    budgetEntries = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ budgetEntries = []; }
   try{
     const r = await window.storage.get('suppliers', false);
     suppliers = r && r.value ? JSON.parse(r.value) : [];
@@ -5977,6 +6137,9 @@ async function saveChartOfAccounts(){
 async function saveJournalDE(){
   try{ await window.storage.set('journalDE', JSON.stringify(journalDE), false); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
 }
+async function saveBudgetEntries(){
+  try{ await window.storage.set('budgetEntries', JSON.stringify(budgetEntries), false); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
+}
 async function saveSuppliers(){
   try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
 }
@@ -5998,7 +6161,7 @@ function gatherFullBackupData(){
     clients, settings, bagStock, vaultTx, courseSessions,
     users, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
     suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments,
-    chartOfAccounts, journalDE
+    chartOfAccounts, journalDE, budgetEntries
   };
 }
 function downloadFullBackup(auto){
@@ -6052,11 +6215,12 @@ async function restoreFullBackup(file){
   chartOfAccounts = data.chartOfAccounts || [];
   seedChartOfAccountsIfEmpty();
   journalDE = data.journalDE || [];
+  budgetEntries = data.budgetEntries || [];
   await Promise.allSettled([
     saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
     saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
     saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
-    saveChartOfAccounts(), saveJournalDE()
+    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries()
   ]);
   await logAudit('edit','الإعدادات', 'تمت استعادة كل بيانات البرنامج من ملف نسخة احتياطية');
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();
@@ -6947,11 +7111,25 @@ window.addEventListener('resize', ()=>{
 });
 
 /* ---------------- Nav ---------------- */
-const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca'];
+const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca','budget'];
+/* مصفوفة صلاحيات الأدوار: null = صلاحيات كاملة (admin) أو نفس سلوك staff القديم (استخدام RESTRICTED_STAFF_VIEWS كقائمة حظر).
+   لأي دور له مصفوفة (array)، تُستخدم كـ "قائمة سماح" — فقط الأقسام المذكورة تظهر له، وما عداها مخفي تماماً. */
+const ROLE_PERMISSIONS = {
+  admin: null,
+  staff: null, // نفس السلوك القديم: كل شيء ما عدا RESTRICTED_STAFF_VIEWS
+  accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
+  reception: ['dashboard','clients','courses','courseinvoices','bags']
+};
+function canAccessView(view){
+  if(currentUserRole==='admin') return true;
+  const allow = ROLE_PERMISSIONS[currentUserRole];
+  if(Array.isArray(allow)) return allow.includes(view);
+  return !RESTRICTED_STAFF_VIEWS.includes(view); // staff أو دور غير معروف: القائمة السوداء القديمة كإجراء أمان احترازي
+}
 $all('nav.tabs button[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    if(currentUserRole==='staff' && RESTRICTED_STAFF_VIEWS.includes(btn.dataset.view)){
-      showToast('هذا القسم متاح للمدير فقط');
+    if(!canAccessView(btn.dataset.view)){
+      showToast('هذا القسم غير متاح لصلاحيتك الحالية');
       return;
     }
     SoundFX.nav();
@@ -6971,22 +7149,20 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='reports') renderReports();
     if(btn.dataset.view==='companies') renderCompanies();
     if(btn.dataset.view==='accounting') renderAccounting();
+    if(btn.dataset.view==='budget') renderEpmBudget();
     if(btn.dataset.view==='purchases') renderPurchases();
     if(btn.dataset.view==='zatca') renderZatca();
   });
 });
-/* إظهار/إخفاء التبويبات المحصورة على المدير فقط حسب صلاحية المستخدم الحالي */
+/* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (مصفوفة ROLE_PERMISSIONS) */
 function applyRolePermissions(){
-  const isStaff = currentUserRole==='staff';
   $all('nav.tabs button[data-view]').forEach(btn=>{
-    btn.style.display = (isStaff && RESTRICTED_STAFF_VIEWS.includes(btn.dataset.view)) ? 'none' : '';
+    btn.style.display = canAccessView(btn.dataset.view) ? '' : 'none';
   });
-  // إن كان المستخدم على أحد الأقسام المحظورة (مثلاً بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده للوحة التحكم
-  if(isStaff){
-    const activeBtn = $('nav.tabs button.active');
-    if(activeBtn && RESTRICTED_STAFF_VIEWS.includes(activeBtn.dataset.view)){
-      $('[data-view="dashboard"]').click();
-    }
+  // إن كان المستخدم على قسم غير مسموح له به (مثلاً بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده للوحة التحكم
+  const activeBtn = $('nav.tabs button.active');
+  if(activeBtn && !canAccessView(activeBtn.dataset.view)){
+    $('[data-view="dashboard"]').click();
   }
 }
 
@@ -7012,7 +7188,98 @@ function renderDashboard(){
   drawDonut('#chart-nat', groupCount(c,'nationality'), 8);
   drawDonut('#chart-channel', groupChannelAmounts(c), 20, v=>fmt(v)+' ﷼');
   renderCfoDashboard();
+  renderSmartAlerts();
 }
+
+/* ============ التنبيهات الذكية (Smart Alerts) ============ */
+function daysSinceDate(dateStr){
+  if(!dateStr) return 0;
+  const d = new Date(dateStr);
+  if(isNaN(d.getTime())) return 0;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+function renderSmartAlerts(){
+  const el = $('#smart-alerts-panel');
+  if(!el) return;
+  const alerts = [];
+
+  // ١) حقائب مطلوب شراؤها متأخرة عن الحد المسموح
+  const overdueDays = settings.bagOverdueDays || 14;
+  const overdueBags = clients.filter(c=> c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended && daysSinceDate(c.date) > overdueDays);
+  if(overdueBags.length){
+    alerts.push({level:'red', icon:'👜', text:`${overdueBags.length} حقيبة مطلوب شراؤها تجاوزت ${overdueDays} يوم بدون شراء`, view:'clients'});
+  }
+
+  // ٢) انخفاض رصيد الخزنة + البنك عن الحد الأدنى
+  const today = todayISO();
+  const liquid = balanceOfAsOf('vault', today) + balanceOfAsOf('bank', today);
+  const threshold = settings.lowBalanceThreshold ?? 5000;
+  if(liquid < threshold){
+    alerts.push({level:'red', icon:'💰', text:`رصيد الخزنة والبنك (${fmt(liquid)}) أقل من الحد الأدنى المحدد (${fmt(threshold)})`, view:'vault'});
+  }
+
+  // ٣) اقتراب انتهاء الترخيص
+  if(LICENSE_EXPIRY_DATE){
+    const daysLeft = Math.ceil((new Date(LICENSE_EXPIRY_DATE).getTime() - Date.now()) / 86400000);
+    if(daysLeft <= 14 && daysLeft >= 0){
+      alerts.push({level:'gold', icon:'🔑', text:`ترخيص البرنامج سينتهي خلال ${daysLeft} يوم — يُرجى التجديد قريباً`});
+    }
+  }
+
+  // ٤) دورات قريبة من اكتمال العدد (لم تكتمل بعد)
+  if(typeof coursesFilteredSessions==='function' && typeof groupClientsByCourseNumber==='function'){
+    const byCourseNumber = groupClientsByCourseNumber();
+    const nearFull = courseSessions.filter(s=>{
+      if(!s.capacity) return false;
+      const enrolled = (byCourseNumber.get(s.courseNumber)||[]).filter(c=>!c.cancelled).length;
+      const ratio = enrolled / s.capacity;
+      return ratio >= 0.8 && enrolled < s.capacity;
+    });
+    if(nearFull.length){
+      alerts.push({level:'gold', icon:'📚', text:`${nearFull.length} دورة اقتربت من اكتمال العدد (80% فأكثر)`, view:'courses'});
+    }
+  }
+
+  // ٥) تذكير بالنسخ الاحتياطي التلقائي (لو معطّل أو متأخر بشكل غير متوقع)
+  if(!settings.autoBackupEnabled){
+    alerts.push({level:'gold', icon:'💾', text:'النسخ الاحتياطي التلقائي معطّل حالياً — يُفضّل تفعيله من الإعدادات', view:'settings'});
+  }
+
+  // ٦) ملخص الشهر الماضي جاهز للإرسال عبر واتساب (يظهر أول 7 أيام من الشهر الجديد فقط ولمرة واحدة لكل شهر)
+  if(settings.monthlyReportWhatsapp && typeof lastCompleteMonthKey==='function'){
+    const key = lastCompleteMonthKey();
+    const dayOfMonth = new Date().getDate();
+    if(dayOfMonth<=7 && settings.lastMonthlyReportPromptMonth!==key){
+      alerts.push({level:'gold', icon:'📤', text:`ملخص ${monthLabelAr(key)} جاهز — اضغط لإرساله عبر واتساب`, action:'monthly-wa', actionKey:key});
+    }
+  }
+
+  if(!alerts.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--red);">
+    <h3 style="margin:0 0 8px;">🔔 تنبيهات تحتاج انتباهك</h3>
+    ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
+      <span style="font-size:18px;">${a.icon}</span>
+      <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
+    </div>`).join('')}
+  </div>`;
+}
+$('#smart-alerts-panel')?.addEventListener('click', async e=>{
+  const actionItem = e.target.closest('[data-sa-action]');
+  if(actionItem){
+    if(actionItem.dataset.saAction==='monthly-wa'){
+      const key = actionItem.dataset.saActionKey;
+      sendMonthlyReportWhatsapp(key);
+      settings.lastMonthlyReportPromptMonth = key;
+      await saveSettings();
+      renderSmartAlerts();
+    }
+    return;
+  }
+  const item = e.target.closest('[data-sa-view]');
+  if(!item) return;
+  document.querySelector(`nav.tabs button[data-view="${item.dataset.saView}"]`)?.click();
+});
+
 
 /* ================= لوحة تحكم CFO-Style: أيقونات + دوال مساعدة ================= */
 const CFO_ICONS = {
@@ -9563,6 +9830,9 @@ function renderSettings(){
   $('#expcat-list').innerHTML = settings.expenseCategories.map((n,i)=>`<div class="tag">${escapeHtml(n)}<button data-re="${i}">✕</button></div>`).join('');
   $('#set-autobackup-enabled').checked = !!settings.autoBackupEnabled;
   $('#set-autobackup-days').value = settings.autoBackupIntervalDays || 7;
+  if($('#set-low-balance')) $('#set-low-balance').value = settings.lowBalanceThreshold ?? 5000;
+  if($('#set-bag-overdue-days')) $('#set-bag-overdue-days').value = settings.bagOverdueDays ?? 14;
+  if($('#set-monthly-wa-number')) $('#set-monthly-wa-number').value = settings.monthlyReportWhatsapp || '';
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
@@ -9757,6 +10027,21 @@ $('#btn-save-autobackup').addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث إعداد النسخ الاحتياطي التلقائي: ${settings.autoBackupEnabled?'مفعّل':'معطّل'} كل ${settings.autoBackupIntervalDays} يوم`);
   showToast('تم حفظ إعداد النسخ الاحتياطي');
+});
+$('#btn-save-alert-settings')?.addEventListener('click', async ()=>{
+  settings.lowBalanceThreshold = Math.max(0, Number($('#set-low-balance').value)||0);
+  settings.bagOverdueDays = Math.max(1, Number($('#set-bag-overdue-days').value)||14);
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث إعدادات التنبيهات: حد أدنى للرصيد ${fmt(settings.lowBalanceThreshold)}، تنبيه الحقائب بعد ${settings.bagOverdueDays} يوم`);
+  showToast('تم حفظ إعدادات التنبيهات');
+  renderSmartAlerts();
+});
+$('#btn-save-monthly-wa')?.addEventListener('click', async ()=>{
+  settings.monthlyReportWhatsapp = ($('#set-monthly-wa-number').value||'').replace(/[^\d]/g,'');
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث رقم واتساب التقرير الشهري`);
+  showToast('تم حفظ رقم واتساب');
+  renderSmartAlerts();
 });
 $('#btn-backup-now').addEventListener('click', ()=>{
   downloadFullBackup(false);
@@ -12175,7 +12460,7 @@ $('#btn-export-audit').addEventListener('click', ()=>{
    SERVER_AUTH_ROLE)، وليس من أول مستخدم في قائمة "المستخدمين" الداخلية للبرنامج. */
 function autoSignInLocalUser(){
   currentUser = SERVER_AUTH_USERNAME || 'غير معروف';
-  currentUserRole = SERVER_AUTH_ROLE === 'admin' ? 'admin' : 'staff';
+  currentUserRole = normalizeRole(SERVER_AUTH_ROLE);
   $('#app-wrap').style.display = 'block';
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();
@@ -12257,8 +12542,228 @@ function clientsInPeriod(){
     return true;
   });
 }
+/* ============ ربحية الدورات حسب النوع (تقديرية) ============ */
+function courseProfitabilityData(){
+  const activeClients = clients.filter(c=>!c.cancelled && !c.suspended);
+  const revByType = {}, countByType = {};
+  activeClients.forEach(c=>{
+    const t = c.courseType || 'غير محدد';
+    revByType[t] = (revByType[t]||0) + centerIncome(c);
+    countByType[t] = (countByType[t]||0) + 1;
+  });
+  const totalRev = Object.values(revByType).reduce((a,b)=>a+b,0);
+  const totalExpenses = vaultTx.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
+  return Object.entries(revByType).map(([type, rev])=>{
+    const share = totalRev>0 ? rev/totalRev : 0;
+    const allocExpense = totalExpenses * share;
+    const profit = rev - allocExpense;
+    const margin = rev>0 ? (profit/rev*100) : 0;
+    return { type, rev, allocExpense, profit, margin, count: countByType[type]||0 };
+  }).sort((a,b)=>b.profit-a.profit);
+}
+function renderCourseProfitability(){
+  const tbody = $('#course-profit-body');
+  if(!tbody) return;
+  const rows = courseProfitabilityData();
+  tbody.innerHTML = rows.map(r=> `<tr>
+    <td>${escapeHtml(r.type)}</td>
+    <td class="mono">${r.count}</td>
+    <td class="mono">${fmt(r.rev)}</td>
+    <td class="mono">${fmt(r.allocExpense)}</td>
+    <td class="mono" style="color:${r.profit>=0?'var(--teal)':'var(--red)'};">${fmt(r.profit)}</td>
+    <td class="mono">${fmt(r.margin)}%</td>
+  </tr>`).join('') || `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد بيانات كافية</td></tr>`;
+}
+
+/* ============ تقرير أعمار الديون (Aging / Collections) ============ */
+function agingBuckets(){
+  const buckets = {b0_30:[], b31_60:[], b61_90:[], b90p:[]};
+  clients.filter(c=>!c.suspended && !c.cancelled && remaining(c)>0).forEach(c=>{
+    const days = daysSinceDate(c.date);
+    const r = remaining(c);
+    const entry = {c, r, days};
+    if(days<=30) buckets.b0_30.push(entry);
+    else if(days<=60) buckets.b31_60.push(entry);
+    else if(days<=90) buckets.b61_90.push(entry);
+    else buckets.b90p.push(entry);
+  });
+  return buckets;
+}
+function renderAgingReport(){
+  const cardsEl = $('#aging-summary-cards');
+  const tbody = $('#aging-table-body');
+  if(!cardsEl && !tbody) return;
+  const b = agingBuckets();
+  const sumOf = arr => arr.reduce((s,x)=>s+x.r,0);
+  if(cardsEl){
+    cardsEl.innerHTML = `
+      <div class="card"><div class="k">0-30 يوم</div><div class="v">${fmt(sumOf(b.b0_30))}</div></div>
+      <div class="card"><div class="k">31-60 يوم</div><div class="v gold">${fmt(sumOf(b.b31_60))}</div></div>
+      <div class="card"><div class="k">61-90 يوم</div><div class="v gold">${fmt(sumOf(b.b61_90))}</div></div>
+      <div class="card"><div class="k">أكثر من 90 يوم</div><div class="v red">${fmt(sumOf(b.b90p))}</div></div>
+    `;
+  }
+  if(tbody){
+    const all = [...b.b0_30, ...b.b31_60, ...b.b61_90, ...b.b90p].sort((x,y)=>y.days-x.days);
+    tbody.innerHTML = all.map(x=> `<tr>
+      <td>${escapeHtml(x.c.name||'')}</td>
+      <td>${escapeHtml(x.c.phone||'')}</td>
+      <td>${escapeHtml(x.c.date||'')}</td>
+      <td class="mono">${x.days}</td>
+      <td class="mono" style="color:${x.days>90?'var(--red)':''};">${fmt(x.r)}</td>
+    </tr>`).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد ذمم متبقية 🎉</td></tr>`;
+  }
+}
+
+/* ============ التقرير الشهري عبر واتساب ============ */
+function lastCompleteMonthKey(){
+  const d = new Date();
+  d.setDate(1); // أول يوم بالشهر الحالي
+  d.setDate(0); // آخر يوم بالشهر السابق (الشهر المكتمل)
+  return d.toISOString().slice(0,7);
+}
+function monthSummaryData(key){
+  const income = vaultTx.filter(t=>t.type==='in' && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);
+  const expense = vaultTx.filter(t=>t.type==='out' && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);
+  const regCount = clients.filter(c=>!c.suspended && (c.date||'').slice(0,7)===key).length;
+  const byType = {};
+  clients.filter(c=>!c.cancelled && (c.date||'').slice(0,7)===key).forEach(c=>{
+    const t = c.courseType || 'غير محدد';
+    byType[t] = (byType[t]||0) + centerIncome(c);
+  });
+  const topType = Object.entries(byType).sort((a,b)=>b[1]-a[1])[0] || null;
+  const totalOutstanding = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
+  return { key, income, expense, net: income-expense, regCount, topType, totalOutstanding };
+}
+function monthSummaryText(key){
+  const d = monthSummaryData(key);
+  const label = monthLabelAr(key);
+  const centerName = (settings.centerInfo && settings.centerInfo.name) || '';
+  let text = `📊 ملخص ${label}${centerName?' — '+centerName:''}\n\n`;
+  text += `👥 عدد التسجيلات: ${d.regCount}\n`;
+  text += `💵 إجمالي الإيرادات: ${fmt(d.income)}\n`;
+  text += `💸 إجمالي المصروفات: ${fmt(d.expense)}\n`;
+  text += `📈 الصافي: ${fmt(d.net)}\n`;
+  if(d.topType) text += `🏆 الأعلى تسجيلاً: ${d.topType[0]}\n`;
+  text += `⏳ إجمالي الذمم المتبقية على العملاء (تراكمي حتى الآن): ${fmt(d.totalOutstanding)}\n`;
+  return text;
+}
+function waLink(phone, text){
+  const clean = (phone||'').replace(/[^\d]/g,'');
+  return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`;
+}
+function sendMonthlyReportWhatsapp(key){
+  if(!settings.monthlyReportWhatsapp){
+    showToast('يرجى إدخال رقم واتساب المستلم من الإعدادات أولاً');
+    return;
+  }
+  const text = monthSummaryText(key);
+  window.open(waLink(settings.monthlyReportWhatsapp, text), '_blank');
+}
+if($('#wa-report-month')) $('#wa-report-month').value = lastCompleteMonthKey();
+$('#btn-send-monthly-wa')?.addEventListener('click', ()=>{
+  const key = $('#wa-report-month').value;
+  if(!key){ showToast('اختر الشهر أولاً'); return; }
+  sendMonthlyReportWhatsapp(key);
+});
+
+/* ============ مقارنة سنة بسنة (Year-over-Year) ============ */
+function yoyAvailableYears(){
+  const years = new Set();
+  clients.forEach(c=>{ const y = (c.date||'').slice(0,4); if(y) years.add(Number(y)); });
+  vaultTx.forEach(t=>{ const y = (t.date||'').slice(0,4); if(y) years.add(Number(y)); });
+  years.add(new Date().getFullYear());
+  return [...years].sort((a,b)=>b-a);
+}
+function yoyData(year){
+  const rows = [];
+  for(let m=1;m<=12;m++){
+    const key = `${year}-${String(m).padStart(2,'0')}`;
+    const prevKey = `${year-1}-${String(m).padStart(2,'0')}`;
+    const cur = monthSummaryData(key);
+    const prev = monthSummaryData(prevKey);
+    const growth = prev.income>0 ? ((cur.income-prev.income)/prev.income*100) : (cur.income>0 ? null : 0);
+    rows.push({ label: MONTH_NAMES_AR_SHORT[m-1], curIncome: cur.income, prevIncome: prev.income, growth, curReg: cur.regCount, prevReg: prev.regCount });
+  }
+  return rows;
+}
+function renderYoY(){
+  const yearSel = $('#yoy-year');
+  const tbody = $('#yoy-table-body');
+  if(!yearSel || !tbody) return;
+  if(!yearSel.dataset.filled){
+    yearSel.innerHTML = yoyAvailableYears().map(y=>`<option value="${y}">${y}</option>`).join('');
+    yearSel.dataset.filled = '1';
+  }
+  const year = Number(yearSel.value || new Date().getFullYear());
+  const rows = yoyData(year);
+  tbody.innerHTML = rows.map(r=> `<tr>
+    <td>${r.label}</td>
+    <td class="mono">${fmt(r.curIncome)}</td>
+    <td class="mono">${fmt(r.prevIncome)}</td>
+    <td class="mono" style="color:${r.growth===null?'':(r.growth>=0?'var(--teal)':'var(--red)')};">${r.growth===null?'—':fmt(r.growth)+'%'}</td>
+    <td class="mono">${r.curReg}</td>
+    <td class="mono">${r.prevReg}</td>
+  </tr>`).join('');
+}
+$('#yoy-year')?.addEventListener('change', renderYoY);
+$('#btn-export-yoy')?.addEventListener('click', ()=>{
+  const year = Number($('#yoy-year').value || new Date().getFullYear());
+  const rows = yoyData(year).map(r=>({
+    'الشهر': r.label, [`إيراد ${year}`]: r.curIncome, [`إيراد ${year-1}`]: r.prevIncome,
+    'نسبة النمو %': r.growth===null?'':Math.round(r.growth*100)/100,
+    [`تسجيلات ${year}`]: r.curReg, [`تسجيلات ${year-1}`]: r.prevReg
+  }));
+  downloadXlsx(`مقارنة_سنوية_${year}.xlsx`, 'مقارنة سنة بسنة', rows);
+});
+
+/* ============ حاسبة نقطة التعادل (Break-even) ============ */
+function suggestedFixedCost(){
+  const keys = lastNMonthKeys(3);
+  const totals = keys.map(k=> vaultTx.filter(t=>t.type==='out' && (t.date||'').slice(0,7)===k).reduce((s,t)=>s+num(t.amount),0));
+  return totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
+}
+function avgRevenuePerClient(){
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-90);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const recent = clients.filter(c=>!c.cancelled && (c.date||'')>=cutoffStr);
+  if(!recent.length) return 0;
+  const total = recent.reduce((s,c)=>s+centerIncome(c),0);
+  return total/recent.length;
+}
+function renderBreakeven(){
+  const cardsEl = $('#breakeven-cards');
+  const input = $('#be-fixed-cost');
+  if(!cardsEl || !input) return;
+  if(!input.dataset.touched){
+    input.value = suggestedFixedCost();
+  }
+  const fixedCost = Math.max(0, Number(input.value)||0);
+  const avgRev = avgRevenuePerClient();
+  const needed = avgRev>0 ? Math.ceil(fixedCost/avgRev) : 0;
+  const thisMonthKey = todayISO().slice(0,7);
+  const regThisMonth = clients.filter(c=>!c.cancelled && (c.date||'').slice(0,7)===thisMonthKey).length;
+  const remainingNeeded = Math.max(0, needed - regThisMonth);
+  cardsEl.innerHTML = `
+    <div class="card"><div class="k">متوسط دخل المركز لكل متدرب (آخر 90 يوم)</div><div class="v">${fmt(avgRev)}</div></div>
+    <div class="card"><div class="k">عدد المتدربين اللازم شهرياً لتغطية المصاريف</div><div class="v gold">${needed || '—'}</div></div>
+    <div class="card"><div class="k">المسجَّلون هذا الشهر حتى الآن</div><div class="v teal">${regThisMonth}</div></div>
+    <div class="card"><div class="k">المتبقي للوصول لنقطة التعادل هذا الشهر</div><div class="v ${remainingNeeded>0?'red':'teal'}">${needed ? remainingNeeded : '—'}</div></div>
+  `;
+}
+$('#be-fixed-cost')?.addEventListener('input', e=>{ e.target.dataset.touched='1'; renderBreakeven(); });
+$('#btn-suggest-fixed-cost')?.addEventListener('click', ()=>{
+  $('#be-fixed-cost').value = suggestedFixedCost();
+  $('#be-fixed-cost').dataset.touched='1';
+  renderBreakeven();
+});
+
 function renderReports(){
   renderBudget();
+  renderCourseProfitability();
+  renderAgingReport();
+  renderYoY();
+  renderBreakeven();
   const rows = periodFilteredVaultTx();
   const income = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
   const expense = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
@@ -13487,6 +13992,192 @@ $('#btn-export-accounting-full')?.addEventListener('click', ()=>{
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trialRows), 'ميزان المراجعة');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(quarterlyRows), 'مقارنة ربع سنوية');
   XLSX.writeFile(wb, `التقرير_المحاسبي_${year}_${from}_${to}.xlsx`);
+});
+
+/* ============ الموازنة التقديرية والتخطيط المالي (EPM) ============ */
+function getBudgetEntry(year, accountId){
+  return budgetEntries.find(b=> b.year===year && b.accountId===accountId);
+}
+function ensureBudgetEntry(year, accountId){
+  let e = getBudgetEntry(year, accountId);
+  if(!e){
+    e = { id: uid(), year, accountId, months: Array(12).fill(0), updatedBy:null, updatedAt:null };
+    budgetEntries.push(e);
+  }
+  return e;
+}
+function budgetYearTotal(entry){
+  return (entry && entry.months) ? entry.months.reduce((a,b)=>a+num(b),0) : 0;
+}
+/* يحسب الرصيد الفعلي لحساب معيّن خلال شهر محدد من القيود اليومية المزدوجة، بالإشارة الصحيحة حسب الرصيد الطبيعي للحساب */
+function actualForAccountMonth(accountId, year, monthIndex, accType){
+  let debit = 0, credit = 0;
+  journalDE.forEach(e=>{
+    const d = new Date(e.date);
+    if(d.getFullYear()!==year || d.getMonth()!==monthIndex) return;
+    (e.lines||[]).forEach(l=>{
+      if(l.accountId!==accountId) return;
+      debit += num(l.debit);
+      credit += num(l.credit);
+    });
+  });
+  return accountNormalBalance(accType)==='debit' ? (debit-credit) : (credit-debit);
+}
+function actualForAccountYear(accountId, year, accType){
+  let total = 0;
+  for(let m=0;m<12;m++) total += actualForAccountMonth(accountId, year, m, accType);
+  return total;
+}
+function renderEpmBudget(){
+  if(!$('#view-budget')) return;
+  const year = parseInt($('#budget-year')?.value || new Date().getFullYear(), 10);
+  const accounts = sortedChartOfAccounts();
+
+  const inputBody = $('#budget-input-body');
+  if(inputBody){
+    inputBody.innerHTML = accounts.map(a=>{
+      const entry = ensureBudgetEntry(year, a.id);
+      const monthInputs = entry.months.map((v,i)=> `<td><input type="number" class="budget-month-input" data-account="${a.id}" data-month="${i}" value="${v||''}" style="width:78px;"></td>`).join('');
+      return `<tr><td>${escapeHtml(a.code)} — ${escapeHtml(a.name)}<div style="font-size:11px;color:var(--text-muted);">${accountTypeLabel(a.type)}</div></td>${monthInputs}<td class="mono" data-account-total="${a.id}">${fmt(budgetYearTotal(entry))}</td></tr>`;
+    }).join('') || `<tr><td colspan="14" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد حسابات في دليل الحسابات بعد</td></tr>`;
+  }
+
+  const compareBody = $('#budget-compare-body');
+  if(compareBody){
+    let totalBudgetRev=0, totalActualRev=0, totalBudgetExp=0, totalActualExp=0;
+    let worst = null;
+    const rows = accounts.map(a=>{
+      const entry = getBudgetEntry(year, a.id);
+      const budget = budgetYearTotal(entry);
+      const actual = actualForAccountYear(a.id, year, a.type);
+      const variance = actual - budget;
+      const pct = budget!==0 ? (actual/budget*100) : (actual!==0 ? null : 100);
+      if(a.type==='revenue'){ totalBudgetRev+=budget; totalActualRev+=actual; }
+      if(a.type==='expense'){ totalBudgetExp+=budget; totalActualExp+=actual; }
+      if(budget!==0 && (!worst || Math.abs(variance) > Math.abs(worst.variance))) worst = { name:a.name, variance };
+      const badColor = a.type==='expense' ? (variance>0) : (variance<0);
+      const style = variance===0 ? '' : (badColor ? 'color:var(--red);' : 'color:var(--teal);');
+      return `<tr><td>${escapeHtml(a.code)} — ${escapeHtml(a.name)}</td><td class="mono">${fmt(budget)}</td><td class="mono">${fmt(actual)}</td><td class="mono" style="${style}">${fmt(variance)}</td><td class="mono">${pct===null?'—':fmt(pct)+'%'}</td></tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد بيانات</td></tr>`;
+    compareBody.innerHTML = rows;
+
+    const cardsEl = $('#budget-summary-cards');
+    if(cardsEl){
+      const revPct = totalBudgetRev!==0 ? (totalActualRev/totalBudgetRev*100) : 0;
+      const expPct = totalBudgetExp!==0 ? (totalActualExp/totalBudgetExp*100) : 0;
+      cardsEl.innerHTML = `
+        <div class="card"><div class="k">نسبة تحقيق الإيرادات المخططة</div><div class="v teal">${fmt(revPct)}%</div></div>
+        <div class="card"><div class="k">نسبة تنفيذ المصروفات المخططة</div><div class="v ${expPct>100?'red':'gold'}">${fmt(expPct)}%</div></div>
+        <div class="card"><div class="k">صافي المخطط (${year})</div><div class="v gold">${fmt(totalBudgetRev-totalBudgetExp)}</div></div>
+        <div class="card"><div class="k">صافي الفعلي (${year})</div><div class="v teal">${fmt(totalActualRev-totalActualExp)}</div></div>
+        ${worst ? `<div class="card"><div class="k">أكبر انحراف عن الموازنة</div><div class="v red" style="font-size:14px;">${escapeHtml(worst.name)} (${fmt(worst.variance)})</div></div>` : ''}
+      `;
+    }
+  }
+}
+$('#budget-year')?.addEventListener('change', renderEpmBudget);
+$('#budget-input-body')?.addEventListener('change', async e=>{
+  const input = e.target.closest('.budget-month-input');
+  if(!input) return;
+  const year = parseInt($('#budget-year').value, 10);
+  const accountId = input.dataset.account;
+  const monthIdx = parseInt(input.dataset.month, 10);
+  const entry = ensureBudgetEntry(year, accountId);
+  entry.months[monthIdx] = num(input.value);
+  entry.updatedBy = (typeof currentUser!=='undefined' && currentUser) ? currentUser : 'غير معروف';
+  entry.updatedAt = Date.now();
+  await saveBudgetEntries();
+  const acc = chartOfAccounts.find(a=>a.id===accountId);
+  await logAudit('edit','الموازنة', `تم تعديل موازنة ${year} لحساب "${acc?acc.name:''}" — شهر ${monthIdx+1}: ${fmt(entry.months[monthIdx])}`);
+  renderEpmBudget();
+});
+$('#btn-export-budget')?.addEventListener('click', ()=>{
+  const year = parseInt($('#budget-year').value, 10);
+  const accounts = sortedChartOfAccounts();
+  const rows = accounts.map(a=>{
+    const entry = getBudgetEntry(year, a.id);
+    const budget = budgetYearTotal(entry);
+    const actual = actualForAccountYear(a.id, year, a.type);
+    return { 'الرمز': a.code, 'الحساب': a.name, 'التصنيف': accountTypeLabel(a.type), 'المخطط (سنوي)': budget, 'الفعلي': actual, 'الفرق': actual-budget };
+  });
+  downloadXlsx(`الموازنة_${year}.xlsx`, 'الموازنة', rows);
+});
+
+/* ============ بحث شامل (Global Search) ============ */
+function runGlobalSearch(q){
+  q = (q||'').trim().toLowerCase();
+  if(q.length < 2) return { clients:[], vault:[], purchases:[] };
+  const matchClients = clients.filter(c=>
+    String(c.name||'').toLowerCase().includes(q) ||
+    String(c.phone||'').toLowerCase().includes(q) ||
+    String(c.clientId||'').toLowerCase().includes(q) ||
+    String(c.invoice||'').toLowerCase().includes(q) ||
+    String(c.courseNumber||'').toLowerCase().includes(q) ||
+    String(c.referNum||'').toLowerCase().includes(q)
+  ).slice(0,8);
+  const matchVault = vaultTx.filter(t=>
+    String(t.clientName||'').toLowerCase().includes(q) ||
+    String(t.notes||'').toLowerCase().includes(q) ||
+    String(t.category||'').toLowerCase().includes(q) ||
+    String(num(t.amount)).includes(q)
+  ).slice(0,8);
+  const matchPurchases = purchases.filter(p=>
+    String(p.supplierName||'').toLowerCase().includes(q) ||
+    String(p.invoiceNo||'').toLowerCase().includes(q) ||
+    String(num(p.total)).includes(q)
+  ).slice(0,8);
+  return { clients: matchClients, vault: matchVault, purchases: matchPurchases };
+}
+function renderGlobalSearchResults(q){
+  const el = $('#global-search-results');
+  if(!el) return;
+  const { clients: rc, vault: rv, purchases: rp } = runGlobalSearch(q);
+  if(q.trim().length < 2){ el.innerHTML = `<div class="hint">اكتب حرفين على الأقل للبحث</div>`; return; }
+  if(!rc.length && !rv.length && !rp.length){ el.innerHTML = `<div class="hint">لا توجد نتائج مطابقة</div>`; return; }
+  let html = '';
+  if(rc.length){
+    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">العملاء (${rc.length})</h4>`;
+    html += rc.map(c=> `<div class="gsr-item" data-gs-client="${c.id}" style="padding:8px; border-bottom:1px solid var(--border); cursor:pointer;">
+      <b>${escapeHtml(c.name||'')}</b> — ${escapeHtml(c.phone||'')} <span style="color:var(--text-muted); font-size:12px;">· ${escapeHtml(c.courseType||'')} · ${escapeHtml(c.invoice||'')}</span>
+    </div>`).join('');
+  }
+  if(rv.length){
+    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">الحركات المالية (${rv.length})</h4>`;
+    html += rv.map(t=> `<div class="gsr-item" style="padding:8px; border-bottom:1px solid var(--border);">
+      <b>${fmt(num(t.amount))}</b> — ${escapeHtml(t.clientName||t.category||'')} <span style="color:var(--text-muted); font-size:12px;">· ${escapeHtml(t.date||'')} · ${t.type==='in'?'قبض':'صرف'}</span>
+    </div>`).join('');
+  }
+  if(rp.length){
+    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">المشتريات (${rp.length})</h4>`;
+    html += rp.map(p=> `<div class="gsr-item" style="padding:8px; border-bottom:1px solid var(--border);">
+      <b>${escapeHtml(p.supplierName||'')}</b> — ${escapeHtml(p.invoiceNo||'')} <span style="color:var(--text-muted); font-size:12px;">· ${fmt(num(p.total))} · ${escapeHtml(p.date||'')}</span>
+    </div>`).join('');
+  }
+  el.innerHTML = html;
+}
+function openGlobalSearch(){
+  $('#global-search-overlay').classList.add('show');
+  $('#global-search-input').value = '';
+  $('#global-search-results').innerHTML = '';
+  setTimeout(()=> $('#global-search-input')?.focus(), 50);
+}
+function closeGlobalSearch(){ $('#global-search-overlay').classList.remove('show'); }
+$('#btn-global-search')?.addEventListener('click', openGlobalSearch);
+$('#btn-close-global-search')?.addEventListener('click', closeGlobalSearch);
+$('#global-search-overlay')?.addEventListener('click', e=>{ if(e.target.id==='global-search-overlay') closeGlobalSearch(); });
+document.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openGlobalSearch(); }
+  if(e.key==='Escape' && $('#global-search-overlay')?.classList.contains('show')) closeGlobalSearch();
+});
+$('#global-search-input')?.addEventListener('input', e=> renderGlobalSearchResults(e.target.value));
+$('#global-search-results')?.addEventListener('click', e=>{
+  const item = e.target.closest('[data-gs-client]');
+  if(!item) return;
+  const client = clients.find(c=>c.id===item.dataset.gsClient);
+  if(!client) return;
+  closeGlobalSearch();
+  document.querySelector('nav.tabs button[data-view="clients"]')?.click();
+  if($('#search')){ $('#search').value = client.clientId || client.name || ''; $('#search').dispatchEvent(new Event('input')); }
 });
 
 /* ---------------- Courses / Sessions ---------------- */
@@ -16611,7 +17302,7 @@ async function ensureServerLoginThenStart(){
       if(res.ok){
         try{
           SERVER_AUTH_USERNAME = sessionStorage.getItem('serverAuthUsername') || null;
-          SERVER_AUTH_ROLE = sessionStorage.getItem('serverAuthRole') === 'admin' ? 'admin' : 'staff';
+          SERVER_AUTH_ROLE = normalizeRole(sessionStorage.getItem('serverAuthRole'));
         }catch(e){ SERVER_AUTH_ROLE = 'staff'; }
         $('#server-login-screen').style.display = 'none';
         await startApp();
@@ -16646,8 +17337,10 @@ $('#server-login-form').addEventListener('submit', async e=>{
   }
 });
 
-async function activateAndStart(clientId){
+let LICENSE_EXPIRY_DATE = null; // تُستخدم في تنبيهات الداشبورد لتذكير المستخدم قبل انتهاء الترخيص
+async function activateAndStart(clientId, expiryDate){
   ENC_KEY = await deriveEncryptionKey(clientId);
+  if(expiryDate) LICENSE_EXPIRY_DATE = expiryDate;
   $('#license-screen').style.display = 'none';
   await ensureServerLoginThenStart();
 }
@@ -16663,7 +17356,7 @@ $('#license-form').addEventListener('submit', async e=>{
     if(result.valid){
       const cleaned = input.replace(/[\s-]/g,'').toUpperCase();
       localStorage.setItem(LICENSE_STORAGE_KEY, cleaned);
-      await activateAndStart(result.clientId);
+      await activateAndStart(result.clientId, result.expiryDate);
     }else{
       $('#license-error').textContent = result.reason || 'كود الترخيص غير صالح';
       $('#license-error').style.display = 'block';
@@ -17226,7 +17919,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeClientsCou
     if(storedKey){
       const result = await validateLicenseKey(storedKey);
       if(result.valid){
-        await activateAndStart(result.clientId);
+        await activateAndStart(result.clientId, result.expiryDate);
         return;
       }
       showLicenseScreen(result.reason);
