@@ -4358,7 +4358,7 @@
   <section class="view" id="view-budget">
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>الموازنة التقديرية والتخطيط المالي</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل حساب من دليل الحسابات، وقارنها تلقائياً بالأرقام الفعلية المسجَّلة في القيود اليومية. هذا القسم متاح للمدير فقط.</p>
+      <p style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل نوع دورة (إيراد) وكل تصنيف مصروف، وقارنها تلقائياً بالأرقام الفعلية المسحوبة مباشرة من بيانات العملاء والحركات المالية الحقيقية في البرنامج. هذا القسم متاح للمدير فقط.</p>
     </div>
 
     <div class="panel">
@@ -4374,16 +4374,16 @@
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-export-budget">تصدير Excel (مخطط وفعلي)</button>
       </div>
-      <div class="hint" style="margin-top:0;">القيمة الفعلية لكل شهر تُحسب تلقائياً من مجموع القيود اليومية المزدوجة (دليل الحسابات) خلال ذلك الشهر — لا حاجة لإدخالها يدوياً.</div>
+      <div class="hint" style="margin-top:0;">الفعلي لكل شهر يُحسب تلقائياً: الإيراد من دخل المركز الحقيقي للعملاء المسجَّلين في ذلك الشهر لكل نوع دورة، والمصروف من مجموع حركات الخزنة الفعلية (صرف) لكل تصنيف — لا حاجة لإدخال أي رقم فعلي يدوياً.</div>
     </div>
 
     <div class="grid-cards" id="budget-summary-cards"></div>
 
     <div class="panel" style="border-right:4px solid var(--teal);">
-      <h3 style="margin:0 0 6px;">إدخال الموازنة الشهرية (حسب دليل الحسابات)</h3>
+      <h3 style="margin:0 0 6px;">إدخال الموازنة الشهرية (حسب أنواع الدورات وتصنيفات المصروفات الفعلية)</h3>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>الحساب</th><th>يناير</th><th>فبراير</th><th>مارس</th><th>أبريل</th><th>مايو</th><th>يونيو</th><th>يوليو</th><th>أغسطس</th><th>سبتمبر</th><th>أكتوبر</th><th>نوفمبر</th><th>ديسمبر</th><th>الإجمالي</th></tr></thead>
+          <thead><tr><th>البند</th><th>يناير</th><th>فبراير</th><th>مارس</th><th>أبريل</th><th>مايو</th><th>يونيو</th><th>يوليو</th><th>أغسطس</th><th>سبتمبر</th><th>أكتوبر</th><th>نوفمبر</th><th>ديسمبر</th><th>الإجمالي</th></tr></thead>
           <tbody id="budget-input-body"></tbody>
         </table>
       </div>
@@ -14019,13 +14019,19 @@ $('#btn-export-accounting-full')?.addEventListener('click', ()=>{
 });
 
 /* ============ الموازنة التقديرية والتخطيط المالي (EPM) ============ */
-function getBudgetEntry(year, accountId){
-  return budgetEntries.find(b=> b.year===year && b.accountId===accountId);
+/* ============ الموازنة التقديرية والتخطيط المالي (EPM) ============
+   مُعاد بناؤها لتعتمد مباشرة على بيانات البرنامج الفعلية بدل القيود اليومية اليدوية:
+   - بنود الإيراد = أنواع الدورات (من settings.courses + أي نوع فعلي مستخدم في العملاء)
+     والفعلي = دخل المركز الحقيقي (centerIncome) لعملاء سُجّلوا في ذلك الشهر لهذا النوع.
+   - بنود المصروف = تصنيفات المصروفات (settings.expenseCategories)
+     والفعلي = مجموع حركات الخزنة الفعلية (vaultTx) من نوع "صرف" لهذا التصنيف في ذلك الشهر. */
+function getBudgetEntry(year, kind, key){
+  return budgetEntries.find(b=> b.year===year && b.kind===kind && b.key===key);
 }
-function ensureBudgetEntry(year, accountId){
-  let e = getBudgetEntry(year, accountId);
+function ensureBudgetEntry(year, kind, key){
+  let e = getBudgetEntry(year, kind, key);
   if(!e){
-    e = { id: uid(), year, accountId, months: Array(12).fill(0), updatedBy:null, updatedAt:null };
+    e = { id: uid(), year, kind, key, months: Array(12).fill(0), updatedBy:null, updatedAt:null };
     budgetEntries.push(e);
   }
   return e;
@@ -14033,55 +14039,64 @@ function ensureBudgetEntry(year, accountId){
 function budgetYearTotal(entry){
   return (entry && entry.months) ? entry.months.reduce((a,b)=>a+num(b),0) : 0;
 }
-/* يحسب الرصيد الفعلي لحساب معيّن خلال شهر محدد من القيود اليومية المزدوجة، بالإشارة الصحيحة حسب الرصيد الطبيعي للحساب */
-function actualForAccountMonth(accountId, year, monthIndex, accType){
-  let debit = 0, credit = 0;
-  journalDE.forEach(e=>{
-    const d = new Date(e.date);
-    if(d.getFullYear()!==year || d.getMonth()!==monthIndex) return;
-    (e.lines||[]).forEach(l=>{
-      if(l.accountId!==accountId) return;
-      debit += num(l.debit);
-      credit += num(l.credit);
-    });
-  });
-  return accountNormalBalance(accType)==='debit' ? (debit-credit) : (credit-debit);
+function budgetLineSources(){
+  const courseTypes = new Set((settings.courses||[]).map(c=>c.name));
+  clients.forEach(c=>{ if(c.courseType) courseTypes.add(c.courseType); });
+  const expenseCats = new Set(settings.expenseCategories||[]);
+  vaultTx.forEach(t=>{ if(t.type==='out' && t.category) expenseCats.add(t.category); });
+  return {
+    revenue: [...courseTypes].sort((a,b)=>a.localeCompare(b,'ar')),
+    expense: [...expenseCats].sort((a,b)=>a.localeCompare(b,'ar'))
+  };
 }
-function actualForAccountYear(accountId, year, accType){
+function actualForLineMonth(kind, key, year, monthIndex){
+  const monthKey = `${year}-${String(monthIndex+1).padStart(2,'0')}`;
+  if(kind==='revenue'){
+    return clients.filter(c=> !c.cancelled && (c.courseType||'')===key && (c.date||'').slice(0,7)===monthKey)
+      .reduce((s,c)=>s+centerIncome(c),0);
+  }
+  return vaultTx.filter(t=> t.type==='out' && (t.category||'')===key && (t.date||'').slice(0,7)===monthKey)
+    .reduce((s,t)=>s+num(t.amount),0);
+}
+function actualForLineYear(kind, key, year){
   let total = 0;
-  for(let m=0;m<12;m++) total += actualForAccountMonth(accountId, year, m, accType);
+  for(let m=0;m<12;m++) total += actualForLineMonth(kind, key, year, m);
   return total;
 }
 function renderEpmBudget(){
   if(!$('#view-budget')) return;
   const year = parseInt($('#budget-year')?.value || new Date().getFullYear(), 10);
-  const accounts = sortedChartOfAccounts();
+  const sources = budgetLineSources();
+  const allLines = [
+    ...sources.revenue.map(key=>({kind:'revenue', key, label:'إيراد: '+key})),
+    ...sources.expense.map(key=>({kind:'expense', key, label:'مصروف: '+key}))
+  ];
 
   const inputBody = $('#budget-input-body');
   if(inputBody){
-    inputBody.innerHTML = accounts.map(a=>{
-      const entry = ensureBudgetEntry(year, a.id);
-      const monthInputs = entry.months.map((v,i)=> `<td><input type="number" class="budget-month-input" data-account="${a.id}" data-month="${i}" value="${v||''}" style="width:78px;"></td>`).join('');
-      return `<tr><td>${escapeHtml(a.code)} — ${escapeHtml(a.name)}<div style="font-size:11px;color:var(--text-muted);">${accountTypeLabel(a.type)}</div></td>${monthInputs}<td class="mono" data-account-total="${a.id}">${fmt(budgetYearTotal(entry))}</td></tr>`;
-    }).join('') || `<tr><td colspan="14" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد حسابات في دليل الحسابات بعد</td></tr>`;
+    inputBody.innerHTML = allLines.map(line=>{
+      const entry = ensureBudgetEntry(year, line.kind, line.key);
+      const monthInputs = entry.months.map((v,i)=> `<td><input type="number" class="budget-month-input" data-kind="${line.kind}" data-key="${escapeHtml(line.key)}" data-month="${i}" value="${v||''}" style="width:78px;"></td>`).join('');
+      return `<tr><td>${escapeHtml(line.label)}</td>${monthInputs}<td class="mono" data-line-total="${line.kind}::${escapeHtml(line.key)}">${fmt(budgetYearTotal(entry))}</td></tr>`;
+    }).join('') || `<tr><td colspan="14" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد أنواع دورات أو تصنيفات مصروفات معرَّفة بعد في الإعدادات</td></tr>`;
   }
 
   const compareBody = $('#budget-compare-body');
   if(compareBody){
     let totalBudgetRev=0, totalActualRev=0, totalBudgetExp=0, totalActualExp=0;
     let worst = null;
-    const rows = accounts.map(a=>{
-      const entry = getBudgetEntry(year, a.id);
+    const rows = allLines.map(line=>{
+      const entry = getBudgetEntry(year, line.kind, line.key);
       const budget = budgetYearTotal(entry);
-      const actual = actualForAccountYear(a.id, year, a.type);
+      const actual = actualForLineYear(line.kind, line.key, year);
       const variance = actual - budget;
       const pct = budget!==0 ? (actual/budget*100) : (actual!==0 ? null : 100);
-      if(a.type==='revenue'){ totalBudgetRev+=budget; totalActualRev+=actual; }
-      if(a.type==='expense'){ totalBudgetExp+=budget; totalActualExp+=actual; }
-      if(budget!==0 && (!worst || Math.abs(variance) > Math.abs(worst.variance))) worst = { name:a.name, variance };
-      const badColor = a.type==='expense' ? (variance>0) : (variance<0);
+      if(line.kind==='revenue'){ totalBudgetRev+=budget; totalActualRev+=actual; }
+      else { totalBudgetExp+=budget; totalActualExp+=actual; }
+      if(budget!==0 && (!worst || Math.abs(variance) > Math.abs(worst.variance))) worst = { name:line.label, variance };
+      const badColor = line.kind==='expense' ? (variance>0) : (variance<0);
       const style = variance===0 ? '' : (badColor ? 'color:var(--red);' : 'color:var(--teal);');
-      return `<tr><td>${escapeHtml(a.code)} — ${escapeHtml(a.name)}</td><td class="mono">${fmt(budget)}</td><td class="mono">${fmt(actual)}</td><td class="mono" style="${style}">${fmt(variance)}</td><td class="mono">${pct===null?'—':fmt(pct)+'%'}</td></tr>`;
+      return `<tr><td>${escapeHtml(line.label)}</td><td class="mono">${fmt(budget)}</td><td class="mono">${fmt(actual)}</td><td class="mono" style="${style}">${fmt(variance)}</td><td class="mono">${pct===null?'—':fmt(pct)+'%'}</td></tr>`;
     }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد بيانات</td></tr>`;
     compareBody.innerHTML = rows;
 
@@ -14104,25 +14119,29 @@ $('#budget-input-body')?.addEventListener('change', async e=>{
   const input = e.target.closest('.budget-month-input');
   if(!input) return;
   const year = parseInt($('#budget-year').value, 10);
-  const accountId = input.dataset.account;
+  const kind = input.dataset.kind;
+  const key = input.dataset.key;
   const monthIdx = parseInt(input.dataset.month, 10);
-  const entry = ensureBudgetEntry(year, accountId);
+  const entry = ensureBudgetEntry(year, kind, key);
   entry.months[monthIdx] = num(input.value);
   entry.updatedBy = (typeof currentUser!=='undefined' && currentUser) ? currentUser : 'غير معروف';
   entry.updatedAt = Date.now();
   await saveBudgetEntries();
-  const acc = chartOfAccounts.find(a=>a.id===accountId);
-  await logAudit('edit','الموازنة', `تم تعديل موازنة ${year} لحساب "${acc?acc.name:''}" — شهر ${monthIdx+1}: ${fmt(entry.months[monthIdx])}`);
+  await logAudit('edit','الموازنة', `تم تعديل موازنة ${year} — ${kind==='revenue'?'إيراد':'مصروف'} "${key}" — شهر ${monthIdx+1}: ${fmt(entry.months[monthIdx])}`);
   renderEpmBudget();
 });
 $('#btn-export-budget')?.addEventListener('click', ()=>{
   const year = parseInt($('#budget-year').value, 10);
-  const accounts = sortedChartOfAccounts();
-  const rows = accounts.map(a=>{
-    const entry = getBudgetEntry(year, a.id);
+  const sources = budgetLineSources();
+  const allLines = [
+    ...sources.revenue.map(key=>({kind:'revenue', key, label:'إيراد: '+key})),
+    ...sources.expense.map(key=>({kind:'expense', key, label:'مصروف: '+key}))
+  ];
+  const rows = allLines.map(line=>{
+    const entry = getBudgetEntry(year, line.kind, line.key);
     const budget = budgetYearTotal(entry);
-    const actual = actualForAccountYear(a.id, year, a.type);
-    return { 'الرمز': a.code, 'الحساب': a.name, 'التصنيف': accountTypeLabel(a.type), 'المخطط (سنوي)': budget, 'الفعلي': actual, 'الفرق': actual-budget };
+    const actual = actualForLineYear(line.kind, line.key, year);
+    return { 'البند': line.label, 'المخطط (سنوي)': budget, 'الفعلي': actual, 'الفرق': actual-budget };
   });
   downloadXlsx(`الموازنة_${year}.xlsx`, 'الموازنة', rows);
 });
