@@ -4992,15 +4992,19 @@
 </div>
 
 <div class="overlay" id="compworkers-bulk-overlay">
-  <div class="modal" style="max-width:640px;">
+  <div class="modal" style="max-width:480px;">
     <h2>استيراد عمال الشركات دفعة واحدة</h2>
-    <div class="hint" style="margin:0 0 10px;">أدخل رقم الهوية واسم الشركة في كل صف. الربط يتم برقم الهوية فقط: إن كان موجوداً مسبقاً في شيت العملاء يتم تحديث اسم الشركة (ونوع العميل إلى "عميل شركات") فقط دون المساس ببقية بياناته، وإن لم يكن موجوداً إطلاقاً يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية واسم الشركة فقط) بدل تجاهل الصف — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته لاحقاً. يمكنك نسخ عمودين من إكسل (رقم الهوية ثم اسم الشركة) ولصقهما مباشرة داخل أي خلية — سيتوزّعان تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة.</div>
+    <div class="hint" style="margin:0 0 10px;">اختر أو اكتب اسم الشركة مرة واحدة أعلاه، ثم أدخل رقم الهوية لكل عامل في صف مستقل أسفله — تُطبَّق نفس الشركة على كل الصفوف، وتعمل هذه الشاشة مع أي شركة. الربط يتم برقم الهوية فقط: إن كان موجوداً مسبقاً في شيت العملاء يتم تحديث اسم الشركة (ونوع العميل إلى "عميل شركات") فقط دون المساس ببقية بياناته، وإن لم يكن موجوداً إطلاقاً يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية واسم الشركة فقط) بدل تجاهل الصف — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته لاحقاً. يمكنك لصق عمود كامل من إكسل مباشرة داخل أي خلية.</div>
+    <div class="field" style="margin-bottom:12px;">
+      <label>اسم الشركة *</label>
+      <input type="text" id="compworkers-bulk-company" list="dl-company-names" placeholder="اكتب أو اختر اسم الشركة">
+      <datalist id="dl-company-names"></datalist>
+    </div>
     <div class="table-scroll" style="max-height:52vh;">
       <table>
         <thead>
           <tr>
             <th style="min-width:110px;">رقم الهوية *</th>
-            <th style="min-width:160px;">اسم الشركة *</th>
             <th style="width:34px;"></th>
           </tr>
         </thead>
@@ -5303,31 +5307,6 @@
   </div>
 </div>
 
-<div class="overlay" id="ctitc-overlay">
-  <div class="modal" style="max-width:480px;">
-    <h2>استيراد عمال الشركة (رقم الهوية فقط)</h2>
-    <div class="hint" style="margin:0 0 10px;">الشركة: <b id="ctitc-company-name">—</b></div>
-    <div class="hint" style="margin:0 0 10px;">أدخل رقم الهوية/الإقامة لكل عامل في صف مستقل ثم اضغط "استيراد". سيُوزَّع كل رقم تلقائياً على أقرب حوالة لدى هذه الشركة بها شواغر، وسيُنشأ للعامل عميل جديد (نوعه "عميل شركات") إن لم يكن موجوداً، أو تُحدَّث حالته إلى "عميل شركات" إن كان موجوداً بنوع آخر. يمكنك لصق عمود كامل من إكسل مباشرة داخل أي خلية.</div>
-    <div class="table-scroll" style="max-height:52vh;">
-      <table>
-        <thead>
-          <tr>
-            <th style="min-width:160px;">رقم الهوية *</th>
-            <th style="width:34px;"></th>
-          </tr>
-        </thead>
-        <tbody id="ctitc-table-body"></tbody>
-      </table>
-    </div>
-    <div class="modal-actions" style="justify-content:space-between;">
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-ctitc-add-row">+ إضافة صف</button>
-      <div style="display:flex; gap:10px;">
-        <button type="button" class="btn btn-ghost" id="ctitc-cancel">إلغاء</button>
-        <button type="button" class="btn btn-primary" id="btn-ctitc-save">استيراد</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div class="overlay" id="bag-overlay">
   <div class="modal" style="max-width:420px;">
