@@ -270,6 +270,8 @@ const DEFAULT_SETTINGS = {
   lowBalanceThreshold: 5000,
   bagOverdueDays: 14,
   monthlyReportWhatsapp: '',
+  monthlyPdfReportsWhatsappNumbers: '',
+  vatPdfReportWhatsappNumbers: '',
   lastMonthlyReportPromptMonth: null,
   nextVaultSeq: 1,
   vaultLockedThrough: '',
@@ -639,6 +641,8 @@ async function loadData(){
     if(settings.lowBalanceThreshold===undefined) settings.lowBalanceThreshold = 5000;
     if(settings.bagOverdueDays===undefined) settings.bagOverdueDays = 14;
     if(settings.monthlyReportWhatsapp===undefined) settings.monthlyReportWhatsapp = '';
+    if(settings.monthlyPdfReportsWhatsappNumbers===undefined) settings.monthlyPdfReportsWhatsappNumbers = '';
+    if(settings.vatPdfReportWhatsappNumbers===undefined) settings.vatPdfReportWhatsappNumbers = '';
     if(settings.lastMonthlyReportPromptMonth===undefined) settings.lastMonthlyReportPromptMonth = null;
     if(!settings.autoBackupIntervalDays) settings.autoBackupIntervalDays = 7;
     if(settings.lastAutoBackupAt===undefined) settings.lastAutoBackupAt = null;
@@ -4774,6 +4778,24 @@ $('#btn-save-monthly-wa')?.addEventListener('click', async ()=>{
   showToast('تم حفظ رقم واتساب');
   renderSmartAlerts();
 });
+$('#btn-save-wa3-numbers')?.addEventListener('click', async ()=>{
+  const raw = ($('#wa3-numbers').value||'');
+  const cleaned = raw.split(',').map(s=> s.replace(/[^\d]/g,'')).filter(Boolean);
+  settings.monthlyPdfReportsWhatsappNumbers = cleaned.join(', ');
+  if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers;
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي التقارير الشهرية (${cleaned.length} رقم)`);
+  showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
+});
+$('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
+  const raw = ($('#vat-wa-numbers').value||'');
+  const cleaned = raw.split(',').map(s=> s.replace(/[^\d]/g,'')).filter(Boolean);
+  settings.vatPdfReportWhatsappNumbers = cleaned.join(', ');
+  if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers;
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي الإقرار الضريبي (${cleaned.length} رقم)`);
+  showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
+});
 $('#btn-backup-now').addEventListener('click', ()=>{
   downloadFullBackup(false);
   showToast('تم تنزيل النسخة الاحتياطية');
@@ -7580,56 +7602,120 @@ function bagsPurchasedReportBodyHtml(from, to, monthLabel){
       </tbody>
     </table>`;
 }
-async function generateAndShareFourMonthlyReports(yearMonth){
-  const statusEl = $('#wa4-report-status');
+/* ---------- 3 تقارير شهرية (تسجيلات ومبالغ / الحركات الصادرة / الحقائب المشتراة) ---------- */
+async function generateAndShareThreeMonthlyReports(yearMonth){
+  const statusEl = $('#wa3-report-status');
   const setStatus = msg => { if(statusEl) statusEl.textContent = msg; };
   const [yStr, mStr] = yearMonth.split('-');
   const from = `${yStr}-${mStr}-01`;
   const daysInMonth = new Date(Number(yStr), Number(mStr), 0).getDate();
   const to = `${yStr}-${mStr}-${String(daysInMonth).padStart(2,'0')}`;
   const monthLabel = monthLabelAr(yearMonth);
-  const btn = $('#btn-send-4-reports-wa');
+  const btn = $('#btn-send-3-reports-wa');
+
+  if(typeof html2canvas==='undefined' || !window.jspdf){
+    setStatus('❌ لم تُحمَّل مكتبة توليد PDF بعد (تحقق من اتصال الإنترنت وأعد فتح الصفحة).');
+    showToast('تعذّر تحميل مكتبة توليد PDF — تحقق من الاتصال بالإنترنت وأعد المحاولة');
+    return;
+  }
   if(btn) btn.disabled = true;
-  setStatus('⏳ جارٍ توليد التقارير الأربعة... قد يستغرق بضع ثوانٍ');
+  setStatus('⏳ جارٍ توليد التقارير الثلاثة... قد يستغرق بضع ثوانٍ');
+  showToast('جارٍ توليد التقارير...');
   try{
     const files = [];
+    setStatus('⏳ (١/٣) تقرير التسجيلات والمبالغ...');
     files.push(await htmlBodyToPdfFile(monthlyClientsReportBodyHtml(yearMonth), {title:'تقرير شهري — '+monthLabel, filename:`تقرير_شهري_تسجيلات_ومبالغ_${yearMonth}.pdf`}));
-    const vatReturn = buildVatReturn(from, to);
-    files.push(await htmlBodyToPdfFile(vatReturnReportBodyHtml(vatReturn, from, to, monthLabel), {title:'الإقرار الضريبي', filename:`الإقرار_الضريبي_${yearMonth}.pdf`}));
+    setStatus('⏳ (٢/٣) الحركات المالية الصادرة...');
     files.push(await htmlBodyToPdfFile(vaultOutReportBodyHtml(from, to, monthLabel), {title:'الحركات المالية الصادرة', filename:`الحركات_الصادرة_${yearMonth}.pdf`}));
+    setStatus('⏳ (٣/٣) الحقائب المشتراة...');
     files.push(await htmlBodyToPdfFile(bagsPurchasedReportBodyHtml(from, to, monthLabel), {title:'الحقائب المشتراة', filename:`الحقائب_المشتراة_${yearMonth}.pdf`}));
 
-    if(navigator.canShare && navigator.canShare({files})){
-      setStatus('✅ تم توليد الملفات — جارٍ فتح قائمة المشاركة...');
-      await navigator.share({ files, title:`تقارير ${monthLabel}`, text:`4 تقارير شهرية — ${monthLabel}` });
-      setStatus('✅ تم فتح قائمة المشاركة. اختر واتساب واضغط إرسال لإكمال العملية.');
-    } else {
-      files.forEach(f=>{
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(f);
-        a.download = f.name;
-        a.click();
-      });
-      setStatus('⚠️ جهازك/متصفحك لا يدعم مشاركة الملفات مباشرة — تم تنزيل الملفات الأربعة بدلاً من ذلك، أرفقها يدوياً في واتساب.');
-    }
+    downloadFilesAndOpenWhatsapp(files, settings.monthlyPdfReportsWhatsappNumbers,
+      `تقارير ${monthLabel} — مرفقة 3 ملفات PDF (تسجيلات ومبالغ، الحركات الصادرة، الحقائب المشتراة). يرجى إرفاقها من مجلد التنزيلات.`,
+      setStatus, 'الملفات الثلاثة');
   }catch(e){
-    if(e && e.name==='AbortError'){
-      setStatus('تم إلغاء المشاركة.');
-    } else {
-      console.error(e);
-      setStatus('❌ حدث خطأ أثناء توليد التقارير: ' + (e.message||e));
-      showToast('تعذّر توليد التقارير، حاول مجدداً');
-    }
+    console.error(e);
+    setStatus('❌ حدث خطأ أثناء توليد التقارير: ' + (e.message||e));
+    showToast('تعذّر توليد التقارير، حاول مجدداً');
   } finally {
     if(btn) btn.disabled = false;
   }
 }
-if($('#wa4-report-month')) $('#wa4-report-month').value = lastCompleteMonthKey();
-$('#btn-send-4-reports-wa')?.addEventListener('click', ()=>{
-  const val = $('#wa4-report-month').value;
+if($('#wa3-report-month')) $('#wa3-report-month').value = lastCompleteMonthKey();
+$('#btn-send-3-reports-wa')?.addEventListener('click', ()=>{
+  const val = $('#wa3-report-month').value;
   if(!val){ showToast('اختر الشهر أولاً'); return; }
-  generateAndShareFourMonthlyReports(val);
+  generateAndShareThreeMonthlyReports(val);
 });
+
+/* ---------- الإقرار الضريبي (ضريبة القيمة المضافة) — تقرير مستقل كل ربع سنة ---------- */
+function quarterDateRange(year, quarter){
+  const q = Number(quarter);
+  const startMonth = (q-1)*3 + 1; // 1,4,7,10
+  const endMonth = startMonth + 2; // 3,6,9,12
+  const from = `${year}-${String(startMonth).padStart(2,'0')}-01`;
+  const daysInEndMonth = new Date(Number(year), endMonth, 0).getDate();
+  const to = `${year}-${String(endMonth).padStart(2,'0')}-${String(daysInEndMonth).padStart(2,'0')}`;
+  const qLabels = {1:'الربع الأول (يناير–مارس)', 2:'الربع الثاني (أبريل–يونيو)', 3:'الربع الثالث (يوليو–سبتمبر)', 4:'الربع الرابع (أكتوبر–ديسمبر)'};
+  return { from, to, label: `${qLabels[q]} ${year}` };
+}
+async function generateAndShareVatReport(year, quarter){
+  const statusEl = $('#vat-report-status');
+  const setStatus = msg => { if(statusEl) statusEl.textContent = msg; };
+  const { from, to, label } = quarterDateRange(year, quarter);
+  const btn = $('#btn-send-vat-report-wa');
+
+  if(typeof html2canvas==='undefined' || !window.jspdf){
+    setStatus('❌ لم تُحمَّل مكتبة توليد PDF بعد (تحقق من اتصال الإنترنت وأعد فتح الصفحة).');
+    showToast('تعذّر تحميل مكتبة توليد PDF — تحقق من الاتصال بالإنترنت وأعد المحاولة');
+    return;
+  }
+  if(btn) btn.disabled = true;
+  setStatus('⏳ جارٍ توليد الإقرار الضريبي...');
+  showToast('جارٍ توليد الإقرار الضريبي...');
+  try{
+    const vatReturn = buildVatReturn(from, to);
+    const file = await htmlBodyToPdfFile(vatReturnReportBodyHtml(vatReturn, from, to, label), {title:'الإقرار الضريبي — '+label, filename:`الإقرار_الضريبي_${year}_ر${quarter}.pdf`});
+    downloadFilesAndOpenWhatsapp([file], settings.vatPdfReportWhatsappNumbers,
+      `الإقرار الضريبي (ضريبة القيمة المضافة) — ${label}. يرجى إرفاق الملف من مجلد التنزيلات.`,
+      setStatus, 'ملف الإقرار الضريبي');
+  }catch(e){
+    console.error(e);
+    setStatus('❌ حدث خطأ أثناء توليد الإقرار الضريبي: ' + (e.message||e));
+    showToast('تعذّر توليد الإقرار الضريبي، حاول مجدداً');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+$('#btn-send-vat-report-wa')?.addEventListener('click', ()=>{
+  const year = Number($('#vat-report-year').value);
+  const quarter = Number($('#vat-report-quarter').value);
+  if(!year || !quarter){ showToast('اختر السنة والربع أولاً'); return; }
+  generateAndShareVatReport(year, quarter);
+});
+
+/* دالة مشتركة: تنزيل ملف/ملفات PDF على الجهاز، ثم فتح محادثة واتساب لكل رقم محفوظ */
+function downloadFilesAndOpenWhatsapp(files, numbersRaw, waText, setStatus, filesLabel){
+  files.forEach(f=>{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(f);
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+  showToast(`✅ تم تنزيل ${filesLabel} لجهازك`);
+  const numbers = (numbersRaw||'').split(',').map(s=>s.trim()).filter(Boolean);
+  if(numbers.length){
+    setStatus(`✅ تم تنزيل ${filesLabel}. جارٍ فتح محادثة واتساب لـ ${numbers.length} رقم — أرفق الملفات من مجلد التنزيلات في كل محادثة ثم أرسل.`);
+    numbers.forEach((num, i)=>{
+      setTimeout(()=>{ window.open(waLink(num, waText), '_blank'); }, i*700);
+    });
+  } else {
+    setStatus(`✅ تم تنزيل ${filesLabel}. لم تُحفظ أي أرقام واتساب — أضف رقماً أو أكثر أعلاه لفتح محادثة واتساب تلقائياً في المرة القادمة، أو افتح واتساب وأرفقها يدوياً الآن.`);
+    showToast('لم تُحفظ أي أرقام واتساب — أرفق الملفات المنزَّلة يدوياً في واتساب');
+  }
+}
 
 /* ============ مقارنة سنة بسنة (Year-over-Year) ============ */
 function yoyAvailableYears(){
@@ -7723,6 +7809,11 @@ $('#btn-suggest-fixed-cost')?.addEventListener('click', ()=>{
 });
 
 function renderReports(){
+  if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
+  if($('#wa3-report-month') && !$('#wa3-report-month').value) $('#wa3-report-month').value = lastCompleteMonthKey();
+  if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
+  if($('#vat-report-year') && !$('#vat-report-year').value) $('#vat-report-year').value = new Date().getFullYear();
+  if($('#vat-report-quarter') && !$('#vat-report-quarter').value) $('#vat-report-quarter').value = String(Math.max(1, Math.ceil((new Date().getMonth()) / 3)) || 1);
   renderBudget();
   renderCourseProfitability();
   renderAgingReport();
