@@ -7207,6 +7207,12 @@ $('#btn-sound-toggle').addEventListener('click', async ()=>{
 });
 $('#btn-logout').addEventListener('click', async ()=>{
   if(await customConfirm('تأكيد تسجيل الخروج؟')){
+    try{
+      await fetch(API_BASE + '/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+      });
+    }catch(e){ /* حتى لو فشل الاتصال، نكمّل تسجيل الخروج محلياً بالأسفل */ }
     currentUser = null;
     currentUserRole = 'staff';
     SERVER_AUTH_TOKEN = null;
