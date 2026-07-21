@@ -76,6 +76,18 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
+// POST /api/auth/logout -> إبطال فوري لكل توكنات هذا المستخدم (بما فيها التوكن
+// المُستخدَم في هذا الطلب نفسه)، بدل الاكتفاء بمسح التوكن من المتصفح فقط.
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE server_users SET token_version = token_version + 1 WHERE id = $1', [req.user.sub]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تسجيل الخروج على الخادم' });
+  }
+});
+
 /* ---------------- إدارة المستخدمين (للمدير admin فقط) ----------------
    بديل عن تشغيل seed-user.js يدوياً من الطرفية في كل مرة — نفس المنطق بالضبط لكن عبر API
    محمي بـ requireRole('admin') على مستوى الخادم نفسه (مش مجرد إخفاء زر في الواجهة). */
@@ -107,7 +119,8 @@ app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash,
          display_name = COALESCE(EXCLUDED.display_name, server_users.display_name),
-         role = EXCLUDED.role
+         role = EXCLUDED.role,
+         token_version = server_users.token_version + 1
        RETURNING id, username, display_name, role, created_at`,
       [username.trim(), hash, displayName || username.trim(), finalRole]
     );
@@ -367,6 +380,7 @@ app.post('/api/zatca/invoice', requireAuth, async (req, res) => {
     });
     res.json(result);
   } catch (e) {
+    if (e.isValidation) return res.status(400).json({ error: e.message });
     console.error(e);
     res.status(500).json({ error: 'تعذّر إرسال الفاتورة للهيئة', detail: e.message });
   }
@@ -394,6 +408,7 @@ app.post('/api/zatca/return', requireAuth, async (req, res) => {
     });
     res.json(result);
   } catch (e) {
+    if (e.isValidation) return res.status(400).json({ error: e.message });
     console.error(e);
     res.status(500).json({ error: 'تعذّر إرسال المردود للهيئة', detail: e.message });
   }

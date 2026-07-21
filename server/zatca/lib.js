@@ -155,6 +155,30 @@ async function withChainLock(fn) {
 
 /* ---------------- بناء وتوقيع وإرسال فاتورة مبسّطة (B2C) ---------------- */
 
+/* تحقق أساسي من شكل وقيم بنود الفاتورة قبل توقيعها وإرسالها للهيئة. الخادم لا
+   يملك وصولاً لبيانات العميل الحقيقية (كل شيء مشفّر من طرف المتصفح ولا يُفكّ
+   تشفيره هنا أبداً)، فلا يمكنه التأكد أن المبالغ "صحيحة" فعلياً — لكنه يمنع
+   على الأقل وصول أي قيم فاسدة أو خطيرة (نص بدل رقم، أرقام سالبة أو غير منتهية،
+   نسبة ضريبة خارج المعقول...) إلى مستند رسمي غير قابل للتعديل بعد إرساله
+   (لأنه جزء من سلسلة تجزئة hash chain لا يمكن التراجع عنها). */
+function validateLineItems(lineItems) {
+  if (!Array.isArray(lineItems) || !lineItems.length) return 'لا توجد بنود في الفاتورة';
+  if (lineItems.length > 200) return 'عدد بنود الفاتورة كبير جداً (الحد الأقصى 200 بند)';
+  for (let i = 0; i < lineItems.length; i++) {
+    const it = lineItems[i] || {};
+    const label = `البند رقم ${i + 1}`;
+    if (typeof it.name !== 'string' || !it.name.trim()) return `${label}: اسم الصنف مفقود`;
+    if (it.name.length > 300) return `${label}: اسم الصنف طويل جداً`;
+    const qty = Number(it.quantity);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 100000) return `${label}: الكمية غير صحيحة`;
+    const price = Number(it.tax_exclusive_price);
+    if (!Number.isFinite(price) || Math.abs(price) > 100000000) return `${label}: السعر غير صحيح`;
+    const vat = Number(it.VAT_percent);
+    if (!Number.isFinite(vat) || vat < 0 || vat > 100) return `${label}: نسبة الضريبة غير صحيحة`;
+  }
+  return null; // null = صالح
+}
+
 /*
  * params: {
  *   environment, sourceRef, documentType: 'invoice'|'credit_note',
@@ -166,6 +190,12 @@ async function withChainLock(fn) {
  */
 async function submitSimplifiedInvoice(params) {
   const { environment, sourceRef, documentType, lineItems, issueDate, issueTime, cancelation, createdBy } = params;
+  const validationError = validateLineItems(lineItems);
+  if (validationError) {
+    const err = new Error(validationError);
+    err.isValidation = true;
+    throw err;
+  }
   const loaded = await loadEgs(environment);
   if (!loaded) throw new Error('لم يتم إعداد ربط الهيئة بعد (Onboarding) لهذه البيئة');
   const { egs, row } = loaded;
