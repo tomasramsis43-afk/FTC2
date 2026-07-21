@@ -10173,6 +10173,123 @@ $('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
 });
 
+/* ---------------- استيراد عمال الشركات دفعة واحدة (جدول داخل البرنامج فقط — بدون Excel) ----------------
+   الربط برقم الهوية فقط: تحديث اسم الشركة (ونوع العميل تلقائياً إلى "عميل شركات") لعميل موجود، أو إضافة
+   عميل جديد بالحد الأدنى من البيانات (رقم الهوية + اسم الشركة) إن لم يكن موجوداً — بنفس منطق استيراد
+   الرقم المرجعي، لكن عبر جدول لصق داخل البرنامج فقط دون أي رفع لملف Excel. */
+function addMinimalClientForCompanyImport(clientId, companyName){
+  const c = {
+    id: uid(), createdAt: Date.now(),
+    clientId, name: '',
+    phone: '', nationality: '',
+    clientType: 'company',
+    companyName: companyName || '', creditDays: '',
+    clientTaxNumber: '',
+    courseType: '',
+    courseNumber: '',
+    referNum: '', invoice: '', bagInvoice: '',
+    date: todayISO(),
+    coursePrice: 0,
+    bagSource: 'buy', bagPrice: num(settings.bagPrice),
+    bagStatus: 'pending', bagPurchaseDate: '',
+    discount: 0, paid: 0,
+    channel: '', networkInvoice: '', paid2: 0, channel2: '', networkInvoice2: '',
+    stage: 'جديد', cancelled: false,
+    notes: 'أُضيف تلقائياً برقم الهوية واسم الشركة فقط عبر استيراد عمال الشركات — بيانات غير مكتملة، لن يُحذف تلقائياً'
+  };
+  clients.push(c);
+  syncClientLedgerEntry(c);
+  return c;
+}
+let compWorkersBulkRowSeq = 0;
+function compWorkersBulkRowHtml(rowId){
+  return `<tr data-row="${rowId}">
+    <td><input type="text" class="cwb-id" data-col="0" maxlength="10" placeholder="10 أرقام" style="min-width:100px;"></td>
+    <td><input type="text" class="cwb-company" data-col="1" style="min-width:160px;"></td>
+    <td><button type="button" class="btn btn-danger btn-sm cwb-remove-row" title="حذف الصف">✕</button></td>
+  </tr>`;
+}
+function addCompWorkersBulkRow(){
+  compWorkersBulkRowSeq++;
+  $('#compworkers-bulk-table-body').insertAdjacentHTML('beforeend', compWorkersBulkRowHtml(compWorkersBulkRowSeq));
+}
+function openCompWorkersBulkModal(){
+  $('#compworkers-bulk-table-body').innerHTML = '';
+  for(let i=0;i<5;i++) addCompWorkersBulkRow();
+  $('#compworkers-bulk-overlay').classList.add('show'); SoundFX.open();
+}
+function closeCompWorkersBulkModal(){ $('#compworkers-bulk-overlay').classList.remove('show'); }
+$('#btn-compworkers-bulk').addEventListener('click', openCompWorkersBulkModal);
+$('#compworkers-bulk-cancel').addEventListener('click', closeCompWorkersBulkModal);
+$('#compworkers-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='compworkers-bulk-overlay') closeCompWorkersBulkModal(); });
+$('#btn-compworkers-bulk-row').addEventListener('click', addCompWorkersBulkRow);
+$('#compworkers-bulk-table-body').addEventListener('click', e=>{
+  if(e.target.classList.contains('cwb-remove-row')){
+    const rows = $('#compworkers-bulk-table-body').querySelectorAll('tr');
+    if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
+    e.target.closest('tr').remove();
+  }
+});
+$('#compworkers-bulk-table-body').addEventListener('paste', e=>{
+  const target = e.target;
+  if(!target || target.dataset.col===undefined) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if(!text || (!text.includes('\n') && !text.includes('\t'))) return;
+  e.preventDefault();
+  let lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(lines.length && lines[lines.length-1]==='') lines.pop();
+  const tbody = $('#compworkers-bulk-table-body');
+  const startRow = [...tbody.children].indexOf(target.closest('tr'));
+  const startCol = parseInt(target.dataset.col, 10);
+  lines.forEach((line, i)=>{
+    const rowIdx = startRow + i;
+    while(tbody.children.length <= rowIdx) addCompWorkersBulkRow();
+    const row = tbody.children[rowIdx];
+    line.split('\t').forEach((val, j)=>{
+      const col = startCol + j;
+      if(col>1) return;
+      const field = row.querySelector(`[data-col="${col}"]`);
+      if(!field) return;
+      field.value = val.trim();
+    });
+  });
+  showToast(`تم لصق ${lines.length} صف`);
+});
+$('#btn-compworkers-bulk-save').addEventListener('click', async ()=>{
+  const rows = [...$('#compworkers-bulk-table-body').querySelectorAll('tr')];
+  const errors = [];
+  const items = [];
+  let newClientsCount = 0;
+  rows.forEach((row, i)=>{
+    const val = cls => row.querySelector(`.${cls}`).value.trim();
+    const clientId = val('cwb-id');
+    const companyName = val('cwb-company');
+    if(!clientId && !companyName) return; // صف فارغ بالكامل يُتجاهل بصمت
+    const rowLabel = `الصف ${i+1}`;
+    if(!clientId){ errors.push(`${rowLabel}: رقم الهوية مطلوب`); return; }
+    if(!companyName){ errors.push(`${rowLabel}: اسم الشركة مطلوب`); return; }
+    let c = clients.find(x=>x.clientId===clientId);
+    let isNew = false;
+    if(!c){ c = addMinimalClientForCompanyImport(clientId, companyName); isNew = true; newClientsCount++; }
+    items.push({clientId, companyName, c, isNew});
+  });
+  if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
+  if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
+  snapshotState(`استيراد عمال الشركات من جدول داخل البرنامج (${items.length} صف)`);
+  let updated=0;
+  items.forEach(({companyName, c, isNew})=>{
+    c.companyName = companyName;
+    if(!isNew) c.clientType = 'company';
+    updated++;
+  });
+  await saveClients();
+  if(newClientsCount){ await syncBagStockIssues(); await saveVaultTx(); }
+  await logAudit('edit','العملاء', `استيراد عمال الشركات من جدول داخل البرنامج: تحديث ${updated} عميل${newClientsCount?`(منهم ${newClientsCount} عميل جديد أُضيف تلقائياً برقم الهوية واسم الشركة فقط)`:''}`);
+  closeCompWorkersBulkModal();
+  renderTable(); refreshFilterOptions();
+  showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
+});
+
 /* ---------------- تحديث/استيراد فواتير الدورات دفعة واحدة (جدول داخل البرنامج) ----------------
    يحل محل استيراد ملف Excel بنفس منطق الربط برقم الهوية (وبرقم الدورة إن وُجد) والتحديث الجزئي. */
 let ciBulkRowSeq = 0;
@@ -10628,6 +10745,75 @@ function companiesFilteredTransfers(){
     return true;
   });
 }
+/* قائمة موحّدة تُسطّح كل الأشخاص/المتدربين التابعين لجميع الشركات (عبر كل حوالاتها) في صف واحد لكل شخص،
+   مع فلاتر مستقلة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد يبحث في رقم الهوية أو الاسم أو
+   اسم الشركة معاً — بغض النظر عن فلاتر سجل الحوالات أعلاه. */
+function companiesFilteredPersons(){
+  const fname = $('#cpp-company')?.value || '';
+  const dfrom = $('#cpp-date-from')?.value || '';
+  const dto = $('#cpp-date-to')?.value || '';
+  const fchannel = $('#cpp-channel')?.value || '';
+  const q = ($('#cpp-search')?.value || '').trim().toLowerCase();
+  const rows = [];
+  companyTransfers.forEach(t=>{
+    if(fname && t.companyName!==fname) return;
+    if(dfrom && (!t.date || t.date<dfrom)) return;
+    if(dto && (!t.date || t.date>dto)) return;
+    if(fchannel && (t.channel||'')!==fchannel) return;
+    (t.trainees||[]).forEach(tr=>{
+      const c = clients.find(x=>x.clientId===tr.clientId);
+      if(q){
+        const hay = [tr.clientId, c?c.name:'', t.companyName].join(' ').toLowerCase();
+        if(!hay.includes(q)) return;
+      }
+      rows.push({t, tr, c});
+    });
+  });
+  return rows.sort((a,b)=>(b.t.createdAt||0)-(a.t.createdAt||0) || String(a.tr.clientId||'').localeCompare(String(b.tr.clientId||'')));
+}
+let cpersonsPageState = {page:1, sig:''};
+function renderCompanyPersons(){
+  if($('#cpp-company')){
+    const cppVal = $('#cpp-company').value;
+    populateSelect($('#cpp-company'), companies.map(c=>c.name), false);
+    $('#cpp-company').insertAdjacentHTML('afterbegin','<option value="">كل الشركات</option>');
+    $('#cpp-company').value = companies.some(c=>c.name===cppVal) ? cppVal : '';
+  }
+  if($('#cpp-channel')){
+    const cppChannelVal = $('#cpp-channel').value;
+    populateSelect($('#cpp-channel'), settings.channels.map(c=>c.name), false);
+    $('#cpp-channel').insertAdjacentHTML('afterbegin','<option value="">كل طرق الدفع</option>');
+    $('#cpp-channel').value = settings.channels.some(c=>c.name===cppChannelVal) ? cppChannelVal : '';
+  }
+  const rows = companiesFilteredPersons();
+  const cnt = $('#cpp-count'); if(cnt) cnt.textContent = rows.length;
+  const pageRows = applyGenericPagination('cpersons', rows, cpersonsPageState, [
+    $('#cpp-company')?.value, $('#cpp-date-from')?.value, $('#cpp-date-to')?.value, $('#cpp-channel')?.value, $('#cpp-search')?.value
+  ]);
+  $('#company-persons-list').innerHTML = rows.length ? `
+    <div class="table-scroll table-scroll-compact">
+    <table>
+      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th></tr></thead>
+      <tbody>
+        ${pageRows.map(({t,tr,c})=>`<tr>
+          <td class="mono">${escapeHtml(tr.clientId)}</td>
+          <td>${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
+          <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+          <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+          <td>${escapeHtml(t.companyName||'—')}</td>
+          <td class="mono">${escapeHtml(t.date||'—')}</td>
+          <td>${escapeHtml(t.channel||'—')}</td>
+          <td>${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+          <td class="mono">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+          <td class="mono">${fmt(num(tr.courseValue))}</td>
+          <td class="mono">${fmt(num(tr.bagValue))}</td>
+          <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
+          <td>${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>` : `<div class="empty-state" style="padding:20px;">لا يوجد أشخاص مطابقون لهذا الفلتر/البحث</div>`;
+}
 /* عند تفعيل فلتر البحث برقم الهوية أو الاسم، تُقصَر قائمة المتدربين المعروضة داخل كل حوالة على المتدربين المطابقين فقط */
 function transferMatchingTrainees(t){
   const fcid = ($('#ctf-clientid')?.value || '').trim();
@@ -10814,6 +11000,7 @@ let ctransfersPageState = {page:1, sig:''};
 function renderCompanies(){
   renderCompaniesStatsCards();
   renderCompaniesUnsettledPanel();
+  renderCompanyPersons();
   // ملخص أعداد المتدربين حسب الشركة (إجمالي كل الحوالات، بغض النظر عن أي فلترة)
   $('#company-transfers-summary').innerHTML = companiesTakenSummaryHtml();
 
@@ -10960,6 +11147,9 @@ function renderCompanies(){
 ['#ctf-company','#ctf-date-from','#ctf-date-to','#ctf-channel'].forEach(sel=> $(sel).addEventListener('input', renderCompanies));
 onSearchInput('#ctf-clientid', renderCompanies);
 bindGenericPagination('ctransfers', ctransfersPageState, renderCompanies);
+['#cpp-company','#cpp-date-from','#cpp-date-to','#cpp-channel'].forEach(sel=> $(sel)?.addEventListener('input', renderCompanyPersons));
+onSearchInput('#cpp-search', renderCompanyPersons);
+bindGenericPagination('cpersons', cpersonsPageState, renderCompanyPersons);
 $('#btn-export-companies').addEventListener('click', ()=>{
   const headers = ['اسم الشركة','تاريخ الحوالة','طريقة الدفع','رقم المرجع','قيمة الحوالة','عدد المتدربين المستهدف','نصيب الفرد','ملاحظات','رقم هوية المتدرب','اسم المتدرب','قيمة الدورة','قيمة الحقيبة','إجمالي المتدرب','حالة الترحيل'];
   const rows = [];
