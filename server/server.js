@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
@@ -13,6 +14,12 @@ const app = express();
 // من X-Forwarded-For، مما يُبطل عمل rate limiting أدناه تماماً (كل الطلبات
 // تُحسب كأنها من نفس المصدر). القيمة 1 تعني "ثق بأول proxy فقط" وهو ترتيب Render.
 app.set('trust proxy', 1);
+// رؤوس أمان HTTP أساسية (X-Content-Type-Options, X-Frame-Options, HSTS...).
+// نعطّل Content-Security-Policy الافتراضي حالياً: الواجهة تحمّل سكريبتات من
+// cdnjs.cloudflare.com ولديها معالجات onclick مضمّنة عبر innerHTML، وتفعيل CSP
+// الصارم بدون اختبار حي قد يمنعها من العمل. تفعيله لاحقاً كخطوة منفصلة بعد
+// حصر كل مصادر السكريبت والتحقق من الواجهة فعلياً.
+app.use(helmet({ contentSecurityPolicy: false }));
 // السماح فقط بالأصول المحدَّدة صراحة عبر متغيّر البيئة CORS_ORIGIN (قائمة مفصولة بفواصل).
 // الفرونت-إند والـ API يُخدَّمان أصلاً من نفس الأصل (نفس الدومين)، فلا حاجة فعلية لفتح CORS
 // للعالم كله؛ ده كان بيسمح لأي موقع تاني يكلّم الـ API مباشرة من متصفح أي زائر.
