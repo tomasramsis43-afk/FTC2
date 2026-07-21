@@ -188,12 +188,11 @@ async function withChainLock(fn) {
 
 /* ---------------- بناء وتوقيع وإرسال فاتورة مبسّطة (B2C) ---------------- */
 
-/* تحقق أساسي من شكل وقيم بنود الفاتورة قبل توقيعها وإرسالها للهيئة. الخادم لا
-   يملك وصولاً لبيانات العميل الحقيقية (كل شيء مشفّر من طرف المتصفح ولا يُفكّ
-   تشفيره هنا أبداً)، فلا يمكنه التأكد أن المبالغ "صحيحة" فعلياً — لكنه يمنع
-   على الأقل وصول أي قيم فاسدة أو خطيرة (نص بدل رقم، أرقام سالبة أو غير منتهية،
-   نسبة ضريبة خارج المعقول...) إلى مستند رسمي غير قابل للتعديل بعد إرساله
-   (لأنه جزء من سلسلة تجزئة hash chain لا يمكن التراجع عنها). */
+// منع تسلسلات "كسر" XML (تعليقات/CDATA) — mitigation لثغرة معروفة في fast-xml-parser
+// (المكتبة المستخدمة داخلياً لبناء XML الفاتورة) لا يوجد لها إصلاح متاح حالياً في
+// النسخة التي تعتمد عليها zatca-xml-js. يُطبَّق على كل نص حر يصل لمحتوى XML الفاتورة.
+const XML_BREAKOUT_RE = /-->|\]\]>|<!--|<!\[CDATA\[/;
+
 function validateLineItems(lineItems) {
   if (!Array.isArray(lineItems) || !lineItems.length) return 'لا توجد بنود في الفاتورة';
   if (lineItems.length > 200) return 'عدد بنود الفاتورة كبير جداً (الحد الأقصى 200 بند)';
@@ -202,14 +201,46 @@ function validateLineItems(lineItems) {
     const label = `البند رقم ${i + 1}`;
     if (typeof it.name !== 'string' || !it.name.trim()) return `${label}: اسم الصنف مفقود`;
     if (it.name.length > 300) return `${label}: اسم الصنف طويل جداً`;
+    if (XML_BREAKOUT_RE.test(it.name)) return `${label}: اسم الصنف يحتوي على رموز غير مسموحة`;
     const qty = Number(it.quantity);
     if (!Number.isFinite(qty) || qty <= 0 || qty > 100000) return `${label}: الكمية غير صحيحة`;
     const price = Number(it.tax_exclusive_price);
     if (!Number.isFinite(price) || Math.abs(price) > 100000000) return `${label}: السعر غير صحيح`;
     const vat = Number(it.VAT_percent);
     if (!Number.isFinite(vat) || vat < 0 || vat > 100) return `${label}: نسبة الضريبة غير صحيحة`;
+    // discounts غير مستخدمة حالياً من الواجهة، لكن أي مستدعٍ آخر للـ API قد يرسلها،
+    // وحقلها reason يصل أيضاً كنص إلى XML الفاتورة (AllowanceChargeReason).
+    if (it.discounts !== undefined) {
+      if (!Array.isArray(it.discounts)) return `${label}: صيغة الخصومات غير صحيحة`;
+      for (const d of it.discounts) {
+        const amt = Number(d?.amount);
+        if (!Number.isFinite(amt) || amt < 0 || amt > 100000000) return `${label}: قيمة خصم غير صحيحة`;
+        if (d?.reason !== undefined) {
+          if (typeof d.reason !== 'string' || d.reason.length > 300) return `${label}: سبب الخصم غير صحيح`;
+          if (XML_BREAKOUT_RE.test(d.reason)) return `${label}: سبب الخصم يحتوي على رموز غير مسموحة`;
+        }
+      }
+    }
   }
   return null; // null = صالح
+}
+
+/* تحقق من بيانات إلغاء/مردود (إشعار دائن) — نفس منطق حماية XML أعلاه، بالإضافة
+   لحدود بسيطة على الطول لتفادي أي نص ضخم غير معقول. */
+function validateCancelation(cancelation) {
+  if (!cancelation) return null;
+  const { canceled_invoice_number, reason } = cancelation;
+  if (canceled_invoice_number !== undefined) {
+    if (typeof canceled_invoice_number !== 'string' || canceled_invoice_number.length > 100) {
+      return 'رقم الفاتورة الملغاة غير صحيح';
+    }
+    if (XML_BREAKOUT_RE.test(canceled_invoice_number)) return 'رقم الفاتورة الملغاة يحتوي على رموز غير مسموحة';
+  }
+  if (reason !== undefined) {
+    if (typeof reason !== 'string' || reason.length > 300) return 'سبب المردود غير صحيح';
+    if (XML_BREAKOUT_RE.test(reason)) return 'سبب المردود يحتوي على رموز غير مسموحة';
+  }
+  return null;
 }
 
 /*
@@ -223,7 +254,7 @@ function validateLineItems(lineItems) {
  */
 async function submitSimplifiedInvoice(params) {
   const { environment, sourceRef, documentType, lineItems, issueDate, issueTime, cancelation, createdBy } = params;
-  const validationError = validateLineItems(lineItems);
+  const validationError = validateLineItems(lineItems) || validateCancelation(cancelation);
   if (validationError) {
     const err = new Error(validationError);
     err.isValidation = true;

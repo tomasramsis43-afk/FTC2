@@ -22,6 +22,7 @@
     "zatca-xml-js": "^0.1.9"
   },
   "overrides": {
-    "xmldom": "npm:@xmldom/xmldom@^0.9.10"
+    "xmldom": "npm:@xmldom/xmldom@^0.9.10",
+    "axios": "^1.18.1"
   }
 }
