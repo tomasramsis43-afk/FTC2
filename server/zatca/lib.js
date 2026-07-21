@@ -17,8 +17,40 @@
  */
 const { EGS, ZATCASimplifiedTaxInvoice, ZATCAInvoiceTypes, ZATCAPaymentMethods } = require('zatca-xml-js');
 const { pool } = require('../db');
+const crypto = require('crypto');
 
 const SOLUTION_NAME = 'TrainingCenterApp';
+
+/* ---------------- تشفير egs_info في قاعدة البيانات (AES-256-GCM) ----------------
+   egs_info يحتوي المفتاح الخاص (secp256k1) وكل أسرار الاعتماد مع الهيئة — أخطر
+   بيانات في التطبيق كله. نشفّره بمفتاح منفصل تماماً (ZATCA_ENC_KEY) لا علاقة له
+   بمفتاح تشفير بيانات العملاء (الذي لا يصل للخادم أصلاً). لو سُرِّبت قاعدة
+   البيانات فقط (بدون متغيرات البيئة)، يبقى هذا العمود غير قابل للقراءة. */
+function getZatcaEncKey() {
+  const hex = process.env.ZATCA_ENC_KEY;
+  if (!hex || hex.length !== 64) {
+    throw new Error('متغيّر البيئة ZATCA_ENC_KEY غير موجود أو غير صحيح (يجب أن يكون 64 حرف hex = 32 بايت). راجع .env.example');
+  }
+  return Buffer.from(hex, 'hex');
+}
+function encryptEgsInfo(obj) {
+  const key = getZatcaEncKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const data = Buffer.concat([cipher.update(JSON.stringify(obj), 'utf8'), cipher.final()]);
+  return { v: 1, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') };
+}
+function decryptEgsInfo(stored) {
+  if (!stored) return null;
+  // توافق مع أي صفوف قديمة قد تكون محفوظة كنص صريح قبل تفعيل التشفير (لن يوجد أي منها
+  // عملياً هنا لأن التسجيل مع الهيئة لم يبدأ بعد، لكن هذا يمنع كسر أي تشغيل سابق فعلاً).
+  if (!stored.iv || !stored.tag || !stored.data) return stored;
+  const key = getZatcaEncKey();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(stored.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(stored.tag, 'base64'));
+  const data = Buffer.concat([decipher.update(Buffer.from(stored.data, 'base64')), decipher.final()]);
+  return JSON.parse(data.toString('utf8'));
+}
 
 /* ---------------- تحميل/حفظ حالة EGS من قاعدة البيانات ---------------- */
 
@@ -28,38 +60,39 @@ async function loadActiveEgsRow(environment) {
      ORDER BY id DESC LIMIT 1`,
     [environment]
   );
-  return r.rows[0] || null;
+  const row = r.rows[0];
+  if (row) row.egs_info = decryptEgsInfo(row.egs_info);
+  return row || null;
 }
 
 async function loadEgs(environment) {
-  const row = await loadActiveEgsRow(environment);
+  const row = await loadActiveEgsRow(environment); // egs_info يرجع مفكوك التشفير بالفعل من الدالة أعلاه
   if (!row || !row.egs_info) return null;
   return { egs: new EGS(row.egs_info), row };
 }
 
 async function saveEgsInfo(environment, egs_info, existingRowId) {
+  // نُشفّر egs_info بالكامل، ونوقف تخزين أي نسخة مكرّرة من الأسرار في الأعمدة
+  // المنفصلة (لم تعد تُقرأ من أي مكان في الكود أصلاً — تسبب فقط تكرار غير آمن للسر
+  // نفسه بنص صريح بجانب النسخة المشفّرة، بلا أي فائدة وظيفية).
+  const encrypted = JSON.stringify(encryptEgsInfo(egs_info));
   if (existingRowId) {
     const r = await pool.query(
       `UPDATE zatca_credentials SET egs_info = $1, updated_at = now(),
-        compliance_csid = $2, compliance_secret = $3,
-        production_csid = $4, production_secret = $5
-       WHERE id = $6 RETURNING *`,
-      [
-        JSON.stringify(egs_info), egs_info.compliance_certificate || null, egs_info.compliance_api_secret || null,
-        egs_info.production_certificate || null, egs_info.production_api_secret || null,
-        existingRowId,
-      ]
+        compliance_csid = NULL, compliance_secret = NULL,
+        production_csid = NULL, production_secret = NULL, private_key_pem = NULL
+       WHERE id = $2 RETURNING *`,
+      [encrypted, existingRowId]
     );
+    r.rows[0].egs_info = egs_info;
     return r.rows[0];
   }
   const r = await pool.query(
-    `INSERT INTO zatca_credentials (environment, egs_info, compliance_csid, compliance_secret, production_csid, production_secret)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [
-      environment, JSON.stringify(egs_info), egs_info.compliance_certificate || null, egs_info.compliance_api_secret || null,
-      egs_info.production_certificate || null, egs_info.production_api_secret || null,
-    ]
+    `INSERT INTO zatca_credentials (environment, egs_info)
+     VALUES ($1, $2) RETURNING *`,
+    [environment, encrypted]
   );
+  r.rows[0].egs_info = egs_info;
   return r.rows[0];
 }
 
