@@ -4009,37 +4009,48 @@
       </div>
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 4px;">📎 إرسال 3 تقارير PDF شهرية عبر واتساب</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
-        يولّد 3 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٣) الحقائب المشتراة (من المخزون والعملاء).
-        <br>تُنزَّل الملفات تلقائياً على جهازك، وتُفتح محادثة واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b> — أرفقها يدوياً من مجلد التنزيلات ثم أرسل.
-      </p>
-      <div class="formgrid" style="align-items:end;">
-        <div class="field" style="max-width:200px;"><label>الشهر</label><input type="month" id="wa3-report-month"></div>
-        <button class="btn btn-primary btn-sm" id="btn-send-3-reports-wa">📎 توليد وإرسال 3 تقارير PDF</button>
+      <h3 style="margin:0 0 4px;">📤 إرسال التقارير عبر واتساب</h3>
+      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 14px;">جميع خيارات إرسال التقارير عبر واتساب في مكان واحد.</p>
+
+      <div style="padding:12px 0; border-top:1px solid var(--border);">
+        <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📤 إرسال ملخص شهري عبر واتساب</div>
+        <div class="hint" style="margin:0 0 10px;">سيتم فتح واتساب (ويب أو التطبيق) برسالة الملخص جاهزة — اضغط "إرسال" هناك لإتمام الإرسال. تأكد من إدخال رقم المستلم من الإعدادات أولاً.</div>
+        <div class="field" style="max-width:180px; margin-bottom:10px;"><label>الشهر</label><input type="month" id="wa-report-month"></div>
+        <button class="btn btn-primary btn-sm" id="btn-send-monthly-wa">إرسال عبر واتساب</button>
       </div>
-      <div id="wa3-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
-    </div>
-    <div class="panel" style="border-right:4px solid var(--gold-dark);">
-      <h3 style="margin:0 0 4px;">🧾 إرسال الإقرار الضريبي (ربع سنوي) عبر واتساب</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
-        الإقرار الضريبي (ضريبة القيمة المضافة) يُقدَّم كل ثلاثة أشهر — اختر السنة والربع (الأول: يناير-مارس، الثاني: أبريل-يونيو، الثالث: يوليو-سبتمبر، الرابع: أكتوبر-ديسمبر) ليولّد ملف PDF واحد لكامل الربع.
-        <br>يُفتح واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b>.
-      </p>
-      <div class="formgrid" style="align-items:end;">
-        <div class="field" style="max-width:120px;"><label>السنة</label><input type="number" id="vat-report-year" min="2020" max="2100" style="font-family:var(--font-mono);"></div>
-        <div class="field" style="max-width:170px;">
-          <label>الربع</label>
-          <select id="vat-report-quarter">
-            <option value="1">الربع الأول (يناير–مارس)</option>
-            <option value="2">الربع الثاني (أبريل–يونيو)</option>
-            <option value="3">الربع الثالث (يوليو–سبتمبر)</option>
-            <option value="4">الربع الرابع (أكتوبر–ديسمبر)</option>
-          </select>
+
+      <div style="padding:12px 0; border-top:1px solid var(--border);">
+        <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📎 إرسال 3 تقارير PDF شهرية عبر واتساب</div>
+        <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
+          يولّد 3 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٣) الحقائب المشتراة (من المخزون والعملاء).
+          <br>تُنزَّل الملفات تلقائياً على جهازك، وتُفتح محادثة واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b> — أرفقها يدوياً من مجلد التنزيلات ثم أرسل.
+        </p>
+        <div class="field" style="max-width:200px; margin-bottom:10px;"><label>الشهر</label><input type="month" id="wa3-report-month"></div>
+        <button class="btn btn-primary btn-sm" id="btn-send-3-reports-wa">📎 توليد وإرسال 3 تقارير PDF</button>
+        <div id="wa3-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
+      </div>
+
+      <div style="padding:12px 0; border-top:1px solid var(--border);">
+        <div style="font-size:14px; font-weight:700; margin:0 0 4px;">🧾 إرسال الإقرار الضريبي (ربع سنوي) عبر واتساب</div>
+        <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
+          الإقرار الضريبي (ضريبة القيمة المضافة) يُقدَّم كل ثلاثة أشهر — اختر السنة والربع (الأول: يناير-مارس، الثاني: أبريل-يونيو، الثالث: يوليو-سبتمبر، الرابع: أكتوبر-ديسمبر) ليولّد ملف PDF واحد لكامل الربع.
+          <br>يُفتح واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b>.
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+          <div class="field" style="max-width:120px;"><label>السنة</label><input type="number" id="vat-report-year" min="2020" max="2100" style="font-family:var(--font-mono);"></div>
+          <div class="field" style="max-width:170px;">
+            <label>الربع</label>
+            <select id="vat-report-quarter">
+              <option value="1">الربع الأول (يناير–مارس)</option>
+              <option value="2">الربع الثاني (أبريل–يونيو)</option>
+              <option value="3">الربع الثالث (يوليو–سبتمبر)</option>
+              <option value="4">الربع الرابع (أكتوبر–ديسمبر)</option>
+            </select>
+          </div>
         </div>
         <button class="btn btn-primary btn-sm" id="btn-send-vat-report-wa">🧾 توليد وإرسال الإقرار الضريبي</button>
+        <div id="vat-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
       </div>
-      <div id="vat-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
     </div>
     <div class="panel">
       <h3>دخل المركز حسب نوع الدورة (حسب فلتر الفترة الحالي)</h3>
@@ -4069,15 +4080,6 @@
           <tbody id="aging-table-body"></tbody>
         </table>
       </div>
-    </div>
-    <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 6px;">📤 إرسال ملخص شهري عبر واتساب</h3>
-      <div class="toolbar">
-        <div class="field" style="max-width:180px;"><label>الشهر</label><input type="month" id="wa-report-month"></div>
-        <span class="spacer"></span>
-        <button class="btn btn-primary btn-sm" id="btn-send-monthly-wa">إرسال عبر واتساب</button>
-      </div>
-      <div class="hint" style="margin-top:8px;">سيتم فتح واتساب (ويب أو التطبيق) برسالة الملخص جاهزة — اضغط "إرسال" هناك لإتمام الإرسال. تأكد من إدخال رقم المستلم من الإعدادات أولاً.</div>
     </div>
 
     <div class="panel" style="border-right:4px solid var(--navy);">
