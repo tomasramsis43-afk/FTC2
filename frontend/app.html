@@ -4008,6 +4008,46 @@
       </table>
       </div>
     </div>
+    <div class="panel" style="border-right:4px solid #25D366;">
+      <h3 style="margin:0 0 4px;">📎 إرسال 3 تقارير PDF شهرية عبر واتساب</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+        يولّد 3 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٣) الحقائب المشتراة (من المخزون والعملاء).
+        <br>تُنزَّل الملفات تلقائياً على جهازك، وتُفتح محادثة واتساب لكل رقم مُدخل أدناه — أرفقها يدوياً من مجلد التنزيلات ثم أرسل.
+      </p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field full"><label>أرقام واتساب المستلمين (رقم أو أكثر، افصل بينها بفاصلة)</label><input type="text" id="wa3-numbers" placeholder="966501234567, 966559876543" dir="ltr"></div>
+      </div>
+      <div class="formgrid" style="align-items:end; margin-top:6px;">
+        <div class="field" style="max-width:200px;"><label>الشهر</label><input type="month" id="wa3-report-month"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-save-wa3-numbers">حفظ الأرقام</button>
+        <button class="btn btn-primary btn-sm" id="btn-send-3-reports-wa">📎 توليد وإرسال 3 تقارير PDF</button>
+      </div>
+      <div id="wa3-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
+    </div>
+    <div class="panel" style="border-right:4px solid var(--gold-dark);">
+      <h3 style="margin:0 0 4px;">🧾 إرسال الإقرار الضريبي (ربع سنوي) عبر واتساب</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+        الإقرار الضريبي (ضريبة القيمة المضافة) يُقدَّم كل ثلاثة أشهر — اختر السنة والربع (الأول: يناير-مارس، الثاني: أبريل-يونيو، الثالث: يوليو-سبتمبر، الرابع: أكتوبر-ديسمبر) ليولّد ملف PDF واحد لكامل الربع.
+      </p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field full"><label>أرقام واتساب المستلمين (رقم أو أكثر، افصل بينها بفاصلة)</label><input type="text" id="vat-wa-numbers" placeholder="966501234567, 966559876543" dir="ltr"></div>
+      </div>
+      <div class="formgrid" style="align-items:end; margin-top:6px;">
+        <div class="field" style="max-width:120px;"><label>السنة</label><input type="number" id="vat-report-year" min="2020" max="2100" style="font-family:var(--font-mono);"></div>
+        <div class="field" style="max-width:170px;">
+          <label>الربع</label>
+          <select id="vat-report-quarter">
+            <option value="1">الربع الأول (يناير–مارس)</option>
+            <option value="2">الربع الثاني (أبريل–يونيو)</option>
+            <option value="3">الربع الثالث (يوليو–سبتمبر)</option>
+            <option value="4">الربع الرابع (أكتوبر–ديسمبر)</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-save-vat-wa-numbers">حفظ الأرقام</button>
+        <button class="btn btn-primary btn-sm" id="btn-send-vat-report-wa">🧾 توليد وإرسال الإقرار الضريبي</button>
+      </div>
+      <div id="vat-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
+    </div>
     <div class="panel">
       <h3>دخل المركز حسب نوع الدورة (حسب فلتر الفترة الحالي)</h3>
       <div id="chart-report-revenue-course"></div>
@@ -4504,18 +4544,6 @@
         <div class="field" style="max-width:260px;"><label>رقم واتساب المستلم</label><input type="text" id="set-monthly-wa-number" placeholder="966501234567" dir="ltr"></div>
         <button class="btn btn-ghost btn-sm" id="btn-save-monthly-wa">حفظ الرقم</button>
       </div>
-    </div>
-    <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 4px;">📎 إرسال 4 تقارير PDF شهرية عبر واتساب</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
-        يولّد 4 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الإقرار الضريبي (ضريبة القيمة المضافة)، (٣) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٤) الحقائب المشتراة (من المخزون والعملاء). ثم تفتح قائمة المشاركة بجوالك لاختيار واتساب وإرسال الملفات الأربعة دفعة واحدة.
-        <br><b>ملاحظة:</b> هذا يفتح قائمة المشاركة القياسية بجوالك — يلزم اختيار واتساب والضغط "إرسال" يدوياً؛ لا يوجد رابط برمجي يرسل ملفات لواتساب تلقائياً بالكامل دون أي تدخل.
-      </p>
-      <div class="formgrid" style="align-items:end;">
-        <div class="field" style="max-width:200px;"><label>الشهر</label><input type="month" id="wa4-report-month"></div>
-        <button class="btn btn-primary btn-sm" id="btn-send-4-reports-wa">📎 توليد وإرسال 4 تقارير PDF</button>
-      </div>
-      <div id="wa4-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
     </div>
     <div class="panel" style="border-right:4px solid var(--teal);">
       <h3 style="margin:0 0 4px;">🔗 ربط Power Automate (Webhooks)</h3>
