@@ -571,6 +571,7 @@
       <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
       <button class="btn btn-primary btn-sm" id="btn-bulk-update">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
       <button class="btn btn-primary btn-sm" id="btn-refnum-bulk">📋 استيراد الرقم المرجعي (جدول)</button>
+      <button class="btn btn-primary btn-sm" id="btn-compworkers-bulk">📋 استيراد عمال الشركات (جدول)</button>
       <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table">🗑 حذف عملاء (جدول)</button>
       <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
       <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
@@ -635,6 +636,36 @@
       <h3 style="margin:0 0 4px;">⚠️ حوالات غير مكتملة التسوية</h3>
       <div class="hint" style="margin:0 0 10px;">حوالات قيمة ما خُصِّص فيها فعلياً للمتدربين (قيمة الدورة + قيمة الحقيبة) لا تساوي قيمة الحوالة المستلمة من الشركة — إما نقص لم يُكمَّل بعد، أو تخصيص زائد عن قيمة الحوالة بالخطأ.</div>
       <div id="companies-unsettled-list"></div>
+    </div>
+
+    <div class="panel" style="padding:0; overflow-x:auto;">
+      <h3 style="padding:18px 20px 0;">كل الأشخاص التابعين للشركات</h3>
+      <div class="hint" style="padding:0 20px 10px;">قائمة موحّدة تجمع كل الأشخاص/المتدربين التابعين لجميع الشركات في كل حوالاتها، مع الفلاتر اللازمة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد (رقم الهوية / الاسم / اسم الشركة).</div>
+      <div class="toolbar" style="padding:0 20px 12px;">
+        <select id="cpp-company"><option value="">كل الشركات</option></select>
+        <input type="date" id="cpp-date-from" title="تاريخ الحوالة من">
+        <input type="date" id="cpp-date-to" title="تاريخ الحوالة إلى">
+        <select id="cpp-channel"><option value="">كل طرق الدفع</option></select>
+        <input type="text" id="cpp-search" placeholder="بحث موحد: رقم الهوية / الاسم / اسم الشركة" style="min-width:240px;">
+        <span class="spacer"></span>
+        <span class="hint">العدد: <b class="mono" id="cpp-count">0</b></span>
+      </div>
+      <div id="company-persons-list" style="padding:10px 20px 20px;"></div>
+      <div class="toolbar" id="cpersons-pagination" style="padding: 0px 20px 16px;">
+        <span class="mono" id="cpersons-page-info" style="font-size:12.5px; color:var(--text-muted);"></span>
+        <span class="spacer"></span>
+        <select id="cpersons-page-size" style="max-width:110px;">
+          <option value="20">20 / صفحة</option>
+          <option value="50" selected>50 / صفحة</option>
+          <option value="100">100 / صفحة</option>
+          <option value="all">عرض الكل</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-first">« الأولى</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-prev">‹ السابقة</button>
+        <span class="mono" id="cpersons-page-current" style="font-size:12.5px; padding:0 6px;"></span>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-next">التالية ›</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-last">الأخيرة »</button>
+      </div>
     </div>
 
     <div class="panel">
@@ -4955,6 +4986,32 @@
       <div style="display:flex; gap:10px;">
         <button type="button" class="btn btn-ghost" id="refnum-bulk-cancel">إلغاء</button>
         <button type="button" class="btn btn-primary" id="btn-refnum-bulk-save">حفظ الكل</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="compworkers-bulk-overlay">
+  <div class="modal" style="max-width:640px;">
+    <h2>استيراد عمال الشركات دفعة واحدة</h2>
+    <div class="hint" style="margin:0 0 10px;">أدخل رقم الهوية واسم الشركة في كل صف. الربط يتم برقم الهوية فقط: إن كان موجوداً مسبقاً في شيت العملاء يتم تحديث اسم الشركة (ونوع العميل إلى "عميل شركات") فقط دون المساس ببقية بياناته، وإن لم يكن موجوداً إطلاقاً يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية واسم الشركة فقط) بدل تجاهل الصف — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته لاحقاً. يمكنك نسخ عمودين من إكسل (رقم الهوية ثم اسم الشركة) ولصقهما مباشرة داخل أي خلية — سيتوزّعان تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة.</div>
+    <div class="table-scroll" style="max-height:52vh;">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:110px;">رقم الهوية *</th>
+            <th style="min-width:160px;">اسم الشركة *</th>
+            <th style="width:34px;"></th>
+          </tr>
+        </thead>
+        <tbody id="compworkers-bulk-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-compworkers-bulk-row">+ إضافة صف</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-ghost" id="compworkers-bulk-cancel">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="btn-compworkers-bulk-save">حفظ الكل</button>
       </div>
     </div>
   </div>
