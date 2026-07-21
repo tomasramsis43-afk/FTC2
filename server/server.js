@@ -155,8 +155,23 @@ app.post('/api/license/validate', licenseLimiter, (req, res) => {
 });
 
 /* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */
+
+/* مشروع تقييد صلاحيات kv_store حسب الدور — تدريجي وليس دفعة واحدة، لأن أغلب
+   المفاتيح مُحمَّلة فعلياً من كل الأدوار عبر مسارات كود مشتركة (مثال: ملخص لوحة
+   التحكم المتاحة للاستقبال يعتمد على بيانات الخزنة رغم أن تبويب "الخزنة" نفسه
+   محجوب عنهم). كل مفتاح يُضاف هنا فقط بعد التأكد أنه لا يُقرأ فعلياً من أي مسار
+   متاح لغير admin (تم فحص هذا لمفتاح users أدناه: نظام دخول داخلي قديم استُبدل
+   بالكامل بحسابات الخادم، ولا يُقرأ الآن من أي شاشة أو حساب فعلي). */
+const ADMIN_ONLY_STORAGE_KEYS = new Set(['users']);
+function restrictKeyToAdmin(req, res, next) {
+  if (ADMIN_ONLY_STORAGE_KEYS.has(req.params.key) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'ليست لديك صلاحية كافية للوصول لهذه البيانات' });
+  }
+  next();
+}
+
 // GET /api/storage/:key  -> { key, value, version }
-app.get('/api/storage/:key', requireAuth, async (req, res) => {
+app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   try {
     const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
     if (!r.rows[0]) return res.json({ key: req.params.key, value: null, version: 0 });
@@ -172,7 +187,7 @@ app.get('/api/storage/:key', requireAuth, async (req, res) => {
 // المفتاح بعد آخر قراءة معروفة لهذا الجهاز، بدل الكتابة فوق تعديله بصمت.
 // (تحسين أداء: استعلام SQL واحد فقط بدل استعلامين متتاليين — يقلّل زمن كل
 // عملية حفظ تقريباً للنصف، خصوصاً مع اتصال قاعدة بيانات بعيد/بطيء الشبكة).
-app.put('/api/storage/:key', requireAuth, async (req, res) => {
+app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
