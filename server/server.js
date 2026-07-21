@@ -2,20 +2,48 @@ require('dotenv').config();
 const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
 const { signToken, requireAuth, requireRole, hashPassword, verifyPassword } = require('./auth');
 
 const app = express();
-app.use(cors());
+// Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
+// الإعداد يقرأ Express IP واحد للجميع (IP الـ proxy نفسه) بدل IP الزائر الحقيقي
+// من X-Forwarded-For، مما يُبطل عمل rate limiting أدناه تماماً (كل الطلبات
+// تُحسب كأنها من نفس المصدر). القيمة 1 تعني "ثق بأول proxy فقط" وهو ترتيب Render.
+app.set('trust proxy', 1);
+// السماح فقط بالأصول المحدَّدة صراحة عبر متغيّر البيئة CORS_ORIGIN (قائمة مفصولة بفواصل).
+// الفرونت-إند والـ API يُخدَّمان أصلاً من نفس الأصل (نفس الدومين)، فلا حاجة فعلية لفتح CORS
+// للعالم كله؛ ده كان بيسمح لأي موقع تاني يكلّم الـ API مباشرة من متصفح أي زائر.
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : { origin: false }));
 // ضغط كل الاستجابات (gzip) — يقلّل حجم app.html (~1.8MB) واستجابات
 // /api/storage (بيانات العملاء/الحركات المشفّرة كنصوص طويلة) بشكل كبير جداً
 // أثناء النقل عبر الشبكة، بدون أي تأثير على المحتوى أو المنطق.
 app.use(compression());
 app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
 
+/* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
+   تسجيل دخول مسبق. نحدّد بالـ IP لأن هذين المسارين تحديداً هما هدف مباشر
+   لأي محاولة تخمين آلية (كلمة مرور أو كود ترخيص). */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 20, // 20 محاولة كحد أقصى لكل IP خلال النافذة الزمنية
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'محاولات كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
+});
+const licenseLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'محاولات كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
+});
+
 /* ---------------- تسجيل الدخول ---------------- */
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
@@ -100,7 +128,7 @@ app.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req
 
 /* ---------------- التحقق من كود الترخيص (لا يتطلب تسجيل دخول) ---------------- */
 const { validateLicenseKey } = require('./license');
-app.post('/api/license/validate', (req, res) => {
+app.post('/api/license/validate', licenseLimiter, (req, res) => {
   const { licenseKey } = req.body || {};
   const result = validateLicenseKey(licenseKey);
   res.json(result);
@@ -157,7 +185,10 @@ app.put('/api/storage/:key', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/storage/:key', requireAuth, async (req, res) => {
+// حذف مفتاح من kv_store — نقصره على admin فقط لأنه إجراء لا رجعة فيه (فقدان بيانات نهائي)،
+// بينما القراءة/الكتابة تبقى متاحة لأي مستخدم مسجّل دخول كما كانت (يحتاجها كل الأدوار
+// لعملهم اليومي: تسجيل عملاء، دفعات، إلخ).
+app.delete('/api/storage/:key', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM kv_store WHERE key = $1', [req.params.key]);
     res.json({ key: req.params.key, deleted: true });
