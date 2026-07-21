@@ -541,7 +541,6 @@ let ctEditingTraineeId = null;
 let ctImportTargetTransferId = null;
 let ctImportTextTargetTransferId = null;
 let ctImportCompanyTargetId = null;
-let ctImportCompanyIdsOnlyTargetId = null;
 let editingId = null;
 let bagPurchaseTargetId = null;
 let editingTransferId = null;
@@ -1171,7 +1170,6 @@ const KB_OVERLAY_CANCEL = {
   'vault-overlay': 'vf-cancel',
   'ctrainee-overlay': 'ctr-cancel',
   'ctimporttext-overlay': 'ctit-cancel',
-  'ctitc-overlay': 'ctitc-cancel',
   'bag-overlay': 'bp-cancel',
   'session-overlay': 'sf-cancel',
   'voided-overlay': 'voided-close',
@@ -10206,8 +10204,7 @@ function addMinimalClientForCompanyImport(clientId, companyName){
 let compWorkersBulkRowSeq = 0;
 function compWorkersBulkRowHtml(rowId){
   return `<tr data-row="${rowId}">
-    <td><input type="text" class="cwb-id" data-col="0" maxlength="10" placeholder="10 أرقام" style="min-width:100px;"></td>
-    <td><input type="text" class="cwb-company" data-col="1" style="min-width:160px;"></td>
+    <td><input type="text" class="cwb-id" data-col="0" maxlength="10" placeholder="10 أرقام" style="min-width:150px;"></td>
     <td><button type="button" class="btn btn-danger btn-sm cwb-remove-row" title="حذف الصف">✕</button></td>
   </tr>`;
 }
@@ -10216,9 +10213,11 @@ function addCompWorkersBulkRow(){
   $('#compworkers-bulk-table-body').insertAdjacentHTML('beforeend', compWorkersBulkRowHtml(compWorkersBulkRowSeq));
 }
 function openCompWorkersBulkModal(){
+  $('#compworkers-bulk-company').value = '';
   $('#compworkers-bulk-table-body').innerHTML = '';
   for(let i=0;i<5;i++) addCompWorkersBulkRow();
   $('#compworkers-bulk-overlay').classList.add('show'); SoundFX.open();
+  setTimeout(()=>$('#compworkers-bulk-company').focus(), 50);
 }
 function closeCompWorkersBulkModal(){ $('#compworkers-bulk-overlay').classList.remove('show'); }
 $('#btn-compworkers-bulk').addEventListener('click', openCompWorkersBulkModal);
@@ -10232,64 +10231,57 @@ $('#compworkers-bulk-table-body').addEventListener('click', e=>{
     e.target.closest('tr').remove();
   }
 });
+// دعم لصق عمود كامل (رقم هوية واحد في كل سطر) منسوخ من إكسل مباشرة داخل الجدول
 $('#compworkers-bulk-table-body').addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
   if(!text || (!text.includes('\n') && !text.includes('\t'))) return;
   e.preventDefault();
-  let lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  let lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').map(l=>l.split('\t')[0]);
   if(lines.length && lines[lines.length-1]==='') lines.pop();
   const tbody = $('#compworkers-bulk-table-body');
   const startRow = [...tbody.children].indexOf(target.closest('tr'));
-  const startCol = parseInt(target.dataset.col, 10);
-  lines.forEach((line, i)=>{
+  lines.forEach((val, i)=>{
     const rowIdx = startRow + i;
     while(tbody.children.length <= rowIdx) addCompWorkersBulkRow();
     const row = tbody.children[rowIdx];
-    line.split('\t').forEach((val, j)=>{
-      const col = startCol + j;
-      if(col>1) return;
-      const field = row.querySelector(`[data-col="${col}"]`);
-      if(!field) return;
-      field.value = val.trim();
-    });
+    const field = row.querySelector('[data-col="0"]');
+    if(field) field.value = val.trim();
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-compworkers-bulk-save').addEventListener('click', async ()=>{
+  const companyName = $('#compworkers-bulk-company').value.trim();
+  if(!companyName){ showToast('اكتب اسم الشركة أعلى الجدول أولاً'); $('#compworkers-bulk-company').focus(); return; }
   const rows = [...$('#compworkers-bulk-table-body').querySelectorAll('tr')];
-  const errors = [];
   const items = [];
+  const seenIds = new Set();
   let newClientsCount = 0;
-  rows.forEach((row, i)=>{
-    const val = cls => row.querySelector(`.${cls}`).value.trim();
-    const clientId = val('cwb-id');
-    const companyName = val('cwb-company');
-    if(!clientId && !companyName) return; // صف فارغ بالكامل يُتجاهل بصمت
-    const rowLabel = `الصف ${i+1}`;
-    if(!clientId){ errors.push(`${rowLabel}: رقم الهوية مطلوب`); return; }
-    if(!companyName){ errors.push(`${rowLabel}: اسم الشركة مطلوب`); return; }
+  rows.forEach(row=>{
+    const clientId = row.querySelector('.cwb-id').value.trim();
+    if(!clientId) return; // صف فارغ يُتجاهل بصمت
+    if(seenIds.has(clientId)) return; // تكرار داخل نفس الجدول يُتجاهل بصمت
+    seenIds.add(clientId);
     let c = clients.find(x=>x.clientId===clientId);
     let isNew = false;
     if(!c){ c = addMinimalClientForCompanyImport(clientId, companyName); isNew = true; newClientsCount++; }
-    items.push({clientId, companyName, c, isNew});
+    items.push({clientId, c, isNew});
   });
-  if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
-  if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
-  snapshotState(`استيراد عمال الشركات من جدول داخل البرنامج (${items.length} صف)`);
+  if(!items.length){ showToast('أدخل رقم هوية واحداً على الأقل'); return; }
+  snapshotState(`استيراد عمال الشركات من جدول داخل البرنامج (${items.length} صف) — الشركة: ${companyName}`);
   let updated=0;
-  items.forEach(({companyName, c, isNew})=>{
+  items.forEach(({c, isNew})=>{
     c.companyName = companyName;
     if(!isNew) c.clientType = 'company';
     updated++;
   });
   await saveClients();
   if(newClientsCount){ await syncBagStockIssues(); await saveVaultTx(); }
-  await logAudit('edit','العملاء', `استيراد عمال الشركات من جدول داخل البرنامج: تحديث ${updated} عميل${newClientsCount?`(منهم ${newClientsCount} عميل جديد أُضيف تلقائياً برقم الهوية واسم الشركة فقط)`:''}`);
+  await logAudit('edit','العملاء', `استيراد عمال الشركات من جدول داخل البرنامج للشركة "${companyName}": تحديث ${updated} عميل${newClientsCount?`(منهم ${newClientsCount} عميل جديد أُضيف تلقائياً برقم الهوية واسم الشركة فقط)`:''}`);
   closeCompWorkersBulkModal();
   renderTable(); refreshFilterOptions();
-  showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
+  showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''} — الشركة: ${companyName}`);
 });
 
 /* ---------------- تحديث/استيراد فواتير الدورات دفعة واحدة (جدول داخل البرنامج) ----------------
@@ -11024,7 +11016,9 @@ function renderCompanies(){
   const dlc = $('#dl-clients');
   if(dlc) dlc.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
 
-  // datalist أسماء الشركات (لنموذج إضافة عميل جديد في شيت العملاء)
+  // datalist أسماء الشركات (لنموذج إضافة عميل جديد في شيت العملاء، ولحقل اسم الشركة أعلى جدول استيراد عمال الشركات)
+  const dlComp = $('#dl-company-names');
+  if(dlComp) dlComp.innerHTML = companies.map(c=>`<option value="${escapeHtml(c.name)}"></option>`).join('');
 
   // جدول الشركات المتفق معها
   const transfersByCompanyId = new Map();
@@ -11045,7 +11039,6 @@ function renderCompanies(){
       <td>
         <button class="btn btn-gold btn-sm" data-printcompany="${c.id}">🖨️ كشف حساب PDF</button>
         <button class="btn btn-ghost btn-sm" data-importcompanytrainees="${c.id}">📥 استيراد متدربين (كل الحوالات)</button>
-        <button class="btn btn-ghost btn-sm" data-importcompanyidsonly="${c.id}">📋 استيراد بالهوية فقط (لصق نص)</button>
         <button class="btn btn-ghost btn-sm" data-editcompany="${c.id}">تعديل</button>
         <button class="btn btn-ghost btn-sm" data-mergecompany="${c.id}">دمج مع شركة أخرى</button>
         <button class="btn btn-ghost btn-sm" data-delcompany="${c.id}">حذف</button>
@@ -11691,13 +11684,6 @@ document.addEventListener('click', async e=>{
     ctImportCompanyTargetId = companyId;
     $('#import-company-trainees-input').click();
   }
-  if(e.target.dataset.importcompanyidsonly){
-    const companyId = e.target.dataset.importcompanyidsonly;
-    const company = companies.find(c=>c.id===companyId);
-    if(!company){ showToast('تعذّر إيجاد الشركة'); return; }
-    if(!companyTransfers.some(t=>t.companyId===companyId)){ showToast('لا توجد حوالات مسجّلة لهذه الشركة بعد — أضف حوالة أولاً'); return; }
-    openCtitcModal(companyId, company.name);
-  }
   if(e.target.dataset.mergecompany){
     const sourceId = e.target.dataset.mergecompany;
     const source = companies.find(x=>x.id===sourceId);
@@ -12047,77 +12033,6 @@ $('#btn-ctit-save').addEventListener('click', async ()=>{
 
   closeCtitModal();
   showToast(`تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
-});
-/* ---------------- استيراد عمال الشركة برقم الهوية فقط (لصق نص) — اسم الشركة أعلى الجدول مرة واحدة، يعمل مع أي شركة ----------------
-   يوزَّع كل رقم هوية تلقائياً على حوالات الشركة (نفس منطق importTraineeRowsIntoCompany)، وأي عميل جديد/موجود
-   يُنشأ أو تُحدَّث حالته تلقائياً إلى "عميل شركات" (تُنفَّذ هذه الخطوة داخل importTraineeRowsIntoTransfer المشتركة). */
-let ctitcRowSeq = 0;
-function ctitcRowHtml(rowId){
-  return `<tr data-row="${rowId}">
-    <td><input type="text" class="ctitc-id" data-col="0" placeholder="رقم الهوية/الإقامة" style="min-width:150px;"></td>
-    <td><button type="button" class="btn btn-danger btn-sm ctitc-remove-row" title="حذف الصف">✕</button></td>
-  </tr>`;
-}
-function addCtitcRow(){
-  ctitcRowSeq++;
-  $('#ctitc-table-body').insertAdjacentHTML('beforeend', ctitcRowHtml(ctitcRowSeq));
-}
-function openCtitcModal(companyId, companyName){
-  ctImportCompanyIdsOnlyTargetId = companyId;
-  $('#ctitc-company-name').textContent = companyName || '—';
-  $('#ctitc-table-body').innerHTML = '';
-  for(let i=0;i<5;i++) addCtitcRow();
-  $('#ctitc-overlay').classList.add('show'); SoundFX.open();
-}
-function closeCtitcModal(){ $('#ctitc-overlay').classList.remove('show'); ctImportCompanyIdsOnlyTargetId=null; }
-$('#ctitc-cancel').addEventListener('click', closeCtitcModal);
-$('#ctitc-overlay').addEventListener('click', e=>{ if(e.target.id==='ctitc-overlay') closeCtitcModal(); });
-$('#btn-ctitc-add-row').addEventListener('click', addCtitcRow);
-$('#ctitc-table-body').addEventListener('click', e=>{
-  if(e.target.classList.contains('ctitc-remove-row')){
-    const rows = $('#ctitc-table-body').querySelectorAll('tr');
-    if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
-    e.target.closest('tr').remove();
-  }
-});
-// دعم لصق عمود كامل (رقم هوية واحد في كل سطر) منسوخ من إكسل مباشرة داخل الجدول
-$('#ctitc-table-body').addEventListener('paste', e=>{
-  const target = e.target;
-  if(!target || target.dataset.col===undefined) return;
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  if(!text || (!text.includes('\n') && !text.includes('\t'))) return; // لصق خلية واحدة عادية — نترك السلوك الافتراضي
-  e.preventDefault();
-  let lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').map(l=>l.split('\t')[0]);
-  if(lines.length && lines[lines.length-1]==='') lines.pop();
-  const tbody = $('#ctitc-table-body');
-  const startRow = [...tbody.children].indexOf(target.closest('tr'));
-  lines.forEach((val, i)=>{
-    const rowIdx = startRow + i;
-    while(tbody.children.length <= rowIdx) addCtitcRow();
-    const row = tbody.children[rowIdx];
-    const field = row.querySelector('[data-col="0"]');
-    if(field) field.value = val.trim();
-  });
-  showToast(`تم لصق ${lines.length} صف`);
-});
-$('#btn-ctitc-save').addEventListener('click', async ()=>{
-  if(!ctImportCompanyIdsOnlyTargetId){ showToast('تعذّر تحديد الشركة'); return; }
-  const company = companies.find(c=>c.id===ctImportCompanyIdsOnlyTargetId);
-  if(!company){ showToast('تعذّر تحديد الشركة'); return; }
-
-  const rows = [...$('#ctitc-table-body').querySelectorAll('tr')];
-  const json = [];
-  rows.forEach(row=>{
-    const clientId = row.querySelector('.ctitc-id').value.trim();
-    if(!clientId) return; // صف فارغ يُتجاهل بصمت
-    json.push({'رقم الهوية': clientId});
-  });
-  if(!json.length){ showToast('أدخل رقم هوية واحداً على الأقل'); return; }
-
-  const {totalAdded, totalSkipped, overflowCount, error} = await importTraineeRowsIntoCompany(company.id, json);
-  if(error==='no-transfers'){ showToast('لا توجد حوالات مسجّلة لهذه الشركة'); return; }
-  closeCtitcModal();
-  showToast(`تم استيراد ${totalAdded} عامل ووُزِّعوا تلقائياً على حوالات "${company.name}"${totalSkipped?`، وتخطي ${totalSkipped} صف (مكرّر أو بدون رقم هوية)`:''}${overflowCount?`، منهم ${overflowCount} أُضيفوا كتجاوز لأحدث حوالة لأن كل الحوالات وصلت لعددها المستهدف`:''}`);
 });
 /* صوت نقر خفيف موحّد لكل أزرار الحفظ/الإضافة الرئيسية والتبويبات، عبر تفويض حدث واحد بدل ربط كل زر يدوياً */
 document.addEventListener('click', e=>{
