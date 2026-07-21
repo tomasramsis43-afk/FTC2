@@ -5303,6 +5303,32 @@
   </div>
 </div>
 
+<div class="overlay" id="ctitc-overlay">
+  <div class="modal" style="max-width:480px;">
+    <h2>استيراد عمال الشركة (رقم الهوية فقط)</h2>
+    <div class="hint" style="margin:0 0 10px;">الشركة: <b id="ctitc-company-name">—</b></div>
+    <div class="hint" style="margin:0 0 10px;">أدخل رقم الهوية/الإقامة لكل عامل في صف مستقل ثم اضغط "استيراد". سيُوزَّع كل رقم تلقائياً على أقرب حوالة لدى هذه الشركة بها شواغر، وسيُنشأ للعامل عميل جديد (نوعه "عميل شركات") إن لم يكن موجوداً، أو تُحدَّث حالته إلى "عميل شركات" إن كان موجوداً بنوع آخر. يمكنك لصق عمود كامل من إكسل مباشرة داخل أي خلية.</div>
+    <div class="table-scroll" style="max-height:52vh;">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:160px;">رقم الهوية *</th>
+            <th style="width:34px;"></th>
+          </tr>
+        </thead>
+        <tbody id="ctitc-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-ctitc-add-row">+ إضافة صف</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-ghost" id="ctitc-cancel">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="btn-ctitc-save">استيراد</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="bag-overlay">
   <div class="modal" style="max-width:420px;">
     <h2>تحديد الحقيبة كمشتراة</h2>
