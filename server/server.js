@@ -364,8 +364,12 @@ app.post('/api/zatca/return', requireAuth, async (req, res) => {
 /* ---------------- استضافة واجهة البرنامج (نفس ملف HTML) ---------------- */
 // نمنع المتصفح من تخزين app.html في الكاش لفترة طويلة، حتى يصل أي تحديث جديد
 // للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة.
-// بالمقابل، الملفات الثابتة (CSS، الصور، sw.js) نسمح بكاش قصير نسبياً (ساعة واحدة)
-// لتفادي إعادة تحميلها من الصفر مع كل طلب — بدون خطر تقديم نسخة قديمة لفترة طويلة.
+// بالنسبة لبقية الملفات الثابتة (JS/CSS)، لا نستخدم مدة كاش ثابتة (كانت ساعة سابقاً)
+// لأن ذلك يخلي المتصفح يشغّل نسخة قديمة من app-inline.js لمدة تصل لساعة كاملة بعد كل
+// تحديث فعلي على السيرفر، وهذا يسبب ظهور البرنامج وكأنه "ما اتحدّث" رغم نجاح النشر.
+// بدون maxAge، يعتمد express.static على ETag/Last-Modified: المتصفح يتأكد من السيرفر
+// في كل مرة (رد سريع 304 لو الملف لم يتغيّر فعلياً)، فنحافظ على معظم فائدة الكاش
+// (تفادي إعادة تحميل المحتوى نفسه) دون خطر تقديم نسخة قديمة بعد كل نشر جديد.
 app.use((req, res, next) => {
   if (req.path === '/' || req.path.endsWith('.html')) {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -373,7 +377,6 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, '..', 'frontend'), {
-  maxAge: '1h',
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
