@@ -643,17 +643,25 @@ async function loadData(){
     const r = await window.storage.get('appLang', false);
     currentLang = (r && r.value) ? r.value : 'ar';
   }catch(e){ currentLang = 'ar'; }
-  try{
-    const r = await window.storage.get('users', false);
-    users = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ users = []; }
-  if(!users.length){
-    users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
-    await saveUsers();
+  // مفتاح users قديم/غير مستخدم فعلياً في أي قرار صلاحية حالياً (النظام الحقيقي
+  // بالكامل عبر SERVER_AUTH_ROLE من الخادم منذ إزالة شاشة الدخول المحلي القديمة)،
+  // فنحمّله فقط لو الدور الحالي admin — تمهيداً لتقييده على مستوى السيرفر بأمان
+  // بدون أي طلب مرفوض أو رسالة خطأ مربكة لباقي الأدوار.
+  if (normalizeRole(SERVER_AUTH_ROLE) === 'admin') {
+    try{
+      const r = await window.storage.get('users', false);
+      users = r && r.value ? JSON.parse(r.value) : [];
+    }catch(e){ users = []; }
+    if(!users.length){
+      users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
+      await saveUsers();
+    }
+    let rolesBackfilled = false;
+    users.forEach(u=>{ if(!u.role){ u.role = 'admin'; rolesBackfilled = true; } });
+    if(rolesBackfilled) await saveUsers();
+  } else {
+    users = [];
   }
-  let rolesBackfilled = false;
-  users.forEach(u=>{ if(!u.role){ u.role = 'admin'; rolesBackfilled = true; } });
-  if(rolesBackfilled) await saveUsers();
   try{
     const r = await window.storage.get('auditLog', false);
     auditLog = r && r.value ? JSON.parse(r.value) : [];
