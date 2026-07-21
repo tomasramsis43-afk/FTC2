@@ -4557,6 +4557,8 @@ function renderSettings(){
   if($('#set-low-balance')) $('#set-low-balance').value = settings.lowBalanceThreshold ?? 5000;
   if($('#set-bag-overdue-days')) $('#set-bag-overdue-days').value = settings.bagOverdueDays ?? 14;
   if($('#set-monthly-wa-number')) $('#set-monthly-wa-number').value = settings.monthlyReportWhatsapp || '';
+  if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
+  if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
@@ -7809,9 +7811,7 @@ $('#btn-suggest-fixed-cost')?.addEventListener('click', ()=>{
 });
 
 function renderReports(){
-  if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
   if($('#wa3-report-month') && !$('#wa3-report-month').value) $('#wa3-report-month').value = lastCompleteMonthKey();
-  if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
   if($('#vat-report-year') && !$('#vat-report-year').value) $('#vat-report-year').value = new Date().getFullYear();
   if($('#vat-report-quarter') && !$('#vat-report-quarter').value) $('#vat-report-quarter').value = String(Math.max(1, Math.ceil((new Date().getMonth()) / 3)) || 1);
   renderBudget();
