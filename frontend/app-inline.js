@@ -2024,6 +2024,15 @@ function remainingByCourseType(){
 function renderCfoDashboard(){
   const el = $('#cfo-grid');
   if(!el) return;
+  // القسم ده فيه أرصدة الخزنة/البنك واتجاهات التحصيل — بيانات مالية حساسة تخص
+  // من له صلاحية "الخزنة" أو "المحاسبة" فقط، حتى لو "لوحة التحكم" نفسها متاحة
+  // لأدوار أوسع (زي الاستقبال). كان بيُعرض للجميع بلا استثناء قبل هذا التعديل.
+  if(!canAccessView('vault') && !canAccessView('accounting')){
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  el.style.display = '';
 
   const now = new Date();
   const thisYear = now.getFullYear(), lastYear = thisYear-1;
