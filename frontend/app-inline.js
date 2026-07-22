@@ -2641,13 +2641,18 @@ function renderTable(){
       <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
       <td><span class="stamp ${rem>0?'owe':'paid'}">${escapeHtml(paymentChannelsLabel(c))}</span></td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-        ${c.taxInvoiceNo ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
-        <button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>
-        ${c.suspended
-          ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
-          : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
-        <button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>
+        <div class="row-menu">
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="row-menu-panel" role="menu">
+            <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
+            ${c.taxInvoiceNo ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
+            <button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>
+            ${c.suspended
+              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
+              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
+            <button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>
+          </div>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -2964,6 +2969,58 @@ $('#table-body').addEventListener('click', async e=>{
     }
   }
 });
+
+/* ---------------- قائمة إجراءات الصف (⋮) في جدول العملاء ----------------
+   نستخدم position:fixed مع حساب الموضع عبر JS بدل position:absolute العادي،
+   لأن الجدول داخل .table-scroll (overflow:auto) وأي قائمة absolute كانت
+   ستُقطَع عند حواف منطقة التمرير المرئية. هذا لا يغيّر أي منطق للأزرار نفسها —
+   فقط يُخفيها داخل قائمة منسدلة، فتبقى معالجة النقر الأصلية (data-edit، data-del...)
+   أعلاه تعمل تماماً كما كانت دون أي تعديل. */
+let openRowMenuPanel = null;
+function closeRowMenu(){
+  if(openRowMenuPanel){
+    openRowMenuPanel.classList.remove('show');
+    const toggle = openRowMenuPanel.previousElementSibling;
+    if(toggle) toggle.setAttribute('aria-expanded','false');
+    openRowMenuPanel = null;
+  }
+}
+$('#table-body').addEventListener('click', e=>{
+  const toggle = e.target.closest('.row-menu-toggle');
+  if(!toggle) return;
+  e.stopPropagation();
+  const panel = toggle.nextElementSibling;
+  if(!panel) return;
+  if(openRowMenuPanel === panel){ closeRowMenu(); return; }
+  closeRowMenu();
+  const r = toggle.getBoundingClientRect();
+  const estWidth = 180; // تقدير أولي لعرض القائمة قبل قياسها فعلياً بعد الظهور
+  panel.style.top = Math.min(r.bottom + 4, window.innerHeight - 10) + 'px';
+  panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - estWidth - 8)) + 'px';
+  panel.classList.add('show');
+  toggle.setAttribute('aria-expanded','true');
+  openRowMenuPanel = panel;
+  requestAnimationFrame(()=>{
+    if(openRowMenuPanel !== panel) return;
+    const pr = panel.getBoundingClientRect();
+    if(pr.right > window.innerWidth - 8){
+      panel.style.left = Math.max(8, window.innerWidth - pr.width - 8) + 'px';
+    }
+    if(pr.bottom > window.innerHeight - 8){
+      panel.style.top = Math.max(8, r.top - pr.height - 4) + 'px'; // نفتح لأعلى إن لم تتسع المساحة أسفل الزر
+    }
+  });
+});
+// إغلاق القائمة المفتوحة عند اختيار أي إجراء من داخلها، أو عند أي نقر خارجها،
+// أو عند التمرير/تصغير النافذة/الضغط على Esc.
+document.addEventListener('click', e=>{
+  if(!openRowMenuPanel) return;
+  if(e.target.closest('.row-menu-toggle')) return;
+  closeRowMenu();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeRowMenu(); });
+window.addEventListener('scroll', closeRowMenu, true);
+window.addEventListener('resize', closeRowMenu);
 
 /* ---------------- Modal / form ---------------- */
 function openModal(id){
