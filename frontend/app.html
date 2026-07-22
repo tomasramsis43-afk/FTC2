@@ -344,6 +344,13 @@
   .stamp.paid{background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal);}
   .empty-state{text-align:center; padding:50px 20px; color:var(--text-muted);}
   .empty-state .big{font-size:34px; margin-bottom:6px;}
+  /* قائمة إجراءات الصف (⋮) في الجداول */
+  .row-menu{position:relative; display:inline-block;}
+  .row-menu-toggle{font-size:17px; line-height:1; padding:6px 12px; font-weight:700; letter-spacing:1px;}
+  .row-menu-toggle[aria-expanded="true"]{background:var(--surface-alt);}
+  .row-menu-panel{display:none; position:fixed; z-index:55; min-width:168px; max-width:240px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-hover); padding:6px; flex-direction:column; gap:3px; animation:popIn .14s cubic-bezier(.22,.9,.32,1);}
+  .row-menu-panel.show{display:flex;}
+  .row-menu-panel .btn{width:100%; justify-content:flex-start; text-align:right; white-space:nowrap;}
 
   /* ---------- Modal ---------- */
   .overlay{position:fixed; inset:0; background:rgba(13,33,56,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
