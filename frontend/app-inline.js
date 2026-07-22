@@ -450,6 +450,20 @@ function applyTheme(isDark){
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
+/* كثافة صفوف الجداول (مريح/مضغوط) — تفضيل عرض شخصي بحت، فيُحفَظ محلياً في هذا
+   المتصفح فقط (localStorage) وليس ضمن إعدادات الحساب المشتركة بين المستخدمين،
+   حتى لا يفرض تفضيل شخص واحد نفس الكثافة على بقية الفريق. */
+function applyRowDensity(isCompact){
+  document.body.classList.toggle('density-compact', !!isCompact);
+  const btn = $('#btn-density-toggle');
+  if(btn) btn.classList.toggle('active', !!isCompact);
+}
+try{ applyRowDensity(localStorage.getItem('ftc2-row-density')==='compact'); }catch(e){}
+$('#btn-density-toggle')?.addEventListener('click', ()=>{
+  const next = !document.body.classList.contains('density-compact');
+  applyRowDensity(next);
+  try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){}
+});
 /* ================= نظام المؤثرات الصوتية ================= */
 const SoundFX = (()=>{
   let ctx = null;
