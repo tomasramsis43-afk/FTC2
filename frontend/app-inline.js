@@ -10940,10 +10940,10 @@ function renderCompanyPersons(){
   $('#company-persons-list').innerHTML = rows.length ? `
     <div class="table-scroll table-scroll-compact">
     <table>
-      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th></tr></thead>
+      <thead><tr><th class="sticky-col sticky-col-1">رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th></tr></thead>
       <tbody>
         ${pageRows.map(({t,tr,c})=>`<tr>
-          <td class="mono">${escapeHtml(tr.clientId)}</td>
+          <td class="mono sticky-col sticky-col-1">${escapeHtml(tr.clientId)}</td>
           <td>${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
           <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
           <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
