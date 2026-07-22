@@ -1749,34 +1749,6 @@ function clearAllSheetFilters(){
 }
 $('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);
 
-/* ---------------- Mobile off-canvas nav (drawer from the right) ---------------- */
-function openMobileNav(){
-  $('nav.tabs')?.classList.add('open');
-  $('#nav-overlay')?.classList.add('show');
-  $('#btn-mobile-menu')?.classList.add('is-open');
-  $('#btn-mobile-menu')?.setAttribute('aria-expanded','true');
-  document.body.classList.add('nav-locked');
-}
-function closeMobileNav(){
-  $('nav.tabs')?.classList.remove('open');
-  $('#nav-overlay')?.classList.remove('show');
-  $('#btn-mobile-menu')?.classList.remove('is-open');
-  $('#btn-mobile-menu')?.setAttribute('aria-expanded','false');
-  document.body.classList.remove('nav-locked');
-}
-$('#btn-mobile-menu')?.addEventListener('click', ()=>{
-  const nav = $('nav.tabs');
-  if(nav && nav.classList.contains('open')) closeMobileNav(); else openMobileNav();
-});
-$('#nav-overlay')?.addEventListener('click', closeMobileNav);
-document.addEventListener('keydown', (e)=>{
-  if(e.key==='Escape' && $('nav.tabs')?.classList.contains('open')) closeMobileNav();
-});
-/* يقفل القائمة تلقائياً لو تغيّر حجم الشاشة لعرض سطح مكتب (مثلاً تدوير الجهاز) لتجنّب بقاء القفل عالقاً */
-window.addEventListener('resize', ()=>{
-  if(window.innerWidth>900 && $('nav.tabs')?.classList.contains('open')) closeMobileNav();
-});
-
 /* ---------------- Nav ---------------- */
 const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca','budget'];
 /* مصفوفة صلاحيات الأدوار: null = صلاحيات كاملة (admin) أو نفس سلوك staff القديم (استخدام RESTRICTED_STAFF_VIEWS كقائمة حظر).
@@ -1800,7 +1772,6 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
       return;
     }
     SoundFX.nav();
-    if(window.innerWidth<=900) closeMobileNav();
     $all('nav.tabs button[data-view]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     $all('section.view').forEach(v=>v.classList.remove('active'));
