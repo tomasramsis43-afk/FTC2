@@ -91,6 +91,21 @@ const VALID_ROLES = ['admin','accountant','reception','staff'];
 function normalizeRole(r){ return VALID_ROLES.includes(r) ? r : 'staff'; }
 const _kvVersions = {}; // آخر نسخة (version) معروفة لكل مفتاح، لمنع الكتابة فوق تعديل شخص آخر بصمت
 
+// كاش محلي دائم (localStorage) للقيم المُشفَّرة كما وصلت من السيرفر، مربوط برقم النسخة.
+// الهدف: لو نفس الجهاز فتح البرنامج تاني ونسخة البيانات على السيرفر لم تتغيّر،
+// نستخدم النسخة المخزّنة محلياً بدل إعادة تحميل نفس البيانات (ممكن تكون مئات
+// الكيلوبايتات لمفاتيح زي قوائم العملاء وحركات الخزنة) من الصفر في كل مرة.
+const KV_CACHE_PREFIX = 'ftc2-kv-cache:';
+function _kvCacheRead(key){
+  try{
+    const raw = localStorage.getItem(KV_CACHE_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function _kvCacheWrite(key, version, value){
+  try{ localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value })); }catch(e){ /* تجاهل امتلاء المساحة */ }
+}
+
 async function serverFetch(path, options = {}) {
   const res = await fetch(API_BASE + path, {
     ...options,
@@ -113,10 +128,19 @@ async function serverFetch(path, options = {}) {
 window.storage = {
     async get(key, shared){
       try{
-        const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`);
+        const cached = _kvCacheRead(key);
+        const headers = cached ? { 'If-None-Match': String(cached.version) } : {};
+        const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
+        if(res.status === 304 && cached){
+          _kvVersions[key] = cached.version;
+          if(cached.value === null || cached.value === undefined) return null;
+          const value = await decryptValue(cached.value);
+          return { key, value, shared: !!shared };
+        }
         if(!res.ok) return null;
         const data = await res.json();
         _kvVersions[key] = data.version || 0;
+        _kvCacheWrite(key, data.version || 0, data.value ?? null);
         if(data.value === null || data.value === undefined) return null;
         const value = await decryptValue(data.value);
         return { key, value, shared: !!shared };
@@ -138,6 +162,7 @@ window.storage = {
         if(!res.ok) return null;
         const data = await res.json();
         _kvVersions[key] = data.version || 0;
+        _kvCacheWrite(key, data.version || 0, toStore);
         return { key, value, shared: !!shared };
       }catch(e){ return null; }
     },
@@ -145,6 +170,7 @@ window.storage = {
       try{
         await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { method: 'DELETE' });
         delete _kvVersions[key];
+        try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){}
         return { key, deleted: true, shared: !!shared };
       }catch(e){ return null; }
     },
