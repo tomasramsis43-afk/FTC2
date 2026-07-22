@@ -3028,7 +3028,7 @@ function closeRowMenu(){
     openRowMenuPanel = null;
   }
 }
-$('#table-body').addEventListener('click', e=>{
+document.addEventListener('click', e=>{
   const toggle = e.target.closest('.row-menu-toggle');
   if(!toggle) return;
   e.stopPropagation();
@@ -3951,8 +3951,41 @@ function filteredCourseInvoices(){
     rows = rows.filter(c=> num(c.receiptActualValue)>0 && Math.abs(num(c.receiptActualValue) - centerIncome(c)) >= 0.01);
   }
   rows.sort((a,b)=> (b.receiptIssueDate||b.date||'').localeCompare(a.receiptIssueDate||a.date||''));
-  return rows;
+  return applyCiColumnSort(rows);
 }
+/* ---------------- ترتيب بالنقر على رأس العمود (فواتير الدورات) ---------------- */
+let ciSortState = { key: null, dir: 1 };
+const CI_SORT_GETTERS = {
+  name: c => (c.name||'').toLowerCase(),
+  clientId: c => (c.clientId||'').toLowerCase(),
+  courseType: c => (c.courseType||'').toLowerCase(),
+  invoice: c => (c.invoice||'').toLowerCase(),
+  date: c => c.receiptIssueDate || c.date || '',
+  actual: c => num(c.receiptActualValue),
+  vat: c => num(c.receiptActualValue)>0 ? courseInvoiceVat(num(c.receiptActualValue)) : -Infinity,
+  system: c => centerIncome(c),
+  noVat: c => num(c.receiptActualValue)>0 ? (num(c.receiptActualValue) - courseInvoiceVat(num(c.receiptActualValue))) : -Infinity,
+  diff: c => num(c.receiptActualValue)>0 ? (num(c.receiptActualValue) - centerIncome(c)) : -Infinity,
+};
+function applyCiColumnSort(rows){
+  const getter = ciSortState.key && CI_SORT_GETTERS[ciSortState.key];
+  if(!getter) return rows;
+  return [...rows].sort((a,b)=>{
+    const va = getter(a), vb = getter(b);
+    if(typeof va === 'number' && typeof vb === 'number') return (va-vb)*ciSortState.dir;
+    return String(va).localeCompare(String(vb),'ar') * ciSortState.dir;
+  });
+}
+document.querySelectorAll('#view-courseinvoices thead th.sortable').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.sort;
+    if(ciSortState.key === key){ ciSortState.dir *= -1; }
+    else{ ciSortState.key = key; ciSortState.dir = 1; }
+    document.querySelectorAll('#view-courseinvoices thead th.sortable').forEach(t=>t.setAttribute('aria-sort','none'));
+    th.setAttribute('aria-sort', ciSortState.dir===1 ? 'ascending' : 'descending');
+    renderCourseInvoices();
+  });
+});
 let ciPageState = {page:1, sig:''};
 function renderCourseInvoices(){
   const body = $('#ci-table-body');
@@ -3994,7 +4027,7 @@ function renderCourseInvoices(){
     const diffColor = diff===null ? '' : (Math.abs(diff)<0.01 ? 'teal' : 'red');
     return `
     <tr>
-      <td data-label="العميل">${escapeHtml(c.name||'')}</td>
+      <td class="sticky-col sticky-col-1" data-label="العميل">${escapeHtml(c.name||'')}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
       <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
@@ -6432,6 +6465,34 @@ function vaultFilteredRows(){
     return true;
   }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
 }
+/* ---------------- ترتيب بالنقر على رأس العمود (حركات الخزنة/البنك/الشبكة) ---------------- */
+let vaultSortState = { key: null, dir: 1 };
+const VAULT_SORT_GETTERS = {
+  who: t => ((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '') : (t.category||'')).toLowerCase(),
+  seq: t => num(t.seq),
+  date: t => t.date || '',
+  clientId: t => (t.clientId||'').toLowerCase(),
+  amount: t => num(t.amount),
+};
+function applyVaultColumnSort(rows){
+  const getter = vaultSortState.key && VAULT_SORT_GETTERS[vaultSortState.key];
+  if(!getter) return rows;
+  return [...rows].sort((a,b)=>{
+    const va = getter(a), vb = getter(b);
+    if(typeof va === 'number' && typeof vb === 'number') return (va-vb)*vaultSortState.dir;
+    return String(va).localeCompare(String(vb),'ar') * vaultSortState.dir;
+  });
+}
+document.querySelectorAll('#view-vault thead th.sortable').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.sort;
+    if(vaultSortState.key === key){ vaultSortState.dir *= -1; }
+    else{ vaultSortState.key = key; vaultSortState.dir = 1; }
+    document.querySelectorAll('#view-vault thead th.sortable').forEach(t=>t.setAttribute('aria-sort','none'));
+    th.setAttribute('aria-sort', vaultSortState.dir===1 ? 'ascending' : 'descending');
+    renderVault();
+  });
+});
 function balanceOf(dest){
   return vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in').reduce((s,t)=>s+num(t.amount),0)
        - vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='out').reduce((s,t)=>s+num(t.amount),0);
@@ -6460,7 +6521,7 @@ function renderVault(){
   const dl = $('#dl-clients');
   dl.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
 
-  const rows = vaultFilteredRows();
+  const rows = applyVaultColumnSort(vaultFilteredRows());
   const periodIn = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
   const periodOut = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
   const netOfDestFiltered = dest => rows.filter(t=>(t.destination||'vault')===dest)
@@ -6512,24 +6573,30 @@ function renderVault(){
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
     return `
     <tr ${isDup?'style="background:rgba(180,72,58,.08);"':''}>
-      <td data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-2" data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
       <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
       <td class="mono" data-label="الرقم">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
       <td class="mono" data-label="التاريخ">${t.date||'—'}</td>
       <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
       <td data-label="النوع"><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
       <td class="mono" data-label="رقم الهوية"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
-      <td data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
       <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
       <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
       <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
-        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : `<button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>`}
-        ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
-        ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
-        <button class="btn btn-danger btn-sm" data-vdel="${t.id}">${tr('delete')}</button>
+        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : `
+        <div class="row-menu">
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="row-menu-panel" role="menu">
+            <button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>
+            ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
+            ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
+            <button class="btn btn-danger btn-sm" data-vdel="${t.id}">${tr('delete')}</button>
+          </div>
+        </div>`}
       </td>
     </tr>`;
   }).join('');
