@@ -8,6 +8,9 @@
      AES-GCM الذي يرجعه (encKey) عبر Web Crypto، دون أي معرفة بالسرّ
      نفسه أو بكيفية اشتقاق المفتاح.
    ============================================================ */
+const $ = s => document.querySelector(s);
+const $all = s => document.querySelectorAll(s);
+
 const LICENSE_STORAGE_KEY = "appLicenseKeyV1";
 let ENC_KEY = null; // مفتاح AES-GCM (CryptoKey) يُستورد من نتيجة السيرفر بعد التفعيل
 
@@ -552,9 +555,6 @@ let users = [];
 let auditLog = [];
 let currentUser = null;
 let currentUserRole = 'admin'; // 'admin' (صلاحيات كاملة) أو 'staff' (صلاحيات محدودة — بدون الإعدادات وسجل المراجعة)
-
-const $ = s => document.querySelector(s);
-const $all = s => document.querySelectorAll(s);
 
 /* دالة تأخير التنفيذ (debounce) — تُستخدم مع حقول البحث النصي حتى لا يُعاد رسم الجداول الكبيرة
    مع كل ضغطة حرف (وهذا هو السبب الرئيسي لبطء البرنامج مع كثرة البيانات)، بل بعد توقف الكتابة فقط */
