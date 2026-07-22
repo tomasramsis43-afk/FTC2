@@ -354,6 +354,63 @@
   .stamp.paid{background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal);}
   .empty-state{text-align:center; padding:50px 20px; color:var(--text-muted);}
   .empty-state .big{font-size:34px; margin-bottom:6px;}
+  /* شارة عدد الفلاتر المتقدمة المفعّلة + مسافة الحاوية القابلة للطي */
+  .filters-count-badge{display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--gold); color:var(--navy-dark); font-size:10px; font-weight:800; margin:0 3px;}
+  .advanced-filters-panel{margin-top:-6px; margin-bottom:10px; background:var(--surface-alt); border-radius:8px; padding:10px 12px;}
+  /* شارة "طريقة الدفع" — معلوماتية محايدة، منفصلة بصرياً عن شارات حالة السداد (owe/paid) */
+  .stamp.channel{border:1.5px dashed var(--navy); color:var(--navy); border-radius:20px; transform:none; background:color-mix(in srgb, var(--navy) 6%, transparent);}
+  /* رؤوس أعمدة قابلة للترتيب بالنقر */
+  .table-scroll thead th.sortable{cursor:pointer; user-select:none; white-space:nowrap;}
+  .table-scroll thead th.sortable:hover{color:var(--navy);}
+  .table-scroll thead th.sortable::after{content:'↕'; opacity:.35; margin-inline-start:4px; font-size:9.5px; display:inline-block;}
+  .table-scroll thead th.sortable[aria-sort="ascending"]::after{content:'▲'; opacity:1; color:var(--gold-dark);}
+  .table-scroll thead th.sortable[aria-sort="descending"]::after{content:'▼'; opacity:1; color:var(--gold-dark);}
+  /* أعمدة مثبّتة عند التمرير الأفقي (التحديد + الاسم) — نستخدم right لأن الاتجاه RTL */
+  .table-scroll .sticky-col{position:sticky; z-index:2; background:var(--surface);}
+  .table-scroll thead th.sticky-col{z-index:3;}
+  .table-scroll tbody tr:nth-child(even) td.sticky-col{background:var(--surface-alt);}
+  .table-scroll tbody tr:hover td.sticky-col{background:color-mix(in srgb, var(--gold) 12%, var(--surface));}
+  .sticky-col-1{right:0;}
+  .sticky-col-2{right:34px; min-width:130px; border-left:1.5px solid var(--border);}
+  @media(max-width:600px){ .table-scroll .sticky-col{position:static;} } /* على الموبايل التمرير الأفقي أقل إزعاجاً وتثبيت الأعمدة قد يضيّق المساحة */
+
+  /* ---------- وضع "البطاقات" العام على الموبايل (بديل للجدول العريض) ----------
+     يُفعَّل بإضافة كلاس cards-mobile على .table-scroll. كل <tr> يصير بطاقة عمودية،
+     وكل <td> يحتاج data-label="اسم العمود" ليظهر كعنوان صغير قبل القيمة. */
+  @media(max-width:600px){
+    .table-scroll.cards-mobile{overflow-x:hidden;}
+    .table-scroll.cards-mobile table{width:100%; min-width:0;}
+    .table-scroll.cards-mobile thead{display:none;}
+    .table-scroll.cards-mobile tbody{display:block;}
+    .table-scroll.cards-mobile tbody tr{
+      display:block; width:100%; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:10px 12px; margin:0 0 10px; box-shadow:var(--shadow);
+      border-inline-start:2px solid var(--gold);
+    }
+    .table-scroll.cards-mobile tbody tr:hover{background:var(--surface);} /* لا تأثير hover على البطاقات */
+    .table-scroll.cards-mobile tbody td{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      width:100%; padding:6px 2px; border:none; white-space:normal; text-align:start;
+      border-bottom:1px dashed var(--border);
+    }
+    .table-scroll.cards-mobile tbody td:last-child{border-bottom:none;}
+    .table-scroll.cards-mobile tbody td::before{
+      content:attr(data-label); font-size:11px; color:var(--text-muted); font-weight:600;
+      flex:none; margin-inline-end:8px;
+    }
+    .table-scroll.cards-mobile tbody td:not([data-label])::before{content:none;}
+    .table-scroll.cards-mobile tbody td[data-label=""]::before{content:none;}
+    /* خلية بلا تسمية (مثل عمود الإجراءات) تاخذ عرض كامل بدون تنسيق flex space-between */
+    .table-scroll.cards-mobile tbody td.card-full{display:block; padding-top:8px;}
+    .table-scroll.cards-mobile tbody td.card-full::before{display:block; margin-bottom:4px;}
+  }
+  /* قائمة إجراءات الصف (⋮) في الجداول */
+  .row-menu{position:relative; display:inline-block;}
+  .row-menu-toggle{font-size:17px; line-height:1; padding:6px 12px; font-weight:700; letter-spacing:1px;}
+  .row-menu-toggle[aria-expanded="true"]{background:var(--surface-alt);}
+  .row-menu-panel{display:none; position:fixed; z-index:55; min-width:168px; max-width:240px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-hover); padding:6px; flex-direction:column; gap:3px; animation:popIn .14s cubic-bezier(.22,.9,.32,1);}
+  .row-menu-panel.show{display:flex;}
+  .row-menu-panel .btn{width:100%; justify-content:flex-start; text-align:right; white-space:nowrap;}
 
   /* ---------- Modal ---------- */
   .overlay{position:fixed; inset:0; background:rgba(13,33,56,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
@@ -561,17 +618,8 @@
       <button class="btn btn-ghost btn-sm" id="btn-filter-suspended" title="عرض العملاء الموقوفين فقط">الموقوفين</button>
       <button class="btn btn-ghost btn-sm" id="btn-filter-unpurchased-bags" title="عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد">الحقائب غير المشتراة</button>
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
-      <select id="filter-course"><option value="">كل الدورات</option><option value="__unknown__">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
-      <select id="filter-nat"><option value="">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
       <select id="filter-status"><option value="" data-i18n="allStatuses">كل حالات السداد</option><option value="paid" data-i18n="fullyPaid">مسدد بالكامل</option><option value="owe" data-i18n="owing">متبقي عليه</option></select>
-      <select id="filter-company"><option value="">كل الشركات</option><option value="المراعي">المراعي</option><option value="شركة الغربي">شركة الغربي</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="محمد القحطاني">محمد القحطاني</option><option value="محمد محمد">محمد محمد</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Beauty Word">Beauty Word</option><option value="CARMEY EST">CARMEY EST</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="ON OFF CO">ON OFF CO</option></select>
-      <select id="filter-invoice"><option value="">كل العملاء (رقم الفاتورة)</option><option value="no">بدون رقم فاتورة</option><option value="yes">لديه رقم فاتورة</option></select>
-      <select id="filter-coursenum"><option value="">كل العملاء (رقم الدورة)</option><option value="no">بدون رقم دورة</option><option value="yes">لديه رقم دورة</option></select>
-      <select id="filter-refnum"><option value="">كل العملاء (الرقم المرجعي)</option><option value="no">بدون رقم مرجعي</option><option value="yes">لديه رقم مرجعي</option></select>
-      <input type="date" id="cl-date-from" title="تاريخ التسجيل من">
-      <input type="date" id="cl-date-to" title="تاريخ التسجيل إلى">
-      <input type="number" id="cl-paid-min" placeholder="المبلغ المدفوع من" style="max-width:140px;">
-      <input type="number" id="cl-paid-max" placeholder="المبلغ المدفوع إلى" style="max-width:140px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-advanced-filters" aria-expanded="false">فلاتر متقدمة <span id="advanced-filters-count" class="filters-count-badge" style="display:none;">0</span> ▾</button>
       <span class="spacer"></span>
       <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
       <button class="btn btn-primary btn-sm" id="btn-bulk-update">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
@@ -581,6 +629,19 @@
       <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
       <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
       <button class="btn btn-gold" id="btn-bulk-add">+ إضافة عدة عملاء</button>
+    </div>
+    <div class="toolbar advanced-filters-panel" id="advanced-filters-panel" style="display:none;">
+      <select id="filter-course"><option value="">كل الدورات</option><option value="__unknown__">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
+      <select id="filter-nat"><option value="">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
+      <select id="filter-company"><option value="">كل الشركات</option><option value="المراعي">المراعي</option><option value="شركة الغربي">شركة الغربي</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="محمد القحطاني">محمد القحطاني</option><option value="محمد محمد">محمد محمد</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Beauty Word">Beauty Word</option><option value="CARMEY EST">CARMEY EST</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="ON OFF CO">ON OFF CO</option></select>
+      <select id="filter-invoice"><option value="">كل العملاء (رقم الفاتورة)</option><option value="no">بدون رقم فاتورة</option><option value="yes">لديه رقم فاتورة</option></select>
+      <select id="filter-coursenum"><option value="">كل العملاء (رقم الدورة)</option><option value="no">بدون رقم دورة</option><option value="yes">لديه رقم دورة</option></select>
+      <select id="filter-refnum"><option value="">كل العملاء (الرقم المرجعي)</option><option value="no">بدون رقم مرجعي</option><option value="yes">لديه رقم مرجعي</option></select>
+      <input type="date" id="cl-date-from" title="تاريخ التسجيل من">
+      <input type="date" id="cl-date-to" title="تاريخ التسجيل إلى">
+      <input type="number" id="cl-paid-min" placeholder="المبلغ المدفوع من" style="max-width:140px;">
+      <input type="number" id="cl-paid-max" placeholder="المبلغ المدفوع إلى" style="max-width:140px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-advanced-filters">مسح الفلاتر المتقدمة</button>
     </div>
     <div class="hint" style="margin-top:-6px;" data-i18n="importExportHint">الاستيراد والتصدير مرتبطان برقم الهوية: إن كان رقم الهوية موجوداً مسبقاً سيتم تحديث الأعمدة التي بها قيمة في الملف فقط (الأعمدة الفارغة تبقى كما هي في النظام)، وإن لم يكن موجوداً سيُضاف كعميل جديد.</div>
     <div class="computed" style="margin-bottom:10px;"><span>عدد العملاء المطابقين للفلتر الحالي: <b id="clients-filtered-count" class="mono">766</b> · من إجمالي <b id="clients-total-count" class="mono">5853</b> عميل</span></div>
@@ -593,13 +654,13 @@
       <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete-selected">🗑 حذف المحدد</button>
     </div>
     <div class="panel" style="padding:0;">
-      <div class="table-scroll">
+      <div class="table-scroll cards-mobile">
       <table>
         <thead>
           <tr>
-            <th style="width:34px;"><input type="checkbox" id="select-all-clients" title="تحديد/إلغاء تحديد كل الصفحة الحالية"></th>
-            <th data-i18n="thId">رقم الهوية</th><th data-i18n="thName">الاسم</th><th data-i18n="thRef">الرقم المرجعي</th><th data-i18n="thNat">الجنسية</th><th data-i18n="thCourse">الدورة</th><th data-i18n="thCourseNum">رقم الدورة</th><th data-i18n="thInvoice">رقم الفاتورة</th><th data-i18n="thRegDate">تاريخ التسجيل</th>
-            <th data-i18n="thTotal">الإجمالي</th><th data-i18n="thPaid">إجمالي المدفوع</th><th data-i18n="thRemaining">المتبقي</th><th data-i18n="thBag">الحقيبة</th><th data-i18n="thChannel">طريقة الدفع</th><th></th>
+            <th class="sticky-col sticky-col-1" style="width:34px;"><input type="checkbox" id="select-all-clients" title="تحديد/إلغاء تحديد كل الصفحة الحالية"></th>
+            <th class="sticky-col sticky-col-2 sortable" data-sort="name" aria-sort="none" data-i18n="thName">الاسم</th><th class="sortable" data-sort="clientId" aria-sort="none" data-i18n="thId">رقم الهوية</th><th class="sortable" data-sort="referNum" aria-sort="none" data-i18n="thRef">الرقم المرجعي</th><th class="sortable" data-sort="nationality" aria-sort="none" data-i18n="thNat">الجنسية</th><th class="sortable" data-sort="courseType" aria-sort="none" data-i18n="thCourse">الدورة</th><th class="sortable" data-sort="courseNumber" aria-sort="none" data-i18n="thCourseNum">رقم الدورة</th><th class="sortable" data-sort="invoice" aria-sort="none" data-i18n="thInvoice">رقم الفاتورة</th><th class="sortable" data-sort="date" aria-sort="descending" data-i18n="thRegDate">تاريخ التسجيل</th>
+            <th class="sortable" data-sort="total" aria-sort="none" data-i18n="thTotal">الإجمالي</th><th class="sortable" data-sort="paid" aria-sort="none" data-i18n="thPaid">إجمالي المدفوع</th><th class="sortable" data-sort="remaining" aria-sort="none" data-i18n="thRemaining">المتبقي</th><th data-i18n="thBag">الحقيبة</th><th data-i18n="thChannel">طريقة الدفع</th><th></th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -753,7 +814,7 @@
         <button type="button" class="btn btn-ghost btn-sm" id="btn-add-cmcat" data-i18n="btnAddCategory">+ إضافة فئة</button>
       </div>
 
-      <div class="table-scroll table-scroll-compact">
+      <div class="table-scroll table-scroll-compact cards-mobile">
         <table>
           <thead><tr><th data-i18n="compFieldName">اسم الشركة</th><th data-i18n="thTaxNo">الرقم الضريبي</th><th data-i18n="thAgreedAmount">المبلغ المتفق عليه / متدرب</th><th data-i18n="thTransferCount">عدد الحوالات</th><th data-i18n="thTransferTotal">إجمالي الحوالات</th><th></th></tr></thead>
           <tbody id="companies-list-body"></tbody>
@@ -1538,7 +1599,7 @@
     <div class="computed" style="margin-bottom:10px;"><span>عدد الفواتير المطابقة للفلتر الحالي: <b id="ci-filtered-count" class="mono">754</b> · من إجمالي <b id="ci-total-count" class="mono">754</b> فاتورة دورة</span></div>
 
     <div class="panel" style="padding:0;">
-      <div class="table-scroll">
+      <div class="table-scroll cards-mobile">
       <table>
         <thead><tr>
           <th>العميل</th><th>رقم الهوية</th><th>الدورة</th><th>رقم الفاتورة</th>
@@ -2244,7 +2305,7 @@
         <span class="spacer"></span>
         <button type="button" class="btn btn-danger btn-sm" id="btn-vault-bulk-delete">🗑 إلغاء المحدد (حذف منطقي)</button>
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll cards-mobile">
         <table>
           <thead>
             <tr><th style="width:34px;"><input type="checkbox" id="select-all-vault" title="تحديد/إلغاء تحديد كل الصفحة الحالية"></th><th>الرقم التسلسلي</th><th>الرقم</th><th>التاريخ</th><th>الحساب</th><th>النوع</th><th>رقم الهوية</th><th>العميل / البيان</th><th>التصنيف</th><th>طريقة الدفع</th><th>رقم فاتورة الشبكة</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr>
@@ -3539,7 +3600,7 @@
       <div class="toolbar" style="padding:0 20px 12px;">
         <div class="card" style="margin:0;"><div class="k">صافي عدد الحقائب (إيداع - سحب) خلال الفترة</div><div class="v teal" id="bagstock-period-deposit-total">707</div></div>
       </div>
-      <div class="table-scroll">
+      <div class="table-scroll cards-mobile">
       <table>
         <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>عدد الحقائب (+/-)</th><th>الرصيد بعد العملية</th><th>طريقة الدفع</th><th>ملاحظات</th><th></th></tr></thead>
         <tbody id="bag-stock-body"></tbody>
