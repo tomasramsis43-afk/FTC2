@@ -479,19 +479,19 @@ app.post('/api/zatca/return', requireAuth, async (req, res) => {
 // (تفادي إعادة تحميل المحتوى نفسه) دون خطر تقديم نسخة قديمة بعد كل نشر جديد.
 app.use((req, res, next) => {
   if (req.path === '/' || req.path.endsWith('.html')) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   }
   next();
 });
 app.use(express.static(path.join(__dirname, '..', 'frontend'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
   },
 }));
 app.get('*', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'app.html'));
 });
 
