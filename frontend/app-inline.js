@@ -739,6 +739,7 @@ async function loadData(){
     const r = await window.storage.get('purchases', false);
     purchases = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ purchases = []; }
+  await migratePurchaseAttachmentsOut();
   try{
     const r = await window.storage.get('manualSalesInvoices', false);
     manualSalesInvoices = r && r.value ? JSON.parse(r.value) : [];
@@ -849,6 +850,26 @@ async function saveBudgetEntries(){
 }
 async function saveSuppliers(){
   try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
+}
+/* ---------------- ترحيل مرفقات فواتير المشتريات القديمة (مرة واحدة) ----------------
+   قبل هذا التحديث كان مرفق كل فاتورة (dataUrl الصورة كاملة) مخزَّناً داخل نفس عنصر الفاتورة
+   ضمن مصفوفة "purchases" الكبيرة — يعني كل صور كل الفواتير تتحمّل مع أي فتح لشيت المشتريات،
+   حتى لو المستخدم لن يفتح ولا صورة واحدة. هذه الدالة تفحص عند كل بدء تشغيل هل يوجد مرفقات
+   قديمة بهذا الشكل، ولو وُجدت تنقلها لمفاتيح kv منفصلة (purchase-attachment:ID) وتُبقي في سجل
+   الفاتورة بيانات وصفية فقط (الاسم والنوع)، ثم تحفظ النتيجة. بعد أول مرة لن يبقى أي مرفق
+   مضمَّن فتنتهي الدالة فوراً بدون أي عمل إضافي في المرات القادمة. */
+async function migratePurchaseAttachmentsOut(){
+  const legacy = purchases.filter(p=>p.attachment && p.attachment.dataUrl);
+  if(!legacy.length) return;
+  for(const p of legacy){
+    try{
+      await window.storage.set('purchase-attachment:'+p.id, JSON.stringify({
+        name: p.attachment.name, type: p.attachment.type, dataUrl: p.attachment.dataUrl
+      }), false);
+      p.attachment = {name: p.attachment.name, type: p.attachment.type};
+    }catch(e){ /* لو فشل نقل مرفق معيّن، نتركه كما هو ليُعاد المحاولة في المرة القادمة */ }
+  }
+  await savePurchases();
 }
 async function savePurchases(){
   try{ await window.storage.set('purchases', JSON.stringify(purchases), false); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
@@ -12577,7 +12598,16 @@ $('#pu-attachment-remove')?.addEventListener('click', ()=>{
   $('#pu-attachment').value = '';
   updatePurchaseAttachmentPreview();
 });
-$('#pu-attachment-view')?.addEventListener('click', ()=> openAttachmentViewer(currentPurchaseAttachment));
+$('#pu-attachment-view')?.addEventListener('click', async ()=>{
+  if(!currentPurchaseAttachment) return;
+  if(currentPurchaseAttachment.dataUrl){ openAttachmentViewer(currentPurchaseAttachment); return; }
+  // مرفق فاتورة موجودة مسبقاً ولم يُستبدَل — بياناته الفعلية غير محمّلة بالذاكرة (وضع توفير البيانات)،
+  // نجيبها الآن فقط عند الحاجة الفعلية للعرض
+  if(!editingPurchaseId) return;
+  const r = await window.storage.get('purchase-attachment:'+editingPurchaseId, false);
+  if(r && r.value) openAttachmentViewer(JSON.parse(r.value));
+  else showToast('تعذّر تحميل المرفق');
+});
 
 $('#btn-add-supplier')?.addEventListener('click', ()=>{
   editingSupplierId = null;
@@ -12664,11 +12694,30 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
     });
   }
 
+  const purchaseId = existing ? existing.id : uid();
+  // نخزّن المرفق الفعلي (dataUrl) في مفتاح kv منفصل خاص بكل فاتورة (purchase-attachment:ID)، ونُبقي في
+  // سجل الفاتورة نفسه بيانات وصفية بسيطة فقط (الاسم والنوع) — بدل تضمين الصورة كاملة داخل مصفوفة
+  // المشتريات الضخمة التي تتحمّل كاملة مع أي فتح لشيت المشتريات (كانت السبب الأكبر في استهلاك البيانات).
+  let attachmentMeta = null;
+  if(currentPurchaseAttachment && currentPurchaseAttachment.dataUrl){
+    // مرفق جديد أو مُستبدَل فعلياً بهذا الحفظ
+    await window.storage.set('purchase-attachment:'+purchaseId, JSON.stringify({
+      name: currentPurchaseAttachment.name, type: currentPurchaseAttachment.type, dataUrl: currentPurchaseAttachment.dataUrl
+    }), false);
+    attachmentMeta = {name: currentPurchaseAttachment.name, type: currentPurchaseAttachment.type};
+  } else if(currentPurchaseAttachment){
+    // بيانات وصفية فقط بدون dataUrl — يعني مرفق فاتورة موجودة لم يُستبدَل، أبقِه كما هو بدون إعادة حفظ
+    attachmentMeta = {name: currentPurchaseAttachment.name, type: currentPurchaseAttachment.type};
+  } else if(existing && existing.attachment){
+    // كان للفاتورة مرفق وأُزيل الآن
+    await window.storage.delete('purchase-attachment:'+purchaseId, false);
+  }
+
   if(existing){
-    Object.assign(existing, {supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: currentPurchaseAttachment});
+    Object.assign(existing, {supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta});
     await logAudit('edit','المشتريات', `تعديل فاتورة شراء: ${invoiceNo||'—'} — ${supplier.name} (${fmt(total)} ﷼ شامل الضريبة)`);
   } else {
-    const newPurchase = {id: uid(), supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: currentPurchaseAttachment, createdAt: Date.now()};
+    const newPurchase = {id: purchaseId, supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta, createdAt: Date.now()};
     purchases.push(newPurchase);
     autoPostPurchase(newPurchase);
     await saveJournalDE();
@@ -12707,7 +12756,13 @@ document.addEventListener('click', async e=>{
   const viewAtt = e.target.closest('[data-view-attachment]');
   if(viewAtt){
     const p = purchases.find(x=>x.id===viewAtt.dataset.viewAttachment);
-    if(p) openAttachmentViewer(p.attachment);
+    if(p && p.attachment){
+      // المرفق الفعلي (dataUrl) مخزَّن في مفتاح منفصل خاص بهذه الفاتورة (وليس ضمن مصفوفة المشتريات)
+      // حتى لا تتحمّل كل صور كل الفواتير مع كل فتح لشيت المشتريات — نجيبه الآن فقط عند طلب العرض فعلياً
+      const r = await window.storage.get('purchase-attachment:'+p.id, false);
+      if(r && r.value) openAttachmentViewer(JSON.parse(r.value));
+      else showToast('تعذّر تحميل المرفق');
+    }
     return;
   }
   const editSup = e.target.closest('[data-edit-supplier]');
@@ -12756,6 +12811,7 @@ document.addEventListener('click', async e=>{
     }
     purchases = purchases.filter(x=>x.id!==id);
     await savePurchases();
+    if(p.attachment){ try{ await window.storage.delete('purchase-attachment:'+id, false); }catch(err){} }
     await logAudit('delete','المشتريات', `حذف فاتورة شراء: ${p.invoiceNo||'—'} — ${p.supplierName}`);
     renderPurchases();
     showToast('تم حذف الفاتورة');
