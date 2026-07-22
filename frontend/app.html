@@ -367,6 +367,12 @@
   .advanced-filters-panel{margin-top:-6px; margin-bottom:10px; background:var(--surface-alt); border-radius:8px; padding:10px 12px;}
   /* شارة "طريقة الدفع" — معلوماتية محايدة، منفصلة بصرياً عن شارات حالة السداد (owe/paid) */
   .stamp.channel{border:1.5px dashed var(--navy); color:var(--navy); border-radius:20px; transform:none; background:color-mix(in srgb, var(--navy) 6%, transparent);}
+  /* كثافة صفوف الجداول: وضع مضغوط اختياري لعرض عدد أكبر من الصفوف دفعة واحدة */
+  body.density-compact tbody td{padding:4px 8px;}
+  body.density-compact thead th{padding:5px 8px;}
+  body.density-compact .stamp{padding:1px 7px; font-size:9.5px;}
+  body.density-compact tbody td input, body.density-compact tbody td select{padding:2px 6px;}
+  #btn-density-toggle.active{background:var(--surface-alt); color:var(--gold-dark);}
   /* رؤوس أعمدة قابلة للترتيب بالنقر */
   .table-scroll thead th.sortable{cursor:pointer; user-select:none; white-space:nowrap;}
   .table-scroll thead th.sortable:hover{color:var(--navy);}
@@ -566,6 +572,7 @@
       <button id="btn-sound-toggle" type="button" class="icon-btn" title="كتم المؤثرات الصوتية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"></path><path d="M16 8a5 5 0 0 1 0 8M18.5 5.5a9 9 0 0 1 0 13"></path></svg></button>
       <button id="btn-shortcuts-help" type="button" class="icon-btn" title="اختصارات لوحة المفاتيح (؟)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 13h6"></path></svg></button>
       <button id="btn-theme-toggle" type="button" class="icon-btn" title="تبديل الوضع الليلي/النهاري"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></button>
+      <button id="btn-density-toggle" type="button" class="icon-btn" title="كثافة صفوف الجداول: مريح / مضغوط"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
       <span class="user-pill"><b id="current-user-label"></b></span>
       <button id="btn-logout" type="button" data-i18n="logout">تسجيل الخروج</button>
     </div>
