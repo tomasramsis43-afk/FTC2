@@ -12498,7 +12498,53 @@ $('#btn-add-item-row')?.addEventListener('click', ()=> addPurchaseItemRow());
 $('#btn-add-purchase')?.addEventListener('click', ()=> openPurchaseModal(null));
 $('#pu-cancel')?.addEventListener('click', ()=> $('#purchase-overlay').classList.remove('show'));
 
-$('#pu-attachment')?.addEventListener('change', e=>{
+/* ---------------- ضغط صور المرفقات قبل التخزين ----------------
+   صور الكاميرا من الموبايل عادة توصل 3-8 ميجابايت وتُخزَّن كاملة كـ base64 داخل
+   سجل الفاتورة (يُحمَّل كل مرة يُفتح فيها الشيت). هذه الدالة تُعيد رسم أي صورة على
+   canvas بأقصى بُعد 1600px وجودة JPEG 0.72 قبل التخزين. لا تُطبَّق على:
+   - ملفات PDF (لا يمكن ضغطها بنفس الطريقة)
+   - الصور الصغيرة أصلاً (أقل من 400KB وأبعادها أقل من 1600px) — تُخزَّن كما هي
+   وفي حال فشل الضغط لأي سبب (متصفح قديم، صورة تالفة...)، نرجع تلقائياً لتخزين
+   الملف الأصلي كاملاً حتى لا يفقد المستخدم مرفقه.
+   ترجع Promise<{name, type, dataUrl}>. */
+function compressImageFile(file){
+  return new Promise((resolve)=>{
+    const fallback = ()=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve({name: file.name, type: file.type, dataUrl: reader.result});
+      reader.onerror = ()=> resolve(null);
+      reader.readAsDataURL(file);
+    };
+    if(file.type === 'application/pdf' || file.type === 'image/gif'){ fallback(); return; }
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(objectUrl);
+      const maxDim = 1600;
+      const needsResize = img.width > maxDim || img.height > maxDim;
+      if(file.size < 400*1024 && !needsResize){ fallback(); return; }
+      try{
+        let w = img.width, h = img.height;
+        if(needsResize){
+          if(w > h){ h = Math.round(h * (maxDim/w)); w = maxDim; }
+          else{ w = Math.round(w * (maxDim/h)); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        if(!dataUrl || dataUrl.length < 50){ fallback(); return; }
+        const newName = file.name.replace(/\.(png|webp|jpe?g)$/i, '') + '.jpg';
+        resolve({name: newName, type: 'image/jpeg', dataUrl});
+      }catch(e){ fallback(); }
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(objectUrl); fallback(); };
+    img.src = objectUrl;
+  });
+}
+
+$('#pu-attachment')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   const nameOk = /\.(pdf|jpe?g|png|webp)$/i.test(file.name);
@@ -12512,6 +12558,11 @@ $('#pu-attachment')?.addEventListener('change', e=>{
     showToast('حجم الملف كبير جداً (الحد الأقصى 8 ميجابايت)');
     e.target.value = '';
     return;
+  }
+  const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(file.name);
+  if(isImage){
+    const result = await compressImageFile(file);
+    if(result){ currentPurchaseAttachment = result; updatePurchaseAttachmentPreview(); return; }
   }
   const reader = new FileReader();
   reader.onload = ()=>{
