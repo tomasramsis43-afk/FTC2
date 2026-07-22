@@ -194,6 +194,11 @@ const RESTRICTED_STORAGE_KEYS = {
   budgetEntries: 'budget',
   suppliers: 'purchases',
   zakatAdjustments: 'zatca',
+  // تحقّقت أن الاتنين دول مقصورين فعلياً على شاشة 'الخزنة' (renderVault/renderBankRecon)
+  // ولا يُستخدمان من أي شاشة متاحة للاستقبال — بخلاف vaultTx وdeletedVaultTx وdeletedInvoices
+  // اللي فحصتها ولقيتها متشابكة فعلياً مع ميزات شرعية في شاشتي 'العملاء' و'الحقائب'.
+  vaultDenomTx: 'vault',
+  bankStatementRows: 'vault',
 };
 function restrictKeyToAdmin(req, res, next) {
   const key = req.params.key;
