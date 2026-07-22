@@ -2497,7 +2497,7 @@ function filteredClients(){
   const paidMaxRaw = $('#cl-paid-max').value;
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
-  return clients.filter(c=>{
+  const rows = clients.filter(c=>{
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
     if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
@@ -2522,7 +2522,44 @@ function filteredClients(){
     }
     return true;
   }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+  return applyClientsColumnSort(rows);
 }
+/* ---------------- ترتيب بالنقر على رأس العمود (جدول العملاء) ----------------
+   يُطبَّق فوق الترتيب الافتراضي (بالتاريخ) وليس بديلاً عنه — إن لم يختر المستخدم
+   عموداً بعد، تبقى النتائج كما كانت دائماً (بالتاريخ الأحدث أولاً). */
+let clientsSortState = { key: null, dir: 1 };
+const CLIENT_SORT_GETTERS = {
+  name: c => (c.name||'').toLowerCase(),
+  clientId: c => (c.clientId||'').toLowerCase(),
+  referNum: c => (c.referNum||'').toLowerCase(),
+  nationality: c => (c.nationality||'').toLowerCase(),
+  courseType: c => (c.courseType||'').toLowerCase(),
+  courseNumber: c => (c.courseNumber||'').toLowerCase(),
+  invoice: c => (c.invoice||'').toLowerCase(),
+  date: c => c.date || '',
+  total: c => total(c),
+  paid: c => paidTotal(c),
+  remaining: c => remaining(c),
+};
+function applyClientsColumnSort(rows){
+  const getter = clientsSortState.key && CLIENT_SORT_GETTERS[clientsSortState.key];
+  if(!getter) return rows;
+  return [...rows].sort((a,b)=>{
+    const va = getter(a), vb = getter(b);
+    if(typeof va === 'number' && typeof vb === 'number') return (va-vb)*clientsSortState.dir;
+    return String(va).localeCompare(String(vb),'ar') * clientsSortState.dir;
+  });
+}
+document.querySelectorAll('#view-clients thead th.sortable').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.sort;
+    if(clientsSortState.key === key){ clientsSortState.dir *= -1; }
+    else{ clientsSortState.key = key; clientsSortState.dir = 1; }
+    document.querySelectorAll('#view-clients thead th.sortable').forEach(t=>t.setAttribute('aria-sort','none'));
+    th.setAttribute('aria-sort', clientsSortState.dir===1 ? 'ascending' : 'descending');
+    renderTable();
+  });
+});
 let tableCurrentPage = 1;
 let tableLastFilterSig = '';
 let showSuspendedOnly = false;
@@ -2626,9 +2663,9 @@ function renderTable(){
     const rem = remaining(c);
     const nameBadges = `${escapeHtml(c.name)}${phoneWithWhatsapp(c.phone)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
     return `<tr${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
-      <td><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-1"><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-2">${nameBadges}</td>
       <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td>${nameBadges}</td>
       <td class="mono">${escapeHtml(c.referNum||'—')}</td>
       <td>${escapeHtml(c.nationality||'')}</td>
       <td>${escapeHtml(c.courseType||'')}</td>
@@ -2637,9 +2674,9 @@ function renderTable(){
       <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
       <td class="mono">${fmt(total(c))}</td>
       <td class="mono">${fmt(paidTotal(c))}</td>
-      <td class="mono">${fmt(rem)}</td>
+      <td class="mono"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
       <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
-      <td><span class="stamp ${rem>0?'owe':'paid'}">${escapeHtml(paymentChannelsLabel(c))}</span></td>
+      <td><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
       <td style="white-space:nowrap;">
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
@@ -2894,6 +2931,41 @@ $('#cl-date-from').addEventListener('input', renderTable);
 $('#cl-date-to').addEventListener('input', renderTable);
 $('#cl-paid-min').addEventListener('input', renderTable);
 $('#cl-paid-max').addEventListener('input', renderTable);
+
+/* ---------------- طي/توسيع الفلاتر المتقدمة (جدول العملاء) ----------------
+   الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
+   معالجات renderTable المرتبطة بها أعلاه — فقط نُخفي/نُظهر الحاوية الأم، ونضيف
+   عدّاداً صغيراً يوضّح كم فلتراً متقدماً مفعّلاً حالياً حتى لو كانت القائمة مطوية. */
+const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
+function updateAdvancedFiltersBadge(){
+  const badge = $('#advanced-filters-count');
+  if(!badge) return;
+  const activeCount = ADVANCED_FILTER_IDS.filter(id=>{ const el=document.getElementById(id); return el && el.value; }).length;
+  badge.textContent = activeCount;
+  badge.style.display = activeCount ? '' : 'none';
+}
+$('#btn-toggle-advanced-filters')?.addEventListener('click', ()=>{
+  const panel = $('#advanced-filters-panel');
+  const btn = $('#btn-toggle-advanced-filters');
+  if(!panel || !btn) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  btn.setAttribute('aria-expanded', String(!isOpen));
+});
+$('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
+  ADVANCED_FILTER_IDS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+  });
+  updateAdvancedFiltersBadge();
+  renderTable();
+});
+ADVANCED_FILTER_IDS.forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', updateAdvancedFiltersBadge);
+});
+updateAdvancedFiltersBadge();
 
 $('#table-body').addEventListener('click', async e=>{
   const editId = e.target.dataset.edit;
