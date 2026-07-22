@@ -158,15 +158,38 @@ app.post('/api/license/validate', licenseLimiter, (req, res) => {
 
 /* مشروع تقييد صلاحيات kv_store حسب الدور — تدريجي وليس دفعة واحدة، لأن أغلب
    المفاتيح مُحمَّلة فعلياً من كل الأدوار عبر مسارات كود مشتركة (مثال: ملخص لوحة
-   التحكم المتاحة للاستقبال يعتمد على بيانات الخزنة رغم أن تبويب "الخزنة" نفسه
-   محجوب عنهم). كل مفتاح يُضاف هنا فقط بعد التأكد أنه لا يُقرأ فعلياً من أي مسار
-   متاح لغير admin (تم فحص هذا لمفتاح users أدناه: نظام دخول داخلي قديم استُبدل
-   بالكامل بحسابات الخادم، ولا يُقرأ الآن من أي شاشة أو حساب فعلي). */
-const ADMIN_ONLY_STORAGE_KEYS = new Set(['users']);
+   التحكم المتاحة للاستقبال كان يعتمد على بيانات الخزنة رغم أن تبويب "الخزنة"
+   نفسه محجوب عنهم — تم فصل هذا في الواجهة، راجع renderCfoDashboard). كل مفتاح
+   يُضاف هنا فقط بعد فحص فعلي (grep شامل على كل دوال render في app-inline.js)
+   يتأكد أنه غير مُستخدَم من أي شاشة متاحة للأدوار الممنوعة منه.
+
+   مطابقة تماماً لنفس ROLE_PERMISSIONS/RESTRICTED_STAFF_VIEWS في app-inline.js —
+   يجب تحديث الاثنين معاً لو تغيّرت صلاحيات الأدوار مستقبلاً. */
+const ROLE_PERMISSIONS = {
+  admin: null,
+  staff: null,
+  accountant: ['dashboard', 'clients', 'vault', 'accounting', 'budget', 'reports', 'purchases', 'companies'],
+  reception: ['dashboard', 'clients', 'courses', 'courseinvoices', 'bags'],
+};
+const RESTRICTED_STAFF_VIEWS = ['settings', 'audit', 'accounting', 'zatca', 'budget'];
+function roleCanAccessView(role, view) {
+  if (role === 'admin') return true;
+  const allow = ROLE_PERMISSIONS[role];
+  if (allow) return allow.includes(view);
+  return !RESTRICTED_STAFF_VIEWS.includes(view); // staff (أو أي دور غير معروف): كل شيء ما عدا القائمة المحظورة
+}
+// key -> null: مقصور على admin دائماً (بلا علاقة بأي "شاشة"، مثال: users نظام قديم).
+// key -> اسم شاشة: يُطبَّق عليه roleCanAccessView بنفس منطق الواجهة.
+const RESTRICTED_STORAGE_KEYS = {
+  users: null,
+  companyTransfers: 'companies',
+};
 function restrictKeyToAdmin(req, res, next) {
-  if (ADMIN_ONLY_STORAGE_KEYS.has(req.params.key) && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'ليست لديك صلاحية كافية للوصول لهذه البيانات' });
-  }
+  const key = req.params.key;
+  if (!(key in RESTRICTED_STORAGE_KEYS)) return next();
+  const view = RESTRICTED_STORAGE_KEYS[key];
+  const allowed = view === null ? req.user.role === 'admin' : roleCanAccessView(req.user.role, view);
+  if (!allowed) return res.status(403).json({ error: 'ليست لديك صلاحية كافية للوصول لهذه البيانات' });
   next();
 }
 
