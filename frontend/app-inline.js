@@ -4023,16 +4023,16 @@ function renderCourseInvoices(){
     const diffColor = diff===null ? '' : (Math.abs(diff)<0.01 ? 'teal' : 'red');
     return `
     <tr>
-      <td>${escapeHtml(c.name||'')}</td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td>${escapeHtml(c.courseType||'')}</td>
-      <td class="mono">${escapeHtml(c.invoice||'—')}</td>
-      <td><input type="date" class="mono" data-ci-date="${c.id}" value="${c.receiptIssueDate||''}" style="min-width:140px;"></td>
-      <td><input type="number" step="0.01" class="mono" data-ci-value="${c.id}" value="${c.receiptActualValue!==undefined && c.receiptActualValue!==null && c.receiptActualValue!=='' ? c.receiptActualValue : ''}" placeholder="القيمة من الإيصال" style="min-width:130px;"></td>
-      <td class="mono">${hasValue ? fmt(vat) : '—'}</td>
-      <td class="mono">${fmt(sys)}</td>
-      <td class="mono">${actualNoVat===null ? '—' : fmt(actualNoVat)}</td>
-      <td class="mono ${diffColor}">${diffLabel}</td>
+      <td data-label="العميل">${escapeHtml(c.name||'')}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td data-label="تاريخ الصدور"><input type="date" class="mono" data-ci-date="${c.id}" value="${c.receiptIssueDate||''}" style="min-width:140px;"></td>
+      <td data-label="القيمة الفعلية"><input type="number" step="0.01" class="mono" data-ci-value="${c.id}" value="${c.receiptActualValue!==undefined && c.receiptActualValue!==null && c.receiptActualValue!=='' ? c.receiptActualValue : ''}" placeholder="القيمة من الإيصال" style="min-width:130px;"></td>
+      <td class="mono" data-label="الضريبة">${hasValue ? fmt(vat) : '—'}</td>
+      <td class="mono" data-label="قيمة النظام">${fmt(sys)}</td>
+      <td class="mono" data-label="بدون ضريبة">${actualNoVat===null ? '—' : fmt(actualNoVat)}</td>
+      <td class="mono ${diffColor}" data-label="الفرق">${diffLabel}</td>
     </tr>`;
   }).join('') : `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد فواتير دورات مطابقة — تأكد من إدخال "رقم الفاتورة" لكل عميل في شيت العملاء أولاً</td></tr>`;
 }
@@ -5269,19 +5269,19 @@ function renderBags(){
     pendingBagsSearchTerm
   ]);
   $('#pending-bags-table').innerHTML = pendingBuyFiltered.length ? `
-    <div class="table-scroll">
+    <div class="table-scroll cards-mobile">
     <table>
       <thead><tr><th>العميل</th><th>رقم الهوية</th><th>رقم الهاتف</th><th>الرقم المرجعي</th><th>الدورة</th><th>تاريخ التسجيل</th><th>قيمة الحقيبة</th><th></th></tr></thead>
       <tbody>${pendingBagsPageRows.map(c=>`
         <tr>
-          <td>${escapeHtml(c.name)}</td>
-          <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-          <td class="mono">${escapeHtml(c.phone||'—')}</td>
-          <td class="mono">${escapeHtml(c.referNum||'—')}</td>
-          <td>${escapeHtml(c.courseType||'')}</td>
-          <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
-          <td class="mono">${fmt(num(c.bagPrice))}</td>
-          <td style="white-space:nowrap;">
+          <td data-label="العميل">${escapeHtml(c.name)}</td>
+          <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+          <td class="mono" data-label="رقم الهاتف">${escapeHtml(c.phone||'—')}</td>
+          <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
+          <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+          <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
+          <td class="mono" data-label="قيمة الحقيبة">${fmt(num(c.bagPrice))}</td>
+          <td class="card-full" data-label="" style="white-space:nowrap;">
             <button class="btn btn-ghost btn-sm" data-fromstock="${c.id}">تسليم من المخزون</button>
           </td>
         </tr>`).join('')}</tbody>
@@ -5303,14 +5303,14 @@ function renderBags(){
     const amountDisplay = b.amount!==undefined ? fmt(num(b.amount)) : fmt(num(b.qty)*num(b.unitPrice));
     return `
     <tr>
-      <td class="mono">${b.date||'—'}</td>
-      <td class="${typeColor}">${typeLabel}</td>
-      <td class="mono">${amountDisplay}</td>
-      <td class="mono ${num(b.qty)<0?'red':''}">${qtyDisplay}</td>
-      <td class="mono">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
-      <td>${escapeHtml(b.method||'')}</td>
-      <td>${escapeHtml(b.notes||'')}</td>
-      <td style="white-space:nowrap;">
+      <td class="mono" data-label="التاريخ">${b.date||'—'}</td>
+      <td class="${typeColor}" data-label="النوع">${typeLabel}</td>
+      <td class="mono" data-label="المبلغ">${amountDisplay}</td>
+      <td class="mono ${num(b.qty)<0?'red':''}" data-label="الكمية">${qtyDisplay}</td>
+      <td class="mono" data-label="الرصيد بعدها">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
+      <td data-label="طريقة الدفع">${escapeHtml(b.method||'')}</td>
+      <td data-label="ملاحظات">${escapeHtml(b.notes||'')}</td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
         ${b.type && b.type!=='issue' ? `<button class="btn btn-ghost btn-sm" data-editstock="${b.id}">${tr('edit')}</button>` : ''}
         <button class="btn btn-danger btn-sm" data-delstock="${b.id}">${tr('delete')}</button>
       </td>
@@ -9510,18 +9510,18 @@ function renderCourses(){
           <button class="btn btn-gold btn-sm" data-print-attendance="${escapeHtml(s.courseNumber)}">${tr('printAttendance')}</button>
         </div>
       </div>
-      <div class="table-scroll table-scroll-course">
+      <div class="table-scroll table-scroll-course cards-mobile">
       <table>
         <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>الحالة</th><th>حالة الحقيبة</th><th></th></tr></thead>
         <tbody>
           ${enrolled.length ? enrolled.map(c=>`
             <tr${c.cancelled?' style="opacity:.5;"':''}>
-              <td>${escapeHtml(c.name)}</td>
-              <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-              <td>${escapeHtml(c.nationality||'')}</td>
-              <td>${c.cancelled ? '<span class="stamp owe">ملغى</span>' : (c.absent ? '<span class="stamp owe">غياب</span>' : '<span class="stamp paid">مسجّل</span>')}</td>
-              <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
-              <td style="white-space:nowrap;">
+              <td data-label="الاسم">${escapeHtml(c.name)}</td>
+              <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+              <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+              <td data-label="الحالة">${c.cancelled ? '<span class="stamp owe">ملغى</span>' : (c.absent ? '<span class="stamp owe">غياب</span>' : '<span class="stamp paid">مسجّل</span>')}</td>
+              <td data-label="حالة الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
+              <td class="card-full" data-label="" style="white-space:nowrap;">
                 ${!c.cancelled && !c.absent ? `<button class="btn btn-danger btn-sm" data-mark-absent="${c.id}">${tr('markAbsent')}</button>` : ''}
                 ${c.absent ? `<button class="btn btn-ghost btn-sm" data-clear-absent="${c.id}">${tr('clearAbsent')}</button>` : ''}
               </td>
@@ -11146,12 +11146,12 @@ function renderCompanies(){
     const transfers = transfersByCompanyId.get(c.id) || [];
     const totalAmount = transfers.reduce((s,t)=>s+num(t.amount),0);
     return `<tr>
-      <td>${escapeHtml(c.name)}</td>
-      <td class="mono">${escapeHtml(c.taxNumber||'—')}</td>
-      <td class="mono">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
-      <td class="mono">${transfers.length}</td>
-      <td class="mono">${fmt(totalAmount)}</td>
-      <td>
+      <td data-label="اسم الشركة">${escapeHtml(c.name)}</td>
+      <td class="mono" data-label="الرقم الضريبي">${escapeHtml(c.taxNumber||'—')}</td>
+      <td class="mono" data-label="المبلغ المتفق">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
+      <td class="mono" data-label="عدد الحوالات">${transfers.length}</td>
+      <td class="mono" data-label="إجمالي الحوالات">${fmt(totalAmount)}</td>
+      <td class="card-full" data-label="">
         <button class="btn btn-gold btn-sm" data-printcompany="${c.id}">🖨️ كشف حساب PDF</button>
         <button class="btn btn-ghost btn-sm" data-importcompanytrainees="${c.id}">📥 استيراد متدربين (كل الحوالات)</button>
         <button class="btn btn-ghost btn-sm" data-editcompany="${c.id}">تعديل</button>
@@ -11189,27 +11189,27 @@ function renderCompanies(){
     const share = num(t.traineeCount)>0 ? num(t.amount)/num(t.traineeCount) : 0;
     const matchedTrainees = transferMatchingTrainees(t);
     const traineesHtml = matchedTrainees.length ? `
-      <div class="table-scroll table-scroll-compact">
+      <div class="table-scroll table-scroll-compact cards-mobile">
       <table style="margin-top:8px;">
         <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>رقم الفاتورة</th><th>حالة الحقيبة</th><th>تاريخ الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th><th></th></tr></thead>
         <tbody>
           ${matchedTrainees.map(tr=>{
             const c = clients.find(x=>x.clientId===tr.clientId);
             return `<tr>
-              <td class="mono">${escapeHtml(tr.clientId)}</td>
-              <td>${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
-              <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
-              <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
-              <td>${escapeHtml(c?(c.courseType||'—'):'—')}</td>
-              <td class="mono">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
-              <td class="mono">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
-              <td>${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
-              <td class="mono">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
-              <td class="mono">${fmt(num(tr.courseValue))}</td>
-              <td class="mono">${fmt(num(tr.bagValue))}</td>
-              <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td>${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
-              <td>
+              <td class="mono" data-label="رقم الهوية">${escapeHtml(tr.clientId)}</td>
+              <td data-label="الاسم">${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
+              <td class="mono" data-label="الجوال">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+              <td data-label="الجنسية">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+              <td data-label="نوع الدورة">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+              <td class="mono" data-label="رقم الدورة">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+              <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
+              <td data-label="حالة الحقيبة">${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
+              <td class="mono" data-label="تاريخ الدورة">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
+              <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
+              <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
+              <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
+              <td data-label="حالة الترحيل">${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
+              <td class="card-full" data-label="">
                 <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
                 <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
               </td>
