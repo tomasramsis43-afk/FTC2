@@ -183,6 +183,17 @@ function roleCanAccessView(role, view) {
 const RESTRICTED_STORAGE_KEYS = {
   users: null,
   companyTransfers: 'companies',
+  // تحقّقتُ عبر فحص كل دالة render تستخدم كل مفتاح من هذه: كلها مقصورة فعلياً
+  // على شاشتها (لا تُستخدم إطلاقاً من أي شاشة متاحة لـ'استقبال'، وهو الدور
+  // الوحيد الأضيق صلاحية هنا؛ منطق roleCanAccessView يغطي 'موظف عام' تلقائياً
+  // عبر RESTRICTED_STAFF_VIEWS بما يطابق الواجهة تماماً).
+  journalEntries: 'accounting',
+  chartOfAccounts: 'accounting',
+  journalDE: 'accounting',
+  manualSalesInvoices: 'accounting',
+  budgetEntries: 'budget',
+  suppliers: 'purchases',
+  zakatAdjustments: 'zatca',
 };
 function restrictKeyToAdmin(req, res, next) {
   const key = req.params.key;
