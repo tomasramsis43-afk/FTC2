@@ -7384,11 +7384,11 @@ function renderAuditLog(){
   ]);
   $('#audit-table-body').innerHTML = pageRows.map(a=>`
     <tr>
-      <td class="mono">${fmtDateTime(a.ts)}</td>
-      <td>${escapeHtml(a.user)}</td>
-      <td>${escapeHtml(a.section)}</td>
-      <td><span class="stamp ${a.action==='delete'?'owe':'paid'}">${actionLabel(a.action)}</span></td>
-      <td>${escapeHtml(a.description)}</td>
+      <td class="mono" data-label="التاريخ والوقت">${fmtDateTime(a.ts)}</td>
+      <td data-label="المستخدم">${escapeHtml(a.user)}</td>
+      <td data-label="الشيت">${escapeHtml(a.section)}</td>
+      <td data-label="العملية"><span class="stamp ${a.action==='delete'?'owe':'paid'}">${actionLabel(a.action)}</span></td>
+      <td data-label="التفاصيل" class="card-full">${escapeHtml(a.description)}</td>
     </tr>`).join('');
 }
 bindGenericPagination('audit', auditPageState, renderAuditLog);
@@ -12281,12 +12281,12 @@ function renderSuppliersTable(){
   const rows = suppliers.filter(s=> !q || (s.name||'').toLowerCase().includes(q) || (s.phone||'').includes(q));
   body.innerHTML = rows.map(s=>`
     <tr>
-      <td>${escapeHtml(s.name)}</td>
-      <td class="mono">${escapeHtml(s.phone||'—')}</td>
-      <td>${escapeHtml(s.category||'—')}</td>
-      <td class="mono">${fmt(totals[s.id]||0)} ﷼</td>
-      <td>${escapeHtml(s.notes||'—')}</td>
-      <td>
+      <td data-label="اسم المورد">${escapeHtml(s.name)}</td>
+      <td class="mono" data-label="الجوال">${escapeHtml(s.phone||'—')}</td>
+      <td data-label="التصنيف">${escapeHtml(s.category||'—')}</td>
+      <td class="mono" data-label="إجمالي المشتريات">${fmt(totals[s.id]||0)} ﷼</td>
+      <td data-label="ملاحظات">${escapeHtml(s.notes||'—')}</td>
+      <td class="card-full" data-label="">
         <button class="btn btn-ghost btn-sm" data-edit-supplier="${s.id}">تعديل</button>
         <button class="btn btn-danger btn-sm" data-del-supplier="${s.id}">حذف</button>
       </td>
@@ -12305,15 +12305,15 @@ function renderPurchasesTable(){
   const rows = purchases.filter(purchaseMatchesFilters).sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
   body.innerHTML = rows.map(p=>`
     <tr>
-      <td class="mono">${escapeHtml(p.date||'—')}</td>
-      <td>${escapeHtml(p.supplierName||'—')}</td>
-      <td class="mono">${escapeHtml(p.invoiceNo||'—')}</td>
-      <td>${p.attachment ? `<button class="btn btn-ghost btn-sm" data-view-attachment="${p.id}">📎 عرض</button>` : `<span style="color:var(--text-muted); font-size:12px;">—</span>`}</td>
-      <td><button class="btn btn-ghost btn-sm" data-view-items="${p.id}">عرض (${(p.items||[]).length})</button></td>
-      <td class="mono">${fmt(num(p.total))} ﷼</td>
-      <td>${escapeHtml(p.method||'—')}</td>
-      <td><span class="stamp ${p.status==='paid'?'paid':'owe'}">${p.status==='paid'?'مدفوعة':'غير مدفوعة'}</span></td>
-      <td>
+      <td class="mono" data-label="التاريخ">${escapeHtml(p.date||'—')}</td>
+      <td data-label="المورد">${escapeHtml(p.supplierName||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(p.invoiceNo||'—')}</td>
+      <td data-label="المرفق">${p.attachment ? `<button class="btn btn-ghost btn-sm" data-view-attachment="${p.id}">📎 عرض</button>` : `<span style="color:var(--text-muted); font-size:12px;">—</span>`}</td>
+      <td data-label="الأصناف"><button class="btn btn-ghost btn-sm" data-view-items="${p.id}">عرض (${(p.items||[]).length})</button></td>
+      <td class="mono" data-label="الإجمالي">${fmt(num(p.total))} ﷼</td>
+      <td data-label="طريقة الدفع">${escapeHtml(p.method||'—')}</td>
+      <td data-label="الحالة"><span class="stamp ${p.status==='paid'?'paid':'owe'}">${p.status==='paid'?'مدفوعة':'غير مدفوعة'}</span></td>
+      <td class="card-full" data-label="">
         <button class="btn btn-ghost btn-sm" data-edit-purchase="${p.id}">تعديل</button>
         <button class="btn btn-danger btn-sm" data-del-purchase="${p.id}">حذف</button>
       </td>
