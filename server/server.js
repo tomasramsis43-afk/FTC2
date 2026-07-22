@@ -210,11 +210,21 @@ function restrictKeyToAdmin(req, res, next) {
 }
 
 // GET /api/storage/:key  -> { key, value, version }
+// يدعم If-None-Match: لو الجهاز عنده نفس النسخة (version) بالفعل، نرد 304 بدون
+// إعادة إرسال القيمة كاملة (ممكن تكون مئات الكيلوبايتات لمفاتيح زي قوائم العملاء
+// أو حركات الخزنة)، فنوفر نقل البيانات في كل مرة يفتح فيها المستخدم البرنامج
+// ولم يتغيّر شيء منذ آخر زيارة.
 app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   try {
     const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
     if (!r.rows[0]) return res.json({ key: req.params.key, value: null, version: 0 });
-    res.json({ key: req.params.key, value: r.rows[0].value, version: r.rows[0].version });
+    const { value, version } = r.rows[0];
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (ifNoneMatch && Number(ifNoneMatch) === version) {
+      return res.status(304).end();
+    }
+    res.setHeader('ETag', String(version));
+    res.json({ key: req.params.key, value, version });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّرت قراءة البيانات' });
