@@ -2468,7 +2468,7 @@ function filteredClients(){
   const paidMaxRaw = $('#cl-paid-max').value;
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
-  return clients.filter(c=>{
+  const rows = clients.filter(c=>{
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
     if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
@@ -2493,7 +2493,44 @@ function filteredClients(){
     }
     return true;
   }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+  return applyClientsColumnSort(rows);
 }
+/* ---------------- ترتيب بالنقر على رأس العمود (جدول العملاء) ----------------
+   يُطبَّق فوق الترتيب الافتراضي (بالتاريخ) وليس بديلاً عنه — إن لم يختر المستخدم
+   عموداً بعد، تبقى النتائج كما كانت دائماً (بالتاريخ الأحدث أولاً). */
+let clientsSortState = { key: null, dir: 1 };
+const CLIENT_SORT_GETTERS = {
+  name: c => (c.name||'').toLowerCase(),
+  clientId: c => (c.clientId||'').toLowerCase(),
+  referNum: c => (c.referNum||'').toLowerCase(),
+  nationality: c => (c.nationality||'').toLowerCase(),
+  courseType: c => (c.courseType||'').toLowerCase(),
+  courseNumber: c => (c.courseNumber||'').toLowerCase(),
+  invoice: c => (c.invoice||'').toLowerCase(),
+  date: c => c.date || '',
+  total: c => total(c),
+  paid: c => paidTotal(c),
+  remaining: c => remaining(c),
+};
+function applyClientsColumnSort(rows){
+  const getter = clientsSortState.key && CLIENT_SORT_GETTERS[clientsSortState.key];
+  if(!getter) return rows;
+  return [...rows].sort((a,b)=>{
+    const va = getter(a), vb = getter(b);
+    if(typeof va === 'number' && typeof vb === 'number') return (va-vb)*clientsSortState.dir;
+    return String(va).localeCompare(String(vb),'ar') * clientsSortState.dir;
+  });
+}
+document.querySelectorAll('#view-clients thead th.sortable').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.sort;
+    if(clientsSortState.key === key){ clientsSortState.dir *= -1; }
+    else{ clientsSortState.key = key; clientsSortState.dir = 1; }
+    document.querySelectorAll('#view-clients thead th.sortable').forEach(t=>t.setAttribute('aria-sort','none'));
+    th.setAttribute('aria-sort', clientsSortState.dir===1 ? 'ascending' : 'descending');
+    renderTable();
+  });
+});
 let tableCurrentPage = 1;
 let tableLastFilterSig = '';
 let showSuspendedOnly = false;
@@ -2597,28 +2634,33 @@ function renderTable(){
     const rem = remaining(c);
     const nameBadges = `${escapeHtml(c.name)}${phoneWithWhatsapp(c.phone)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
     return `<tr${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
-      <td><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td>${nameBadges}</td>
-      <td class="mono">${escapeHtml(c.referNum||'—')}</td>
-      <td>${escapeHtml(c.nationality||'')}</td>
-      <td>${escapeHtml(c.courseType||'')}</td>
-      <td class="mono">${escapeHtml(c.courseNumber||'—')}</td>
-      <td class="mono">${escapeHtml(c.invoice||'—')}</td>
-      <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
-      <td class="mono">${fmt(total(c))}</td>
-      <td class="mono">${fmt(paidTotal(c))}</td>
-      <td class="mono">${fmt(rem)}</td>
-      <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
-      <td><span class="stamp ${rem>0?'owe':'paid'}">${escapeHtml(paymentChannelsLabel(c))}</span></td>
-      <td style="white-space:nowrap;">
-        <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-        ${c.taxInvoiceNo ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
-        <button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>
-        ${c.suspended
-          ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
-          : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
-        <button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>
+      <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
+      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="رقم الدورة">${escapeHtml(c.courseNumber||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
+      <td class="mono" data-label="الإجمالي">${fmt(total(c))}</td>
+      <td class="mono" data-label="المدفوع">${fmt(paidTotal(c))}</td>
+      <td class="mono" data-label="المتبقي"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
+      <td data-label="الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
+      <td data-label="طريقة الدفع"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
+        <div class="row-menu">
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="row-menu-panel" role="menu">
+            <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
+            ${c.taxInvoiceNo ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
+            <button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>
+            ${c.suspended
+              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
+              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
+            <button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>
+          </div>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -2861,6 +2903,41 @@ $('#cl-date-to').addEventListener('input', renderTable);
 $('#cl-paid-min').addEventListener('input', renderTable);
 $('#cl-paid-max').addEventListener('input', renderTable);
 
+/* ---------------- طي/توسيع الفلاتر المتقدمة (جدول العملاء) ----------------
+   الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
+   معالجات renderTable المرتبطة بها أعلاه — فقط نُخفي/نُظهر الحاوية الأم، ونضيف
+   عدّاداً صغيراً يوضّح كم فلتراً متقدماً مفعّلاً حالياً حتى لو كانت القائمة مطوية. */
+const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
+function updateAdvancedFiltersBadge(){
+  const badge = $('#advanced-filters-count');
+  if(!badge) return;
+  const activeCount = ADVANCED_FILTER_IDS.filter(id=>{ const el=document.getElementById(id); return el && el.value; }).length;
+  badge.textContent = activeCount;
+  badge.style.display = activeCount ? '' : 'none';
+}
+$('#btn-toggle-advanced-filters')?.addEventListener('click', ()=>{
+  const panel = $('#advanced-filters-panel');
+  const btn = $('#btn-toggle-advanced-filters');
+  if(!panel || !btn) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  btn.setAttribute('aria-expanded', String(!isOpen));
+});
+$('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
+  ADVANCED_FILTER_IDS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+  });
+  updateAdvancedFiltersBadge();
+  renderTable();
+});
+ADVANCED_FILTER_IDS.forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', updateAdvancedFiltersBadge);
+});
+updateAdvancedFiltersBadge();
+
 $('#table-body').addEventListener('click', async e=>{
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
@@ -2935,6 +3012,63 @@ $('#table-body').addEventListener('click', async e=>{
     }
   }
 });
+
+/* ---------------- قائمة إجراءات الصف (⋮) في جدول العملاء ----------------
+   نستخدم position:fixed مع حساب الموضع عبر JS بدل position:absolute العادي،
+   لأن الجدول داخل .table-scroll (overflow:auto) وأي قائمة absolute كانت
+   ستُقطَع عند حواف منطقة التمرير المرئية. هذا لا يغيّر أي منطق للأزرار نفسها —
+   فقط يُخفيها داخل قائمة منسدلة، فتبقى معالجة النقر الأصلية (data-edit، data-del...)
+   أعلاه تعمل تماماً كما كانت دون أي تعديل. */
+let openRowMenuPanel = null;
+function closeRowMenu(){
+  if(openRowMenuPanel){
+    openRowMenuPanel.classList.remove('show');
+    const toggle = openRowMenuPanel.previousElementSibling;
+    if(toggle) toggle.setAttribute('aria-expanded','false');
+    openRowMenuPanel = null;
+  }
+}
+$('#table-body').addEventListener('click', e=>{
+  const toggle = e.target.closest('.row-menu-toggle');
+  if(!toggle) return;
+  e.stopPropagation();
+  const panel = toggle.nextElementSibling;
+  if(!panel) return;
+  if(openRowMenuPanel === panel){ closeRowMenu(); return; }
+  closeRowMenu();
+  const r = toggle.getBoundingClientRect();
+  // نقيس أبعاد القائمة الحقيقية أولاً وهي مخفية (visibility:hidden لا تؤثر على القياس
+  // خلافاً لـ display:none)، بدل تقدير المكان ثم تصحيحه بعد الظهور — كان هذا يسبب
+  // ظهور القائمة متراكبة فوق صف خاطئ أو مقطوعة الأزرار في الصفوف القريبة من أعلى الجدول.
+  panel.style.visibility = 'hidden';
+  panel.style.top = '0px';
+  panel.style.left = '0px';
+  panel.classList.add('show');
+  const pw = panel.offsetWidth || 180;
+  const ph = panel.offsetHeight || 160;
+  const spaceBelow = window.innerHeight - r.bottom;
+  const spaceAbove = r.top;
+  const openUp = spaceBelow < (ph + 12) && spaceAbove > spaceBelow;
+  const top = openUp
+    ? Math.max(8, r.top - ph - 4)
+    : Math.min(r.bottom + 4, window.innerHeight - ph - 8);
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+  panel.style.top = Math.max(8, top) + 'px';
+  panel.style.left = left + 'px';
+  panel.style.visibility = '';
+  toggle.setAttribute('aria-expanded','true');
+  openRowMenuPanel = panel;
+});
+// إغلاق القائمة المفتوحة عند اختيار أي إجراء من داخلها، أو عند أي نقر خارجها،
+// أو عند التمرير/تصغير النافذة/الضغط على Esc.
+document.addEventListener('click', e=>{
+  if(!openRowMenuPanel) return;
+  if(e.target.closest('.row-menu-toggle')) return;
+  closeRowMenu();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeRowMenu(); });
+window.addEventListener('scroll', closeRowMenu, true);
+window.addEventListener('resize', closeRowMenu);
 
 /* ---------------- Modal / form ---------------- */
 function openModal(id){
@@ -3860,16 +3994,16 @@ function renderCourseInvoices(){
     const diffColor = diff===null ? '' : (Math.abs(diff)<0.01 ? 'teal' : 'red');
     return `
     <tr>
-      <td>${escapeHtml(c.name||'')}</td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td>${escapeHtml(c.courseType||'')}</td>
-      <td class="mono">${escapeHtml(c.invoice||'—')}</td>
-      <td><input type="date" class="mono" data-ci-date="${c.id}" value="${c.receiptIssueDate||''}" style="min-width:140px;"></td>
-      <td><input type="number" step="0.01" class="mono" data-ci-value="${c.id}" value="${c.receiptActualValue!==undefined && c.receiptActualValue!==null && c.receiptActualValue!=='' ? c.receiptActualValue : ''}" placeholder="القيمة من الإيصال" style="min-width:130px;"></td>
-      <td class="mono">${hasValue ? fmt(vat) : '—'}</td>
-      <td class="mono">${fmt(sys)}</td>
-      <td class="mono">${actualNoVat===null ? '—' : fmt(actualNoVat)}</td>
-      <td class="mono ${diffColor}">${diffLabel}</td>
+      <td data-label="العميل">${escapeHtml(c.name||'')}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td data-label="تاريخ الصدور"><input type="date" class="mono" data-ci-date="${c.id}" value="${c.receiptIssueDate||''}" style="min-width:140px;"></td>
+      <td data-label="القيمة الفعلية"><input type="number" step="0.01" class="mono" data-ci-value="${c.id}" value="${c.receiptActualValue!==undefined && c.receiptActualValue!==null && c.receiptActualValue!=='' ? c.receiptActualValue : ''}" placeholder="القيمة من الإيصال" style="min-width:130px;"></td>
+      <td class="mono" data-label="الضريبة">${hasValue ? fmt(vat) : '—'}</td>
+      <td class="mono" data-label="قيمة النظام">${fmt(sys)}</td>
+      <td class="mono" data-label="بدون ضريبة">${actualNoVat===null ? '—' : fmt(actualNoVat)}</td>
+      <td class="mono ${diffColor}" data-label="الفرق">${diffLabel}</td>
     </tr>`;
   }).join('') : `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد فواتير دورات مطابقة — تأكد من إدخال "رقم الفاتورة" لكل عميل في شيت العملاء أولاً</td></tr>`;
 }
@@ -5106,19 +5240,19 @@ function renderBags(){
     pendingBagsSearchTerm
   ]);
   $('#pending-bags-table').innerHTML = pendingBuyFiltered.length ? `
-    <div class="table-scroll">
+    <div class="table-scroll cards-mobile">
     <table>
       <thead><tr><th>العميل</th><th>رقم الهوية</th><th>رقم الهاتف</th><th>الرقم المرجعي</th><th>الدورة</th><th>تاريخ التسجيل</th><th>قيمة الحقيبة</th><th></th></tr></thead>
       <tbody>${pendingBagsPageRows.map(c=>`
         <tr>
-          <td>${escapeHtml(c.name)}</td>
-          <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-          <td class="mono">${escapeHtml(c.phone||'—')}</td>
-          <td class="mono">${escapeHtml(c.referNum||'—')}</td>
-          <td>${escapeHtml(c.courseType||'')}</td>
-          <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
-          <td class="mono">${fmt(num(c.bagPrice))}</td>
-          <td style="white-space:nowrap;">
+          <td data-label="العميل">${escapeHtml(c.name)}</td>
+          <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+          <td class="mono" data-label="رقم الهاتف">${escapeHtml(c.phone||'—')}</td>
+          <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
+          <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+          <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
+          <td class="mono" data-label="قيمة الحقيبة">${fmt(num(c.bagPrice))}</td>
+          <td class="card-full" data-label="" style="white-space:nowrap;">
             <button class="btn btn-ghost btn-sm" data-fromstock="${c.id}">تسليم من المخزون</button>
           </td>
         </tr>`).join('')}</tbody>
@@ -5140,14 +5274,14 @@ function renderBags(){
     const amountDisplay = b.amount!==undefined ? fmt(num(b.amount)) : fmt(num(b.qty)*num(b.unitPrice));
     return `
     <tr>
-      <td class="mono">${b.date||'—'}</td>
-      <td class="${typeColor}">${typeLabel}</td>
-      <td class="mono">${amountDisplay}</td>
-      <td class="mono ${num(b.qty)<0?'red':''}">${qtyDisplay}</td>
-      <td class="mono">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
-      <td>${escapeHtml(b.method||'')}</td>
-      <td>${escapeHtml(b.notes||'')}</td>
-      <td style="white-space:nowrap;">
+      <td class="mono" data-label="التاريخ">${b.date||'—'}</td>
+      <td class="${typeColor}" data-label="النوع">${typeLabel}</td>
+      <td class="mono" data-label="المبلغ">${amountDisplay}</td>
+      <td class="mono ${num(b.qty)<0?'red':''}" data-label="الكمية">${qtyDisplay}</td>
+      <td class="mono" data-label="الرصيد بعدها">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
+      <td data-label="طريقة الدفع">${escapeHtml(b.method||'')}</td>
+      <td data-label="ملاحظات">${escapeHtml(b.notes||'')}</td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
         ${b.type && b.type!=='issue' ? `<button class="btn btn-ghost btn-sm" data-editstock="${b.id}">${tr('edit')}</button>` : ''}
         <button class="btn btn-danger btn-sm" data-delstock="${b.id}">${tr('delete')}</button>
       </td>
@@ -6378,20 +6512,20 @@ function renderVault(){
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
     return `
     <tr ${isDup?'style="background:rgba(180,72,58,.08);"':''}>
-      <td><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
-      <td class="mono" style="font-weight:700;">#${t.seq||'—'}</td>
-      <td class="mono">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
-      <td class="mono">${t.date||'—'}</td>
-      <td><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
-      <td><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
-      <td class="mono"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
-      <td>${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
-      <td>${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
-      <td>${escapeHtml(t.method||'')}</td>
-      <td class="mono">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono">${fmt(num(t.amount))}</td>
-      <td>${escapeHtml(t.notes||'')}</td>
-      <td style="white-space:nowrap;">
+      <td data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
+      <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
+      <td class="mono" data-label="الرقم">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
+      <td class="mono" data-label="التاريخ">${t.date||'—'}</td>
+      <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
+      <td data-label="النوع"><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
+      <td class="mono" data-label="رقم الهوية"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
+      <td data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
+      <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
+      <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
+      <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
+      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
+      <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : `<button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>`}
         ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
         ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
@@ -9347,18 +9481,18 @@ function renderCourses(){
           <button class="btn btn-gold btn-sm" data-print-attendance="${escapeHtml(s.courseNumber)}">${tr('printAttendance')}</button>
         </div>
       </div>
-      <div class="table-scroll table-scroll-course">
+      <div class="table-scroll table-scroll-course cards-mobile">
       <table>
         <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>الحالة</th><th>حالة الحقيبة</th><th></th></tr></thead>
         <tbody>
           ${enrolled.length ? enrolled.map(c=>`
             <tr${c.cancelled?' style="opacity:.5;"':''}>
-              <td>${escapeHtml(c.name)}</td>
-              <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-              <td>${escapeHtml(c.nationality||'')}</td>
-              <td>${c.cancelled ? '<span class="stamp owe">ملغى</span>' : (c.absent ? '<span class="stamp owe">غياب</span>' : '<span class="stamp paid">مسجّل</span>')}</td>
-              <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
-              <td style="white-space:nowrap;">
+              <td data-label="الاسم">${escapeHtml(c.name)}</td>
+              <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+              <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+              <td data-label="الحالة">${c.cancelled ? '<span class="stamp owe">ملغى</span>' : (c.absent ? '<span class="stamp owe">غياب</span>' : '<span class="stamp paid">مسجّل</span>')}</td>
+              <td data-label="حالة الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
+              <td class="card-full" data-label="" style="white-space:nowrap;">
                 ${!c.cancelled && !c.absent ? `<button class="btn btn-danger btn-sm" data-mark-absent="${c.id}">${tr('markAbsent')}</button>` : ''}
                 ${c.absent ? `<button class="btn btn-ghost btn-sm" data-clear-absent="${c.id}">${tr('clearAbsent')}</button>` : ''}
               </td>
@@ -10983,12 +11117,12 @@ function renderCompanies(){
     const transfers = transfersByCompanyId.get(c.id) || [];
     const totalAmount = transfers.reduce((s,t)=>s+num(t.amount),0);
     return `<tr>
-      <td>${escapeHtml(c.name)}</td>
-      <td class="mono">${escapeHtml(c.taxNumber||'—')}</td>
-      <td class="mono">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
-      <td class="mono">${transfers.length}</td>
-      <td class="mono">${fmt(totalAmount)}</td>
-      <td>
+      <td data-label="اسم الشركة">${escapeHtml(c.name)}</td>
+      <td class="mono" data-label="الرقم الضريبي">${escapeHtml(c.taxNumber||'—')}</td>
+      <td class="mono" data-label="المبلغ المتفق">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
+      <td class="mono" data-label="عدد الحوالات">${transfers.length}</td>
+      <td class="mono" data-label="إجمالي الحوالات">${fmt(totalAmount)}</td>
+      <td class="card-full" data-label="">
         <button class="btn btn-gold btn-sm" data-printcompany="${c.id}">🖨️ كشف حساب PDF</button>
         <button class="btn btn-ghost btn-sm" data-importcompanytrainees="${c.id}">📥 استيراد متدربين (كل الحوالات)</button>
         <button class="btn btn-ghost btn-sm" data-editcompany="${c.id}">تعديل</button>
@@ -11026,27 +11160,27 @@ function renderCompanies(){
     const share = num(t.traineeCount)>0 ? num(t.amount)/num(t.traineeCount) : 0;
     const matchedTrainees = transferMatchingTrainees(t);
     const traineesHtml = matchedTrainees.length ? `
-      <div class="table-scroll table-scroll-compact">
+      <div class="table-scroll table-scroll-compact cards-mobile">
       <table style="margin-top:8px;">
         <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>رقم الفاتورة</th><th>حالة الحقيبة</th><th>تاريخ الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th><th></th></tr></thead>
         <tbody>
           ${matchedTrainees.map(tr=>{
             const c = clients.find(x=>x.clientId===tr.clientId);
             return `<tr>
-              <td class="mono">${escapeHtml(tr.clientId)}</td>
-              <td>${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
-              <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
-              <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
-              <td>${escapeHtml(c?(c.courseType||'—'):'—')}</td>
-              <td class="mono">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
-              <td class="mono">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
-              <td>${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
-              <td class="mono">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
-              <td class="mono">${fmt(num(tr.courseValue))}</td>
-              <td class="mono">${fmt(num(tr.bagValue))}</td>
-              <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td>${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
-              <td>
+              <td class="mono" data-label="رقم الهوية">${escapeHtml(tr.clientId)}</td>
+              <td data-label="الاسم">${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
+              <td class="mono" data-label="الجوال">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+              <td data-label="الجنسية">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+              <td data-label="نوع الدورة">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+              <td class="mono" data-label="رقم الدورة">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+              <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
+              <td data-label="حالة الحقيبة">${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
+              <td class="mono" data-label="تاريخ الدورة">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
+              <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
+              <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
+              <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
+              <td data-label="حالة الترحيل">${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
+              <td class="card-full" data-label="">
                 <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
                 <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
               </td>
