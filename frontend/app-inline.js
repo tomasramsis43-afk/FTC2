@@ -3066,22 +3066,27 @@ $('#table-body').addEventListener('click', e=>{
   if(openRowMenuPanel === panel){ closeRowMenu(); return; }
   closeRowMenu();
   const r = toggle.getBoundingClientRect();
-  const estWidth = 180; // تقدير أولي لعرض القائمة قبل قياسها فعلياً بعد الظهور
-  panel.style.top = Math.min(r.bottom + 4, window.innerHeight - 10) + 'px';
-  panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - estWidth - 8)) + 'px';
+  // نقيس أبعاد القائمة الحقيقية أولاً وهي مخفية (visibility:hidden لا تؤثر على القياس
+  // خلافاً لـ display:none)، بدل تقدير المكان ثم تصحيحه بعد الظهور — كان هذا يسبب
+  // ظهور القائمة متراكبة فوق صف خاطئ أو مقطوعة الأزرار في الصفوف القريبة من أعلى الجدول.
+  panel.style.visibility = 'hidden';
+  panel.style.top = '0px';
+  panel.style.left = '0px';
   panel.classList.add('show');
+  const pw = panel.offsetWidth || 180;
+  const ph = panel.offsetHeight || 160;
+  const spaceBelow = window.innerHeight - r.bottom;
+  const spaceAbove = r.top;
+  const openUp = spaceBelow < (ph + 12) && spaceAbove > spaceBelow;
+  const top = openUp
+    ? Math.max(8, r.top - ph - 4)
+    : Math.min(r.bottom + 4, window.innerHeight - ph - 8);
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+  panel.style.top = Math.max(8, top) + 'px';
+  panel.style.left = left + 'px';
+  panel.style.visibility = '';
   toggle.setAttribute('aria-expanded','true');
   openRowMenuPanel = panel;
-  requestAnimationFrame(()=>{
-    if(openRowMenuPanel !== panel) return;
-    const pr = panel.getBoundingClientRect();
-    if(pr.right > window.innerWidth - 8){
-      panel.style.left = Math.max(8, window.innerWidth - pr.width - 8) + 'px';
-    }
-    if(pr.bottom > window.innerHeight - 8){
-      panel.style.top = Math.max(8, r.top - pr.height - 4) + 'px'; // نفتح لأعلى إن لم تتسع المساحة أسفل الزر
-    }
-  });
 });
 // إغلاق القائمة المفتوحة عند اختيار أي إجراء من داخلها، أو عند أي نقر خارجها،
 // أو عند التمرير/تصغير النافذة/الضغط على Esc.
