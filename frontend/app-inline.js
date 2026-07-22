@@ -6541,20 +6541,20 @@ function renderVault(){
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
     return `
     <tr ${isDup?'style="background:rgba(180,72,58,.08);"':''}>
-      <td><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
-      <td class="mono" style="font-weight:700;">#${t.seq||'—'}</td>
-      <td class="mono">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
-      <td class="mono">${t.date||'—'}</td>
-      <td><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
-      <td><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
-      <td class="mono"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
-      <td>${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
-      <td>${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
-      <td>${escapeHtml(t.method||'')}</td>
-      <td class="mono">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono">${fmt(num(t.amount))}</td>
-      <td>${escapeHtml(t.notes||'')}</td>
-      <td style="white-space:nowrap;">
+      <td data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
+      <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
+      <td class="mono" data-label="الرقم">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
+      <td class="mono" data-label="التاريخ">${t.date||'—'}</td>
+      <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
+      <td data-label="النوع"><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
+      <td class="mono" data-label="رقم الهوية"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
+      <td data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
+      <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
+      <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
+      <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
+      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
+      <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : `<button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>`}
         ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
         ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
