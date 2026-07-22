@@ -363,6 +363,37 @@
   .sticky-col-1{right:0;}
   .sticky-col-2{right:34px; min-width:130px; border-left:1.5px solid var(--border);}
   @media(max-width:600px){ .table-scroll .sticky-col{position:static;} } /* على الموبايل التمرير الأفقي أقل إزعاجاً وتثبيت الأعمدة قد يضيّق المساحة */
+
+  /* ---------- وضع "البطاقات" العام على الموبايل (بديل للجدول العريض) ----------
+     يُفعَّل بإضافة كلاس cards-mobile على .table-scroll. كل <tr> يصير بطاقة عمودية،
+     وكل <td> يحتاج data-label="اسم العمود" ليظهر كعنوان صغير قبل القيمة. */
+  @media(max-width:600px){
+    .table-scroll.cards-mobile{overflow-x:hidden;}
+    .table-scroll.cards-mobile table{width:100%; min-width:0;}
+    .table-scroll.cards-mobile thead{display:none;}
+    .table-scroll.cards-mobile tbody{display:block;}
+    .table-scroll.cards-mobile tbody tr{
+      display:block; width:100%; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:10px 12px; margin:0 0 10px; box-shadow:var(--shadow);
+      border-inline-start:2px solid var(--gold);
+    }
+    .table-scroll.cards-mobile tbody tr:hover{background:var(--surface);} /* لا تأثير hover على البطاقات */
+    .table-scroll.cards-mobile tbody td{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      width:100%; padding:6px 2px; border:none; white-space:normal; text-align:start;
+      border-bottom:1px dashed var(--border);
+    }
+    .table-scroll.cards-mobile tbody td:last-child{border-bottom:none;}
+    .table-scroll.cards-mobile tbody td::before{
+      content:attr(data-label); font-size:11px; color:var(--text-muted); font-weight:600;
+      flex:none; margin-inline-end:8px;
+    }
+    .table-scroll.cards-mobile tbody td:not([data-label])::before{content:none;}
+    .table-scroll.cards-mobile tbody td[data-label=""]::before{content:none;}
+    /* خلية بلا تسمية (مثل عمود الإجراءات) تاخذ عرض كامل بدون تنسيق flex space-between */
+    .table-scroll.cards-mobile tbody td.card-full{display:block; padding-top:8px;}
+    .table-scroll.cards-mobile tbody td.card-full::before{display:block; margin-bottom:4px;}
+  }
   /* قائمة إجراءات الصف (⋮) في الجداول */
   .row-menu{position:relative; display:inline-block;}
   .row-menu-toggle{font-size:17px; line-height:1; padding:6px 12px; font-weight:700; letter-spacing:1px;}
@@ -618,7 +649,7 @@
       <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete-selected">🗑 حذف المحدد</button>
     </div>
     <div class="panel" style="padding:0;">
-      <div class="table-scroll">
+      <div class="table-scroll cards-mobile">
       <table>
         <thead>
           <tr>
