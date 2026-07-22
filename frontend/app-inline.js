@@ -2663,21 +2663,21 @@ function renderTable(){
     const rem = remaining(c);
     const nameBadges = `${escapeHtml(c.name)}${phoneWithWhatsapp(c.phone)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
     return `<tr${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
-      <td class="sticky-col sticky-col-1"><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
-      <td class="sticky-col sticky-col-2">${nameBadges}</td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td class="mono">${escapeHtml(c.referNum||'—')}</td>
-      <td>${escapeHtml(c.nationality||'')}</td>
-      <td>${escapeHtml(c.courseType||'')}</td>
-      <td class="mono">${escapeHtml(c.courseNumber||'—')}</td>
-      <td class="mono">${escapeHtml(c.invoice||'—')}</td>
-      <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
-      <td class="mono">${fmt(total(c))}</td>
-      <td class="mono">${fmt(paidTotal(c))}</td>
-      <td class="mono"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
-      <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
-      <td><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
-      <td style="white-space:nowrap;">
+      <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
+      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
+      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="رقم الدورة">${escapeHtml(c.courseNumber||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
+      <td class="mono" data-label="الإجمالي">${fmt(total(c))}</td>
+      <td class="mono" data-label="المدفوع">${fmt(paidTotal(c))}</td>
+      <td class="mono" data-label="المتبقي"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
+      <td data-label="الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
+      <td data-label="طريقة الدفع"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
+      <td class="card-full" data-label="" style="white-space:nowrap;">
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
