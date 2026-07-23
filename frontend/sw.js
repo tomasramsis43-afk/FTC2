@@ -3,15 +3,17 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v1';
-const RUNTIME_CACHE = 'ftc-runtime-v1';
+const CACHE_VERSION = 'ftc-cache-v2';
+const RUNTIME_CACHE = 'ftc-runtime-v2';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
-  '/app-optimized.html',
+  '/app.html',
   '/styles.css',
   '/app-performance.js',
-  '/app.js'
+  '/app-inline.js',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
 // تثبيت Service Worker وحفظ الموارد الثابتة
