@@ -288,29 +288,60 @@ app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
 // السبب)، فيظهر شيت العملاء فارغاً رغم أن العدد الإجمالي صحيح. الحل: UPSERT لكل صف
 // على حدة (يتجاوز تكرار id بدل أن يوقف كل شيء)، مع تجاهل الصف السيّئ فقط إن وُجد
 // (بدل إلغاء المزامنة كلها)، ثم حذف الصفوف القديمة غير الموجودة في المصفوفة الحالية.
+// تحسين أداء مهم (كان سبب تأخير ظهور البيانات بعد أي استيراد/تعديل دفعة عملاء):
+// النسخة السابقة كانت تنفّذ استعلام INSERT منفصل لكل عميل بالتتابع (await داخل for)،
+// أي أن حفظ 5000 عميل مثلاً يعني 5000 رحلة ذهاب/إياب منفصلة لقاعدة البيانات، قد تستغرق
+// دقائق فعلياً على استضافة بها زمن استجابة شبكة ولو بسيط لكل استعلام — وطوال هذه المدة
+// يبقى GET /api/clients (شاشة جدول العملاء المرقّمة) يعرض بيانات قديمة/غير مكتملة، وهو
+// ما يظهر للمستخدم كأن "المشتريات/العملاء المستوردة لا تظهر" أو تتأخر كثيراً بعد أي رفع
+// بيانات من السحابة. الحل: تجميع الصفوف في دفعات (كل دفعة = استعلام INSERT واحد متعدد
+// الصفوف)، فيهبط عدد الرحلات لقاعدة البيانات من N إلى ~N/300 فقط، مع الحفاظ تماماً على
+// نفس صلابة السلوك القديم (تجاوز أي صف سيّئ بدل إلغاء العملية كلها): لو فشلت دفعة كاملة
+// (نادر جداً)، نعيد محاولتها صفاً صفاً لتلك الدفعة فقط بدل فقدها بالكامل.
+const CLIENTS_ROWS_CHUNK_SIZE = 300;
+async function upsertClientsRowsChunk(chunk) {
+  const values = [];
+  const placeholders = chunk.map((c, idx) => {
+    const base = idx * 10;
+    values.push(c.id, JSON.stringify(c), c.name || '', c.clientId || '', c.referNum || '',
+      c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', c.date || '');
+    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`;
+  }).join(',');
+  await pool.query(
+    `INSERT INTO clients_rows (id, data, name, client_id, refer_num, nationality, course_type, course_number, invoice_no, reg_date)
+     VALUES ${placeholders}
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data, name = EXCLUDED.name, client_id = EXCLUDED.client_id,
+       refer_num = EXCLUDED.refer_num, nationality = EXCLUDED.nationality,
+       course_type = EXCLUDED.course_type, course_number = EXCLUDED.course_number,
+       invoice_no = EXCLUDED.invoice_no, reg_date = EXCLUDED.reg_date, updated_at = now()`,
+    values
+  );
+}
 async function syncClientsRows(value) {
   let arr;
   try { arr = JSON.parse(value || '[]'); } catch (e) { return; }
   if (!Array.isArray(arr)) return;
+  const valid = arr.filter(c => c && c.id);
   const ids = [];
   let failedRows = 0;
-  for (const c of arr) {
-    if (!c || !c.id) continue;
+  for (let start = 0; start < valid.length; start += CLIENTS_ROWS_CHUNK_SIZE) {
+    const chunk = valid.slice(start, start + CLIENTS_ROWS_CHUNK_SIZE);
     try {
-      await pool.query(
-        `INSERT INTO clients_rows (id, data, name, client_id, refer_num, nationality, course_type, course_number, invoice_no, reg_date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-         ON CONFLICT (id) DO UPDATE SET
-           data = EXCLUDED.data, name = EXCLUDED.name, client_id = EXCLUDED.client_id,
-           refer_num = EXCLUDED.refer_num, nationality = EXCLUDED.nationality,
-           course_type = EXCLUDED.course_type, course_number = EXCLUDED.course_number,
-           invoice_no = EXCLUDED.invoice_no, reg_date = EXCLUDED.reg_date, updated_at = now()`,
-        [c.id, JSON.stringify(c), c.name || '', c.clientId || '', c.referNum || '', c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', c.date || '']
-      );
-      ids.push(c.id);
+      await upsertClientsRowsChunk(chunk);
+      chunk.forEach(c => ids.push(c.id));
     } catch (e) {
-      failedRows++;
-      console.error(`تعذّرت مزامنة صف عميل واحد (id=${c.id}):`, e.message);
+      // فشلت الدفعة كاملة (مثلاً id مكرر داخلها) — نعيد المحاولة صفاً صفاً لهذه الدفعة
+      // فقط، حتى نتجاوز الصف السيّئ تحديداً دون فقد باقي الدفعة.
+      for (const c of chunk) {
+        try {
+          await upsertClientsRowsChunk([c]);
+          ids.push(c.id);
+        } catch (e2) {
+          failedRows++;
+          console.error(`تعذّرت مزامنة صف عميل واحد (id=${c.id}):`, e2.message);
+        }
+      }
     }
   }
   if (failedRows) console.error(`مزامنة clients_rows: تم تجاوز ${failedRows} صف بسبب خطأ (غالباً id مكرر)، وتمت مزامنة الباقي بنجاح`);
