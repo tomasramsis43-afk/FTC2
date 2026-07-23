@@ -281,28 +281,50 @@ app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
 // أي تغيير فيه)، لمزامنة النسخة "المفهرسة" clients_rows المستخدمة حصراً بواسطة
 // GET /api/clients أدناه. عدم استخدام Transaction هنا مقصود: فشل المزامنة (نادر جداً)
 // لا يجب أن يُفشل عملية الحفظ الأساسية نفسها التي نجحت بالفعل في kv_store.
+// ملاحظة مهمة (إصلاح): النسخة السابقة كانت تحذف الجدول بالكامل ثم تُدرج كل الصفوف
+// داخل معاملة (transaction) واحدة تفشل بالكامل (ROLLBACK) لو صف واحد فقط فيه خطأ —
+// أخطرها تكرار نفس المعرّف (id) مرتين في المصفوفة (بيانات قديمة/استيراد قديم)، مما
+// كان يجعل clients_rows يبقى فارغاً تماماً وبشكل دائم (كل عملية حفظ لاحقة تفشل بنفس
+// السبب)، فيظهر شيت العملاء فارغاً رغم أن العدد الإجمالي صحيح. الحل: UPSERT لكل صف
+// على حدة (يتجاوز تكرار id بدل أن يوقف كل شيء)، مع تجاهل الصف السيّئ فقط إن وُجد
+// (بدل إلغاء المزامنة كلها)، ثم حذف الصفوف القديمة غير الموجودة في المصفوفة الحالية.
 async function syncClientsRows(value) {
   let arr;
   try { arr = JSON.parse(value || '[]'); } catch (e) { return; }
   if (!Array.isArray(arr)) return;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM clients_rows');
-    for (const c of arr) {
-      if (!c || !c.id) continue;
-      await client.query(
+  const ids = [];
+  let failedRows = 0;
+  for (const c of arr) {
+    if (!c || !c.id) continue;
+    try {
+      await pool.query(
         `INSERT INTO clients_rows (id, data, name, client_id, refer_num, nationality, course_type, course_number, invoice_no, reg_date)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (id) DO UPDATE SET
+           data = EXCLUDED.data, name = EXCLUDED.name, client_id = EXCLUDED.client_id,
+           refer_num = EXCLUDED.refer_num, nationality = EXCLUDED.nationality,
+           course_type = EXCLUDED.course_type, course_number = EXCLUDED.course_number,
+           invoice_no = EXCLUDED.invoice_no, reg_date = EXCLUDED.reg_date, updated_at = now()`,
         [c.id, JSON.stringify(c), c.name || '', c.clientId || '', c.referNum || '', c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', c.date || '']
       );
+      ids.push(c.id);
+    } catch (e) {
+      failedRows++;
+      console.error(`تعذّرت مزامنة صف عميل واحد (id=${c.id}):`, e.message);
     }
-    await client.query('COMMIT');
+  }
+  if (failedRows) console.error(`مزامنة clients_rows: تم تجاوز ${failedRows} صف بسبب خطأ (غالباً id مكرر)، وتمت مزامنة الباقي بنجاح`);
+  try {
+    if (ids.length) {
+      await pool.query(`DELETE FROM clients_rows WHERE id != ALL($1)`, [ids]);
+    } else if (arr.length === 0) {
+      // المصفوفة فارغة فعلاً (لا يوجد أي عميل) — نفرّغ الجدول المفهرس ليطابق ذلك.
+      await pool.query('DELETE FROM clients_rows');
+    }
+    // لو arr غير فارغة لكن ids فارغة (كل الصفوف فشلت)، لا نحذف شيئاً تحسباً لخطأ عابر
+    // (مثل انقطاع اتصال) حتى لا نفقد البيانات المفهرسة السابقة بلا داعٍ.
   } catch (e) {
-    await client.query('ROLLBACK');
-    console.error('تعذّرت مزامنة clients_rows:', e.message);
-  } finally {
-    client.release();
+    console.error('تعذّر حذف الصفوف القديمة من clients_rows:', e.message);
   }
 }
 
@@ -580,16 +602,19 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3000;
 ensureSchema()
   .then(async () => {
-    // ترحيل تلقائي مرة واحدة: لو clients_rows فاضي (أول تشغيل بعد هذا التحديث) وعندنا
-    // بالفعل بيانات عملاء قديمة بالطريقة السابقة، نزامنها فوراً بدل انتظار أول حفظ يدوي —
-    // حتى تعمل شاشة "جدول العملاء" الجديدة (Pagination) من أول لحظة بدون بيانات ناقصة.
+    // مزامنة عند بدء التشغيل: لو عدد صفوف clients_rows لا يطابق عدد عملاء kv_store الفعلي
+    // (يشمل الحالة القديمة: 0 صف رغم وجود آلاف العملاء — كانت تحدث بصمت لو صف واحد فقط
+    // به id مكرر أوقف كل عملية المزامنة بالكامل قبل هذا الإصلاح)، نعيد المزامنة كاملة.
+    // الآن آمنة ورخيصة التكلفة (UPSERT) فتُستدعى دائماً عند الإقلاع لضمان تطابق دائم.
     try {
-      const cnt = await pool.query('SELECT COUNT(*) FROM clients_rows');
-      if (Number(cnt.rows[0].count) === 0) {
-        const existing = await pool.query(`SELECT value FROM kv_store WHERE key = 'clients'`);
-        if (existing.rows[0] && existing.rows[0].value) {
+      const existing = await pool.query(`SELECT value FROM kv_store WHERE key = 'clients'`);
+      if (existing.rows[0] && existing.rows[0].value) {
+        let expectedCount = 0;
+        try { const parsed = JSON.parse(existing.rows[0].value); if (Array.isArray(parsed)) expectedCount = parsed.filter(c => c && c.id).length; } catch (e) {}
+        const cnt = await pool.query('SELECT COUNT(*) FROM clients_rows');
+        if (Number(cnt.rows[0].count) !== expectedCount) {
           await syncClientsRows(existing.rows[0].value);
-          console.log('✅ تم ترحيل بيانات العملاء القديمة إلى clients_rows');
+          console.log(`✅ تمت مزامنة/ترحيل بيانات العملاء إلى clients_rows (${expectedCount} عميل متوقع)`);
         }
       }
     } catch (e) { console.error('تعذّر الترحيل الأولي لـ clients_rows:', e.message); }
