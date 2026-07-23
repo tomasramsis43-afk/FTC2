@@ -9,7 +9,6 @@ const STATIC_ASSETS = [
   '/',
   '/app.html',
   '/styles.css',
-  '/app-performance.js',
   '/app-inline.js',
   '/manifest.json',
   '/icons/icon-192.png',
