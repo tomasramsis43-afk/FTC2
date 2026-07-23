@@ -94,19 +94,94 @@ const VALID_ROLES = ['admin','accountant','reception','staff'];
 function normalizeRole(r){ return VALID_ROLES.includes(r) ? r : 'staff'; }
 const _kvVersions = {}; // آخر نسخة (version) معروفة لكل مفتاح، لمنع الكتابة فوق تعديل شخص آخر بصمت
 
-// كاش محلي دائم (localStorage) للقيم المُشفَّرة كما وصلت من السيرفر، مربوط برقم النسخة.
+// كاش محلي دائم للقيم المُشفَّرة كما وصلت من السيرفر، مربوط برقم النسخة.
 // الهدف: لو نفس الجهاز فتح البرنامج تاني ونسخة البيانات على السيرفر لم تتغيّر،
 // نستخدم النسخة المخزّنة محلياً بدل إعادة تحميل نفس البيانات (ممكن تكون مئات
 // الكيلوبايتات لمفاتيح زي قوائم العملاء وحركات الخزنة) من الصفر في كل مرة.
+//
+// يستخدم IndexedDB بدل localStorage: مساحة تخزين أكبر بكثير (localStorage محدود
+// عملياً بحوالي 5-10 ميجا لكل موقع وقد يمتلئ بسرعة مع آلاف العملاء والمرفقات)،
+// وقراءة/كتابة غير متزامنة لا تُجمّد الواجهة أثناء تحويل نصوص JSON الكبيرة.
+// أي بيانات كانت محفوظة سابقاً بـ localStorage (نسخة قديمة من البرنامج) تُنقَل
+// تلقائياً إلى IndexedDB أول مرة تُقرأ، ثم تُحذف من localStorage. لو IndexedDB
+// غير متاح لأي سبب (متصفح قديم/وضع خاص يمنعه)، نرجع تلقائياً لـ localStorage
+// كخط رجعة آمن حتى لا يتعطل البرنامج.
 const KV_CACHE_PREFIX = 'ftc2-kv-cache:';
-function _kvCacheRead(key){
+const KV_IDB_NAME = 'ftc2-kv-cache-db';
+const KV_IDB_STORE = 'kv';
+let _kvIdbPromise = null;
+function _openKvIdb(){
+  if(_kvIdbPromise) return _kvIdbPromise;
+  _kvIdbPromise = new Promise((resolve)=>{
+    try{
+      if(!window.indexedDB){ resolve(null); return; }
+      const req = indexedDB.open(KV_IDB_NAME, 1);
+      req.onupgradeneeded = ()=>{ try{ req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){} };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> resolve(null); // فشل الفتح — سنستخدم localStorage كخط رجعة
+    }catch(e){ resolve(null); }
+  });
+  return _kvIdbPromise;
+}
+async function _kvCacheRead(key){
+  try{
+    const db = await _openKvIdb();
+    if(db){
+      const fromIdb = await new Promise((resolve)=>{
+        try{
+          const tx = db.transaction(KV_IDB_STORE, 'readonly');
+          const req = tx.objectStore(KV_IDB_STORE).get(key);
+          req.onsuccess = ()=> resolve(req.result || null);
+          req.onerror = ()=> resolve(null);
+        }catch(e){ resolve(null); }
+      });
+      if(fromIdb) return { version: fromIdb.version, value: fromIdb.value };
+      // لا شيء في IndexedDB — تحقّق من وجود نسخة قديمة بـ localStorage وانقلها مرة واحدة
+      const legacy = _kvCacheReadLegacyLS(key);
+      if(legacy){ _kvCacheWrite(key, legacy.version, legacy.value).catch(()=>{}); try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){} return legacy; }
+      return null;
+    }
+    return _kvCacheReadLegacyLS(key);
+  }catch(e){ return null; }
+}
+function _kvCacheReadLegacyLS(key){
   try{
     const raw = localStorage.getItem(KV_CACHE_PREFIX + key);
     return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
-function _kvCacheWrite(key, version, value){
-  try{ localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value })); }catch(e){ /* تجاهل امتلاء المساحة */ }
+async function _kvCacheWrite(key, version, value){
+  try{
+    const db = await _openKvIdb();
+    if(db){
+      await new Promise((resolve)=>{
+        try{
+          const tx = db.transaction(KV_IDB_STORE, 'readwrite');
+          tx.objectStore(KV_IDB_STORE).put({ key, version, value });
+          tx.oncomplete = ()=> resolve();
+          tx.onerror = ()=> resolve();
+        }catch(e){ resolve(); }
+      });
+      return;
+    }
+    localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
+  }catch(e){ /* تجاهل امتلاء المساحة أو أي خطأ تخزين */ }
+}
+async function _kvCacheDelete(key){
+  try{
+    const db = await _openKvIdb();
+    if(db){
+      await new Promise((resolve)=>{
+        try{
+          const tx = db.transaction(KV_IDB_STORE, 'readwrite');
+          tx.objectStore(KV_IDB_STORE).delete(key);
+          tx.oncomplete = ()=> resolve();
+          tx.onerror = ()=> resolve();
+        }catch(e){ resolve(); }
+      });
+    }
+  }catch(e){}
+  try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){}
 }
 
 async function serverFetch(path, options = {}) {
@@ -131,7 +206,7 @@ async function serverFetch(path, options = {}) {
 window.storage = {
     async get(key, shared){
       try{
-        const cached = _kvCacheRead(key);
+        const cached = await _kvCacheRead(key);
         const headers = cached ? { 'If-None-Match': String(cached.version) } : {};
         const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
         if(res.status === 304 && cached){
@@ -173,7 +248,7 @@ window.storage = {
       try{
         await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { method: 'DELETE' });
         delete _kvVersions[key];
-        try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){}
+        _kvCacheDelete(key).catch(()=>{});
         return { key, deleted: true, shared: !!shared };
       }catch(e){ return null; }
     },
