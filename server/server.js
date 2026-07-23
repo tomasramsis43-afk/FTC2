@@ -214,6 +214,47 @@ function restrictKeyToAdmin(req, res, next) {
 // إعادة إرسال القيمة كاملة (ممكن تكون مئات الكيلوبايتات لمفاتيح زي قوائم العملاء
 // أو حركات الخزنة)، فنوفر نقل البيانات في كل مرة يفتح فيها المستخدم البرنامج
 // ولم يتغيّر شيء منذ آخر زيارة.
+// GET /api/clients?page=&pageSize=&search=&nationality=&courseType=&dateFrom=&dateTo=&sort=&order=
+// ترقيم/بحث/فلترة حقيقية من قاعدة البيانات (بدون تحميل كل العملاء للمتصفح)، تُستخدم فقط من
+// شاشة "جدول العملاء" نفسها للحالات الشائعة (تصفح + بحث بالاسم/الهوية + فلترة بالجنسية/الدورة/التاريخ).
+// فلاتر المبالغ (مدين/مسدد) والفرز بالمبالغ غير مدعومة هنا عمداً لأنها تعتمد على حسابات معقّدة
+// (خصومات، دفعات جزئية...) موجودة فقط بمنطق الواجهة الأمامية — تلك الحالات تستمر تُحسب من
+// المصفوفة الكاملة المحمّلة أصلاً بالمتصفح كما كانت قبل هذا التحديث، بلا أي تغيير في نتيجتها.
+app.get('/api/clients', requireAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const where = [];
+    const params = [];
+    let i = 1;
+    if (req.query.search) {
+      where.push(`(name ILIKE $${i} OR client_id ILIKE $${i} OR refer_num ILIKE $${i} OR invoice_no ILIKE $${i})`);
+      params.push('%' + req.query.search + '%'); i++;
+    }
+    if (req.query.nationality) { where.push(`nationality = $${i}`); params.push(req.query.nationality); i++; }
+    if (req.query.courseType) { where.push(`course_type = $${i}`); params.push(req.query.courseType); i++; }
+    if (req.query.dateFrom) { where.push(`reg_date >= $${i}`); params.push(req.query.dateFrom); i++; }
+    if (req.query.dateTo) { where.push(`reg_date <= $${i}`); params.push(req.query.dateTo); i++; }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const sortCols = { name: 'name', date: 'reg_date', clientId: 'client_id', courseType: 'course_type', nationality: 'nationality' };
+    const sortCol = sortCols[req.query.sort] || 'name';
+    const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
+    const totalR = await pool.query(`SELECT COUNT(*) FROM clients_rows ${whereSql}`, params);
+    const rowsR = await pool.query(
+      `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
+      [...params, pageSize, (page - 1) * pageSize]
+    );
+    res.json({
+      rows: rowsR.rows.map(r => r.data),
+      total: Number(totalR.rows[0].count),
+      page, pageSize,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب بيانات العملاء' });
+  }
+});
+
 app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   try {
     const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
@@ -236,6 +277,35 @@ app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
 // المفتاح بعد آخر قراءة معروفة لهذا الجهاز، بدل الكتابة فوق تعديله بصمت.
 // (تحسين أداء: استعلام SQL واحد فقط بدل استعلامين متتاليين — يقلّل زمن كل
 // عملية حفظ تقريباً للنصف، خصوصاً مع اتصال قاعدة بيانات بعيد/بطيء الشبكة).
+// يُستدعى فقط بعد نجاح حفظ مفتاح 'clients' في kv_store (نفس مسار الحفظ القديم بدون
+// أي تغيير فيه)، لمزامنة النسخة "المفهرسة" clients_rows المستخدمة حصراً بواسطة
+// GET /api/clients أدناه. عدم استخدام Transaction هنا مقصود: فشل المزامنة (نادر جداً)
+// لا يجب أن يُفشل عملية الحفظ الأساسية نفسها التي نجحت بالفعل في kv_store.
+async function syncClientsRows(value) {
+  let arr;
+  try { arr = JSON.parse(value || '[]'); } catch (e) { return; }
+  if (!Array.isArray(arr)) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM clients_rows');
+    for (const c of arr) {
+      if (!c || !c.id) continue;
+      await client.query(
+        `INSERT INTO clients_rows (id, data, name, client_id, refer_num, nationality, course_type, course_number, invoice_no, reg_date)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [c.id, JSON.stringify(c), c.name || '', c.clientId || '', c.referNum || '', c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', c.date || '']
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('تعذّرت مزامنة clients_rows:', e.message);
+  } finally {
+    client.release();
+  }
+}
+
 app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
@@ -253,6 +323,7 @@ app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
       [req.params.key, value, req.user.username, knownVersion]
     );
     if (upsert.rows[0]) {
+      if (req.params.key === 'clients') syncClientsRows(upsert.rows[0].value).catch(()=>{});
       return res.json({ key: req.params.key, value: upsert.rows[0].value, version: upsert.rows[0].version });
     }
     // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
@@ -275,6 +346,7 @@ app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
 app.delete('/api/storage/:key', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM kv_store WHERE key = $1', [req.params.key]);
+    if (req.params.key === 'clients') await pool.query('DELETE FROM clients_rows').catch(()=>{});
     res.json({ key: req.params.key, deleted: true });
   } catch (e) {
     console.error(e);
@@ -507,7 +579,20 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 ensureSchema()
-  .then(() => {
+  .then(async () => {
+    // ترحيل تلقائي مرة واحدة: لو clients_rows فاضي (أول تشغيل بعد هذا التحديث) وعندنا
+    // بالفعل بيانات عملاء قديمة بالطريقة السابقة، نزامنها فوراً بدل انتظار أول حفظ يدوي —
+    // حتى تعمل شاشة "جدول العملاء" الجديدة (Pagination) من أول لحظة بدون بيانات ناقصة.
+    try {
+      const cnt = await pool.query('SELECT COUNT(*) FROM clients_rows');
+      if (Number(cnt.rows[0].count) === 0) {
+        const existing = await pool.query(`SELECT value FROM kv_store WHERE key = 'clients'`);
+        if (existing.rows[0] && existing.rows[0].value) {
+          await syncClientsRows(existing.rows[0].value);
+          console.log('✅ تم ترحيل بيانات العملاء القديمة إلى clients_rows');
+        }
+      }
+    } catch (e) { console.error('تعذّر الترحيل الأولي لـ clients_rows:', e.message); }
     app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
   })
   .catch(e => {

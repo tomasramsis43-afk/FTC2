@@ -87,6 +87,35 @@ CREATE TABLE IF NOT EXISTS zatca_invoice_log (
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter ON zatca_invoice_log(invoice_counter);
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_source ON zatca_invoice_log(source_ref);
 
+-- ============================================================
+-- جدول العملاء كصفوف حقيقية مفهرسة (Pagination من السيرفر)
+-- ============================================================
+-- المصدر الأساسي لبيانات العملاء يبقى مفتاح kv_store('clients') كما هو تماماً
+-- (كل الشاشات الأخرى — اللوحة، التقارير، المحاسبة، مطابقة الشركات... — تقرأ منه
+-- بلا أي تغيير). هذا الجدول نسخة "مفهرسة" منه فقط، تُحدَّث تلقائياً في كل مرة
+-- يُحفظ فيها مفتاح clients عبر PUT /api/storage/clients (نفس مسار الحفظ الحالي
+-- بدون أي تعديل في الواجهة الأمامية لبقية الشاشات)، وتُستخدم حصراً من نقطة
+-- النهاية الجديدة GET /api/clients لعرض/بحث/ترقيم شاشة "جدول العملاء" فقط،
+-- بدل تحميل كل الـ5000+ سجل للمتصفح وتقطيعها بجافاسكربت في كل مرة.
+CREATE TABLE IF NOT EXISTS clients_rows (
+  id            TEXT PRIMARY KEY,
+  data          JSONB NOT NULL,
+  name          TEXT,
+  client_id     TEXT,
+  refer_num     TEXT,
+  nationality   TEXT,
+  course_type   TEXT,
+  course_number TEXT,
+  invoice_no    TEXT,
+  reg_date      TEXT,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_name ON clients_rows(name);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_client_id ON clients_rows(client_id);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_course_type ON clients_rows(course_type);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_nationality ON clients_rows(nationality);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_reg_date ON clients_rows(reg_date);
+
 -- ملاحظة: كان هنا سابقاً جدول purchase_invoices منفصل، لكن تبيّن أن المشتريات
 -- مُدارة بالفعل بالكامل عبر kv_store (window.storage) كباقي بيانات التطبيق —
 -- فحُذف الجدول المنفصل لتفادي ازدواجية مصدر البيانات (تم الحذف فعلياً؛ إن
