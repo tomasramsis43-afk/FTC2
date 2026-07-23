@@ -2714,6 +2714,14 @@ async function renderTable(){
       if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
       if(!res.ok) throw new Error('server pagination failed');
       const data = await res.json();
+      // حماية إضافية: لو السيرفر رجّع 0 نتيجة بدون أي بحث/فلتر فعلي بينما عندنا فعلاً
+      // عملاء محمّلين محلياً (مثال: خلل مؤقت في مزامنة clients_rows بالسيرفر)، هذه نتيجة
+      // غير منطقية — نتجاهلها ونكمل تلقائياً للمسار المحلي الكامل أدناه بدل عرض جدول فارغ
+      // خطأً للمستخدم رغم وجود بيانات فعلية.
+      const noRealFilter = !q && !fc && !fn && !dfrom && !dto;
+      if(data.total === 0 && noRealFilter && clients.length > 0){
+        throw new Error('server returned suspicious empty result');
+      }
       renderClientsTableRows(data.rows, data.total, data.total, pageSize);
       return;
     }catch(e){
