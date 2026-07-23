@@ -5489,13 +5489,13 @@ function renderOwnBagClients(){
   const pageRows = applyGenericPagination('ownbag', rows, ownbagPageState, [$('#ownbag-search')?.value, $('#ownbag-year-filter')?.value]);
   body.innerHTML = rows.length ? pageRows.map(c=>`
     <tr>
-      <td>${escapeHtml(c.name||'—')}</td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td>${escapeHtml(c.nationality||'—')}</td>
-      <td class="mono">${escapeHtml(c.phone||'—')}</td>
-      <td>${escapeHtml(c.courseType||'—')}</td>
-      <td class="mono">${escapeHtml(c.invoice||'—')}</td>
-      <td class="mono">${formatDateDisplay(c.date)||'—'}</td>
+      <td data-label="الاسم">${escapeHtml(c.name||'—')}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td data-label="الجنسية">${escapeHtml(c.nationality||'—')}</td>
+      <td class="mono" data-label="رقم الهاتف">${escapeHtml(c.phone||'—')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
     </tr>`).join('') : `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">لا يوجد عملاء وفّروا حقيبتهم الخاصة</td></tr>`;
 }
 onSearchInput('#ownbag-search', renderOwnBagClients);
@@ -9946,18 +9946,18 @@ function renderMissingCourse(){
     box.innerHTML = `<div class="empty-state" style="padding:24px 10px;"><div class="big">✅</div>${type ? `لا يوجد — كل من سجّل في دورة "${escapeHtml(type)}" له رقم دورة محدَّد` : 'لا يوجد — كل العملاء لديهم رقم دورة محدَّد'}</div>`;
     return;
   }
-  box.innerHTML = `<div class="table-scroll"><table>
+  box.innerHTML = `<div class="table-scroll cards-mobile"><table>
     <thead><tr><th>الاسم</th><th>تاريخ التسجيل</th><th>نوع الدورة</th><th>رقم الهوية</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>حالة الحقيبة</th><th>تاريخ دورة متوقع</th></tr></thead>
     <tbody>${missing.map(c=>`<tr>
-      <td>${escapeHtml(c.name||'—')}</td>
-      <td>${registrationAgeLabel(c.date)}</td>
-      <td>${escapeHtml(c.courseType||'—')}</td>
-      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
-      <td class="mono">${escapeHtml(c.phone||'—')}</td>
-      <td>${escapeHtml(c.nationality||'')}</td>
-      <td>${escapeHtml(c.companyName||'—')}</td>
-      <td><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
-      <td><input type="date" class="cs-expected-date" data-client-id="${escapeHtml(c.id)}" value="${escapeHtml(effectiveExpectedDate(c))}" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
+      <td data-label="الاسم">${escapeHtml(c.name||'—')}</td>
+      <td data-label="تاريخ التسجيل">${registrationAgeLabel(c.date)}</td>
+      <td data-label="نوع الدورة">${escapeHtml(c.courseType||'—')}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="الجوال">${escapeHtml(c.phone||'—')}</td>
+      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="اسم الشركة">${escapeHtml(c.companyName||'—')}</td>
+      <td data-label="حالة الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
+      <td class="card-full" data-label="تاريخ دورة متوقع"><input type="date" class="cs-expected-date" data-client-id="${escapeHtml(c.id)}" value="${escapeHtml(effectiveExpectedDate(c))}" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
