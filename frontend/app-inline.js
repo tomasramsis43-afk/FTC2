@@ -3260,7 +3260,11 @@ document.addEventListener('click', e=>{
   const top = openUp
     ? Math.max(8, r.top - ph - 4)
     : Math.min(r.bottom + 4, window.innerHeight - ph - 8);
-  const left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+  // في تصميم RTL، القائمة يجب أن تُحاذي حافتها اليمنى مع الحافة اليمنى لزر (⋮)
+  // وتمتد لليسار، وليس محاذاة الحافة اليسرى (r.left) كما كان سابقاً — كان هذا يجعل
+  // القائمة تمتد لجهة خاطئة فتغطي أجزاءً من الصف/البطاقة المجاورة بدل الظهور
+  // بدقة أسفل زرها.
+  const left = Math.max(8, Math.min(r.right - pw, window.innerWidth - pw - 8));
   panel.style.top = Math.max(8, top) + 'px';
   panel.style.left = left + 'px';
   panel.style.visibility = '';
