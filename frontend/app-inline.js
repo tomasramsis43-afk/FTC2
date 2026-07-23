@@ -1047,6 +1047,7 @@ async function restoreFullBackup(file){
   if(typeof renderBags==='function') renderBags();
   if(typeof renderCourses==='function') renderCourses();
   if(typeof renderCompanies==='function') renderCompanies();
+  if(typeof renderPurchases==='function') renderPurchases();
   if(typeof renderReports==='function') renderReports();
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
@@ -1824,6 +1825,7 @@ function refreshEverything(){
   if(typeof renderCompanies==='function') renderCompanies();
   if(typeof renderCtGroups==='function') renderCtGroups();
   if(typeof renderCmCats==='function') renderCmCats();
+  if(typeof renderPurchases==='function') renderPurchases();
   if(typeof renderReports==='function') renderReports();
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
@@ -1891,6 +1893,7 @@ function clearAllSheetFilters(){
   if(typeof renderCompanies==='function') renderCompanies();
   if(typeof renderCtGroups==='function') renderCtGroups();
   if(typeof renderCmCats==='function') renderCmCats();
+  if(typeof renderPurchases==='function') renderPurchases();
   if(typeof renderReports==='function') renderReports();
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
