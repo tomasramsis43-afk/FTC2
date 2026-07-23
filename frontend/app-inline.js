@@ -340,8 +340,20 @@ async function serverFetch(path, options = {}) {
 }
 
 window.storage = {
-    async get(key, shared){
+    async get(key, shared, cacheOnly){
       const cached = await _kvCacheRead(key);
+      if(cacheOnly){
+        // وضع "من الجهاز فقط" — بدون أي اتصال بالسيرفر، لعرض آخر نسخة محفوظة محلياً فوراً
+        // عند فتح البرنامج دون انتظار الشبكة. المزامنة الفعلية مع السحابة تحدث بعد ذلك
+        // في الخلفية عبر backgroundSyncCheck() دون تجميد الواجهة.
+        if(!cached) return null;
+        _kvVersions[key] = cached.version;
+        if(cached.value === null || cached.value === undefined) return null;
+        try{
+          const value = await decryptValue(cached.value);
+          return { key, value, shared: !!shared };
+        }catch(e){ return null; }
+      }
       try{
         const headers = cached ? { 'If-None-Match': String(cached.version) } : {};
         const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
@@ -846,7 +858,7 @@ async function syncBagStockIssues(){
   if(migrated){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
   return migrated;
 }
-async function loadData(){
+async function loadData(cacheOnly){
   // نجلب كل مفاتيح kv_store بالتوازي (كل الطلبات تُرسل دفعة واحدة) بدل التتابع (طلب وراء طلب)
   // المستخدم سابقاً. زمن الانتظار الأكبر هو زمن الشبكة/استجابة الخادم — خصوصاً على استضافة مجانية
   // بطيئة قد تكون "نائمة" وتحتاج تستيقظ — وليس زمن معالجة البيانات نفسها، فتوازي الطلبات يقلّل
@@ -858,7 +870,7 @@ async function loadData(){
   ].concat(wantUsers ? ['users'] : []);
   const kv = {};
   await Promise.all(kvKeys.map(async k=>{
-    try{ kv[k] = await window.storage.get(k, false); }catch(e){ kv[k] = null; }
+    try{ kv[k] = await window.storage.get(k, false, cacheOnly); }catch(e){ kv[k] = null; }
   }));
 
   try{
@@ -13186,10 +13198,9 @@ document.addEventListener('click', async e=>{
   }
 });
 
-async function startApp(){
-  await loadData();
-  updateOfflineIndicator(); // يعكس فوراً لو تحميل البيانات أعلاه رجع من الكاش المحلي (بدون اتصال)
-  flushPendingWrites().catch(()=>{}); // لو فيه تعديلات محفوظة محلياً من جلسة سابقة بدون اتصال
+// كل شاشات العرض التي كانت تُرسم مرة واحدة عند فتح البرنامج — تم فصلها في دالة مستقلة حتى
+// تُستدعى أيضاً بعد أي مزامنة خلفية تجلب تغييرات فعلية من السحابة (راجع backgroundSyncCheck).
+async function renderAllViewsAfterLoad(){
   await cleanupDuplicateCourseTypes();
   await cleanupDuplicateNationalities();
   await cleanupDuplicatePaymentMethods();
@@ -13209,9 +13220,61 @@ async function startApp(){
   renderPurchases();
   applyLanguage(currentLang);
   applyTheme(!!settings.darkMode); applySoundIcon();
+}
+
+// هل يوجد على هذا الجهاز نسخة محفوظة محلياً يمكن الانطلاق منها فوراً بدون انتظار الشبكة؟
+// نتحقق من مفتاح 'settings' تحديداً لأنه أول مفتاح يُحفظ دائماً بعد أي استخدام فعلي للبرنامج،
+// فوجوده يعني أن هذا الجهاز فتح البرنامج بنجاح من قبل ولديه نسخة كاملة من البيانات محلياً.
+async function hasLocalCache(){
+  try{ return !!(await _kvCacheRead('settings')); }catch(e){ return false; }
+}
+
+let _bgSyncInFlight = false;
+// مزامنة خلفية: تقارن رقم نسخة كل مفتاح محلياً مع نسخته الحالية على السحابة عبر طلب واحد خفيف
+// (/api/storage-versions) بدل طلب منفصل لكل مفتاح، وترفع أولاً أي تعديل محلي معلّق لم يصل
+// للسحابة بعد (حتى لا نفقده أو نستبدله بغير قصد)، ثم تجلب فعلياً فقط المفاتيح التي تغيّرت
+// نسختها على السحابة منذ آخر تحميل. لو كل النسخ متطابقة (الحالة الأشيع: لا يوجد أي تغيير
+// منذ آخر فتح للبرنامج)، لا يحدث أي نقل بيانات إضافي ولا أي إعادة رسم للشاشة.
+async function backgroundSyncCheck(){
+  if(_bgSyncInFlight) return;
+  _bgSyncInFlight = true;
+  try{
+    await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
+    const res = await serverFetch('/api/storage-versions');
+    if(!res.ok){ markOffline(); return; }
+    const data = await res.json();
+    markOnline();
+    const serverVersions = data.versions || {};
+    const changedKeys = Object.keys(serverVersions).filter(k => (_kvVersions[k] || 0) !== serverVersions[k]);
+    if(changedKeys.length){
+      // تحميل عادي عبر الشبكة: المفاتيح غير المتغيّرة ترجع 304 فوراً (بدون نقل بيانات)،
+      // والمفاتيح المتغيّرة فقط هي التي تُنقل فعلياً من السحابة — ثم نعيد رسم كل الشاشات
+      // لأننا لا نعرف مسبقاً أي شاشات تعتمد على المفاتيح التي تغيّرت تحديداً.
+      await loadData(false);
+      await renderAllViewsAfterLoad();
+    }
+  }catch(e){ markOffline(); } finally { _bgSyncInFlight = false; }
+}
+// إعادة فحص دورية كل دقيقتين، حتى تنعكس تعديلات جهاز/مستخدم آخر تلقائياً بدون الحاجة لإغلاق
+// البرنامج وإعادة فتحه — بتكلفة شبكة ضئيلة جداً (طلب واحد صغير) لو لم يتغيّر شيء.
+setInterval(()=>{ backgroundSyncCheck().catch(()=>{}); }, 120000);
+
+async function startApp(){
+  const localFirst = await hasLocalCache();
+  if(localFirst){
+    // البدء فوراً من آخر نسخة محفوظة على هذا الجهاز، بدون انتظار أي اتصال بالسيرفر — البرنامج
+    // يظهر فوراً بنفس البيانات المحفوظة محلياً، ثم تتم المزامنة الفعلية مع السحابة في الخلفية.
+    await loadData(true);
+  } else {
+    // أول تشغيل على هذا الجهاز (لا توجد نسخة محلية بعد) — تحميل كامل من السحابة كالمعتاد.
+    await loadData(false);
+  }
+  updateOfflineIndicator();
+  await renderAllViewsAfterLoad();
   await maybeRunAutoBackup();
   autoSignInLocalUser();
   SoundFX.login();
+  backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج
 }
 
 /* ---------------- License gate: يجب التحقق من كود الترخيص قبل تشغيل أي جزء من البرنامج ---------------- */
