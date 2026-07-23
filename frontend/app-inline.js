@@ -602,12 +602,26 @@ async function syncBagStockIssues(){
   return migrated;
 }
 async function loadData(){
+  // نجلب كل مفاتيح kv_store بالتوازي (كل الطلبات تُرسل دفعة واحدة) بدل التتابع (طلب وراء طلب)
+  // المستخدم سابقاً. زمن الانتظار الأكبر هو زمن الشبكة/استجابة الخادم — خصوصاً على استضافة مجانية
+  // بطيئة قد تكون "نائمة" وتحتاج تستيقظ — وليس زمن معالجة البيانات نفسها، فتوازي الطلبات يقلّل
+  // زمن فتح البرنامج بشكل ملموس دون أي تغيير في منطق المعالجة أو ترتيبه أدناه.
+  const wantUsers = normalizeRole(SERVER_AUTH_ROLE) === 'admin';
+  const kvKeys = ['clients','settings','bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows',
+    'deletedInvoices','courseSessions','appLang','auditLog','companies','companyTransfers','journalEntries',
+    'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
+  ].concat(wantUsers ? ['users'] : []);
+  const kv = {};
+  await Promise.all(kvKeys.map(async k=>{
+    try{ kv[k] = await window.storage.get(k, false); }catch(e){ kv[k] = null; }
+  }));
+
   try{
-    const r = await window.storage.get('clients', false);
+    const r = kv.clients;
     clients = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ clients = []; }
   try{
-    const r = await window.storage.get('settings', false);
+    const r = kv.settings;
     settings = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if(settings.bagPrice===undefined) settings.bagPrice = DEFAULT_SETTINGS.bagPrice;
     if(settings.priceSaudi===undefined) settings.priceSaudi = DEFAULT_SETTINGS.priceSaudi;
@@ -647,7 +661,7 @@ async function loadData(){
     if(settings.bagFinanceLinkEnabled===undefined) settings.bagFinanceLinkEnabled = true;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
-    const r = await window.storage.get('bagStock', false);
+    const r = kv.bagStock;
     bagStock = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ bagStock = []; }
   // ترحيل/تصحيح تلقائي: أي عميل مصدر حقيبته "من المخزون" (bagSource==='stock') ولم يكن له عملية "تسليم"
@@ -656,40 +670,40 @@ async function loadData(){
   // قد يضبط مصدر حقيبة عميل على "من المخزون"، حتى يتحدّث رقم المخزون فوراً دون الحاجة لإعادة تحميل التطبيق.
   await syncBagStockIssues();
   try{
-    const r = await window.storage.get('vaultTx', false);
+    const r = kv.vaultTx;
     vaultTx = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ vaultTx = []; }
   try{
-    const r = await window.storage.get('deletedVaultTx', false);
+    const r = kv.deletedVaultTx;
     deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ deletedVaultTx = []; }
   try{
-    const r = await window.storage.get('vaultDenomTx', false);
+    const r = kv.vaultDenomTx;
     vaultDenomTx = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ vaultDenomTx = []; }
   try{
-    const r = await window.storage.get('bankStatementRows', false);
+    const r = kv.bankStatementRows;
     bankStatementRows = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ bankStatementRows = []; }
   try{
-    const r = await window.storage.get('deletedInvoices', false);
+    const r = kv.deletedInvoices;
     deletedInvoices = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ deletedInvoices = []; }
   try{
-    const r = await window.storage.get('courseSessions', false);
+    const r = kv.courseSessions;
     courseSessions = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ courseSessions = []; }
   try{
-    const r = await window.storage.get('appLang', false);
+    const r = kv.appLang;
     currentLang = (r && r.value) ? r.value : 'ar';
   }catch(e){ currentLang = 'ar'; }
   // مفتاح users قديم/غير مستخدم فعلياً في أي قرار صلاحية حالياً (النظام الحقيقي
   // بالكامل عبر SERVER_AUTH_ROLE من الخادم منذ إزالة شاشة الدخول المحلي القديمة)،
   // فنحمّله فقط لو الدور الحالي admin — تمهيداً لتقييده على مستوى السيرفر بأمان
   // بدون أي طلب مرفوض أو رسالة خطأ مربكة لباقي الأدوار.
-  if (normalizeRole(SERVER_AUTH_ROLE) === 'admin') {
+  if (wantUsers) {
     try{
-      const r = await window.storage.get('users', false);
+      const r = kv.users;
       users = r && r.value ? JSON.parse(r.value) : [];
     }catch(e){ users = []; }
     if(!users.length){
@@ -703,49 +717,49 @@ async function loadData(){
     users = [];
   }
   try{
-    const r = await window.storage.get('auditLog', false);
+    const r = kv.auditLog;
     auditLog = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ auditLog = []; }
   try{
-    const r = await window.storage.get('companies', false);
+    const r = kv.companies;
     companies = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ companies = []; }
   try{
-    const r = await window.storage.get('companyTransfers', false);
+    const r = kv.companyTransfers;
     companyTransfers = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ companyTransfers = []; }
   try{
-    const r = await window.storage.get('journalEntries', false);
+    const r = kv.journalEntries;
     journalEntries = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ journalEntries = []; }
   try{
-    const r = await window.storage.get('chartOfAccounts', false);
+    const r = kv.chartOfAccounts;
     chartOfAccounts = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ chartOfAccounts = []; }
   seedChartOfAccountsIfEmpty();
   try{
-    const r = await window.storage.get('journalDE', false);
+    const r = kv.journalDE;
     journalDE = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ journalDE = []; }
   try{
-    const r = await window.storage.get('budgetEntries', false);
+    const r = kv.budgetEntries;
     budgetEntries = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ budgetEntries = []; }
   try{
-    const r = await window.storage.get('suppliers', false);
+    const r = kv.suppliers;
     suppliers = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ suppliers = []; }
   try{
-    const r = await window.storage.get('purchases', false);
+    const r = kv.purchases;
     purchases = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ purchases = []; }
   await migratePurchaseAttachmentsOut();
   try{
-    const r = await window.storage.get('manualSalesInvoices', false);
+    const r = kv.manualSalesInvoices;
     manualSalesInvoices = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ manualSalesInvoices = []; }
   try{
-    const r = await window.storage.get('zakatAdjustments', false);
+    const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
   }catch(e){ zakatAdjustments = {}; }
 }
