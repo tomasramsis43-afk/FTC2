@@ -2797,7 +2797,22 @@ async function renderTable(){
       // غير منطقية — نتجاهلها ونكمل تلقائياً للمسار المحلي الكامل أدناه بدل عرض جدول فارغ
       // خطأً للمستخدم رغم وجود بيانات فعلية.
       const noRealFilter = !q && !fc && !fn && !dfrom && !dto;
-      if(data.total === 0 && noRealFilter && clients.length > 0){
+      // نفس الفكرة، لكن لحالة فلتر السنة العام أعلى البرنامج تحديداً: هذا الفلتر يضبط
+      // cl-date-from/cl-date-to تلقائياً، فيصبح "فلتر تاريخ فقط" (بدون بحث/فلاتر أخرى).
+      // لو الجدول المفهرس clients_rows بالسيرفر غير متزامن مع سنة معينة، سيرجع صفر رغم وجود
+      // عملاء فعليين بهذا التاريخ محمّلين محلياً بالفعل — نتحقق من ذلك محلياً قبل تصديق الصفر.
+      const onlyDateFilter = !q && !fc && !fn && (dfrom || dto);
+      let localMatchesInDateRange = 0;
+      if(onlyDateFilter){
+        localMatchesInDateRange = clients.filter(c=>{
+          const d = c.date || '';
+          if(!d) return false;
+          if(dfrom && d < dfrom) return false;
+          if(dto && d > dto) return false;
+          return true;
+        }).length;
+      }
+      if(data.total === 0 && (noRealFilter || (onlyDateFilter && localMatchesInDateRange > 0))){
         throw new Error('server returned suspicious empty result');
       }
       renderClientsTableRows(data.rows, data.total, data.total, pageSize);
