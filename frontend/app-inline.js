@@ -3146,7 +3146,7 @@ ADVANCED_FILTER_IDS.forEach(id=>{
 });
 updateAdvancedFiltersBadge();
 
-$('#table-body').addEventListener('click', async e=>{
+document.addEventListener('click', async e=>{
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
   const invId = e.target.dataset.invoice;
@@ -3221,29 +3221,47 @@ $('#table-body').addEventListener('click', async e=>{
   }
 });
 
-/* ---------------- قائمة إجراءات الصف (⋮) في جدول العملاء ----------------
-   نستخدم position:fixed مع حساب الموضع عبر JS بدل position:absolute العادي،
-   لأن الجدول داخل .table-scroll (overflow:auto) وأي قائمة absolute كانت
-   ستُقطَع عند حواف منطقة التمرير المرئية. هذا لا يغيّر أي منطق للأزرار نفسها —
-   فقط يُخفيها داخل قائمة منسدلة، فتبقى معالجة النقر الأصلية (data-edit، data-del...)
-   أعلاه تعمل تماماً كما كانت دون أي تعديل. */
+/* ---------------- قائمة إجراءات الصف (⋮) في أي جدول (عملاء / حركات مالية...) ----------------
+   القائمة الفعلية المعروضة للمستخدم ليست القائمة المدمجة داخل صف الجدول (تلك تبقى مخفية
+   دائماً وتُستخدم فقط كـ"قالب" نسخ منه)، بل عنصر واحد مشترك (#global-row-menu-panel) يُضاف
+   مباشرة إلى نهاية <body> (portal) عند كل فتح. هذا يضمن ظهورها دائماً فوق كل نصوص/خطوط/صفوف
+   الجدول ولا تُغطّى بها أبداً، لأنها فعلياً لم تعد جزءاً من شجرة DOM الخاصة بالجدول (ولا من أي
+   Stacking Context أو منطقة overflow داخله) وقت ظهورها — بدل الاعتماد فقط على z-index/position:fixed
+   داخل مكانها الأصلي وسط صفوف الجدول.
+   نستمر في حساب الموضع عبر JS (getBoundingClientRect) بدل الاعتماد على مكانها الأصلي، لأن
+   الجدول داخل .table-scroll (overflow:auto) وأي قائمة عادية كانت ستُقطَع عند حواف منطقة التمرير. */
 let openRowMenuPanel = null;
+let openRowMenuToggle = null;
+function getGlobalRowMenuPanel(){
+  let el = document.getElementById('global-row-menu-panel');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'global-row-menu-panel';
+    el.className = 'row-menu-panel';
+    el.setAttribute('role','menu');
+    document.body.appendChild(el);
+  }
+  return el;
+}
 function closeRowMenu(){
   if(openRowMenuPanel){
     openRowMenuPanel.classList.remove('show');
-    const toggle = openRowMenuPanel.previousElementSibling;
-    if(toggle) toggle.setAttribute('aria-expanded','false');
+    openRowMenuPanel.innerHTML = '';
+    if(openRowMenuToggle) openRowMenuToggle.setAttribute('aria-expanded','false');
     openRowMenuPanel = null;
+    openRowMenuToggle = null;
   }
 }
 document.addEventListener('click', e=>{
   const toggle = e.target.closest('.row-menu-toggle');
   if(!toggle) return;
   e.stopPropagation();
-  const panel = toggle.nextElementSibling;
-  if(!panel) return;
-  if(openRowMenuPanel === panel){ closeRowMenu(); return; }
+  const sourcePanel = toggle.nextElementSibling; // القالب المخفي الخاص بهذا الصف تحديداً
+  if(!sourcePanel || !sourcePanel.classList.contains('row-menu-panel')) return;
+  if(openRowMenuToggle === toggle){ closeRowMenu(); return; }
   closeRowMenu();
+  const panel = getGlobalRowMenuPanel();
+  panel.innerHTML = sourcePanel.innerHTML; // ننسخ أزرار هذا الصف (وبياناتها data-edit/data-del...) لحظياً
   const r = toggle.getBoundingClientRect();
   // نقيس أبعاد القائمة الحقيقية أولاً وهي مخفية (visibility:hidden لا تؤثر على القياس
   // خلافاً لـ display:none)، بدل تقدير المكان ثم تصحيحه بعد الظهور — كان هذا يسبب
@@ -3270,12 +3288,20 @@ document.addEventListener('click', e=>{
   panel.style.visibility = '';
   toggle.setAttribute('aria-expanded','true');
   openRowMenuPanel = panel;
+  openRowMenuToggle = toggle;
 });
 // إغلاق القائمة المفتوحة عند اختيار أي إجراء من داخلها، أو عند أي نقر خارجها،
 // أو عند التمرير/تصغير النافذة/الضغط على Esc.
 document.addEventListener('click', e=>{
   if(!openRowMenuPanel) return;
   if(e.target.closest('.row-menu-toggle')) return;
+  const insidePanel = e.target.closest('#global-row-menu-panel');
+  if(insidePanel){
+    // القائمة نفسها لم تعد تُزال تلقائياً بإعادة رسم الجدول (لأنها الآن خارج شجرته)،
+    // لذا نُغلقها يدوياً بعد تنفيذ أي زر إجراء بداخلها ليطابق السلوك السابق.
+    if(e.target.closest('button')) setTimeout(closeRowMenu, 0);
+    return;
+  }
   closeRowMenu();
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeRowMenu(); });
@@ -13641,4 +13667,3 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeClientsCou
     showLicenseScreen('حدث خطأ غير متوقع أثناء التحقق من الترخيص');
   }
 })();
-
