@@ -2974,27 +2974,25 @@ async function renderTable(){
       if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
       if(!res.ok) throw new Error('server pagination failed');
       const data = await res.json();
-      // حماية إضافية: لو السيرفر رجّع 0 نتيجة بدون أي بحث/فلتر فعلي بينما عندنا فعلاً
-      // عملاء محمّلين محلياً (مثال: خلل مؤقت في مزامنة clients_rows بالسيرفر)، هذه نتيجة
-      // غير منطقية — نتجاهلها ونكمل تلقائياً للمسار المحلي الكامل أدناه بدل عرض جدول فارغ
-      // خطأً للمستخدم رغم وجود بيانات فعلية.
-      const noRealFilter = !q && !fc && !fn && !dfrom && !dto;
-      // نفس الفكرة، لكن لحالة فلتر السنة العام أعلى البرنامج تحديداً: هذا الفلتر يضبط
-      // cl-date-from/cl-date-to تلقائياً، فيصبح "فلتر تاريخ فقط" (بدون بحث/فلاتر أخرى).
-      // لو الجدول المفهرس clients_rows بالسيرفر غير متزامن مع سنة معينة، سيرجع صفر رغم وجود
-      // عملاء فعليين بهذا التاريخ محمّلين محلياً بالفعل — نتحقق من ذلك محلياً قبل تصديق الصفر.
-      const onlyDateFilter = !q && !fc && !fn && (dfrom || dto);
-      let localMatchesInDateRange = 0;
-      if(onlyDateFilter){
-        localMatchesInDateRange = clients.filter(c=>{
-          const d = c.date || '';
-          if(!d) return false;
-          if(dfrom && d < dfrom) return false;
-          if(dto && d > dto) return false;
-          return true;
-        }).length;
-      }
-      if(data.total === 0 && (noRealFilter || (onlyDateFilter && localMatchesInDateRange > 0))){
+      // حماية عامة: لو السيرفر رجّع 0 نتيجة لأي تركيبة فلاتر (بحث/نوع دورة/جنسية/تاريخ)، بينما
+      // نفس هذه الفلاتر مطبّقة محلياً على البيانات المحمّلة أصلاً بالمتصفح (clients) تُعطي نتائج
+      // فعلية — هذا يعني عدم تطابق بين clients_rows على السيرفر والبيانات الحقيقية (مثال: نوع
+      // دورة تمت إعادة تسميته، أو خلل مؤقت في مزامنة clients_rows)، فنتجاهل رد السيرفر المضلِّل
+      // ونكمل تلقائياً للمسار المحلي الكامل أدناه (فلترة دقيقة 100% من نفس البيانات) بدل عرض
+      // جدول فارغ خطأً للمستخدم رغم وجود بيانات فعلية مطابقة.
+      const localMatches = clients.filter(c=>{
+        if(q){
+          const hay = [c.name, c.clientId, c.referNum, c.invoice].map(v=>String(v||'').toLowerCase());
+          if(!hay.some(v=>v.includes(q.toLowerCase()))) return false;
+        }
+        if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
+        else if(fc && c.courseType!==fc) return false;
+        if(fn && c.nationality!==fn) return false;
+        if(dfrom && (!c.date || c.date<dfrom)) return false;
+        if(dto && (!c.date || c.date>dto)) return false;
+        return true;
+      }).length;
+      if(data.total === 0 && localMatches > 0){
         throw new Error('server returned suspicious empty result');
       }
       renderClientsTableRows(data.rows, data.total, data.total, pageSize);
@@ -13866,9 +13864,11 @@ function closeClientsCourseSubmenu(){
 function renderClientsCourseSubmenu(){
   if(!clientsCourseSubmenu) return;
   const courses = settings.courses || [];
-  let html = `<button type="button" data-course-filter="">كل الدورات</button>`;
+  const currentVal = $('#filter-course') ? $('#filter-course').value : '';
+  const isActive = (v)=> v===currentVal ? ' class="active-course-filter" aria-current="true"' : '';
+  let html = `<button type="button" data-course-filter=""${isActive('')}>كل الدورات</button>`;
   if(courses.length){
-    html += courses.map(c=>`<button type="button" data-course-filter="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`).join('');
+    html += courses.map(c=>`<button type="button" data-course-filter="${escapeHtml(c.name)}"${isActive(c.name)}>${escapeHtml(c.name)}</button>`).join('');
   } else {
     html += `<div class="nav-submenu-empty">لا توجد أنواع دورات معرَّفة بعد</div>`;
   }
@@ -13893,7 +13893,14 @@ clientsCourseSubmenu?.addEventListener('click', (e)=>{
   const sel = $('#filter-course');
   if(sel) sel.value = courseName;
   renderTable();
-  closeClientsCourseSubmenu();
+  // نُبقي القائمة مفتوحة بعد الاختيار (بدل إغلاقها فوراً)، ونُحدِّث فقط علامة "المختار حالياً"
+  // على الزر المضغوط عليه — حتى يقدر المستخدم يقارن بين أكتر من نوع دورة بسهولة من نفس القائمة
+  // دون إعادة فتحها في كل مرة، ويشوف بوضوح أي تبويب مفعَّل الآن.
+  clientsCourseSubmenu.querySelectorAll('[data-course-filter]').forEach(b=>{
+    const active = b === btn;
+    b.classList.toggle('active-course-filter', active);
+    if(active) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current');
+  });
 });
 document.addEventListener('click', (e)=>{
   if(clientsCourseSubmenu?.classList.contains('show') && !clientsFlyoutWrap.contains(e.target)) closeClientsCourseSubmenu();
