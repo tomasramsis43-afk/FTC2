@@ -2670,33 +2670,83 @@ function currentTablePageSize(){
   const v = $('#table-page-size')?.value || '100';
   return v==='all' ? Infinity : Number(v);
 }
-function renderTable(){
-  let rows = filteredClients();
-  const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = rows.length;
-  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = clients.length;
-
-  $('#empty-state').style.display = rows.length ? 'none' : 'block';
-
-  // إعادة الصفحة إلى الأولى تلقائياً كلما تغيّر البحث أو أي فلتر (وليس عند التنقّل بين الصفحات فقط)
+let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالية سريعة (تغيير صفحة/فلتر قبل وصول رد الطلب السابق)
+// الأعمدة المدعومة للفرز من السيرفر (مطابقة لِما يدعمه GET /api/clients بالضبط) — أي فرز
+// بعمود آخر (مثل الإجمالي/المدفوع/المتبقي، التي تحتاج حسابات معقّدة) يُبقي الوضع على المسار المحلي.
+const SERVER_SORTABLE_CLIENT_COLS = { name:1, date:1, clientId:1, courseType:1, nationality:1 };
+function clientsQueryIsSimple(){
+  if(showSuspendedOnly || showUnpurchasedBagsOnly) return false;
+  if($('#filter-company')?.value) return false;
+  if($('#filter-invoice')?.value) return false;
+  if($('#filter-coursenum')?.value) return false;
+  if($('#filter-refnum')?.value) return false;
+  if(($('#cl-paid-min')?.value||'') !== '' || ($('#cl-paid-max')?.value||'') !== '') return false;
+  if($('#filter-status')?.value) return false; // مدين/مسدد يحتاج حساب المتبقي الكامل (خصومات، دفعات...)
+  if(clientsSortState.key && !SERVER_SORTABLE_CLIENT_COLS[clientsSortState.key]) return false;
+  return true;
+}
+async function renderTable(){
+  const mySeq = ++renderTableSeq;
   const filterSig = JSON.stringify([
     $('#search')?.value, $('#filter-course')?.value, $('#filter-nat')?.value, $('#filter-status')?.value,
     $('#filter-company')?.value, $('#filter-invoice')?.value, $('#filter-coursenum')?.value, $('#filter-refnum')?.value, $('#cl-date-from')?.value, $('#cl-date-to')?.value,
     $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly
   ]);
   if(filterSig !== tableLastFilterSig){ tableCurrentPage = 1; tableLastFilterSig = filterSig; }
-
   const pageSize = currentTablePageSize();
+
+  if(clientsQueryIsSimple() && Number.isFinite(pageSize)){
+    // المسار السريع: نطلب من السيرفر فقط سجلات الصفحة الحالية (ترقيم/بحث/فلترة حقيقية من قاعدة
+    // البيانات)، بدل تحميل ومعالجة وتقطيع آلاف السجلات المحمّلة أصلاً بالمتصفح في كل مرة — أخف
+    // وأسرع بكثير على جهاز المستخدم، خصوصاً على الجوال. أي فلتر غير مدعوم بالسيرفر (البند أعلاه)
+    // يُبقي العمل بالطريقة المحلية القديمة تماماً كما كانت قبل هذا التحديث دون أي فرق في النتيجة.
+    try{
+      const params = new URLSearchParams();
+      params.set('page', tableCurrentPage);
+      params.set('pageSize', pageSize);
+      const q = ($('#search')?.value||'').trim(); if(q) params.set('search', q);
+      const fc = $('#filter-course')?.value; if(fc && fc!=='__unknown__') params.set('courseType', fc);
+      const fn = $('#filter-nat')?.value; if(fn) params.set('nationality', fn);
+      const dfrom = $('#cl-date-from')?.value; if(dfrom) params.set('dateFrom', dfrom);
+      const dto = $('#cl-date-to')?.value; if(dto) params.set('dateTo', dto);
+      if(clientsSortState.key){ params.set('sort', clientsSortState.key); params.set('order', clientsSortState.dir===-1?'desc':'asc'); }
+      const res = await serverFetch('/api/clients?'+params.toString());
+      if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
+      if(!res.ok) throw new Error('server pagination failed');
+      const data = await res.json();
+      renderClientsTableRows(data.rows, data.total, data.total, pageSize);
+      return;
+    }catch(e){
+      // فشل الاتصال بالمسار السريع (مثلاً الخادم نائم لحظياً على الاستضافة المجانية) — نكمل
+      // فوراً بالطريقة المحلية القديمة أدناه كخط رجعة آمن، بدون أي رسالة خطأ مزعجة للمستخدم
+    }
+  }
+
+  // المسار الكامل المحلي (فلاتر/فرز غير مدعوم بالسيرفر، أو تعذّر الاتصال بالمسار السريع أعلاه) —
+  // نفس المنطق والنتيجة تماماً كما كانا قبل إضافة الترقيم من السيرفر.
+  let rows = filteredClients();
+  if(mySeq !== renderTableSeq) return;
   const totalPages = Number.isFinite(pageSize) ? Math.max(1, Math.ceil(rows.length/pageSize)) : 1;
   if(tableCurrentPage > totalPages) tableCurrentPage = totalPages;
   if(tableCurrentPage < 1) tableCurrentPage = 1;
   const pageRows = Number.isFinite(pageSize) ? rows.slice((tableCurrentPage-1)*pageSize, tableCurrentPage*pageSize) : rows;
+  renderClientsTableRows(pageRows, rows.length, clients.length, pageSize);
+}
+// يرسم صفوف الجدول وشريط الترقيم فعلياً — يُستخدَم من كلا مساري renderTable (السيرفر والمحلي)
+// حتى لا يتكرر كود بناء HTML للصف في مكانين قد يختلفان عن بعض بمرور الوقت.
+function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
+  const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
+  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = clients.length;
 
+  $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
+
+  const totalPages = Number.isFinite(pageSize) ? Math.max(1, Math.ceil(filteredTotal/pageSize)) : 1;
   const pag = $('#table-pagination');
   if(pag){
-    pag.style.display = rows.length ? '' : 'none';
-    const startN = rows.length ? (tableCurrentPage-1)*(Number.isFinite(pageSize)?pageSize:rows.length)+1 : 0;
-    const endN = Number.isFinite(pageSize) ? Math.min(rows.length, tableCurrentPage*pageSize) : rows.length;
-    $('#table-page-info').textContent = rows.length ? `عرض ${startN} - ${endN} من ${rows.length}` : '';
+    pag.style.display = filteredTotal ? '' : 'none';
+    const startN = filteredTotal ? (tableCurrentPage-1)*(Number.isFinite(pageSize)?pageSize:filteredTotal)+1 : 0;
+    const endN = Number.isFinite(pageSize) ? Math.min(filteredTotal, tableCurrentPage*pageSize) : filteredTotal;
+    $('#table-page-info').textContent = filteredTotal ? `عرض ${startN} - ${endN} من ${filteredTotal}` : '';
     $('#table-page-current').textContent = `صفحة ${tableCurrentPage} / ${totalPages}`;
     $('#table-page-first').disabled = tableCurrentPage<=1;
     $('#table-page-prev').disabled = tableCurrentPage<=1;
@@ -2742,7 +2792,7 @@ function renderTable(){
   // نحذف من التحديد أي عميل لم يعد موجوداً أصلاً (حُذف من مكان آخر)، حتى لا يبقى تحديد "شبح"
   const allIds = new Set(clients.map(c=>c.id));
   [...selectedClientIds].forEach(id=>{ if(!allIds.has(id)) selectedClientIds.delete(id); });
-  renderBulkSelectionBar(rows);
+  renderBulkSelectionBar({length: filteredTotal});
 }
 
 let selectedClientIds = new Set();
