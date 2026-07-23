@@ -217,6 +217,8 @@
   .nav-submenu.show{display:block; animation:popIn .18s cubic-bezier(.22,.9,.32,1);}
   .nav-submenu button{display:block; width:100%; text-align:right; background:transparent; border:none; color:#C9D4DE; padding:8px 10px; border-radius:7px; font-family:inherit; font-size:13px; cursor:pointer;}
   .nav-submenu button:hover{background:rgba(255,255,255,.08); color:#fff;}
+  .nav-submenu button.active-course-filter{background:color-mix(in srgb, var(--gold) 18%, transparent); color:var(--gold); font-weight:700;}
+  .nav-submenu button.active-course-filter::after{content:'✓'; float:left; font-weight:700;}
   .nav-submenu .nav-submenu-empty{color:#8B93A0; font-size:12px; padding:8px 10px;}
   nav.tabs button.active{background:color-mix(in srgb, var(--gold) 14%, transparent); color:var(--gold); font-weight:700; border-inline-start-color:var(--gold);}
   nav.tabs button:not(.active):hover{background:rgba(255,255,255,.06); color:#fff;}
