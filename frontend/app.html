@@ -419,7 +419,12 @@
     .table-scroll.cards-mobile tbody td.card-full::before{display:block; margin-bottom:4px;}
   }
   /* قائمة إجراءات الصف (⋮) في الجداول */
-  .row-menu{position:relative; display:inline-block;}
+  /* z-index أعلى من الأعمدة المثبّتة (.sticky-col: z-index 2، رأس الجدول المثبّت: 3) —
+     بدونها كان زر "⋮" يظهر خلف عمود الاسم/رقم الهوية المثبّت في بعض الصفوف (خصوصاً
+     عند التمرير الأفقي)، لأن position:sticky يُطبَع فوق العناصر غير المُموضعة دائماً
+     بغض النظر عن ترتيبها بالصفحة. هذا الإصلاح عام لكل الجداول (عملاء، خزنة، مشتريات...)
+     لأنها كلها تستخدم نفس الكلاس المشترك .row-menu. */
+  .row-menu{position:relative; z-index:6; display:inline-block;}
   .row-menu-toggle{font-size:17px; line-height:1; padding:6px 12px; font-weight:700; letter-spacing:1px;}
   .row-menu-toggle[aria-expanded="true"]{background:var(--surface-alt);}
   .row-menu-panel{display:none; position:fixed; z-index:55; min-width:168px; max-width:240px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-hover); padding:6px; flex-direction:column; gap:3px; animation:popIn .14s cubic-bezier(.22,.9,.32,1);}
