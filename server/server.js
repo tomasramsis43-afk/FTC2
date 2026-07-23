@@ -418,6 +418,31 @@ app.get('/api/storage', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/storage-versions -> { versions: { key: version } } لكل المفاتيح دفعة واحدة، بدل طلب
+// منفصل بالنسخة الحالية لكل مفتاح (كان يعني اتصالاً بالسيرفر لكل مفتاح في كل فتحة للبرنامج).
+// تستخدمها الواجهة عند فتح البرنامج للمقارنة السريعة بين النسخة المخزّنة محلياً على الجهاز ونسخة
+// السحابة: لو كل الأرقام متطابقة، لا يوجد أي نقل بيانات إضافي (البرنامج يعمل بالفعل من أحدث نسخة
+// محفوظة محلياً). لو اختلف رقم مفتاح أو أكثر، الواجهة تجلب القيمة الكاملة لتلك المفاتيح فقط
+// عبر GET /api/storage/:key كالمعتاد — بدل تحميل كل البيانات من جديد في كل مرة.
+app.get('/api/storage-versions', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT key, version FROM kv_store');
+    const versions = {};
+    r.rows.forEach(row => {
+      if (row.key in RESTRICTED_STORAGE_KEYS) {
+        const view = RESTRICTED_STORAGE_KEYS[row.key];
+        const allowed = view === null ? req.user.role === 'admin' : roleCanAccessView(req.user.role, view);
+        if (!allowed) return; // لا نُظهر حتى رقم نسخة مفتاح لا يملك المستخدم صلاحية قراءته
+      }
+      versions[row.key] = row.version;
+    });
+    res.json({ versions });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب نسخ البيانات' });
+  }
+});
+
 /* ---------------- قراءة فواتير الدورات من ملفات حقيقية (PDF/صور) بالذكاء الاصطناعي ----------------
    تستقبل مجموعة ملفات (Base64)، وترسل كل ملف لـ Claude API لاستخراج البيانات المطبوعة داخله فقط
    (رقم الهوية، رقم الفاتورة، تاريخ الفاتورة، القيمة الفعلية). لا شيء يُحفظ هنا في قاعدة البيانات —
