@@ -3281,11 +3281,14 @@ document.addEventListener('click', e=>{
   const top = openUp
     ? Math.max(8, r.top - ph - 4)
     : Math.min(r.bottom + 4, window.innerHeight - ph - 8);
-  // في تصميم RTL، القائمة يجب أن تُحاذي حافتها اليمنى مع الحافة اليمنى لزر (⋮)
-  // وتمتد لليسار، وليس محاذاة الحافة اليسرى (r.left) كما كان سابقاً — كان هذا يجعل
-  // القائمة تمتد لجهة خاطئة فتغطي أجزاءً من الصف/البطاقة المجاورة بدل الظهور
-  // بدقة أسفل زرها.
-  const left = Math.max(8, Math.min(r.right - pw, window.innerWidth - pw - 8));
+  // نُحاصر القائمة أفقياً داخل حدود صندوق الجدول نفسه (.panel/.table-scroll) وليس عرض
+  // النافذة كله — كانت القائمة أحياناً تمتد لليسار خارج حدود الصندوق (فوق الخلفية/الشريط
+  // الجانبي) لأن الحساب كان يعتمد على window.innerWidth فقط، بغض النظر عن عرض الجدول الفعلي.
+  const container = toggle.closest('.panel') || toggle.closest('.table-scroll');
+  const cRect = container ? container.getBoundingClientRect() : null;
+  const minLeft = cRect ? cRect.left + 6 : 8;
+  const maxLeft = cRect ? Math.max(minLeft, cRect.right - pw - 6) : window.innerWidth - pw - 8;
+  const left = Math.max(minLeft, Math.min(r.right - pw, maxLeft));
   panel.style.top = Math.max(8, top) + 'px';
   panel.style.left = left + 'px';
   panel.style.visibility = '';
