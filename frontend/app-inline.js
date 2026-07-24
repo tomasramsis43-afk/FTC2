@@ -547,8 +547,8 @@ const DEFAULT_SETTINGS = {
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
-  themeColors: { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' },
-  themePresetId: 'classic',
+  themeColors: { navy:'#3F5EDB', navyDark:'#232C5C', gold:'#E8A33D', goldDark:'#C27F1E', goldSoft:'#F0C27A', teal:'#0E9488', red:'#DC4C4C' },
+  themePresetId: 'midnightslate',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
@@ -582,7 +582,10 @@ const EDITABLE_ROLES = [
   {id:'reception', label:'استقبال'}
 ];
 /* أطقم ألوان جاهزة (سيمز) — لوحات هادئة وراقية، تُطبَّق بضغطة واحدة بدل اختيار كل لون يدوياً */
+// الألوان الكلاسيكية القديمة (قبل صدور طقم "كحلي نيلي وذهبي" الجديد) — تُستخدم فقط لمقارنة ترقية لمرة واحدة أدناه
+const DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS = { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' };
 const THEME_PRESETS = [
+  { id:'midnightslate', name:'كحلي نيلي وذهبي (الافتراضي الجديد)', colors:{ navy:'#3F5EDB', navyDark:'#232C5C', gold:'#E8A33D', goldDark:'#C27F1E', goldSoft:'#F0C27A', teal:'#0E9488', red:'#DC4C4C' } },
   { id:'classic', name:'كحلي وذهبي كلاسيكي', colors:{ navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' } },
   { id:'forestcopper', name:'أخضر داكن ونحاسي', colors:{ navy:'#1F4A3D', navyDark:'#123028', gold:'#B5651D', goldDark:'#8F4E16', goldSoft:'#D98F52', teal:'#2F6B5E', red:'#A83D32' } },
   { id:'graysilver', name:'رمادي أنيق وفضي', colors:{ navy:'#4A5560', navyDark:'#2E363D', gold:'#8C8578', goldDark:'#6B6558', goldSoft:'#B5AFA0', teal:'#5E7A78', red:'#A15048' } },
@@ -825,7 +828,7 @@ function fillThemeColorInputs(){ renderThemePresetsGrid(); }
 function renderThemePresetsGrid(){
   const wrap = $('#theme-presets-grid');
   if(!wrap) return;
-  const activeId = settings.themePresetId || 'classic';
+  const activeId = settings.themePresetId || 'midnightslate';
   wrap.innerHTML = THEME_PRESETS.map(p=>{
     const isActive = p.id === activeId;
     const dots = ['navy','gold','teal','red'].map(k=>`<span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:${p.colors[k]}; border:1px solid rgba(0,0,0,.15);"></span>`).join('');
@@ -1173,7 +1176,21 @@ async function loadData(cacheOnly){
       // إكمال أي لون مفقود بالقيمة الافتراضية (توافقاً مع نسخ قديمة محفوظة)
       Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
     }
-    if(!settings.themePresetId) settings.themePresetId = 'classic';
+    if(!settings.themePresetId) settings.themePresetId = 'midnightslate';
+    // ترقية لمرة واحدة: أي حساب اتظبط تلقائياً على الطقم الكلاسيكي القديم (قبل صدور هذا التحديث)
+    // ولم يغيّر ألوانه يدوياً بنفسه، يُنقل تلقائياً للطقم الجديد الافتراضي (كحلي نيلي وذهبي).
+    // لا تُطبَّق على أي حساب اختار "كلاسيكي" بنفسه بعد تعديل ألوانه يدوياً.
+    if(!settings._themeDefaultMigratedV2){
+      const oldClassicColors = DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS;
+      const isUnmodifiedClassic = settings.themePresetId==='classic' &&
+        Object.keys(oldClassicColors).every(k=> settings.themeColors[k]===oldClassicColors[k]);
+      if(isUnmodifiedClassic || !settings.themePresetId){
+        settings.themePresetId = 'midnightslate';
+        settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='midnightslate').colors));
+      }
+      settings._themeDefaultMigratedV2 = true;
+      await saveSettings();
+    }
     if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
     else{
       if(settings.pinLock.enabled===undefined) settings.pinLock.enabled = false;
@@ -2813,7 +2830,7 @@ function drawBars(sel, entries, limit=20, formatter){
 }
 
 /* لوحة ألوان الشارت الدائري — امتداد من نفس هوية ألوان البرنامج (gold/navy/teal/red) لعدد فئات أكبر */
-const DONUT_COLORS = ['#E8951F','#2F6C9E','#2B7568','#B03F31','#C97814','#5B8AA6','#4FA394','#D9A76A','#8C6E3E','#7C93A8','#E0B583','#3E5C76'];
+const DONUT_COLORS = ['#E8A33D','#3F5EDB','#0E9488','#DC4C4C','#C27F1E','#7C93E0','#4FBFAE','#F0C27A','#8C6E3E','#9AACEE','#F2C98A','#5E76C9'];
 
 /* رسم بياني دائري (Donut) بألوان هوية البرنامج — يجمع بين الأناقة (فراغ مركزي، نهايات مدورة، فواصل ناعمة)
    وحيوية بصرية أعصر (تدرّج لوني خفيف وظل رقيق لكل شريحة) دون كسر الطابع الهادئ للواجهة. */
@@ -3460,12 +3477,11 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
 
 /* تطبيع رقم جوال العميل ليتوافق مع صيغة واتساب الدولية (يفترض أرقام السعودية عند غياب رمز الدولة) */
 function normalizePhoneForWhatsapp(phone){
-  let p = String(phone||'').trim().replace(/[^\d+]/g,'');
+  let p = String(phone||'').replace(/[^0-9]/g,'');
   if(!p) return '';
-  p = p.replace(/^\+/, '');
   if(p.startsWith('00')) p = p.slice(2);
   if(p.startsWith('0')) p = '966' + p.slice(1);          // 05XXXXXXXX -> 9665XXXXXXXX
-  else if(/^5\d{8}$/.test(p)) p = '966' + p;              // 5XXXXXXXX (بدون صفر) -> 9665XXXXXXXX
+  else if(p.length===9 && p.startsWith('5')) p = '966' + p; // 5XXXXXXXX (بدون صفر) -> 9665XXXXXXXX
   if(!/^\d{8,15}$/.test(p)) return '';
   return p;
 }
@@ -3496,7 +3512,7 @@ function phoneWithWhatsapp(phone){
    بدل تكرار نفس قواعد CSS يدوياً في كل دالة طباعة على حدة —
    أي تعديل على شكل الطباعة (لون، خط، مسافات) يتم هنا فقط ويظهر في كل المستندات.
    ============================================================ */
-const PRINT_PALETTE = { navy:'#1C3A52', gold:'#C97814', red:'#B03F31', text:'#1E2530', muted:'#626B78', border:'#DBE1E8', surfaceAlt:'#E7EBF0' };
+const PRINT_PALETTE = { navy:'#232C5C', gold:'#C27F1E', red:'#DC4C4C', text:'#171B2E', muted:'#6B7290', border:'#E1E5F2', surfaceAlt:'#EEF1FA' };
 
 function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, variant = 'full'} = {}){
   const p = PRINT_PALETTE;
@@ -4365,15 +4381,7 @@ function openBulkUpdateModal(){
 function closeBulkUpdateModal(){ $('#bulk-update-overlay').classList.remove('show'); }
 
 /* ---------------- إرسال رسالة واتساب جماعية للعملاء المحددين (wa.me تسلسلي) ---------------- */
-function normalizePhoneForWhatsapp(raw){
-  if(!raw) return '';
-  let digits = String(raw).replace(/[^0-9]/g, '');
-  if(!digits) return '';
-  if(digits.startsWith('00')) digits = digits.slice(2);
-  if(digits.startsWith('0')) digits = '966' + digits.slice(1); // رقم سعودي محلي يبدأ بصفر
-  else if(digits.length===9 && digits.startsWith('5')) digits = '966' + digits; // بدون صفر وبدون كود الدولة
-  return digits;
-}
+/* تستخدم دالة normalizePhoneForWhatsapp الموحّدة المعرَّفة أعلى الملف (تشمل التحقق من صحة طول الرقم) */
 let bulkMsgQueue = [];
 let bulkMsgIndex = 0;
 let bulkMsgTemplate = '';
@@ -11805,7 +11813,7 @@ function renderCompanyPersons(){
           <td class="mono">${fmt(num(tr.courseValue))}</td>
           <td class="mono">${fmt(num(tr.bagValue))}</td>
           <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بشيت العملاء بعد</span>'}</td>
+          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بشيت العملاء بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -11843,7 +11851,7 @@ function renderTraineesTableHtml(t, trainees){
             <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
             <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
             <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
+            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
             <td class="card-full" data-label="">
               <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
               <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
@@ -12139,7 +12147,7 @@ function renderCompanies(){
               <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
               <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
               <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
+              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
               <td class="card-full" data-label="">
                 <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
                 <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
@@ -12652,6 +12660,13 @@ document.addEventListener('click', async e=>{
       showToast('تم الحذف');
     }
   }
+  if(e.target.dataset.linktrainee){
+    const [transferId, traineeId] = e.target.dataset.linktrainee.split('|');
+    await linkSingleTraineeToClient(transferId, traineeId);
+  }
+  if(e.target.id==='btn-link-unlinked-persons'){
+    await linkAllUnlinkedTrainees();
+  }
   if(e.target.dataset.deltransfer){
     const transferId = e.target.dataset.deltransfer;
     const t = companyTransfers.find(x=>x.id===transferId);
@@ -12750,6 +12765,73 @@ document.addEventListener('click', async e=>{
     showToast('عدّل البيانات ثم اضغط "تحديث بيانات الشركة"');
   }
 });
+
+/* ---------------- ربط متدرب حالي (موجود ضمن حوالة شركة) بشيت العملاء إن لم يكن مرتبطاً ----------------
+   يُستخدم لإصلاح حوالات قديمة أُضيف لها متدربون قبل ربطهم تلقائياً بشيت العملاء، أو أي حالة أخرى
+   تسبّب فيها فقدان الربط. يُنشئ سجل عميل كامل بنفس منطق الإنشاء التلقائي المستخدَم عند إضافة متدرب جديد. */
+function createClientForUnlinkedTrainee(t, tr){
+  const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
+  const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
+  const bagValue = num(tr.bagValue);
+  const client = {
+    id: uid(), createdAt: Date.now(),
+    clientId: tr.clientId, name: `متدرب شركة (${tr.clientId})`,
+    phone:'', nationality:'',
+    clientType:'company', companyName: t.companyName, creditDays:'',
+    clientTaxNumber:'', courseType:'', courseNumber:'',
+    referNum:'', invoice:'', bagInvoice:'',
+    date: t.date || todayISO(),
+    coursePrice: num(tr.courseValue),
+    bagSource: bagValue>0 ? 'stock' : 'own',
+    bagPrice: bagValue,
+    bagStatus: bagValue>0 ? 'purchased' : 'n/a',
+    bagPurchaseDate: bagValue>0 ? (t.date||todayISO()) : undefined,
+    discount: 0,
+    paid: num(tr.courseValue)+bagValue,
+    channel: payMethod0, networkInvoice:'',
+    paid2:0, channel2:'', networkInvoice2:'',
+    stage:'جديد', cancelled:false,
+    notes: `تم ربطه يدوياً بشيت العملاء من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}`
+  };
+  clients.push(client);
+  if(bagValue>0){
+    bagStock.push({
+      id: uid(), type:'issue', qty:-1, unitPrice:0,
+      date: client.bagPurchaseDate, createdAt: Date.now(),
+      issuedClientId: client.id, issuedClientName: client.name,
+      notes: `تسليم من المخزون للعميل: ${client.name} (ربط يدوي من حوالة الشركة "${t.companyName}")`
+    });
+  }
+  return client;
+}
+async function linkSingleTraineeToClient(transferId, traineeId){
+  const t = companyTransfers.find(x=>x.id===transferId);
+  const tr = t && (t.trainees||[]).find(x=>x.id===traineeId);
+  if(!t || !tr){ showToast('تعذّر تحديد المتدرب'); return; }
+  if(clients.some(c=>c.clientId===tr.clientId)){ showToast('هذا المتدرب مرتبط بالفعل بشيت العملاء'); return; }
+  snapshotState(`ربط متدرب بشيت العملاء: ${tr.clientId}`);
+  const client = createClientForUnlinkedTrainee(t, tr);
+  if(num(tr.bagValue)>0){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
+  await saveClients();
+  await logAudit('add','تحويلات الشركات', `تم ربط المتدرب (${tr.clientId}) بشيت العملاء يدوياً من حوالة الشركة "${t.companyName}" — تم إنشاء سجل عميل باسم مؤقت (${client.name}) يمكن تعديله من شيت العملاء`);
+  renderCompanies(); renderTable();
+  if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
+  showToast('تم الربط بشيت العملاء');
+}
+async function linkAllUnlinkedTrainees(){
+  const targets = [];
+  companyTransfers.forEach(t=> (t.trainees||[]).forEach(tr=>{ if(!clients.some(c=>c.clientId===tr.clientId)) targets.push({t,tr}); }));
+  if(!targets.length){ showToast('كل المتدربين مرتبطون بالفعل بشيت العملاء'); return; }
+  if(!await customConfirm(`سيتم إنشاء ${targets.length} سجل عميل جديد في شيت العملاء (بأسماء مؤقتة قابلة للتعديل لاحقاً) لكل متدرب غير مرتبط حالياً. متابعة؟`)) return;
+  snapshotState(`ربط ${targets.length} متدرب غير مرتبط بشيت العملاء دفعة واحدة`);
+  let bagAdded = false;
+  targets.forEach(({t,tr})=>{ createClientForUnlinkedTrainee(t,tr); if(num(tr.bagValue)>0) bagAdded=true; });
+  if(bagAdded){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
+  await saveClients();
+  await logAudit('add','تحويلات الشركات', `تم ربط ${targets.length} متدرب دفعة واحدة بشيت العملاء (من مختلف حوالات الشركات) — بأسماء مؤقتة قابلة للتعديل`);
+  renderCompanies(); renderTable();
+  showToast(`تم ربط ${targets.length} متدرب بشيت العملاء`);
+}
 
 /* ---------------- استيراد متدربين مجمّع لحوالة شركة (Excel) ---------------- */
 $('#btn-template-trainees').addEventListener('click', ()=>{

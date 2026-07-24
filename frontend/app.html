@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#123B37">
+<meta name="theme-color" content="#232C5C">
 <title>نظام إدارة عملاء وكورسات المركز</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -380,8 +380,11 @@
   .stamp::before{content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none;}
   .stamp.owe{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent);}
   .stamp.paid{background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal); border-color:color-mix(in srgb, var(--teal) 25%, transparent);}
-  .empty-state{text-align:center; padding:50px 20px; color:var(--text-muted);}
-  .empty-state .big{font-size:34px; margin-bottom:6px;}
+  .empty-state{text-align:center; padding:46px 20px; color:var(--text-muted);}
+  .empty-state .big{
+    font-size:30px; width:64px; height:64px; margin:0 auto 14px; border-radius:50%;
+    background:var(--surface-alt); display:flex; align-items:center; justify-content:center;
+  }
   /* شارة عدد الفلاتر المتقدمة المفعّلة + مسافة الحاوية القابلة للطي */
   .filters-count-badge{display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--gold); color:var(--navy-dark); font-size:10px; font-weight:800; margin:0 3px;}
   .advanced-filters-panel{margin-top:-6px; margin-bottom:10px; background:var(--surface-alt); border-radius:8px; padding:10px 12px;}
@@ -452,10 +455,10 @@
   .row-menu-panel .btn{width:100%; justify-content:flex-start; text-align:right; white-space:nowrap;}
 
   /* ---------- Modal ---------- */
-  .overlay{position:fixed; inset:0; background:rgba(13,33,56,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
+  .overlay{position:fixed; inset:0; background:color-mix(in srgb, var(--navy-dark) 62%, transparent); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
   .overlay.show{display:flex;}
-  .modal{background:var(--surface); border-radius:var(--radius); width:100%; max-width:640px; max-height:90vh; overflow-y:auto; box-shadow:var(--shadow); padding:22px 26px;}
-  .modal h2{margin:0 0 16px; font-size:18px; color:var(--navy); font-family:var(--font-display); font-weight:800;}
+  .modal{background:var(--surface); border-radius:calc(var(--radius) + 4px); width:100%; max-width:640px; max-height:90vh; overflow-y:auto; box-shadow:0 8px 16px rgba(0,0,0,.12), 0 30px 60px -20px rgba(0,0,0,.35); padding:24px 28px; border:1px solid var(--border);}
+  .modal h2{margin:0 0 18px; font-size:18px; color:var(--text); font-family:var(--font-display); font-weight:800; padding-bottom:14px; border-bottom:1px solid var(--border);}
   .formgrid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .formgrid .full{grid-column:1/3;}
   @media(max-width:560px){.formgrid{grid-template-columns:1fr;} .formgrid .full{grid-column:1;}}
@@ -466,11 +469,11 @@
     .modal-actions{flex-wrap:wrap;}
     .modal-actions .btn{flex:1 1 auto;}
   }
-  .field label{display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px; font-weight:500;}
+  .field label{display:block; font-size:12px; color:var(--text-muted); margin-bottom:5px; font-weight:600;}
   .field input, .field select, .field textarea{
-    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13.5px; background:var(--surface);
+    width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:10px; font-family:inherit; font-size:13.5px; background:var(--surface); color:var(--text); transition:border-color .15s ease, box-shadow .15s ease;
   }
-  .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold);}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--navy); box-shadow:0 0 0 3px color-mix(in srgb, var(--navy) 18%, transparent);}
   .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px; border-top:1px solid var(--border); padding-top:16px;}
   .computed{background:var(--surface-alt); border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; font-size:13px; margin-top:4px;}
   .computed b{font-family:'IBM Plex Mono',monospace; color:var(--navy);}
@@ -481,7 +484,7 @@
   .tag button{border:none; background:none; color:var(--red); cursor:pointer; font-size:13px; padding:0;}
   .addrow{display:flex; gap:8px;}
   .addrow input{flex:1;}
-  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(8px); background:var(--navy-dark); color:#fff; padding:11px 22px; border-radius:10px; font-size:13.5px; box-shadow:var(--shadow-hover); opacity:0; transition:opacity .25s ease, transform .25s ease; pointer-events:none; z-index:100; display:flex; align-items:center; gap:8px;}
+  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(8px); background:var(--navy-dark); color:#fff; padding:12px 22px; border-radius:12px; font-size:13.5px; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,.15), 0 16px 32px -10px rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08); opacity:0; transition:opacity .25s ease, transform .25s ease; pointer-events:none; z-index:100; display:flex; align-items:center; gap:9px;}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
   @media(max-width:600px){
     .toast{bottom:14px; left:10px; right:10px; transform:translateY(8px); max-width:none; width:auto; justify-content:center;}
@@ -497,7 +500,8 @@
   .hint{font-size:11.5px; color:var(--text-muted); margin-top:-6px; margin-bottom:10px;}
 
   /* ---------- Login ---------- */
-  .login-box{background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:30px 28px; width:100%; max-width:360px;}
+  .login-box{background:var(--surface); border-radius:calc(var(--radius) + 6px); box-shadow:0 8px 16px rgba(0,0,0,.08), 0 30px 60px -20px rgba(0,0,0,.25); padding:34px 30px 28px; width:100%; max-width:360px; position:relative; overflow:hidden;}
+  .login-box::before{content:''; position:absolute; inset-inline-start:0; top:0; width:100%; height:4px; background:linear-gradient(90deg,var(--navy),var(--gold));}
   .login-box .seal{
     width:60px; height:60px; border-radius:14px; flex:none; margin:0 auto 14px; position:relative;
     display:flex; align-items:center; justify-content:center; overflow:hidden;
@@ -755,6 +759,7 @@
         <select id="cpp-channel"><option value="">كل طرق الدفع</option></select>
         <input type="text" id="cpp-search" placeholder="بحث موحد: رقم الهوية / الاسم / اسم الشركة" style="min-width:240px;">
         <span class="spacer"></span>
+        <button class="btn btn-gold btn-sm" id="btn-link-unlinked-persons">ربط غير المرتبطين بشيت العملاء</button>
         <span class="hint">العدد: <b class="mono" id="cpp-count">0</b></span>
       </div>
       <div id="company-persons-list" style="padding:10px 20px 20px;"></div>
@@ -5590,13 +5595,13 @@
 </div>
 <!-- /app-wrap -->
 
-<div id="pin-lock-screen" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--navy,#1C3A52); color:#fff; align-items:center; justify-content:center; flex-direction:column; gap:16px; text-align:center; padding:20px;">
-  <div style="font-size:52px;">🔒</div>
-  <div style="font-size:20px; font-weight:700;">الشاشة مقفلة</div>
-  <div style="font-size:13px; opacity:.85;">أدخل رقم PIN للمتابعة</div>
-  <input type="password" id="pin-unlock-input" maxlength="4" inputmode="numeric" style="width:170px; text-align:center; font-size:26px; letter-spacing:10px; padding:10px; border-radius:8px; border:none;">
+<div id="pin-lock-screen" style="display:none; position:fixed; inset:0; z-index:99999; background:linear-gradient(160deg, var(--navy-dark,#232C5C), color-mix(in srgb, var(--navy,#3F5EDB) 55%, var(--navy-dark,#232C5C))); color:#fff; align-items:center; justify-content:center; flex-direction:column; gap:14px; text-align:center; padding:20px;">
+  <div style="width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,.1); display:flex; align-items:center; justify-content:center; font-size:28px; margin-bottom:4px;">🔒</div>
+  <div style="font-size:20px; font-weight:800;">الشاشة مقفلة</div>
+  <div style="font-size:13px; opacity:.8;">أدخل رقم PIN للمتابعة</div>
+  <input type="password" id="pin-unlock-input" maxlength="4" inputmode="numeric" style="width:170px; text-align:center; font-size:26px; letter-spacing:10px; padding:12px; border-radius:12px; border:none; box-shadow:0 8px 20px rgba(0,0,0,.25);">
   <div id="pin-unlock-error" style="display:none; color:#ffb3b3; font-size:13px;">رقم غير صحيح</div>
-  <button type="button" class="btn btn-gold btn-sm" id="btn-pin-unlock-submit">فتح</button>
+  <button type="button" class="btn btn-gold btn-sm" id="btn-pin-unlock-submit" style="margin-top:4px;">فتح</button>
 </div>
 
 <script defer src="app-inline.js"></script>
