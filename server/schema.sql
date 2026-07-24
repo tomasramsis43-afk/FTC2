@@ -121,3 +121,15 @@ CREATE INDEX IF NOT EXISTS idx_clients_rows_reg_date ON clients_rows(reg_date);
 -- فحُذف الجدول المنفصل لتفادي ازدواجية مصدر البيانات (تم الحذف فعلياً؛ إن
 -- احتجت جدولاً بهذا الاسم لغرض آخر مستقبلاً، تأكد من عدم وجود أي DROP قديم
 -- في هذا الملف قد يحذفه صامتاً في كل مرة يُشغَّل فيها السيرفر).
+
+-- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
+-- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
+CREATE TABLE IF NOT EXISTS login_history (
+  id           SERIAL PRIMARY KEY,
+  username     TEXT NOT NULL,
+  role         TEXT,
+  ip_address   TEXT,
+  logged_in_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
+CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);

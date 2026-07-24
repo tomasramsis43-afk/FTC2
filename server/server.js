@@ -62,6 +62,13 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     const token = signToken(user);
+    // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
+    // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
+    const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    pool.query(
+      'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
+      [user.username, user.role || 'staff', loginIp]
+    ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
     // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
     // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
     res.json({
@@ -143,6 +150,33 @@ app.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حذف المستخدم' });
+  }
+});
+
+// GET /api/login-history -> آخر عمليات الدخول الناجحة لكل المستخدمين (admin فقط) — سجل الدخول والجلسات
+app.get('/api/login-history', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT username, role, ip_address, logged_in_at FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
+    );
+    res.json({ history: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب سجل الدخول' });
+  }
+});
+
+// POST /api/users/:username/force-logout -> تسجيل خروج فوري لهذا المستخدم من كل الأجهزة/الجلسات
+// دفعة واحدة (عبر زيادة token_version، بنفس آلية /api/auth/logout الحالية)، بدون حاجة لكلمة مروره.
+app.post('/api/users/:username/force-logout', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  try {
+    const r = await pool.query('UPDATE server_users SET token_version = token_version + 1 WHERE username = $1 RETURNING username', [target]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    res.json({ username: target, loggedOut: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إنهاء جلسات هذا المستخدم' });
   }
 });
 
