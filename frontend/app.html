@@ -4718,21 +4718,9 @@
       </div>
     </div>
     <div class="panel" id="panel-theme-colors" style="border-right:4px solid var(--teal);">
-      <h3 style="margin:0 0 4px;">🎨 تخصيص ألوان البرنامج</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر الألوان الأساسية التي تظهر في كل شاشات البرنامج (الأزرار، العناوين، الحدود الجانبية...). التغيير يُطبَّق فوراً ويبقى ثابتاً في الوضعين الليلي والنهاري.</p>
-      <div class="formgrid" style="align-items:end;">
-        <div class="field" style="max-width:140px;"><label>الأساسي (كحلي)</label><input type="color" id="tc-navy" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>الأساسي الغامق</label><input type="color" id="tc-navy-dark" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>الذهبي</label><input type="color" id="tc-gold" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>الذهبي الغامق</label><input type="color" id="tc-gold-dark" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>الذهبي الفاتح</label><input type="color" id="tc-gold-soft" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>الأخضر المزرق</label><input type="color" id="tc-teal" style="height:38px; padding:2px; width:100%;"></div>
-        <div class="field" style="max-width:140px;"><label>لون التنبيه (أحمر)</label><input type="color" id="tc-red" style="height:38px; padding:2px; width:100%;"></div>
-      </div>
-      <div style="display:flex; gap:10px; margin-top:12px;">
-        <button class="btn btn-primary btn-sm" id="btn-save-theme-colors">حفظ الألوان</button>
-        <button class="btn btn-ghost btn-sm" id="btn-reset-theme-colors">↺ استعادة الألوان الافتراضية</button>
-      </div>
+      <h3 style="margin:0 0 4px;">🎨 ألوان البرنامج (سيمز جاهزة)</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر أحد الأطقم الجاهزة، ويتطبّق فوراً على كل شاشات البرنامج ويبقى ثابتاً في الوضعين الليلي والنهاري. لا حاجة لاختيار ألوان يدوياً.</p>
+      <div id="theme-presets-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px;"></div>
     </div>
     <div class="panel" id="panel-app-reset" style="border-right:4px solid var(--red, #c0392b);">
       <h3 style="margin:0 0 4px;">إعادة ضبط المصنع</h3>
