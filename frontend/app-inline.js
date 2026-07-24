@@ -2440,7 +2440,30 @@ function applyRolePermissions(){
   if(activeBtn && !canAccessView(activeBtn.dataset.view)){
     $('[data-view="dashboard"]').click();
   }
+  pinNavTabsToRightEdge();
 }
+/* يثبّت شريط التبويبات الأفقي (وضع الجوال) على أقصى اليمين افتراضياً، لأن بعض المتصفحات
+   تبدأ من scrollLeft=0 وأخرى قد تحتاج قيمة موجبة/سالبة حسب دعمها لـ RTL — هذه الدالة
+   تتأكد بأن أول تبويب ظاهر فعلياً هو "لوحة التحكم" أقصى اليمين دائماً دون أي انزياح. */
+function pinNavTabsToRightEdge(){
+  const nav = document.querySelector('nav.tabs');
+  if(!nav) return;
+  if(window.innerWidth > 900) return; // هذا السلوك خاص بوضع الشريط الأفقي في الجوال فقط
+  requestAnimationFrame(()=>{
+    // نجرّب القيمة القياسية أولاً (0)، ثم نتحقق أن أول عنصر فعلاً ظاهر بالكامل عند الحافة اليمنى
+    nav.scrollLeft = 0;
+    const firstBtn = nav.querySelector('button[data-view]:not([style*="display: none"])');
+    if(firstBtn){
+      const navRect = nav.getBoundingClientRect();
+      const btnRect = firstBtn.getBoundingClientRect();
+      if(Math.abs(btnRect.right - navRect.right) > 2){
+        // بعض المتصفحات تفسّر 0 كأقصى اليسار في RTL — نستخدم القيمة المعاكسة كحل احتياطي
+        nav.scrollLeft = nav.scrollWidth - nav.clientWidth;
+      }
+    }
+  });
+}
+window.addEventListener('resize', ()=>{ pinNavTabsToRightEdge(); });
 
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){

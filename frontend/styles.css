@@ -403,6 +403,7 @@ nav.tabs button:hover svg {
     overflow-y: visible;
     gap: 4px;
     -webkit-overflow-scrolling: touch;
+    direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً بدل أي سلوك متضارب بين المتصفحات */
   }
 
   nav.tabs button {
