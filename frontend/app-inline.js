@@ -3489,7 +3489,7 @@ function phoneWithWhatsapp(phone){
    بدل تكرار نفس قواعد CSS يدوياً في كل دالة طباعة على حدة —
    أي تعديل على شكل الطباعة (لون، خط، مسافات) يتم هنا فقط ويظهر في كل المستندات.
    ============================================================ */
-const PRINT_PALETTE = { navy:'#1C3A52', gold:'#C97814', red:'#B03F31', text:'#1E2530', muted:'#626B78', border:'#DBE1E8', surfaceAlt:'#E7EBF0' };
+const PRINT_PALETTE = { navy:'#232C5C', gold:'#C27F1E', red:'#DC4C4C', text:'#171B2E', muted:'#6B7290', border:'#E1E5F2', surfaceAlt:'#EEF1FA' };
 
 function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, variant = 'full'} = {}){
   const p = PRINT_PALETTE;
