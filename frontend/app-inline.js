@@ -11782,7 +11782,7 @@ function renderCompanyPersons(){
           <td class="mono">${fmt(num(tr.courseValue))}</td>
           <td class="mono">${fmt(num(tr.bagValue))}</td>
           <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بشيت العملاء بعد</span>'}</td>
+          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بشيت العملاء بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -11820,7 +11820,7 @@ function renderTraineesTableHtml(t, trainees){
             <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
             <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
             <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
+            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
             <td class="card-full" data-label="">
               <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
               <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
@@ -12116,7 +12116,7 @@ function renderCompanies(){
               <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
               <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
               <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
+              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
               <td class="card-full" data-label="">
                 <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
                 <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
@@ -12629,6 +12629,13 @@ document.addEventListener('click', async e=>{
       showToast('تم الحذف');
     }
   }
+  if(e.target.dataset.linktrainee){
+    const [transferId, traineeId] = e.target.dataset.linktrainee.split('|');
+    await linkSingleTraineeToClient(transferId, traineeId);
+  }
+  if(e.target.id==='btn-link-unlinked-persons'){
+    await linkAllUnlinkedTrainees();
+  }
   if(e.target.dataset.deltransfer){
     const transferId = e.target.dataset.deltransfer;
     const t = companyTransfers.find(x=>x.id===transferId);
@@ -12727,6 +12734,73 @@ document.addEventListener('click', async e=>{
     showToast('عدّل البيانات ثم اضغط "تحديث بيانات الشركة"');
   }
 });
+
+/* ---------------- ربط متدرب حالي (موجود ضمن حوالة شركة) بشيت العملاء إن لم يكن مرتبطاً ----------------
+   يُستخدم لإصلاح حوالات قديمة أُضيف لها متدربون قبل ربطهم تلقائياً بشيت العملاء، أو أي حالة أخرى
+   تسبّب فيها فقدان الربط. يُنشئ سجل عميل كامل بنفس منطق الإنشاء التلقائي المستخدَم عند إضافة متدرب جديد. */
+function createClientForUnlinkedTrainee(t, tr){
+  const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
+  const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
+  const bagValue = num(tr.bagValue);
+  const client = {
+    id: uid(), createdAt: Date.now(),
+    clientId: tr.clientId, name: `متدرب شركة (${tr.clientId})`,
+    phone:'', nationality:'',
+    clientType:'company', companyName: t.companyName, creditDays:'',
+    clientTaxNumber:'', courseType:'', courseNumber:'',
+    referNum:'', invoice:'', bagInvoice:'',
+    date: t.date || todayISO(),
+    coursePrice: num(tr.courseValue),
+    bagSource: bagValue>0 ? 'stock' : 'own',
+    bagPrice: bagValue,
+    bagStatus: bagValue>0 ? 'purchased' : 'n/a',
+    bagPurchaseDate: bagValue>0 ? (t.date||todayISO()) : undefined,
+    discount: 0,
+    paid: num(tr.courseValue)+bagValue,
+    channel: payMethod0, networkInvoice:'',
+    paid2:0, channel2:'', networkInvoice2:'',
+    stage:'جديد', cancelled:false,
+    notes: `تم ربطه يدوياً بشيت العملاء من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}`
+  };
+  clients.push(client);
+  if(bagValue>0){
+    bagStock.push({
+      id: uid(), type:'issue', qty:-1, unitPrice:0,
+      date: client.bagPurchaseDate, createdAt: Date.now(),
+      issuedClientId: client.id, issuedClientName: client.name,
+      notes: `تسليم من المخزون للعميل: ${client.name} (ربط يدوي من حوالة الشركة "${t.companyName}")`
+    });
+  }
+  return client;
+}
+async function linkSingleTraineeToClient(transferId, traineeId){
+  const t = companyTransfers.find(x=>x.id===transferId);
+  const tr = t && (t.trainees||[]).find(x=>x.id===traineeId);
+  if(!t || !tr){ showToast('تعذّر تحديد المتدرب'); return; }
+  if(clients.some(c=>c.clientId===tr.clientId)){ showToast('هذا المتدرب مرتبط بالفعل بشيت العملاء'); return; }
+  snapshotState(`ربط متدرب بشيت العملاء: ${tr.clientId}`);
+  const client = createClientForUnlinkedTrainee(t, tr);
+  if(num(tr.bagValue)>0){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
+  await saveClients();
+  await logAudit('add','تحويلات الشركات', `تم ربط المتدرب (${tr.clientId}) بشيت العملاء يدوياً من حوالة الشركة "${t.companyName}" — تم إنشاء سجل عميل باسم مؤقت (${client.name}) يمكن تعديله من شيت العملاء`);
+  renderCompanies(); renderTable();
+  if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
+  showToast('تم الربط بشيت العملاء');
+}
+async function linkAllUnlinkedTrainees(){
+  const targets = [];
+  companyTransfers.forEach(t=> (t.trainees||[]).forEach(tr=>{ if(!clients.some(c=>c.clientId===tr.clientId)) targets.push({t,tr}); }));
+  if(!targets.length){ showToast('كل المتدربين مرتبطون بالفعل بشيت العملاء'); return; }
+  if(!await customConfirm(`سيتم إنشاء ${targets.length} سجل عميل جديد في شيت العملاء (بأسماء مؤقتة قابلة للتعديل لاحقاً) لكل متدرب غير مرتبط حالياً. متابعة؟`)) return;
+  snapshotState(`ربط ${targets.length} متدرب غير مرتبط بشيت العملاء دفعة واحدة`);
+  let bagAdded = false;
+  targets.forEach(({t,tr})=>{ createClientForUnlinkedTrainee(t,tr); if(num(tr.bagValue)>0) bagAdded=true; });
+  if(bagAdded){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
+  await saveClients();
+  await logAudit('add','تحويلات الشركات', `تم ربط ${targets.length} متدرب دفعة واحدة بشيت العملاء (من مختلف حوالات الشركات) — بأسماء مؤقتة قابلة للتعديل`);
+  renderCompanies(); renderTable();
+  showToast(`تم ربط ${targets.length} متدرب بشيت العملاء`);
+}
 
 /* ---------------- استيراد متدربين مجمّع لحوالة شركة (Excel) ---------------- */
 $('#btn-template-trainees').addEventListener('click', ()=>{
