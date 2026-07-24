@@ -3250,25 +3250,6 @@ function bindGenericPagination(prefix, state, renderFn){
   $(`#${prefix}-page-next`)?.addEventListener('click', ()=>{ state.page=state.page+1; renderFn(); });
   $(`#${prefix}-page-last`)?.addEventListener('click', ()=>{ state.page=Infinity; renderFn(); });
 }
-function genericPaginationToolbarHtml(prefix){
-  return `<div class="toolbar" id="${prefix}-pagination" style="padding:12px 16px; display:none;">
-    <span class="mono" id="${prefix}-page-info" style="font-size:12.5px; color:var(--text-muted);"></span>
-    <span class="spacer"></span>
-    <select id="${prefix}-page-size" style="max-width:110px;">
-      <option value="20">20 / صفحة</option>
-      <option value="50" selected>50 / صفحة</option>
-      <option value="100">100 / صفحة</option>
-      <option value="200">200 / صفحة</option>
-      <option value="all">عرض الكل</option>
-    </select>
-    <button class="btn btn-ghost btn-sm" id="${prefix}-page-first">« الأولى</button>
-    <button class="btn btn-ghost btn-sm" id="${prefix}-page-prev">‹ السابقة</button>
-    <span class="mono" id="${prefix}-page-current" style="font-size:12.5px; padding:0 6px;"></span>
-    <button class="btn btn-ghost btn-sm" id="${prefix}-page-next">التالية ›</button>
-    <button class="btn btn-ghost btn-sm" id="${prefix}-page-last">الأخيرة »</button>
-  </div>`;
-}
-
 function currentTablePageSize(){
   const v = $('#table-page-size')?.value || '100';
   return v==='all' ? Infinity : Number(v);
@@ -6492,11 +6473,6 @@ $('#btn-add-stock').addEventListener('click', async ()=>{
 /* ---------------- إضافة حركات تمويل مخزون الحقائب دفعة واحدة (جدول داخل البرنامج) ----------------
    يحل محل الاستيراد من ملف Excel: نفس منطق الإدخال اليدوي من نموذج "تمويل مخزون الحقائب" أعلاه
    (بما في ذلك ترحيل أي مبلغ كاش فعلي من/إلى "الحركات المالية")، لكن عبر جدول صفوف متعددة داخل البرنامج. */
-function bagFundTypeLabelToValue(l){
-  const v = String(l||'').trim();
-  if(v==='سحب') return 'withdraw';
-  return 'deposit';
-}
 let bagfundBulkRowSeq = 0;
 function bagfundBulkRowHtml(rowId){
   const methodOptions = (settings.channels||[]).map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
@@ -8964,7 +8940,6 @@ function fixedAssetsTotalAsOf(asOf){ return journalUpTo(asOf).filter(j=>j.type==
 function depreciationTotalAsOf(asOf){ return journalUpTo(asOf).filter(j=>j.type==='depreciation').reduce((s,j)=>s+num(j.amount),0); }
 function accruedTotalAsOf(asOf){ return journalUpTo(asOf).filter(j=>j.type==='accrued').reduce((s,j)=>s+num(j.amount),0); }
 function otherLiabilityTotalAsOf(asOf){ return journalUpTo(asOf).filter(j=>j.type==='otherliability').reduce((s,j)=>s+num(j.amount),0); }
-function readjTotalAsOf(asOf){ return journalUpTo(asOf).filter(j=>j.type==='readj').reduce((s,j)=>s+num(j.amount),0); }
 
 /* ---- قائمة الدخل التشغيلية عن فترة (from..to)، مبنية على أساس الاستحقاق ---- */
 function revenueBreakdown(from, to){
@@ -8984,9 +8959,6 @@ function expenseBreakdown(from, to){
 }
 function drawingsTotal(from, to){
   return vaultTx.filter(t=>t.type==='out' && t.category==='مسحوبات شركاء' && inRange(t.date, from, to)).reduce((s,t)=>s+num(t.amount),0);
-}
-function otherContributionsTotal(from, to){
-  return vaultTx.filter(t=>t.type==='in' && !t.clientId && !t.bagStockRef && !isLoanTx(t) && inRange(t.date, from, to)).reduce((s,t)=>s+num(t.amount),0);
 }
 /* صافي الربح/الخسارة عن فترة، شاملاً أي قيود إهلاك أو مستحقات أو تسويات يدوية داخل نفس الفترة */
 function netIncomeOf(from, to){
@@ -11420,11 +11392,6 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
 
 /* ---------------- Excel Import / Export (linked by رقم الهوية) ---------------- */
 function bagSourceToLabel(s){ return s==='own' ? 'خاصته' : s==='stock' ? 'من المخزون' : 'شراء'; }
-function bagLabelToSource(l){
-  const v = String(l||'').trim();
-  if(v==='خاصته') return 'own';
-  return 'stock';
-}
 /* عرض التاريخ بصيغة يوم/شهر/سنة للمستخدم، مع بقاء التخزين الداخلي بصيغة ISO (سنة-شهر-يوم) للفرز والفلترة */
 function formatDateDisplay(iso){
   if(!iso) return '';
