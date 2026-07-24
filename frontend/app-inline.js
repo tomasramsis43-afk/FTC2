@@ -243,6 +243,21 @@ async function _pendingCount(){
 // isOffline: آخر حالة معروفة لاتصال السيرفر (وليس فقط navigator.onLine، لأنه قد يكون
 // المتصفح متصل بشبكة محلية بينما السيرفر نفسه لا يستجيب — نعتمد نجاح/فشل الطلبات الفعلية).
 let _ftcIsOffline = false;
+// وضع "العمل من الجهاز فقط" — يُفعَّل يدوياً من المستخدم عبر زر في الإعدادات (بخلاف _ftcIsOffline
+// أعلاه الذي يُكتشف تلقائياً من فشل الاتصال الفعلي). لما يكون مفعَّلاً، serverFetch يرفض الاتصال
+// بالسيرفر عمداً من أول خطوة، فتعمل كل قراءة/كتابة عبر نفس مسار "بدون اتصال" الموجود أصلاً
+// (قراءة من الكاش المحلي، وقائمة انتظار للتعديلات) دون أي تكرار للمنطق.
+let manualOfflineMode = false;
+try{ manualOfflineMode = localStorage.getItem('ftcManualOfflineMode') === '1'; }catch(e){}
+function setManualOfflineMode(on){
+  manualOfflineMode = !!on;
+  try{ localStorage.setItem('ftcManualOfflineMode', manualOfflineMode ? '1' : '0'); }catch(e){}
+  updateOfflineIndicator();
+  if(!manualOfflineMode){
+    // إعادة التفعيل: يبدأ فوراً برفع أي تعديلات تراكمت محلياً أثناء إيقاف الاتصال
+    flushPendingWrites();
+  }
+}
 function markOffline(){
   if(_ftcIsOffline) { updateOfflineIndicator(); return; }
   _ftcIsOffline = true;
@@ -258,7 +273,12 @@ async function updateOfflineIndicator(){
     const el = document.getElementById('offline-status-indicator');
     if(!el) return;
     const count = await _pendingCount();
-    if(_ftcIsOffline){
+    if(manualOfflineMode){
+      el.style.display = 'flex';
+      el.style.background = '#4a3b1f';
+      el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — لا يتصل البرنامج بالسيرفر إطلاقاً، وأي تعديل يُحفظ محلياً فقط حتى تُعيد تفعيل الاتصال';
+      el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الرفع لاحقاً` : '');
+    } else if(_ftcIsOffline){
       el.style.display = 'flex';
       el.style.background = '#7a1f1f';
       el.title = 'لا يوجد اتصال بالسيرفر حالياً — البرنامج يعمل من آخر نسخة محفوظة على هذا الجهاز، وأي تعديل سيُحفظ محلياً ويُرفع تلقائياً عند عودة الاتصال';
@@ -321,6 +341,12 @@ window.addEventListener('offline', ()=>{ markOffline(); });
 setInterval(()=>{ flushPendingWrites().catch(()=>{}); }, 20000);
 
 async function serverFetch(path, options = {}) {
+  if(manualOfflineMode){
+    // وضع العمل من الجهاز فقط مفعَّل يدوياً — نرفض الاتصال بالسيرفر من أول خطوة، فتتعامل كل
+    // دالة قراءة/كتابة في window.storage مع هذا الرفض تماماً كما تتعامل مع انقطاع اتصال حقيقي
+    // (القراءة من الكاش المحلي، والكتابة في طابور الانتظار لحين إعادة تفعيل الاتصال).
+    throw new Error('وضع العمل من الجهاز فقط مفعَّل — لا يوجد اتصال بالسيرفر');
+  }
   const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
@@ -761,6 +787,34 @@ function fillThemeColorInputs(){
   if($('#tc-teal')) $('#tc-teal').value = c.teal;
   if($('#tc-red')) $('#tc-red').value = c.red;
 }
+/* يعرض حالة الاتصال بالسيرفر الحالية (تلقائي/متوقف يدوياً) في لوحة الإعدادات */
+function renderServerSyncPanel(){
+  const label = $('#server-sync-status-label');
+  const btn = $('#btn-toggle-server-sync');
+  if(!label || !btn) return;
+  if(manualOfflineMode){
+    label.textContent = '🔒 متوقف — يعمل من الجهاز فقط حالياً';
+    label.style.color = 'var(--red)';
+    btn.textContent = '🔌 إعادة تفعيل الاتصال ورفع التعديلات';
+    btn.className = 'btn btn-primary btn-sm';
+  }else{
+    label.textContent = '🟢 متصل بالسيرفر (تلقائي)';
+    label.style.color = 'var(--teal)';
+    btn.textContent = '⏸️ إيقاف الاتصال والعمل من الجهاز فقط';
+    btn.className = 'btn btn-danger btn-sm';
+  }
+}
+if($('#btn-toggle-server-sync')) $('#btn-toggle-server-sync').addEventListener('click', async ()=>{
+  if(!manualOfflineMode){
+    if(!await customConfirm('سيتوقف البرنامج عن الاتصال بالسيرفر تماماً، وسيعمل فقط بالنسخة المحفوظة على هذا الجهاز. أي تعديل تسويه سيُحفظ محلياً بدون رفعه للسيرفر حتى تُعيد تفعيل الاتصال يدوياً. متابعة؟')) return;
+    setManualOfflineMode(true);
+    showToast('تم إيقاف الاتصال — البرنامج يعمل الآن من نسخة الجهاز فقط');
+  }else{
+    setManualOfflineMode(false);
+    showToast('تمت إعادة تفعيل الاتصال — جارٍ رفع أي تعديلات محفوظة محلياً تلقائياً');
+  }
+  renderServerSyncPanel();
+});
 /* كثافة صفوف الجداول (مريح/مضغوط) — تفضيل عرض شخصي بحت، فيُحفَظ محلياً في هذا
    المتصفح فقط (localStorage) وليس ضمن إعدادات الحساب المشتركة بين المستخدمين،
    حتى لا يفرض تفضيل شخص واحد نفس الكثافة على بقية الفريق. */
@@ -5188,6 +5242,7 @@ function renderSettings(){
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
   renderUsersList();
   fillThemeColorInputs();
+  renderServerSyncPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
