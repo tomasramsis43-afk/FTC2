@@ -1015,6 +1015,14 @@ async function loadData(cacheOnly){
     const r = kv.companyTransfers;
     companyTransfers = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ companyTransfers = []; }
+  {
+    const migratedCount = migrateCompanyTransfersToLumpSum();
+    if(migratedCount>0){
+      await saveVaultTx();
+      await saveDeletedVaultTx();
+      await logAudit('edit','تحويلات الشركات', `ترحيل تلقائي: تم توحيد القيود المالية لـ ${migratedCount} حوالة شركة قديمة في قيد واحد لكل حوالة`);
+    }
+  }
   try{
     const r = kv.journalEntries;
     journalEntries = r && r.value ? JSON.parse(r.value) : [];
@@ -1136,6 +1144,40 @@ async function saveCompanies(){
 }
 async function saveCompanyTransfers(){
   try{ await window.storage.set('companyTransfers', JSON.stringify(companyTransfers), false); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
+}
+/* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
+   سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).
+   حالياً: الحوالة كاملة يجب أن تُمثَّل بقيد خزنة واحد فقط (companyTransferId) بكامل مبلغ الحوالة —
+   لأن المبلغ يُستلم دفعة واحدة من الشركة سواء وُزِّع على المتدربين بالكامل أو لا. هذه الدالة تُستدعى
+   مرة واحدة تلقائياً عند كل تحميل للبرنامج: أي حوالة قديمة ما زال ليس لها قيد "companyTransferId" بعد
+   يتم دمج كل قيودها الفردية القديمة (إن وُجدت) في قيد واحد جديد بقيمة "amount" المسجّلة على الحوالة نفسها،
+   مع نقل القيود القديمة إلى سجل الحركات الملغاة (حذف منطقي) حفاظاً على أثرها التاريخي/المحاسبي.
+   بيانات المتدربين داخل سجل الحوالة نفسها (الأسماء، القيم، الربط بشيت العملاء) لا تُمس إطلاقاً هنا. */
+function migrateCompanyTransfersToLumpSum(){
+  let migratedCount = 0;
+  companyTransfers.forEach(t=>{
+    if(vaultTx.some(v=>v.companyTransferId===t.id)) return; // مُرحَّلة مسبقاً
+    const traineeIds = new Set((t.trainees||[]).map(tr=>tr.id));
+    const oldEntries = vaultTx.filter(v=>v.companyTransferAllocId && traineeIds.has(v.companyTransferAllocId));
+    const refEntry = oldEntries[0];
+    const date = t.date || (refEntry && refEntry.date) || todayISO();
+    const channel = t.channel || (refEntry && refEntry.method) || (settings.channels[0] && settings.channels[0].name) || 'تحويل بنكي';
+    const destCh = settings.channels.find(ch=>ch.name===channel);
+    const destination = destCh ? destCh.dest : ((refEntry && refEntry.destination) || 'bank');
+    oldEntries.forEach(e=>{
+      const removed = softDeleteVaultTx(e.id, `دُمجت تلقائياً ضمن قيد واحد موحّد لحوالة الشركة "${t.companyName||''}"`);
+      if(removed) removed.companyTransferAllocId = undefined;
+    });
+    vaultTx.push({
+      id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+      type:'in', date, amount: num(t.amount), destination,
+      clientName:'', method: channel, category:'', manual:'', networkInvoice:'',
+      notes: `حوالة شركة "${t.companyName||''}"${t.refNum?` — مرجع: ${t.refNum}`:''}${oldEntries.length?` (تم دمج ${oldEntries.length} قيد فردي سابق تلقائياً)`:''}`,
+      companyTransferId: t.id
+    });
+    migratedCount++;
+  });
+  return migratedCount;
 }
 async function saveJournalEntries(){
   try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
@@ -7058,7 +7100,8 @@ function renderVault(){
       <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
       <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
-        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : `
+        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : (t.type==='in' && t.companyTransferId) ? `
+        <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button>` : `
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
@@ -11433,7 +11476,7 @@ function renderCompanyPersons(){
   $('#company-persons-list').innerHTML = rows.length ? `
     <div class="table-scroll table-scroll-compact">
     <table>
-      <thead><tr><th class="sticky-col sticky-col-1">رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th></tr></thead>
+      <thead><tr><th class="sticky-col sticky-col-1">رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
       <tbody>
         ${pageRows.map(({t,tr,c})=>`<tr>
           <td class="mono sticky-col sticky-col-1">${escapeHtml(tr.clientId)}</td>
@@ -11448,7 +11491,7 @@ function renderCompanyPersons(){
           <td class="mono">${fmt(num(tr.courseValue))}</td>
           <td class="mono">${fmt(num(tr.bagValue))}</td>
           <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-          <td>${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
+          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بشيت العملاء بعد</span>'}</td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -11466,18 +11509,61 @@ function transferMatchingTrainees(t){
     return !!(c && String(c.name||'').toLowerCase().includes(fcidLower));
   });
 }
+/* يبني جدول توزيع المتدربين لحوالة معيّنة (قابل لإعادة الاستخدام) — نفس أزرار تعديل/حذف المتدرب المستخدَمة في شاشة تحويلات الشركات */
+function renderTraineesTableHtml(t, trainees){
+  if(!trainees.length) return `<div class="empty-state" style="padding:16px;">لا يوجد متدربون مسجّلون بعد تحت هذه الحوالة</div>`;
+  return `
+    <div class="table-scroll table-scroll-compact cards-mobile">
+    <table style="margin-top:8px;">
+      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        ${trainees.map(tr=>{
+          const c = clients.find(x=>x.clientId===tr.clientId);
+          return `<tr>
+            <td class="mono" data-label="رقم الهوية">${escapeHtml(tr.clientId)}</td>
+            <td data-label="الاسم">${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
+            <td class="mono" data-label="الجوال">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+            <td data-label="الجنسية">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+            <td data-label="نوع الدورة">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+            <td class="mono" data-label="رقم الدورة">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+            <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
+            <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
+            <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
+            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
+            <td class="card-full" data-label="">
+              <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
+              <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+/* يفتح نافذة تفصيلية من شيت الحركات المالية تعرض توزيع المتدربين تحت قيد الحوالة الواحد */
+function openVaultCompanyTransferDetail(transferId){
+  const t = companyTransfers.find(x=>x.id===transferId);
+  if(!t){ showToast('تعذّر إيجاد بيانات هذه الحوالة'); return; }
+  const allocated = transferAllocatedTotal(t);
+  const remaining = num(t.amount) - allocated;
+  $('#vct-title').textContent = `حوالة الشركة "${t.companyName}" — بتاريخ ${t.date||'—'}`;
+  $('#vct-summary').innerHTML = `القيمة الإجمالية: <b>${fmt(num(t.amount))}</b> ﷼ — المخصَّص للمتدربين حالياً: <b>${fmt(allocated)}</b> ﷼ — المتبقي: <b>${fmt(remaining)}</b> ﷼ — عدد المتدربين المسجَّلين: <b>${(t.trainees||[]).length}</b> من أصل ${num(t.traineeCount)} مستهدف`;
+  $('#vct-table-wrap').innerHTML = renderTraineesTableHtml(t, t.trainees||[]);
+  $('#vault-company-transfer-overlay').classList.add('show');
+}
+$('#vct-close')?.addEventListener('click', ()=> $('#vault-company-transfer-overlay').classList.remove('show'));
 /* بطاقات إحصائية + تنبيه الحوالات غير مكتملة التسوية (الفرق بين قيمة الحوالة وما خُصِّص فعلياً للمتدربين) */
 function companiesStats(){
   const totalCompanies = companies.length;
   const totalTransfers = companyTransfers.length;
   const totalAmount = companyTransfers.reduce((s,t)=>s+num(t.amount),0);
-  let unsettledCount = 0, unpostedTrainees = 0, totalTrainees = 0;
+  let unsettledCount = 0, totalTrainees = 0;
   companyTransfers.forEach(t=>{
     const allocated = transferAllocatedTotal(t);
     if(Math.abs(num(t.amount)-allocated) > 0.01) unsettledCount++;
-    (t.trainees||[]).forEach(tr=>{ totalTrainees++; if(!tr.posted) unpostedTrainees++; });
+    totalTrainees += (t.trainees||[]).length;
   });
-  return {totalCompanies, totalTransfers, totalAmount, unsettledCount, unpostedTrainees, totalTrainees};
+  return {totalCompanies, totalTransfers, totalAmount, unsettledCount, totalTrainees};
 }
 function renderCompaniesStatsCards(){
   const wrap = $('#companies-stats-cards');
@@ -11487,7 +11573,7 @@ function renderCompaniesStatsCards(){
     <div class="card"><div class="k">عدد الشركات</div><div class="v">${s.totalCompanies}</div></div>
     <div class="card"><div class="k">عدد الحوالات</div><div class="v">${s.totalTransfers}</div></div>
     <div class="card"><div class="k">إجمالي قيمة الحوالات</div><div class="v gold">${fmt(s.totalAmount)}</div></div>
-    <div class="card"><div class="k">متدربون بانتظار الترحيل للبنك</div><div class="v ${s.unpostedTrainees?'red':''}">${s.unpostedTrainees} / ${s.totalTrainees}</div></div>
+    <div class="card"><div class="k">إجمالي المتدربين المسجَّلين</div><div class="v">${s.totalTrainees}</div></div>
     <div class="card"><div class="k">حوالات غير مكتملة التسوية</div><div class="v ${s.unsettledCount?'red':''}">${s.unsettledCount}</div></div>
   `;
 }
@@ -11544,7 +11630,7 @@ document.addEventListener('click', e=>{
     }
   }, 60);
 });
-/* كشف حساب PDF لشركة محددة: يجمع كل حوالاتها ومتدربيها مع إجمالي المخصَّص والمتبقي وحالة الترحيل */
+/* كشف حساب PDF لشركة محددة: يجمع كل حوالاتها ومتدربيها مع إجمالي المخصَّص والمتبقي */
 function printCompanyStatement(companyId){
   const company = companies.find(c=>c.id===companyId);
   if(!company){ showToast('تعذّر إيجاد الشركة'); return; }
@@ -11557,7 +11643,7 @@ function printCompanyStatement(companyId){
   const totalRemaining = totalAmount - totalAllocated;
   const allTrainees = [];
   transfers.forEach(t=> (t.trainees||[]).forEach(tr=> allTrainees.push({tr, t})));
-  const totalPosted = allTrainees.filter(x=>x.tr.posted).length;
+  const totalLinked = allTrainees.filter(x=>clients.some(c=>c.clientId===x.tr.clientId)).length;
 
   const transfersRows = transfers.length ? transfers.map(t=>{
     const allocated = transferAllocatedTotal(t);
@@ -11621,7 +11707,7 @@ function printCompanyStatement(companyId){
       <thead><tr><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>رقم المرجع</th><th>قيمة الحوالة</th><th>العدد المستهدف</th><th>عدد المتدربين المضافين</th><th>المخصَّص فعلياً</th><th>المتبقي</th><th>ملاحظات</th></tr></thead>
       <tbody>${transfersRows}</tbody>
     </table>
-    <h3>المتدربون (${allTrainees.length} — تم الترحيل للبنك: ${totalPosted})</h3>
+    <h3>المتدربون (${allTrainees.length} — مرتبط بشيت العملاء: ${totalLinked})</h3>
     <table>
       <thead><tr><th>تاريخ الحوالة</th><th>رقم الهوية</th><th>الاسم</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th></tr></thead>
       <tbody>${traineesRows}</tbody>
@@ -11722,7 +11808,7 @@ function renderCompanies(){
     const traineesHtml = matchedTrainees.length ? `
       <div class="table-scroll table-scroll-compact cards-mobile">
       <table style="margin-top:8px;">
-        <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>رقم الفاتورة</th><th>حالة الحقيبة</th><th>تاريخ الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>حالة الترحيل</th><th></th></tr></thead>
+        <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>رقم الفاتورة</th><th>حالة الحقيبة</th><th>تاريخ الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
         <tbody>
           ${matchedTrainees.map(tr=>{
             const c = clients.find(x=>x.clientId===tr.clientId);
@@ -11739,7 +11825,7 @@ function renderCompanies(){
               <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
               <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
               <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td data-label="حالة الترحيل">${tr.posted ? '<span class="stamp paid">تم الترحيل</span>' : `<span class="stamp owe" title="${escapeHtml(tr.skipReason||'')}">${escapeHtml(tr.skipReason||'لم يُرحَّل')}</span>`}</td>
+              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : '<span class="stamp owe">غير موجود بعد</span>'}</td>
               <td class="card-full" data-label="">
                 <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
                 <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
@@ -11793,14 +11879,14 @@ bindGenericPagination('ctransfers', ctransfersPageState, renderCompanies);
 onSearchInput('#cpp-search', renderCompanyPersons);
 bindGenericPagination('cpersons', cpersonsPageState, renderCompanyPersons);
 $('#btn-export-companies').addEventListener('click', ()=>{
-  const headers = ['اسم الشركة','تاريخ الحوالة','طريقة الدفع','رقم المرجع','قيمة الحوالة','عدد المتدربين المستهدف','نصيب الفرد','ملاحظات','رقم هوية المتدرب','اسم المتدرب','قيمة الدورة','قيمة الحقيبة','إجمالي المتدرب','حالة الترحيل'];
+  const headers = ['اسم الشركة','تاريخ الحوالة','طريقة الدفع','رقم المرجع','قيمة الحوالة','عدد المتدربين المستهدف','نصيب الفرد','ملاحظات','رقم هوية المتدرب','اسم المتدرب','قيمة الدورة','قيمة الحقيبة','إجمالي المتدرب','الحالة'];
   const rows = [];
   companiesFilteredTransfers().forEach(t=>{
     const share = num(t.traineeCount)>0 ? num(t.amount)/num(t.traineeCount) : 0;
     if((t.trainees||[]).length){
       t.trainees.forEach(tr=>{
         const c = clients.find(x=>x.clientId===tr.clientId);
-        rows.push([t.companyName,t.date,t.channel||'تحويل بنكي',t.refNum||'',num(t.amount),num(t.traineeCount),share,t.notes||'',tr.clientId,c?c.name:'',num(tr.courseValue),num(tr.bagValue),num(tr.courseValue)+num(tr.bagValue),tr.posted?'تم الترحيل':'لم يُرحَّل']);
+        rows.push([t.companyName,t.date,t.channel||'تحويل بنكي',t.refNum||'',num(t.amount),num(t.traineeCount),share,t.notes||'',tr.clientId,c?c.name:'',num(tr.courseValue),num(tr.bagValue),num(tr.courseValue)+num(tr.bagValue),c?'مرتبط بشيت العملاء':'غير موجود بعد']);
       });
     } else {
       rows.push([t.companyName,t.date,t.channel||'تحويل بنكي',t.refNum||'',num(t.amount),num(t.traineeCount),share,t.notes||'','','','','','','']);
@@ -11824,14 +11910,14 @@ $('#btn-export-companies-xlsx').addEventListener('click', ()=>{
           'اسم الشركة': t.companyName, 'تاريخ الحوالة': t.date||'', 'طريقة الدفع': t.channel||'تحويل بنكي', 'رقم المرجع': t.refNum||'',
           'قيمة الحوالة': num(t.amount), 'عدد المتدربين المستهدف': num(t.traineeCount), 'نصيب الفرد': share, 'ملاحظات': t.notes||'',
           'رقم هوية المتدرب': tr.clientId, 'اسم المتدرب': c?c.name:'', 'قيمة الدورة': num(tr.courseValue), 'قيمة الحقيبة': num(tr.bagValue),
-          'إجمالي المتدرب': num(tr.courseValue)+num(tr.bagValue), 'حالة الترحيل': tr.posted?'تم الترحيل':'لم يُرحَّل'
+          'إجمالي المتدرب': num(tr.courseValue)+num(tr.bagValue), 'الحالة': c?'مرتبط بشيت العملاء':'غير موجود بعد'
         });
       });
     } else {
       rows.push({
         'اسم الشركة': t.companyName, 'تاريخ الحوالة': t.date||'', 'طريقة الدفع': t.channel||'تحويل بنكي', 'رقم المرجع': t.refNum||'',
         'قيمة الحوالة': num(t.amount), 'عدد المتدربين المستهدف': num(t.traineeCount), 'نصيب الفرد': share, 'ملاحظات': t.notes||'',
-        'رقم هوية المتدرب': '', 'اسم المتدرب': '', 'قيمة الدورة': '', 'قيمة الحقيبة': '', 'إجمالي المتدرب': '', 'حالة الترحيل': ''
+        'رقم هوية المتدرب': '', 'اسم المتدرب': '', 'قيمة الدورة': '', 'قيمة الحقيبة': '', 'إجمالي المتدرب': '', 'الحالة': ''
       });
     }
   });
@@ -11916,33 +12002,28 @@ $('#btn-add-transfer').addEventListener('click', async ()=>{
     const idx = companyTransfers.findIndex(x=>x.id===editingTransferId);
     if(idx===-1){ showToast('تعذّر إيجاد الحوالة للتعديل — قد تكون حُذفت'); cancelTransferEdit(); return; }
     const tExisting = companyTransfers[idx];
-    const lockedLinked = (tExisting.trainees||[]).some(tr=>{
-      const vtx = vaultTx.find(v=>v.companyTransferAllocId===tr.id);
-      return vtx && isDateLocked(vtx.date);
-    });
-    if(lockedLinked){ showToast('تعذّر التعديل: توجد حركة مالية مرتبطة بمتدربي هذه الحوالة ضمن فترة محاسبية مُقفلة'); return; }
+    const existingLump = vaultTx.find(v=>v.companyTransferId===tExisting.id);
+    if(existingLump && isDateLocked(existingLump.date)){ showToast('تعذّر التعديل: الحركة المالية المرتبطة بهذه الحوالة ضمن فترة محاسبية مُقفلة'); return; }
     snapshotState(`تعديل حوالة الشركة: ${company.name}`);
     const t = companyTransfers[idx];
     t.companyId = companyId; t.companyName = company.name; t.date = date; t.amount = amount;
     t.traineeCount = count; t.notes = notes; t.channel = channel; t.refNum = refNum;
     if(groupsUsed.length) t.groups = groupsUsed.map(g=>({label:g.label, count:num(g.count), price:num(g.price)}));
     else delete t.groups;
-    // مزامنة التاريخ وطريقة الدفع مع كل حركة مالية مُرحَّلة فعلياً لمتدربي هذه الحوالة (لأن كل حركة أُنشئت بتاريخ/طريقة دفع الحوالة وقت الترحيل، ولا ترتبط تلقائياً بالحوالة بعد ذلك)
-    let cascadedCount = 0;
-    (t.trainees||[]).forEach(tr=>{
-      const vtx = vaultTx.find(v=>v.companyTransferAllocId===tr.id);
-      if(vtx){
-        vtx.date = date;
-        vtx.method = channel;
-        const destCh = settings.channels.find(ch=>ch.name===channel);
-        if(destCh) vtx.destination = destCh.dest;
-        vtx.notes = `ترحيل تلقائي (مُعدَّل حسب تعديل بيانات الحوالة) من حوالة الشركة "${company.name}" بتاريخ ${date}${num(tr.bagValue)>0?' — يشمل قيمة الحقيبة':''}`;
-        cascadedCount++;
-      }
-    });
-    if(cascadedCount) await saveVaultTx();
+    // مزامنة التاريخ والمبلغ وطريقة الدفع مع القيد المالي الواحد المرتبط بهذه الحوالة بالكامل (بدل تعديل قيود متعددة سابقاً)
+    let cascaded = false;
+    if(existingLump){
+      existingLump.date = date;
+      existingLump.amount = amount;
+      existingLump.method = channel;
+      const destCh = settings.channels.find(ch=>ch.name===channel);
+      if(destCh) existingLump.destination = destCh.dest;
+      existingLump.notes = `حوالة شركة "${company.name}"${refNum?` — مرجع: ${refNum}`:''} (مُعدَّلة)`;
+      cascaded = true;
+    }
+    if(cascaded) await saveVaultTx();
     await saveCompanyTransfers();
-    await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات حوالة الشركة "${company.name}" بتاريخ ${date} — القيمة الآن ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel})${cascadedCount?` — وتمت مزامنة التاريخ وطريقة الدفع مع ${cascadedCount} حركة مالية مُرحَّلة مسبقاً لمتدربي هذه الحوالة`:''}`);
+    await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات حوالة الشركة "${company.name}" بتاريخ ${date} — القيمة الآن ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel})${cascaded?' — وتمت مزامنة القيد المالي الواحد المرتبط بهذه الحوالة':''}`);
     cancelTransferEdit();
     renderCompanies();
     showToast('تم حفظ التعديل');
@@ -11952,14 +12033,25 @@ $('#btn-add-transfer').addEventListener('click', async ()=>{
   const transferRecord = {id:uid(), createdAt:Date.now(), companyId, companyName:company.name, date, amount, traineeCount:count, notes, channel, refNum, trainees:[]};
   if(groupsUsed.length) transferRecord.groups = groupsUsed.map(g=>({label:g.label, count:num(g.count), price:num(g.price)}));
   companyTransfers.push(transferRecord);
+  // قيد مالي واحد فوري بكامل مبلغ الحوالة — المبلغ مُستلَم فعلياً بالكامل من الشركة سواء وُزِّع على المتدربين الآن أو لاحقاً
+  const destCh0 = settings.channels.find(ch=>ch.name===channel);
+  vaultTx.push({
+    id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+    type:'in', date, amount, destination: destCh0 ? destCh0.dest : 'bank',
+    clientName:'', method: channel, category:'', manual:'', networkInvoice:'',
+    notes: `حوالة شركة "${company.name}"${refNum?` — مرجع: ${refNum}`:''}`,
+    companyTransferId: transferRecord.id
+  });
+  await saveVaultTx();
   await saveCompanyTransfers();
   const groupsNote = groupsUsed.length ? ` — مقسّمة حسب فئات: ${ctGroupsSummaryText(transferRecord.groups)}` : '';
-  await logAudit('add','تحويلات الشركات', `تمت إضافة حوالة جديدة للشركة "${company.name}" بقيمة ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel})${groupsNote}`);
+  await logAudit('add','تحويلات الشركات', `تمت إضافة حوالة جديدة للشركة "${company.name}" بقيمة ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel}) — وتم تسجيل قيد مالي فوري بكامل المبلغ${groupsNote}`);
   $('#ct-amount').value=''; $('#ct-count').value=''; $('#ct-notes').value=''; $('#ct-date').value=''; $('#ct-refnum').value='';
   resetCtGroups();
-  renderCompanies();
+  renderCompanies(); renderVault();
   showToast('تم حفظ الحوالة');
 });
+
 
 /* تعديل حوالة شركة قائمة: يملأ نموذج "إضافة حوالة جديدة" ببيانات الحوالة المحددة، ويحوّل زر الحفظ لوضع "تعديل" مؤقتاً */
 function openTransferEdit(id){
@@ -12072,14 +12164,6 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
 
     tr.courseValue = courseValue;
     tr.bagValue = bagValue;
-    // تحديث الترحيل المالي المرتبط في الحركات المالية إن كان قد رُحِّل مسبقاً
-    const vtx = vaultTx.find(v=>v.companyTransferAllocId===tr.id);
-    if(vtx){
-      vtx.amount = courseValue+bagValue;
-      vtx.clientName = client ? client.name : vtx.clientName;
-      vtx.notes = `ترحيل تلقائي (مُعدَّل) من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}${bagValue>0?' — يشمل قيمة الحقيبة':''}`;
-      await saveVaultTx();
-    }
     await saveCompanyTransfers();
     await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات متدرب (${clientId}) في حوالة الشركة "${t.companyName}"`);
 
@@ -12087,6 +12171,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
     ctraineeTargetTransferId = null; ctEditingTraineeId = null;
     $('#ctr-id').readOnly = false;
     renderCompanies(); renderVault(); renderTable();
+    if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
     showToast('تم تحديث بيانات المتدرب');
     return;
   }
@@ -12100,9 +12185,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
 
   snapshotState(`إضافة متدرب لحوالة الشركة: ${t.companyName}`);
   let client = clients.find(x=>x.clientId===clientId);
-  const alreadyPostedElsewhere = !!(client && num(client.paid)>0);
   const traineeId = uid();
-  let posted = false, skipReason = '';
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
   const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
 
@@ -12148,48 +12231,15 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
     await saveClients();
   }
 
-  let matchedExisting = false;
-  if(!alreadyPostedElsewhere){
-    const totalAmount = courseValue + bagValue;
-    if(totalAmount>0){
-      const payDest = payChannel0 ? payChannel0.dest : 'bank';
-      // مطابقة مسبقة: إن وُجدت حركة مالية موجودة فعلاً بنفس رقم الهوية ونفس القيمة (وغير مرتبطة بترحيل سابق)، تُحدَّث تلقائياً بدل إنشاء حركة مكرّرة
-      const existingTx = vaultTx.find(v => v.clientId===clientId && !v.companyTransferAllocId && Math.abs(num(v.amount)-totalAmount)<0.01);
-      if(existingTx){
-        existingTx.date = t.date || todayISO();
-        existingTx.destination = payDest;
-        existingTx.method = payMethod0;
-        existingTx.clientName = client ? client.name : existingTx.clientName;
-        existingTx.notes = `ترحيل تلقائي (مطابقة رقم الهوية والقيمة مع حركة موجودة مسبقاً) من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}${bagValue>0?' — يشمل قيمة الحقيبة':''}`;
-        existingTx.companyTransferAllocId = traineeId;
-        matchedExisting = true;
-      }else{
-        vaultTx.push({
-          id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
-          type:'in', date: t.date || todayISO(), amount: totalAmount, destination:payDest,
-          clientId, clientName: client ? client.name : '', method:payMethod0,
-          category:'', manual: client ? '' : `متدرب شركة: ${clientId}`,
-          networkInvoice:'',
-          notes: `ترحيل تلقائي من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}${bagValue>0?' — يشمل قيمة الحقيبة':''}`,
-          companyTransferAllocId: traineeId
-        });
-      }
-      await saveVaultTx();
-      await saveSettings();
-      posted = true;
-    }
-  }else{
-    skipReason = 'مدفوع بالفعل عبر شيت العملاء — لم يُرحَّل';
-  }
-
   t.trainees = t.trainees || [];
-  t.trainees.push({id:traineeId, clientId, courseValue, bagValue, posted, skipReason});
+  t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
   await saveCompanyTransfers();
-  await logAudit('add','تحويلات الشركات', `تمت إضافة متدرب (${clientId}) لحوالة الشركة "${t.companyName}"${posted?(matchedExisting?' وتم تحديث حركة مالية موجودة مطابقة (رقم الهوية والقيمة) بإجمالي '+fmt(courseValue+bagValue)+' ﷼':' وتم ترحيل إجمالي '+fmt(courseValue+bagValue)+' ﷼'):' (بدون ترحيل جديد — '+skipReason+')'}`);
+  await logAudit('add','تحويلات الشركات', `تمت إضافة متدرب (${clientId}) لحوالة الشركة "${t.companyName}" بإجمالي ${fmt(courseValue+bagValue)} ﷼ (ضمن القيد المالي الواحد المسجَّل للحوالة)`);
 
   $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null;
   renderCompanies(); renderVault(); renderTable();
-  showToast(posted ? 'تمت الإضافة والترحيل' : 'تمت الإضافة بدون ترحيل جديد (مدفوع بالفعل)');
+  if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
+  showToast('تمت إضافة المتدرب');
 });
 
 document.addEventListener('change', async e=>{
@@ -12237,6 +12287,9 @@ document.addEventListener('click', async e=>{
     $('#ctr-client-info').textContent = 'لم يتم العثور على العميل بعد — إن أكملت الاسم والجنسية أدناه سيُضاف تلقائياً كعميل شركات جديد في شيت العملاء.';
     $('#ctrainee-overlay').classList.add('show'); SoundFX.open();
   }
+  if(e.target.dataset.viewcompanytransfer){
+    openVaultCompanyTransferDetail(e.target.dataset.viewcompanytransfer);
+  }
   if(e.target.dataset.edittrainee){
     const [transferId, traineeId] = e.target.dataset.edittrainee.split('|');
     const t = companyTransfers.find(x=>x.id===transferId);
@@ -12274,25 +12327,23 @@ document.addEventListener('click', async e=>{
   if(e.target.dataset.deltrainee){
     const [transferId, traineeId] = e.target.dataset.deltrainee.split('|');
     const t = companyTransfers.find(x=>x.id===transferId);
-    if(t && await customConfirm('حذف هذا المتدرب من الحوالة؟ سيُحذف أيضاً أي ترحيل مالي مرتبط به للبنك.')){
+    if(t && await customConfirm('حذف هذا المتدرب من الحوالة؟ (لن يؤثر على القيد المالي الإجمالي للحوالة نفسها).')){
       const tr = (t.trainees||[]).find(x=>x.id===traineeId);
       snapshotState(`حذف متدرب من حوالة الشركة: ${t.companyName}`);
-      vaultTx = vaultTx.filter(v=>v.companyTransferAllocId!==traineeId);
       t.trainees = (t.trainees||[]).filter(x=>x.id!==traineeId);
-      await saveVaultTx();
       await saveCompanyTransfers();
       await logAudit('delete','تحويلات الشركات', `تم حذف متدرب (${tr?tr.clientId:''}) من حوالة الشركة "${t.companyName}"`);
-      renderCompanies(); renderVault();
+      renderCompanies();
+      if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
       showToast('تم الحذف');
     }
   }
   if(e.target.dataset.deltransfer){
     const transferId = e.target.dataset.deltransfer;
     const t = companyTransfers.find(x=>x.id===transferId);
-    if(t && await customConfirm(`حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} كاملة مع كل المتدربين المرتبطين بها والترحيلات المالية المرتبطة؟`)){
+    if(t && await customConfirm(`حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} كاملة مع كل المتدربين المرتبطين بها والقيد المالي المرتبط؟`)){
       snapshotState(`حذف حوالة شركة: ${t.companyName}`);
-      const traineeIds = (t.trainees||[]).map(x=>x.id);
-      vaultTx = vaultTx.filter(v=>!traineeIds.includes(v.companyTransferAllocId));
+      vaultTx = vaultTx.filter(v=>v.companyTransferId!==transferId);
       companyTransfers = companyTransfers.filter(x=>x.id!==transferId);
       await saveVaultTx();
       await saveCompanyTransfers();
@@ -12399,12 +12450,11 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
   const share = num(t.traineeCount)>0 ? num(t.amount)/num(t.traineeCount) : 0;
   const bagPrice = num(settings.bagPrice) || 0;
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
-  const payDest0 = payChannel0 ? payChannel0.dest : 'bank';
   const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
 
   snapshotState(snapshotLabel);
   t.trainees = t.trainees || [];
-  let added=0, skipped=0, postedCount=0, newClients=0, bagsIssuedFromStock=0;
+  let added=0, skipped=0, newClients=0, bagsIssuedFromStock=0;
   const changedRows = [];
   for(const row of json){
     const clientId = String(row['رقم الهوية']||'').trim();
@@ -12421,9 +12471,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
     if(courseValue<=0 && bagValue<=0){ skipped++; continue; }
 
     let client = clients.find(x=>x.clientId===clientId);
-    const alreadyPostedElsewhere = !!(client && num(client.paid)>0);
     const traineeId = uid();
-    let posted = false, skipReason = '';
 
     if(!client){
       // لا يوجد سجل عميل بهذا الرقم بعد — نُنشئ سجلاً كاملاً في شيت العملاء (عميل شركات) حتى يظهر عند الفلترة بالشركة
@@ -12463,45 +12511,16 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
       client.companyName = t.companyName;
     }
 
-    if(!alreadyPostedElsewhere){
-      const totalAmount = courseValue + bagValue;
-      if(totalAmount>0){
-        const existingTx = vaultTx.find(v => v.clientId===clientId && !v.companyTransferAllocId && Math.abs(num(v.amount)-totalAmount)<0.01);
-        if(existingTx){
-          existingTx.date = t.date || todayISO();
-          existingTx.destination = payDest0;
-          existingTx.method = payMethod0;
-          existingTx.clientName = client ? client.name : existingTx.clientName;
-          existingTx.notes = `ترحيل تلقائي (مطابقة رقم الهوية والقيمة مع حركة موجودة مسبقاً — استيراد مجمّع) من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}${bagValue>0?' — يشمل قيمة الحقيبة':''}`;
-          existingTx.companyTransferAllocId = traineeId;
-        }else{
-          vaultTx.push({
-            id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
-            type:'in', date: t.date || todayISO(), amount: totalAmount, destination:payDest0,
-            clientId, clientName: client ? client.name : '', method:payMethod0,
-            category:'', manual: client ? '' : `متدرب شركة: ${clientId}`,
-            networkInvoice:'',
-            notes: `ترحيل تلقائي (استيراد مجمّع) من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}${bagValue>0?' — يشمل قيمة الحقيبة':''}`,
-            companyTransferAllocId: traineeId
-          });
-        }
-        posted = true; postedCount++;
-      }
-    }else{
-      skipReason = 'مدفوع بالفعل عبر شيت العملاء — لم يُرحَّل';
-    }
-
-    t.trainees.push({id:traineeId, clientId, courseValue, bagValue, posted, skipReason});
+    t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
     added++;
-    changedRows.push({'رقم الهوية':clientId, 'الاسم':client?client.name:'', 'قيمة الدورة':courseValue, 'قيمة الحقيبة':bagValue, 'الإجمالي':courseValue+bagValue, 'حالة الترحيل':posted?'تم الترحيل':(skipReason||'لم يُرحَّل')});
+    changedRows.push({'رقم الهوية':clientId, 'الاسم':client?client.name:'', 'قيمة الدورة':courseValue, 'قيمة الحقيبة':bagValue, 'الإجمالي':courseValue+bagValue});
   }
   if(bagsIssuedFromStock>0) recalcBagFundLedger();
   await saveClients();
-  await saveVaultTx();
   if(bagsIssuedFromStock>0) await saveBagStock();
   await saveSettings();
   await saveCompanyTransfers();
-  await logAudit('add','تحويلات الشركات', `${auditLabel} لحوالة الشركة "${t.companyName}": إضافة ${added} متدرب (${newClients} منهم عملاء جدد في شيت العملاء، وتم ترحيل ${postedCount} للبنك، و${bagsIssuedFromStock} حقيبة سُلِّمت من المخزون)${skipped?`، وتخطي ${skipped} صف`:''}`);
+  await logAudit('add','تحويلات الشركات', `${auditLabel} لحوالة الشركة "${t.companyName}": إضافة ${added} متدرب (${newClients} منهم عملاء جدد في شيت العملاء، و${bagsIssuedFromStock} حقيبة سُلِّمت من المخزون) ضمن القيد المالي الواحد للحوالة${skipped?`، وتخطي ${skipped} صف`:''}`);
   renderCompanies(); renderVault(); renderTable(); renderBags();
   return {added, skipped, changedRows};
 }
