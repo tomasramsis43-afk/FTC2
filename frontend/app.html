@@ -293,10 +293,10 @@
   .grid-cards{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px;}
   @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
   @media(max-width:480px){.grid-cards{grid-template-columns:1fr;}}
-  .card{background:var(--surface); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); border:1px solid var(--border); border-inline-start:2px solid var(--gold); transition:box-shadow .2s ease, transform .2s ease;}
-  .card:hover{box-shadow:var(--shadow-hover); transform:translateY(-1px);}
-  .card .k{font-size:11px; color:var(--text-muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:.6px; font-weight:600;}
-  .card .v{font-family:'IBM Plex Mono',monospace; font-size:23px; font-weight:600; color:var(--navy);}
+  .card{background:var(--surface); border-radius:var(--radius); padding:17px 19px; box-shadow:var(--shadow); border:1px solid var(--border); border-inline-start:4px solid var(--navy); transition:box-shadow .2s ease, transform .2s ease; overflow:hidden;}
+  .card:hover{box-shadow:var(--shadow-hover); transform:translateY(-2px);}
+  .card .k{font-size:11px; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.7px; font-weight:700;}
+  .card .v{font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:800; color:var(--navy); letter-spacing:.2px;}
   .card .v.gold{color:var(--gold-dark);}
   .card .v.red{color:var(--red);}
   .card .v.teal{color:var(--teal);}
@@ -324,24 +324,25 @@
   .bar-row .val{width:64px; flex:none; text-align:left; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text);}
 
   /* ---------- Buttons ---------- */
-  .btn{border:none; border-radius:8px; padding:10px 18px; font-family:inherit; font-weight:600; font-size:13.5px; cursor:pointer; transition:background .15s ease, color .15s ease, border-color .15s ease;}
-  .btn:active{filter:brightness(.95);}
-  .btn-primary{background:var(--navy-dark); color:#fff;}
-  .btn-primary:hover{filter:brightness(1.15);}
-  .btn-gold{background:var(--gold); color:#fff;}
-  .btn-gold:hover{background:var(--gold-dark);}
+  .btn{border:none; border-radius:10px; padding:10px 18px; font-family:inherit; font-weight:700; font-size:13.5px; cursor:pointer; transition:background .15s ease, color .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;}
+  .btn:active{filter:brightness(.95); transform:translateY(0);}
+  .btn-primary{background:var(--navy); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08), 0 6px 14px -8px color-mix(in srgb, var(--navy) 70%, transparent);}
+  .btn-primary:hover{filter:brightness(1.08); transform:translateY(-1px); box-shadow:0 2px 4px rgba(0,0,0,.1), 0 10px 18px -8px color-mix(in srgb, var(--navy) 70%, transparent);}
+  .btn-gold{background:var(--gold); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08), 0 6px 14px -8px color-mix(in srgb, var(--gold) 70%, transparent);}
+  .btn-gold:hover{background:var(--gold-dark); transform:translateY(-1px);}
   .btn-ghost{background:transparent; color:var(--navy); border:1px solid var(--border);}
-  .btn-ghost:hover{background:var(--surface-alt);}
+  .btn-ghost:hover{background:var(--surface-alt); border-color:var(--navy);}
   .btn-danger{background:transparent; color:var(--red); border:1px solid var(--border);}
-  .btn-danger:hover{background:color-mix(in srgb, var(--red) 10%, transparent);}
-  .btn-sm{padding:6px 10px; font-size:12px; border-radius:6px;}
+  .btn-danger:hover{background:color-mix(in srgb, var(--red) 10%, transparent); border-color:var(--red);}
+  .btn-sm{padding:6px 10px; font-size:12px; border-radius:8px;}
   .btn:disabled{opacity:.5; cursor:not-allowed; transform:none; box-shadow:none;}
 
   /* ---------- Clients toolbar ---------- */
   .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px;}
   .toolbar input, .toolbar select{
-    font-family:inherit; padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; background:var(--surface); color:var(--text);
+    font-family:inherit; padding:9px 13px; border:1px solid var(--border); border-radius:10px; font-size:13.5px; background:var(--surface); color:var(--text); transition:border-color .15s ease, box-shadow .15s ease;
   }
+  .toolbar input:focus, .toolbar select:focus{outline:none; border-color:var(--navy); box-shadow:0 0 0 3px color-mix(in srgb, var(--navy) 18%, transparent);}
   .toolbar input[type=text]{min-width:200px; flex:1;}
   .toolbar .spacer{flex:1;}
   @media(max-width:600px){
@@ -351,7 +352,7 @@
   }
 
   table{width:100%; border-collapse:collapse; font-size:13px;}
-  .table-scroll{max-height:calc(100vh - 300px); min-height:300px; overflow-y:auto; overflow-x:auto; border:1px solid var(--border); border-radius:8px;}
+  .table-scroll{max-height:calc(100vh - 300px); min-height:300px; overflow-y:auto; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);}
   @media(max-width:900px){
     /* على الشاشات الصغيرة: امنع تزنيق أعمدة الجدول فوق بعض، خلّي الجدول ياخد عرضه الطبيعي ويظهر سكرول أفقي بدل ما يتراكب النص */
     .table-scroll table{width:max-content; min-width:100%;}
@@ -361,23 +362,24 @@
   .table-scroll-course{min-height:0; max-height:272px;}
   .table-scroll-compact{min-height:0; max-height:272px;} /* يحصر الصندوق على 6 صفوف تقريباً قبل ظهور شريط تمرير داخلي */
   .table-scroll table{margin:0;}
-  .table-scroll thead th{position:sticky; top:0; background:var(--surface); z-index:1;}
-  thead th{text-align:right; font-size:11px; color:var(--text-muted); font-weight:700; letter-spacing:.5px; padding:9px 10px; border-bottom:2px solid var(--navy); text-transform:uppercase;}
-  tbody td{padding:10px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  .table-scroll thead th{position:sticky; top:0; background:var(--surface-alt); z-index:1;}
+  thead th{text-align:right; font-size:11px; color:var(--text-muted); font-weight:700; letter-spacing:.5px; padding:11px 10px; border-bottom:1px solid var(--border); background:var(--surface-alt); text-transform:uppercase;}
+  tbody td{padding:11px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
   tbody td input, tbody td select{
-    width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-family:inherit; font-size:13px; background:var(--surface); color:inherit; box-sizing:border-box;
+    width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:13px; background:var(--surface); color:inherit; box-sizing:border-box; transition:border-color .15s ease, box-shadow .15s ease;
   }
-  tbody td input:focus, tbody td select:focus{outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold);}
+  tbody td input:focus, tbody td select:focus{outline:none; border-color:var(--navy); box-shadow:0 0 0 3px color-mix(in srgb, var(--navy) 18%, transparent);}
   tbody td input[type=number]{text-align:center;}
   tbody tr{transition:background .12s ease;}
   tbody tr:nth-child(even){background:var(--surface-alt);}
-  tbody tr:hover{background:color-mix(in srgb, var(--gold) 12%, var(--surface));}
+  tbody tr:hover{background:color-mix(in srgb, var(--navy) 6%, var(--surface));}
   .stamp{
-    display:inline-block; background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal); border-radius:20px;
-    padding:3px 10px; font-size:10.5px; font-weight:700; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:5px; background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal); border:1px solid color-mix(in srgb, var(--teal) 25%, transparent); border-radius:20px;
+    padding:3px 11px; font-size:10.5px; font-weight:700; white-space:nowrap;
   }
-  .stamp.owe{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red);}
-  .stamp.paid{background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal);}
+  .stamp::before{content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none;}
+  .stamp.owe{background:color-mix(in srgb, var(--red) 12%, transparent); color:var(--red); border-color:color-mix(in srgb, var(--red) 25%, transparent);}
+  .stamp.paid{background:color-mix(in srgb, var(--teal) 12%, transparent); color:var(--teal); border-color:color-mix(in srgb, var(--teal) 25%, transparent);}
   .empty-state{text-align:center; padding:50px 20px; color:var(--text-muted);}
   .empty-state .big{font-size:34px; margin-bottom:6px;}
   /* شارة عدد الفلاتر المتقدمة المفعّلة + مسافة الحاوية القابلة للطي */
