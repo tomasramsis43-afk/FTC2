@@ -547,8 +547,8 @@ const DEFAULT_SETTINGS = {
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
-  themeColors: { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' },
-  themePresetId: 'classic',
+  themeColors: { navy:'#3F5EDB', navyDark:'#232C5C', gold:'#E8A33D', goldDark:'#C27F1E', goldSoft:'#F0C27A', teal:'#0E9488', red:'#DC4C4C' },
+  themePresetId: 'midnightslate',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
@@ -582,7 +582,10 @@ const EDITABLE_ROLES = [
   {id:'reception', label:'استقبال'}
 ];
 /* أطقم ألوان جاهزة (سيمز) — لوحات هادئة وراقية، تُطبَّق بضغطة واحدة بدل اختيار كل لون يدوياً */
+// الألوان الكلاسيكية القديمة (قبل صدور طقم "كحلي نيلي وذهبي" الجديد) — تُستخدم فقط لمقارنة ترقية لمرة واحدة أدناه
+const DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS = { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' };
 const THEME_PRESETS = [
+  { id:'midnightslate', name:'كحلي نيلي وذهبي (الافتراضي الجديد)', colors:{ navy:'#3F5EDB', navyDark:'#232C5C', gold:'#E8A33D', goldDark:'#C27F1E', goldSoft:'#F0C27A', teal:'#0E9488', red:'#DC4C4C' } },
   { id:'classic', name:'كحلي وذهبي كلاسيكي', colors:{ navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' } },
   { id:'forestcopper', name:'أخضر داكن ونحاسي', colors:{ navy:'#1F4A3D', navyDark:'#123028', gold:'#B5651D', goldDark:'#8F4E16', goldSoft:'#D98F52', teal:'#2F6B5E', red:'#A83D32' } },
   { id:'graysilver', name:'رمادي أنيق وفضي', colors:{ navy:'#4A5560', navyDark:'#2E363D', gold:'#8C8578', goldDark:'#6B6558', goldSoft:'#B5AFA0', teal:'#5E7A78', red:'#A15048' } },
@@ -825,7 +828,7 @@ function fillThemeColorInputs(){ renderThemePresetsGrid(); }
 function renderThemePresetsGrid(){
   const wrap = $('#theme-presets-grid');
   if(!wrap) return;
-  const activeId = settings.themePresetId || 'classic';
+  const activeId = settings.themePresetId || 'midnightslate';
   wrap.innerHTML = THEME_PRESETS.map(p=>{
     const isActive = p.id === activeId;
     const dots = ['navy','gold','teal','red'].map(k=>`<span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:${p.colors[k]}; border:1px solid rgba(0,0,0,.15);"></span>`).join('');
@@ -1173,7 +1176,21 @@ async function loadData(cacheOnly){
       // إكمال أي لون مفقود بالقيمة الافتراضية (توافقاً مع نسخ قديمة محفوظة)
       Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
     }
-    if(!settings.themePresetId) settings.themePresetId = 'classic';
+    if(!settings.themePresetId) settings.themePresetId = 'midnightslate';
+    // ترقية لمرة واحدة: أي حساب اتظبط تلقائياً على الطقم الكلاسيكي القديم (قبل صدور هذا التحديث)
+    // ولم يغيّر ألوانه يدوياً بنفسه، يُنقل تلقائياً للطقم الجديد الافتراضي (كحلي نيلي وذهبي).
+    // لا تُطبَّق على أي حساب اختار "كلاسيكي" بنفسه بعد تعديل ألوانه يدوياً.
+    if(!settings._themeDefaultMigratedV2){
+      const oldClassicColors = DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS;
+      const isUnmodifiedClassic = settings.themePresetId==='classic' &&
+        Object.keys(oldClassicColors).every(k=> settings.themeColors[k]===oldClassicColors[k]);
+      if(isUnmodifiedClassic || !settings.themePresetId){
+        settings.themePresetId = 'midnightslate';
+        settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='midnightslate').colors));
+      }
+      settings._themeDefaultMigratedV2 = true;
+      await saveSettings();
+    }
     if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
     else{
       if(settings.pinLock.enabled===undefined) settings.pinLock.enabled = false;
