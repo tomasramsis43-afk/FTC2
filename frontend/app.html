@@ -4709,6 +4709,14 @@
         <button class="btn btn-ghost btn-sm" id="btn-test-pa-webhook">🧪 إرسال اختبار</button>
       </div>
     </div>
+    <div class="panel" id="panel-server-sync" style="border-right:4px solid var(--gold);">
+      <h3 style="margin:0 0 4px;">🔌 الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تسويه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <span id="server-sync-status-label" style="font-weight:700;"></span>
+        <button class="btn btn-sm" id="btn-toggle-server-sync"></button>
+      </div>
+    </div>
     <div class="panel" id="panel-theme-colors" style="border-right:4px solid var(--teal);">
       <h3 style="margin:0 0 4px;">🎨 تخصيص ألوان البرنامج</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر الألوان الأساسية التي تظهر في كل شاشات البرنامج (الأزرار، العناوين، الحدود الجانبية...). التغيير يُطبَّق فوراً ويبقى ثابتاً في الوضعين الليلي والنهاري.</p>
