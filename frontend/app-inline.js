@@ -548,8 +548,39 @@ const DEFAULT_SETTINGS = {
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
   themeColors: { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' },
-  themePresetId: 'classic'
+  themePresetId: 'classic',
+  pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
+  rolePermissions: {
+    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
+    accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
+    reception: ['dashboard','clients','courses','courseinvoices','bags']
+  }
 };
+/* كل الأقسام (التبويبات) المتاحة في البرنامج، وأسماؤها المعروضة — تُستخدم في بناء
+   جدول صلاحيات الأدوار في الإعدادات، وكمرجع كامل للأقسام الموجودة فعلياً. */
+const ALL_VIEWS = [
+  {id:'dashboard', label:'لوحة التحكم'},
+  {id:'clients', label:'العملاء'},
+  {id:'companies', label:'تحويلات الشركات'},
+  {id:'courses', label:'الدورات'},
+  {id:'courseinvoices', label:'فواتير الدورات'},
+  {id:'vault', label:'الحركات المالية'},
+  {id:'bags', label:'مخزون الحقائب'},
+  {id:'purchases', label:'المشتريات'},
+  {id:'zatca', label:'الفوترة الضريبية والزكاة'},
+  {id:'reports', label:'التقارير'},
+  {id:'accounting', label:'المحاسبة'},
+  {id:'budget', label:'الموازنة والتخطيط'},
+  {id:'audit', label:'سجل المراجعة'},
+  {id:'settings', label:'الإعدادات'}
+];
+/* الأدوار القابلة للتحكم بصلاحياتها من الإعدادات — المدير مستثنى عمداً وله دائماً
+   كل الصلاحيات كاملة بدون أي إمكانية تقييد، لتفادي فقدان الوصول الكامل للبرنامج بالخطأ. */
+const EDITABLE_ROLES = [
+  {id:'staff', label:'موظف عام'},
+  {id:'accountant', label:'محاسب'},
+  {id:'reception', label:'استقبال'}
+];
 /* أطقم ألوان جاهزة (سيمز) — لوحات هادئة وراقية، تُطبَّق بضغطة واحدة بدل اختيار كل لون يدوياً */
 const THEME_PRESETS = [
   { id:'classic', name:'كحلي وذهبي كلاسيكي', colors:{ navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' } },
@@ -818,6 +849,118 @@ if($('#theme-presets-grid')) $('#theme-presets-grid').addEventListener('click', 
   showToast(`تم تطبيق طقم الألوان: ${preset.name}`);
 });
 /* يعرض حالة الاتصال بالسيرفر الحالية (تلقائي/متوقف يدوياً) في لوحة الإعدادات */
+/* ---------------- تصدير/استيراد إعدادات البرنامج كملف واحد ----------------
+   قائمة محدودة عمداً: إعدادات "تهيئة/تفضيل" فقط (ألوان، أسعار، تصنيفات، بيانات المركز...)،
+   وليس عدادات تشغيلية خاصة بكل جهاز/تركيب (أرقام الفواتير التالية، الرقم التسلسلي المالي التالي،
+   قفل الفترة المحاسبية، توقيت آخر نسخة احتياطية) لأن نقل هذه القيم لجهاز آخر قد يسبب تعارضاً
+   أو تكراراً في الترقيم بدل مجرد نقل "تفضيل". */
+/* ---------------- قفل الشاشة بـ PIN (محلي على هذا الجهاز فقط) ---------------- */
+let isScreenLocked = false;
+let lastActivityAt = Date.now();
+function noteActivity(){ lastActivityAt = Date.now(); }
+['mousemove','mousedown','keydown','touchstart','scroll'].forEach(evt=>{
+  document.addEventListener(evt, noteActivity, {passive:true});
+});
+function lockScreenNow(){
+  if(!settings.pinLock || !settings.pinLock.enabled || !settings.pinLock.pin || String(settings.pinLock.pin).length!==4) return;
+  isScreenLocked = true;
+  const scr = $('#pin-lock-screen');
+  if(scr){
+    scr.style.display = 'flex';
+    const inp = $('#pin-unlock-input');
+    if(inp){ inp.value=''; setTimeout(()=>inp.focus(), 50); }
+    const err = $('#pin-unlock-error'); if(err) err.style.display = 'none';
+  }
+}
+function unlockScreenAttempt(){
+  const inp = $('#pin-unlock-input');
+  const err = $('#pin-unlock-error');
+  if(!inp) return;
+  if(String(inp.value)===String(settings.pinLock.pin) && inp.value.length===4){
+    isScreenLocked = false;
+    $('#pin-lock-screen').style.display = 'none';
+    noteActivity();
+  }else{
+    if(err) err.style.display = 'block';
+    inp.value = '';
+    inp.focus();
+  }
+}
+if($('#btn-pin-unlock-submit')) $('#btn-pin-unlock-submit').addEventListener('click', unlockScreenAttempt);
+if($('#pin-unlock-input')) $('#pin-unlock-input').addEventListener('keydown', e=>{ if(e.key==='Enter') unlockScreenAttempt(); });
+setInterval(()=>{
+  if(isScreenLocked) return;
+  if(!settings || !settings.pinLock || !settings.pinLock.enabled || !settings.pinLock.pin) return;
+  const minutes = num(settings.pinLock.autoLockMinutes) || 5;
+  if(Date.now() - lastActivityAt >= minutes*60000) lockScreenNow();
+}, 20000);
+function renderPinLockPanel(){
+  const pl = settings.pinLock || DEFAULT_SETTINGS.pinLock;
+  if($('#pin-enabled-select')) $('#pin-enabled-select').value = pl.enabled ? '1' : '0';
+  if($('#pin-code-input')) $('#pin-code-input').value = pl.pin || '';
+  if($('#pin-autolock-minutes')) $('#pin-autolock-minutes').value = pl.autoLockMinutes || 5;
+}
+if($('#btn-save-pin-lock')) $('#btn-save-pin-lock').addEventListener('click', async ()=>{
+  const enabled = $('#pin-enabled-select').value === '1';
+  const pin = ($('#pin-code-input').value || '').trim();
+  const minutes = Math.max(1, Math.min(120, num($('#pin-autolock-minutes').value) || 5));
+  if(enabled && !/^\d{4}$/.test(pin)){ showToast('رقم PIN لازم يكون 4 أرقام بالضبط'); return; }
+  settings.pinLock = { enabled, pin, autoLockMinutes: minutes };
+  await saveSettings();
+  await logAudit('edit','الإعدادات', enabled ? `تم تفعيل قفل الشاشة بـ PIN (بعد ${minutes} دقيقة خمول)` : 'تم تعطيل قفل الشاشة بـ PIN');
+  noteActivity();
+  showToast('تم حفظ إعدادات القفل');
+});
+if($('#btn-lock-now')) $('#btn-lock-now').addEventListener('click', ()=>{
+  if(!settings.pinLock || !settings.pinLock.enabled || !/^\d{4}$/.test(String(settings.pinLock.pin||''))){
+    showToast('فعّل القفل وحدّد رقم PIN صحيح (4 أرقام) أولاً ثم احفظ');
+    return;
+  }
+  lockScreenNow();
+});
+const SETTINGS_EXPORT_KEYS = [
+  'courses','nationalities','channels','bagPrice','priceSaudi','priceNonSaudi','expenseCategories',
+  'centerInfo','darkMode','soundEnabled','autoBackupEnabled','autoBackupIntervalDays','lowBalanceThreshold',
+  'bagOverdueDays','monthlyReportWhatsapp','monthlyPdfReportsWhatsappNumbers','vatPdfReportWhatsappNumbers',
+  'bagFinanceLinkEnabled','powerAutomate','themeColors','themePresetId'
+];
+function exportSettingsToFile(){
+  const exportObj = {};
+  SETTINGS_EXPORT_KEYS.forEach(k=>{ exportObj[k] = settings[k]; });
+  const payload = { type:'ftc2-settings-export', exportedAt: new Date().toISOString(), data: exportObj };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `اعدادات_البرنامج_${todayISO()}.json`;
+  a.click();
+}
+async function importSettingsFromFile(file){
+  let parsed;
+  try{
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  }catch(e){ showToast('تعذّر قراءة الملف — تأكد أنه ملف تصدير إعدادات صحيح'); return; }
+  const data = (parsed && parsed.type==='ftc2-settings-export' && parsed.data) ? parsed.data : parsed;
+  if(!data || typeof data !== 'object'){ showToast('صيغة الملف غير صحيحة'); return; }
+  const foundKeys = SETTINGS_EXPORT_KEYS.filter(k=> Object.prototype.hasOwnProperty.call(data, k));
+  if(!foundKeys.length){ showToast('لم يتم التعرّف على أي إعدادات صالحة داخل هذا الملف'); return; }
+  if(!await customConfirm(`سيتم استيراد ${foundKeys.length} إعداد من الملف (الألوان، الأسعار، طرق الدفع، بيانات المركز...) وسيحل محل الإعدادات الحالية المطابقة. متابعة؟`)) return;
+  snapshotState('استيراد إعدادات البرنامج من ملف');
+  foundKeys.forEach(k=>{ settings[k] = data[k]; });
+  await saveSettings();
+  applyThemeColors(settings.themeColors);
+  applyTheme(!!settings.darkMode);
+  await logAudit('edit','الإعدادات', `تم استيراد إعدادات البرنامج من ملف خارجي (${foundKeys.length} إعداد)`);
+  renderSettings();
+  showToast('تم استيراد الإعدادات بنجاح');
+}
+if($('#btn-export-settings')) $('#btn-export-settings').addEventListener('click', exportSettingsToFile);
+if($('#btn-import-settings')) $('#btn-import-settings').addEventListener('click', ()=> $('#import-settings-input').click());
+if($('#import-settings-input')) $('#import-settings-input').addEventListener('change', async e=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(file) await importSettingsFromFile(file);
+});
 function renderServerSyncPanel(){
   const label = $('#server-sync-status-label');
   const btn = $('#btn-toggle-server-sync');
@@ -1031,6 +1174,16 @@ async function loadData(cacheOnly){
       Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
     }
     if(!settings.themePresetId) settings.themePresetId = 'classic';
+    if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
+    else{
+      if(settings.pinLock.enabled===undefined) settings.pinLock.enabled = false;
+      if(settings.pinLock.pin===undefined) settings.pinLock.pin = '';
+      if(!settings.pinLock.autoLockMinutes) settings.pinLock.autoLockMinutes = 5;
+    }
+    if(!settings.rolePermissions) settings.rolePermissions = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.rolePermissions));
+    else{
+      EDITABLE_ROLES.forEach(r=>{ if(!Array.isArray(settings.rolePermissions[r.id])) settings.rolePermissions[r.id] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.rolePermissions[r.id])); });
+    }
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
     const r = kv.bagStock;
@@ -2243,19 +2396,12 @@ $('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);
 
 /* ---------------- Nav ---------------- */
 const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca','budget'];
-/* مصفوفة صلاحيات الأدوار: null = صلاحيات كاملة (admin) أو نفس سلوك staff القديم (استخدام RESTRICTED_STAFF_VIEWS كقائمة حظر).
-   لأي دور له مصفوفة (array)، تُستخدم كـ "قائمة سماح" — فقط الأقسام المذكورة تظهر له، وما عداها مخفي تماماً. */
-const ROLE_PERMISSIONS = {
-  admin: null,
-  staff: null, // نفس السلوك القديم: كل شيء ما عدا RESTRICTED_STAFF_VIEWS
-  accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
-  reception: ['dashboard','clients','courses','courseinvoices','bags']
-};
 function canAccessView(view){
   if(currentUserRole==='admin') return true;
-  const allow = ROLE_PERMISSIONS[currentUserRole];
+  const rp = (settings && settings.rolePermissions) || DEFAULT_SETTINGS.rolePermissions;
+  const allow = rp[currentUserRole];
   if(Array.isArray(allow)) return allow.includes(view);
-  return !RESTRICTED_STAFF_VIEWS.includes(view); // staff أو دور غير معروف: القائمة السوداء القديمة كإجراء أمان احترازي
+  return !RESTRICTED_STAFF_VIEWS.includes(view); // دور غير معروف: قائمة حظر احترازية قديمة كخط دفاع أخير
 }
 $all('nav.tabs button[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -2284,7 +2430,7 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='zatca') renderZatca();
   });
 });
-/* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (مصفوفة ROLE_PERMISSIONS) */
+/* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (settings.rolePermissions القابلة للتعديل من الإعدادات) */
 function applyRolePermissions(){
   $all('nav.tabs button[data-view]').forEach(btn=>{
     btn.style.display = canAccessView(btn.dataset.view) ? '' : 'none';
@@ -5274,6 +5420,8 @@ function renderSettings(){
   renderUsersList();
   fillThemeColorInputs();
   renderServerSyncPanel();
+  renderPinLockPanel();
+  renderRolePermissionsPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -5295,7 +5443,86 @@ async function renderUsersList(){
     el.innerHTML = `<div class="hint" style="color:var(--red);">تعذّر تحميل قائمة المستخدمين: ${escapeHtml(e.message||'')}</div>`;
   }
 }
-/* ---------------- تحديث البرنامج (نسخة سطح المكتب فقط) ---------------- */
+/* ---------------- صلاحيات الأدوار (جدول مصفوفة قابل للتعديل من الإعدادات) ---------------- */
+function renderRolePermissionsPanel(){
+  const wrap = $('#role-permissions-table-wrap');
+  if(!wrap) return;
+  const rp = settings.rolePermissions || DEFAULT_SETTINGS.rolePermissions;
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>القسم</th>${EDITABLE_ROLES.map(r=>`<th>${escapeHtml(r.label)}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${ALL_VIEWS.map(v=>`<tr>
+          <td>${escapeHtml(v.label)}</td>
+          ${EDITABLE_ROLES.map(r=>`<td style="text-align:center;"><input type="checkbox" data-rp-role="${r.id}" data-rp-view="${v.id}" ${(rp[r.id]||[]).includes(v.id)?'checked':''}></td>`).join('')}
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventListener('click', async ()=>{
+  const newRp = {};
+  EDITABLE_ROLES.forEach(r=>{ newRp[r.id] = []; });
+  $all('#role-permissions-table-wrap input[type=checkbox]').forEach(cb=>{
+    if(cb.checked) newRp[cb.dataset.rpRole].push(cb.dataset.rpView);
+  });
+  const emptyRoles = EDITABLE_ROLES.filter(r=>!newRp[r.id].length).map(r=>r.label);
+  if(emptyRoles.length && !await customConfirm(`الأدوار التالية لن يكون لها أي قسم ظاهر إطلاقاً: ${emptyRoles.join('، ')}. متابعة؟`)) return;
+  settings.rolePermissions = newRp;
+  await saveSettings();
+  await logAudit('edit','الإعدادات','تم تعديل صلاحيات الأدوار (أي أقسام تظهر لكل دور)');
+  applyRolePermissions();
+  showToast('تم حفظ الصلاحيات');
+});
+async function renderLoginHistory(){
+  const el = $('#login-history-list');
+  if(!el) return;
+  el.innerHTML = `<div class="hint">جارٍ تحميل سجل الدخول من الخادم...</div>`;
+  try{
+    const res = await fetch(API_BASE + '/api/login-history', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر جلب سجل الدخول');
+    const history = data.history || [];
+    if(!history.length){ el.innerHTML = `<div class="hint">لا يوجد سجل دخول بعد</div>`; return; }
+    const uniqueUsers = [...new Set(history.map(h=>h.username))];
+    el.innerHTML = `
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        ${uniqueUsers.map(u=>`<button class="btn btn-danger btn-sm" data-forcelogout="${escapeHtml(u)}" ${u===currentUser?'disabled title="لا يمكنك إنهاء جلستك الحالية من هنا"':''}>🔒 إنهاء جلسات "${escapeHtml(u)}"</button>`).join('')}
+      </div>
+      <div class="table-scroll table-scroll-compact cards-mobile">
+      <table>
+        <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>الوقت</th><th>عنوان IP</th></tr></thead>
+        <tbody>
+          ${history.map(h=>`<tr>
+            <td data-label="اسم المستخدم">${escapeHtml(h.username)}${h.username===currentUser?' — أنت':''}</td>
+            <td data-label="الصلاحية">${escapeHtml(SERVER_ROLE_LABELS[h.role]||h.role||'—')}</td>
+            <td class="mono" data-label="الوقت">${new Date(h.logged_in_at).toLocaleString('ar-SA')}</td>
+            <td class="mono" data-label="عنوان IP">${escapeHtml(h.ip_address||'—')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  }catch(e){
+    el.innerHTML = `<div class="hint" style="color:var(--red);">تعذّر تحميل سجل الدخول: ${escapeHtml(e.message||'')}</div>`;
+  }
+}
+if($('#btn-refresh-login-history')) $('#btn-refresh-login-history').addEventListener('click', renderLoginHistory);
+if($('#login-history-list')) $('#login-history-list').addEventListener('click', async e=>{
+  const btn = e.target.closest('[data-forcelogout]');
+  if(!btn) return;
+  const username = btn.dataset.forcelogout;
+  if(!await customConfirm(`سيتم تسجيل خروج فوري لـ "${username}" من كل الأجهزة والجلسات المفتوحة حالياً، وسيحتاج يسجّل دخول من جديد. متابعة؟`)) return;
+  try{
+    const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username) + '/force-logout', {
+      method:'POST', headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN }
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر إنهاء الجلسات');
+    await logAudit('edit','الإعدادات', `تم إنهاء جلسات المستخدم "${username}" من كل الأجهزة يدوياً`);
+    showToast(`تم تسجيل خروج "${username}" من كل الأجهزة`);
+  }catch(e){
+    showToast('تعذّر إنهاء الجلسات: ' + (e.message||''));
+  }
+});
 /* ---------------- إعادة ضبط البرنامج بالكامل (حذف كل البيانات) ---------------- */
 $('#btn-reset-app').addEventListener('click', async ()=>{
   const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) ولن يمكن التراجع عن ذلك.\n\nهل أنت متأكد أنك تريد المتابعة؟');

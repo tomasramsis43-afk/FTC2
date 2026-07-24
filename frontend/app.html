@@ -4830,6 +4830,42 @@
       <div class="hint" style="margin-top:10px; border-right:3px solid var(--gold); padding-right:8px;">✅ هذه القائمة أصبحت متصلة مباشرة بخادم الدخول المركزي — أي مستخدم تضيفه هنا يقدر يسجّل دخول فوراً بالصلاحية المحددة. كلمات المرور تُشفَّر (bcrypt) على الخادم قبل التخزين ولا تُحفظ أبداً كنص واضح.</div>
       <div class="hint" style="margin-top:14px;">لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به (لتفادي فقدان الوصول بالخطأ) — سجّل دخول بحساب مدير آخر أولاً لو احتجت حذفه.</div>
     </div>
+    <div class="panel" id="panel-role-permissions">
+      <h3 style="margin:0 0 4px;">🛡️ صلاحيات الأدوار (أي أقسام تظهر لكل دور)</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">حدّد أي أقسام تظهر لكل دور غير "مدير". المدير دائماً له كل الصلاحيات كاملة ولا يمكن تقييده إطلاقاً، لتفادي فقدان الوصول الكامل للبرنامج بالخطأ.</p>
+      <div class="table-scroll table-scroll-compact" id="role-permissions-table-wrap"></div>
+      <button class="btn btn-primary btn-sm" id="btn-save-role-permissions" style="margin-top:12px;">حفظ الصلاحيات</button>
+    </div>
+    <div class="panel" id="panel-login-history">
+      <h3 style="margin:0 0 4px;">🕓 سجل الدخول والجلسات</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
+      <button class="btn btn-ghost btn-sm" id="btn-refresh-login-history" style="margin-bottom:10px;">🔄 تحديث السجل</button>
+      <div id="login-history-list"><div class="hint">اضغط "تحديث السجل" لعرض آخر عمليات الدخول</div></div>
+    </div>
+    <div class="panel" id="panel-pin-lock" style="border-right:4px solid var(--navy);">
+      <h3 style="margin:0 0 4px;">🔒 قفل الشاشة بـ PIN</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">يقفل البرنامج تلقائياً بعد مدة خمول محددة، ويطلب رقم PIN لإعادة الدخول — مفيد لو تركت الجهاز بدون مراقبة. القفل شغّال على هذا الجهاز فقط ولا يؤثر على أي جهاز آخر.</p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field" style="max-width:160px;"><label>تفعيل القفل التلقائي</label>
+          <select id="pin-enabled-select"><option value="0">معطّل</option><option value="1">مفعَّل</option></select>
+        </div>
+        <div class="field" style="max-width:160px;"><label>رقم PIN (4 أرقام)</label><input type="text" id="pin-code-input" maxlength="4" inputmode="numeric" placeholder="مثال: 1234"></div>
+        <div class="field" style="max-width:160px;"><label>القفل بعد خمول (دقائق)</label><input type="number" id="pin-autolock-minutes" min="1" max="120" value="5"></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn btn-primary btn-sm" id="btn-save-pin-lock">حفظ إعدادات القفل</button>
+        <button class="btn btn-ghost btn-sm" id="btn-lock-now">🔒 قفل الآن</button>
+      </div>
+    </div>
+    <div class="panel" id="panel-settings-export" style="border-right:4px solid var(--teal);">
+      <h3 style="margin:0 0 4px;">📤 تصدير / استيراد إعدادات البرنامج</h3>
+      <p class="hint" style="margin:0 0 12px;">تصدير نسخة من إعدادات البرنامج (الألوان، أسعار الدورات، طرق الدفع، تصنيفات المصروفات، بيانات المركز، الجنسيات...) كملف واحد لنقلها لجهاز أو حساب آخر بسهولة. هذا الملف لا يشمل بيانات العملاء أو الحركات المالية أو كلمات المرور إطلاقاً.</p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" id="btn-export-settings">⬇️ تصدير الإعدادات</button>
+        <button class="btn btn-ghost btn-sm" id="btn-import-settings">⬆️ استيراد إعدادات</button>
+        <input type="file" id="import-settings-input" accept=".json" style="display:none;">
+      </div>
+    </div>
     <div class="panel">
       <h3>بيانات النظام</h3>
       <p style="font-size:13px; color:var(--text-muted);">جميع البيانات محفوظة بشكل خاص وتظهر فقط لك عند فتح هذا التطبيق. يمكنك تصدير نسخة CSV من تبويب "العملاء" في أي وقت للاحتفاظ بنسخة احتياطية.</p>
@@ -5551,6 +5587,15 @@
   </div>
 </div>
 <!-- /app-wrap -->
+
+<div id="pin-lock-screen" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--navy,#1C3A52); color:#fff; align-items:center; justify-content:center; flex-direction:column; gap:16px; text-align:center; padding:20px;">
+  <div style="font-size:52px;">🔒</div>
+  <div style="font-size:20px; font-weight:700;">الشاشة مقفلة</div>
+  <div style="font-size:13px; opacity:.85;">أدخل رقم PIN للمتابعة</div>
+  <input type="password" id="pin-unlock-input" maxlength="4" inputmode="numeric" style="width:170px; text-align:center; font-size:26px; letter-spacing:10px; padding:10px; border-radius:8px; border:none;">
+  <div id="pin-unlock-error" style="display:none; color:#ffb3b3; font-size:13px;">رقم غير صحيح</div>
+  <button type="button" class="btn btn-gold btn-sm" id="btn-pin-unlock-submit">فتح</button>
+</div>
 
 <script defer src="app-inline.js"></script>
 
