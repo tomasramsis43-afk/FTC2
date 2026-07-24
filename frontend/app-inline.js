@@ -3454,12 +3454,11 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<
 
 /* تطبيع رقم جوال العميل ليتوافق مع صيغة واتساب الدولية (يفترض أرقام السعودية عند غياب رمز الدولة) */
 function normalizePhoneForWhatsapp(phone){
-  let p = String(phone||'').trim().replace(/[^\d+]/g,'');
+  let p = String(phone||'').replace(/[^0-9]/g,'');
   if(!p) return '';
-  p = p.replace(/^\+/, '');
   if(p.startsWith('00')) p = p.slice(2);
   if(p.startsWith('0')) p = '966' + p.slice(1);          // 05XXXXXXXX -> 9665XXXXXXXX
-  else if(/^5\d{8}$/.test(p)) p = '966' + p;              // 5XXXXXXXX (بدون صفر) -> 9665XXXXXXXX
+  else if(p.length===9 && p.startsWith('5')) p = '966' + p; // 5XXXXXXXX (بدون صفر) -> 9665XXXXXXXX
   if(!/^\d{8,15}$/.test(p)) return '';
   return p;
 }
@@ -4359,15 +4358,7 @@ function openBulkUpdateModal(){
 function closeBulkUpdateModal(){ $('#bulk-update-overlay').classList.remove('show'); }
 
 /* ---------------- إرسال رسالة واتساب جماعية للعملاء المحددين (wa.me تسلسلي) ---------------- */
-function normalizePhoneForWhatsapp(raw){
-  if(!raw) return '';
-  let digits = String(raw).replace(/[^0-9]/g, '');
-  if(!digits) return '';
-  if(digits.startsWith('00')) digits = digits.slice(2);
-  if(digits.startsWith('0')) digits = '966' + digits.slice(1); // رقم سعودي محلي يبدأ بصفر
-  else if(digits.length===9 && digits.startsWith('5')) digits = '966' + digits; // بدون صفر وبدون كود الدولة
-  return digits;
-}
+/* تستخدم دالة normalizePhoneForWhatsapp الموحّدة المعرَّفة أعلى الملف (تشمل التحقق من صحة طول الرقم) */
 let bulkMsgQueue = [];
 let bulkMsgIndex = 0;
 let bulkMsgTemplate = '';
