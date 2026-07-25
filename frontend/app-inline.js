@@ -592,6 +592,9 @@ const DEFAULT_SETTINGS = {
   vatPdfReportWhatsappNumbers: '',
   lastMonthlyReportPromptMonth: null,
   nextVaultSeq: 1,
+  // عداد تسلسلي منفصل ومستقل لكل حساب/وجهة (الخزنة كاش / البنك / الشبكة / أخرى) — كل حساب له
+  // ترقيمه الخاص به بدءاً من 1، بدل رقم تسلسلي واحد موحّد لكل الحركات المالية مهما كان حسابها.
+  nextVaultSeqByDest: { vault:1, bank:1, network:1, other:1 },
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
@@ -1195,6 +1198,8 @@ async function loadData(cacheOnly){
     }
     if(!settings.expenseCategories.includes('مشتريات')){ settings.expenseCategories.push('مشتريات'); await saveSettings(); }
     if(!settings.nextVaultSeq) settings.nextVaultSeq = DEFAULT_SETTINGS.nextVaultSeq;
+    if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.nextVaultSeqByDest));
+    else ['vault','bank','network','other'].forEach(d=>{ if(!settings.nextVaultSeqByDest[d]) settings.nextVaultSeqByDest[d] = 1; });
     if(!settings.powerAutomate) settings.powerAutomate = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.powerAutomate));
     if(settings.vaultLockedThrough===undefined) settings.vaultLockedThrough = DEFAULT_SETTINGS.vaultLockedThrough;
     if(settings.channels && typeof settings.channels[0]==='string'){
@@ -1272,7 +1277,7 @@ async function loadData(cacheOnly){
     if(renumberedCount>0){
       await saveVaultTx();
       await saveDeletedVaultTx();
-      await logAudit('edit','الحركات المالية', `ترحيل تلقائي لمرة واحدة: تم إعادة ترقيم الرقم التسلسلي لكل الحركات المالية (${renumberedCount} حركة) حسب تاريخها بدءاً من 1، لتصحيح القيود القديمة التي لم تكن قد أخذت رقماً تسلسلياً من قبل`);
+      await logAudit('edit','الحركات المالية', `ترحيل تلقائي لمرة واحدة: تم إعادة ترقيم الرقم التسلسلي لكل الحركات المالية (${renumberedCount} حركة) بشكل مستقل لكل حساب (الخزنة كاش / البنك / الشبكة / أخرى) حسب تاريخ كل حركة، بحيث تبدأ كل وجهة برقمها من 1`);
     }
   }
   try{
@@ -1431,34 +1436,49 @@ async function saveDeletedInvoices(){
 }
 
 /* ================= معايير محاسبية: ترقيم تسلسلي رسمي + قفل فترات + حذف منطقي ================= */
-// رقم تسلسلي دائم لا يتكرر ولا يُعاد استخدامه لأي حركة مالية جديدة تُضاف لأي شاشة في النظام
-function allocVaultSeq(){
-  const s = settings.nextVaultSeq || 1;
-  settings.nextVaultSeq = s + 1;
+// رقم تسلسلي دائم لا يتكرر ولا يُعاد استخدامه — لكن منفصل تماماً لكل حساب/وجهة (الخزنة كاش /
+// البنك / الشبكة / أخرى)، بحيث تبدأ كل وجهة بترقيمها المستقل من 1 ولا تتأثر بعدد حركات باقي
+// الوجهات الأخرى إطلاقاً.
+function allocVaultSeq(destination){
+  const dest = (destination && ['vault','bank','network','other'].includes(destination)) ? destination : 'vault';
+  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, other:1 };
+  const s = settings.nextVaultSeqByDest[dest] || 1;
+  settings.nextVaultSeqByDest[dest] = s + 1;
   return s;
 }
-// ترحيل تلقائي لمرة واحدة فقط: إعادة ترقيم كل الحركات المالية (الفعّالة والملغاة/المحذوفة
-// منطقياً) بالكامل برقم تسلسلي واحد متصل بدءاً من 1، مرتّباً حسب تاريخ الحركة نفسها
-// تصاعدياً (وعند تساوي التاريخ: حسب وقت الإنشاء الفعلي createdAt)، بدل الاعتماد فقط على
-// allocVaultSeq() الذي ترك كثيراً من القيود القديمة (قبل إضافة الترقيم) بدون رقم إطلاقاً.
-// تُنفَّذ مرة واحدة فقط بعلامة settings.vaultSeqRenumberedChronoV1 ولا تتكرر أبداً بعد ذلك،
-// حتى لا تتغير الأرقام الرسمية بعد اعتمادها وطباعتها على المستندات.
+// ترحيل تلقائي لمرة واحدة فقط: إعادة ترقيم كل الحركات المالية (الفعّالة والملغاة/المحذوفة منطقياً)
+// بحيث يكون لكل حساب/وجهة (الخزنة كاش / البنك / الشبكة / أخرى) رقم تسلسلي مستقل خاص به بدءاً من 1،
+// مرتّباً حسب تاريخ الحركة نفسها تصاعدياً ضمن كل وجهة على حدة (وعند تساوي التاريخ: حسب وقت الإنشاء
+// الفعلي createdAt) — بدل رقم تسلسلي واحد موحّد لكل الحركات بغض النظر عن حسابها.
+// تُنفَّذ مرة واحدة فقط بعلامة settings.vaultSeqRenumberedByDestV1 ولا تتكرر أبداً بعد ذلك، حتى لا
+// تتغير الأرقام الرسمية بعد اعتمادها وطباعتها على المستندات.
 function renumberVaultSeqChronologically(){
-  if(settings.vaultSeqRenumberedChronoV1) return 0;
+  if(settings.vaultSeqRenumberedByDestV1) return 0;
   const all = [...vaultTx, ...deletedVaultTx];
-  if(!all.length){ settings.vaultSeqRenumberedChronoV1 = true; return 0; }
-  all.sort((a,b)=>{
-    const da = a.date || '', db = b.date || '';
-    if(da !== db) return da.localeCompare(db);
-    const ca = a.createdAt || 0, cb = b.createdAt || 0;
-    if(ca !== cb) return ca - cb;
-    return String(a.id||'').localeCompare(String(b.id||''));
+  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, other:1 };
+  if(!all.length){ settings.vaultSeqRenumberedByDestV1 = true; return 0; }
+  const byDest = { vault:[], bank:[], network:[], other:[] };
+  all.forEach(t=>{
+    const d = ['vault','bank','network','other'].includes(t.destination) ? t.destination : 'vault';
+    byDest[d].push(t);
   });
-  let n = 1;
-  all.forEach(t=>{ t.seq = n++; });
-  settings.nextVaultSeq = n;
-  settings.vaultSeqRenumberedChronoV1 = true;
-  return all.length;
+  let totalRenumbered = 0;
+  ['vault','bank','network','other'].forEach(dest=>{
+    const group = byDest[dest];
+    group.sort((a,b)=>{
+      const da = a.date || '', db = b.date || '';
+      if(da !== db) return da.localeCompare(db);
+      const ca = a.createdAt || 0, cb = b.createdAt || 0;
+      if(ca !== cb) return ca - cb;
+      return String(a.id||'').localeCompare(String(b.id||''));
+    });
+    let n = 1;
+    group.forEach(t=>{ t.seq = n++; });
+    settings.nextVaultSeqByDest[dest] = n;
+    totalRenumbered += group.length;
+  });
+  settings.vaultSeqRenumberedByDestV1 = true;
+  return totalRenumbered;
 }
 // هل هذا التاريخ يقع ضمن فترة محاسبية مُقفلة (بعد اعتماد قوائمها)؟
 function isDateLocked(dateStr){
@@ -1522,7 +1542,7 @@ function migrateCompanyTransfersToLumpSum(){
       if(removed) removed.companyTransferAllocId = undefined;
     });
     vaultTx.push({
-      id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+      id: uid(), seq: allocVaultSeq(destination), createdAt: Date.now(),
       type:'in', date, amount: num(t.amount), destination,
       clientName:'', method: channel, category:'', manual:'', networkInvoice:'',
       notes: `حوالة شركة "${t.companyName||''}"${t.refNum?` — مرجع: ${t.refNum}`:''}${oldEntries.length?` (تم دمج ${oldEntries.length} قيد فردي سابق تلقائياً)`:''}`,
@@ -6598,7 +6618,7 @@ $('#btn-add-stock').addEventListener('click', async ()=>{
     // البنكي مثلاً) لا تُرحَّل لأن المبلغ لم يدخل فعلياً لرصيد الخزنة النقدي.
     if(method==='سحب نقدي' && settings.bagFinanceLinkEnabled!==false){
       const cashInTx = {
-        id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+        id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
         type: 'in', date, amount, method,
         notes: `سحب نقدي من حساب تمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
         clientId: '', clientName: '', manual: 'سحب نقدي من مخزون الحقائب',
@@ -6621,7 +6641,7 @@ $('#btn-add-stock').addEventListener('click', async ()=>{
     // أو غيرها) لا تُرحَّل لأن المبلغ لم يخرج فعلياً من رصيد الخزنة النقدي.
     if((method==='إيداع كاش في الحساب البنكي' || method==='كاش مباشر') && settings.bagFinanceLinkEnabled!==false){
       const cashOutTx = {
-        id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+        id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
         type: 'out', date, amount, method,
         notes: `إيداع نقدي (${method}) لتمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
         clientId: '', clientName: '', manual: '',
@@ -6751,7 +6771,7 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
     if(type==='withdraw'){
       if(method==='سحب نقدي' && settings.bagFinanceLinkEnabled!==false){
         const cashInTx = {
-          id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+          id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
           type: 'in', date, amount, method,
           notes: `سحب نقدي من حساب تمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
           clientId: '', clientName: '', manual: 'سحب نقدي من مخزون الحقائب',
@@ -6765,7 +6785,7 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
     }else{
       if((method==='إيداع كاش في الحساب البنكي' || method==='كاش مباشر') && settings.bagFinanceLinkEnabled!==false){
         const cashOutTx = {
-          id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
+          id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
           type: 'out', date, amount, method,
           notes: `إيداع نقدي (${method}) لتمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
           clientId: '', clientName: '', manual: '',
@@ -6985,7 +7005,7 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
         const clientId = String(row['رقم الهوية']||'').trim();
         const client = clientId ? clients.find(c=>c.clientId===clientId) : null;
         newTx = {
-          id: uid(), seq: allocVaultSeq(), createdAt: Date.now(), type:'in', isReturn:false,
+          id: uid(), seq: allocVaultSeq(destination), createdAt: Date.now(), type:'in', isReturn:false,
           date, amount, method, notes,
           clientId: client ? clientId : '',
           clientName: client ? client.name : '',
@@ -6998,7 +7018,7 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
       }else{
         const category = String(row['التصنيف']||'').trim();
         newTx = {
-          id: uid(), seq: allocVaultSeq(), createdAt: Date.now(), type:'out', isReturn:false,
+          id: uid(), seq: allocVaultSeq(destination), createdAt: Date.now(), type:'out', isReturn:false,
           date, amount, method, notes,
           clientId:'', clientName:'', manual:'',
           category,
@@ -7378,7 +7398,7 @@ function syncClientLedgerEntry(client){
     // ضمن "إجمالي المدفوع" لبيانات العميل — لكنها لا تدخل ضمن أرصدة الخزنة/البنك/الشبكة (balanceOf يتجاهل "أخرى").
     vaultTx.push({
       id:'auto_'+client.id,
-      seq: prevSeqs['auto_'+client.id] || allocVaultSeq(),
+      seq: prevSeqs['auto_'+client.id] || allocVaultSeq(dest),
       type:'in',
       date: client.date || todayISO(),
       amount: num(client.paid),
@@ -7402,7 +7422,7 @@ function syncClientLedgerEntry(client){
     const dest2 = chan2 ? chan2.dest : 'other';
     vaultTx.push({
       id:'auto2_'+client.id,
-      seq: prevSeqs['auto2_'+client.id] || allocVaultSeq(),
+      seq: prevSeqs['auto2_'+client.id] || allocVaultSeq(dest2),
       type:'in',
       date: client.date || todayISO(),
       amount: num(client.paid2),
@@ -8124,7 +8144,7 @@ $('#vault-form').addEventListener('submit', async e=>{
     savedTx = vaultTx[idx];
     showToast('تم تحديث الحركة');
   }else{
-    savedTx = {id:uid(), seq: allocVaultSeq(), createdAt:Date.now(), ...data};
+    savedTx = {id:uid(), seq: allocVaultSeq(data.destination), createdAt:Date.now(), ...data};
     vaultTx.push(savedTx);
     await saveSettings();
     showToast('تمت إضافة الحركة');
@@ -12519,9 +12539,10 @@ $('#btn-add-transfer').addEventListener('click', async ()=>{
   companyTransfers.push(transferRecord);
   // قيد مالي واحد فوري بكامل مبلغ الحوالة — المبلغ مُستلَم فعلياً بالكامل من الشركة سواء وُزِّع على المتدربين الآن أو لاحقاً
   const destCh0 = settings.channels.find(ch=>ch.name===channel);
+  const dest0 = destCh0 ? destCh0.dest : 'bank';
   vaultTx.push({
-    id: uid(), seq: allocVaultSeq(), createdAt: Date.now(),
-    type:'in', date, amount, destination: destCh0 ? destCh0.dest : 'bank',
+    id: uid(), seq: allocVaultSeq(dest0), createdAt: Date.now(),
+    type:'in', date, amount, destination: dest0,
     clientName:'', method: channel, category:'', manual:'', networkInvoice:'',
     notes: `حوالة شركة "${company.name}"${refNum?` — مرجع: ${refNum}`:''}`,
     companyTransferId: transferRecord.id
@@ -13772,7 +13793,7 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
     vaultTxId = 'purchase_'+(existing?.id || uid());
     vaultTx.push({
       id: vaultTxId,
-      seq: allocVaultSeq(),
+      seq: allocVaultSeq(dest),
       type: 'out',
       date,
       amount: total,
