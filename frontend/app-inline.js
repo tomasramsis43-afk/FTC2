@@ -12,6 +12,10 @@ const $ = s => document.querySelector(s);
 const $all = s => document.querySelectorAll(s);
 
 const LICENSE_STORAGE_KEY = "appLicenseKeyV1";
+// نسخة محلية مخبّأة من آخر تفعيل ناجح (مفتاح التشفير + تاريخ الانتهاء)، تُستخدم فقط
+// عند تعذّر الوصول للسيرفر (انقطاع إنترنت) لتشغيل البرنامج بدل حجبه بالكامل، بشرط
+// ألا يكون تاريخ انتهاء الترخيص قد مضى فعلياً حسب آخر تحقق ناجح كان معروفاً.
+const LICENSE_CACHE_KEY = "appLicenseCacheV1";
 let ENC_KEY = null; // مفتاح AES-GCM (CryptoKey) يُستورد من نتيجة السيرفر بعد التفعيل
 
 function bytesToBase64(bytes){
@@ -36,8 +40,12 @@ async function validateLicenseKey(rawKey){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ licenseKey: rawKey }),
     });
-    const data = await res.json();
-    if(!res.ok || !data) return { valid:false, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص' };
+    let data = null;
+    try{ data = await res.json(); }catch(e){ data = null; }
+    // فشل اتصال فعلي بالسيرفر (لا رد صالح إطلاقاً) — نميّزه عن رفض صريح من
+    // السيرفر لصلاحية الكود، حتى يمكن لاحقاً الرجوع لآخر تفعيل ناجح محفوظ محلياً
+    // بدل إجبار المستخدم على إعادة إدخال الكود لمجرد انقطاع الإنترنت مؤقتاً.
+    if(!res.ok || !data) return { valid:false, networkError:true, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص' };
     if(!data.valid){
       return {
         valid:false,
@@ -53,7 +61,7 @@ async function validateLicenseKey(rawKey){
       encKeyRaw: data.encKey, // base64 — يُستورد لاحقاً في activateAndStart
     };
   }catch(e){
-    return { valid:false, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص — تفاصيل تقنية: ' + (e && e.message ? e.message : String(e)) };
+    return { valid:false, networkError:true, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص — تفاصيل تقنية: ' + (e && e.message ? e.message : String(e)) };
   }
 }
 
@@ -1259,6 +1267,14 @@ async function loadData(cacheOnly){
     const r = kv.deletedVaultTx;
     deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ deletedVaultTx = []; }
+  {
+    const renumberedCount = renumberVaultSeqChronologically();
+    if(renumberedCount>0){
+      await saveVaultTx();
+      await saveDeletedVaultTx();
+      await logAudit('edit','الحركات المالية', `ترحيل تلقائي لمرة واحدة: تم إعادة ترقيم الرقم التسلسلي لكل الحركات المالية (${renumberedCount} حركة) حسب تاريخها بدءاً من 1، لتصحيح القيود القديمة التي لم تكن قد أخذت رقماً تسلسلياً من قبل`);
+    }
+  }
   try{
     const r = kv.vaultDenomTx;
     vaultDenomTx = r && r.value ? JSON.parse(r.value) : [];
@@ -1420,6 +1436,29 @@ function allocVaultSeq(){
   const s = settings.nextVaultSeq || 1;
   settings.nextVaultSeq = s + 1;
   return s;
+}
+// ترحيل تلقائي لمرة واحدة فقط: إعادة ترقيم كل الحركات المالية (الفعّالة والملغاة/المحذوفة
+// منطقياً) بالكامل برقم تسلسلي واحد متصل بدءاً من 1، مرتّباً حسب تاريخ الحركة نفسها
+// تصاعدياً (وعند تساوي التاريخ: حسب وقت الإنشاء الفعلي createdAt)، بدل الاعتماد فقط على
+// allocVaultSeq() الذي ترك كثيراً من القيود القديمة (قبل إضافة الترقيم) بدون رقم إطلاقاً.
+// تُنفَّذ مرة واحدة فقط بعلامة settings.vaultSeqRenumberedChronoV1 ولا تتكرر أبداً بعد ذلك،
+// حتى لا تتغير الأرقام الرسمية بعد اعتمادها وطباعتها على المستندات.
+function renumberVaultSeqChronologically(){
+  if(settings.vaultSeqRenumberedChronoV1) return 0;
+  const all = [...vaultTx, ...deletedVaultTx];
+  if(!all.length){ settings.vaultSeqRenumberedChronoV1 = true; return 0; }
+  all.sort((a,b)=>{
+    const da = a.date || '', db = b.date || '';
+    if(da !== db) return da.localeCompare(db);
+    const ca = a.createdAt || 0, cb = b.createdAt || 0;
+    if(ca !== cb) return ca - cb;
+    return String(a.id||'').localeCompare(String(b.id||''));
+  });
+  let n = 1;
+  all.forEach(t=>{ t.seq = n++; });
+  settings.nextVaultSeq = n;
+  settings.vaultSeqRenumberedChronoV1 = true;
+  return all.length;
 }
 // هل هذا التاريخ يقع ضمن فترة محاسبية مُقفلة (بعد اعتماد قوائمها)؟
 function isDateLocked(dateStr){
@@ -13989,9 +14028,17 @@ $('#server-login-form').addEventListener('submit', async e=>{
 });
 
 let LICENSE_EXPIRY_DATE = null; // تُستخدم في تنبيهات الداشبورد لتذكير المستخدم قبل انتهاء الترخيص
-async function activateAndStart(encKeyRaw, expiryDate){
+async function activateAndStart(encKeyRaw, expiryDate, clientId){
   ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(encKeyRaw), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
   if(expiryDate) LICENSE_EXPIRY_DATE = expiryDate;
+  try{
+    localStorage.setItem(LICENSE_CACHE_KEY, JSON.stringify({
+      encKeyRaw,
+      expiryDate: expiryDate ? new Date(expiryDate).toISOString() : null,
+      clientId: clientId || null,
+      cachedAt: new Date().toISOString(),
+    }));
+  }catch(e){}
   $('#license-screen').style.display = 'none';
   await ensureServerLoginThenStart();
 }
@@ -14007,7 +14054,7 @@ $('#license-form').addEventListener('submit', async e=>{
     if(result.valid){
       const cleaned = input.replace(/[\s-]/g,'').toUpperCase();
       localStorage.setItem(LICENSE_STORAGE_KEY, cleaned);
-      await activateAndStart(result.encKeyRaw, result.expiryDate);
+      await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
     }else{
       $('#license-error').textContent = result.reason || 'كود الترخيص غير صالح';
       $('#license-error').style.display = 'block';
@@ -14579,8 +14626,26 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeClientsCou
     if(storedKey){
       const result = await validateLicenseKey(storedKey);
       if(result.valid){
-        await activateAndStart(result.encKeyRaw, result.expiryDate);
+        await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
         return;
+      }
+      // تعذّر الوصول للسيرفر (مش رفض صريح للكود): نحاول تشغيل البرنامج بآخر تفعيل
+      // ناجح محفوظ محلياً على هذا الجهاز، بدل حجب البرنامج بالكامل لمجرد انقطاع
+      // الإنترنت. لو الترخيص المحفوظ منتهي فعلياً حسب آخر تاريخ انتهاء معروف، أو
+      // مفيش أي تفعيل سابق محفوظ، تظهر شاشة الترخيص كالمعتاد.
+      if(result.networkError){
+        try{
+          const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
+          if(cachedRaw){
+            const cached = JSON.parse(cachedRaw);
+            const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
+            if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
+              await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
+              showToast('⚠️ تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
+              return;
+            }
+          }
+        }catch(e){}
       }
       showLicenseScreen(result.reason);
       return;
