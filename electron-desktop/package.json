@@ -13,14 +13,20 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^4.2.0"
   },
   "build": {
     "appId": "com.ftc2.desktop",
     "productName": "FTC2",
-    "files": ["main.js", "app-assets/**/*"],
+    "files": [
+      "main.js",
+      "app-assets/**/*"
+    ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "signDlls": false

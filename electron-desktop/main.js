@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const PORT = 17532;
 const REMOTE_BASE = 'https://ftc-6d0s.onrender.com';
@@ -41,17 +42,7 @@ async function checkForFrontendUpdate() {
       const remote = await fetchText(`${REMOTE_BASE}/${file}`);
       // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية
       if (remote && remote.length > 20) {
-        let content = remote;
-        if (file === 'app-inline.js') {
-          // الملف القادم من السيرفر بيه API_BASE = '' (لأنه بيتقدَّم من نفس عنوان
-          // الـ API على Render)، لكن هنا بيتقدَّم من خادم محلي، فلازم نعيد ضبط
-          // العنوان الكامل بعد كل تحديث حتى لا تنقطع الاتصال بالسيرفر البعيد.
-          content = content.replace(
-            /const API_BASE = '[^']*';.*/,
-            `const API_BASE = '${REMOTE_BASE}'; // تم ضبطه تلقائياً لتطبيق سطح المكتب`
-          );
-        }
-        fs.writeFileSync(path.join(userAssetsDir, file), content, 'utf8');
+        fs.writeFileSync(path.join(userAssetsDir, file), remote, 'utf8');
       }
     } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
   }
@@ -65,6 +56,17 @@ async function checkForFrontendUpdate() {
 function startLocalServer() {
   return new Promise((resolve) => {
     const srv = express();
+    // وسيط محلي: كل طلبات /api تُمرَّر للسيرفر البعيد على Render، بحيث تظل
+    // كل طلبات المتصفح (fetch) من نفس الأصل (http://127.0.0.1:PORT) ولا
+    // تصطدم بسياسة CORS المضبوطة على السيرفر (اللي بتسمح فقط لنفس دومين الموقع).
+    srv.use('/api', createProxyMiddleware({
+      target: REMOTE_BASE,
+      changeOrigin: true,
+      onError: (err, req, res) => {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'تعذّر الاتصال بالسيرفر' }));
+      },
+    }));
     srv.use(express.static(userAssetsDir));
     srv.use(express.static(path.join(__dirname, 'app-assets')));
     srv.listen(PORT, '127.0.0.1', () => resolve());
