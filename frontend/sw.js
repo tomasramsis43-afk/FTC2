@@ -3,8 +3,8 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v3';
-const RUNTIME_CACHE = 'ftc-runtime-v3';
+const CACHE_VERSION = 'ftc-cache-v4';
+const RUNTIME_CACHE = 'ftc-runtime-v4';
 const STATIC_ASSETS = [
   '/',
   '/app.html',
