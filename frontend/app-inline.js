@@ -1284,6 +1284,12 @@ async function loadData(cacheOnly){
       await saveClients();
       await logAudit('edit','شيت العملاء', `مزامنة تلقائية: تم تحديث قيمة الدورة/الحقيبة/المدفوع لـ ${valuesMigratedCount} عميل من تخصيصهم في حوالات الشركات`);
     }
+    const dupRemovedCount = cleanupDuplicateCompanyTraineeVaultEntries();
+    if(dupRemovedCount>0){
+      await saveVaultTx();
+      await saveDeletedVaultTx();
+      await logAudit('delete','الحركات المالية', `إصلاح تلقائي: تم حذف ${dupRemovedCount} قيد مالي مكرر لعملاء مُرحَّلة قيمتهم من حوالات الشركات (مبلغهم مُرحَّل بالفعل ضمن القيد الموحّد لكل حوالة)`);
+    }
   }
   try{
     const r = kv.journalEntries;
@@ -1454,12 +1460,28 @@ function migrateCompanyTraineeValuesToClients(){
       const client = clients.find(x=>x.clientId===tr.clientId);
       if(!client) return;
       const newCourse = num(tr.courseValue), newBag = num(tr.bagValue), newPaid = newCourse+newBag;
-      if(num(client.coursePrice)===newCourse && num(client.bagPrice)===newBag && num(client.paid)===newPaid) return; // مطابق بالفعل
+      if(client.companyTransferAllocated && num(client.coursePrice)===newCourse && num(client.bagPrice)===newBag && num(client.paid)===newPaid) return; // مطابق بالفعل ومُعلَّم مسبقاً
       syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue);
       changedCount++;
     });
   });
   return changedCount;
+}
+/* ================= إصلاح تلقائي: حذف القيود المالية المكرَّرة التي أُنشئت خطأً سابقاً =================
+   لعملاء مُرحَّلة قيمتهم من حوالة شركة (companyTransferAllocated)، أي قيد تلقائي فردي (autoClientId) في
+   الحركات المالية يُعتبر مكرراً — لأن مبلغهم مُرحَّل بالفعل ضمن القيد الموحّد لكامل الحوالة
+   (companyTransferId). يُنقل القيد المكرر لسجل الحركات الملغاة (وليس حذفاً نهائياً) حفاظاً على أثره. */
+function cleanupDuplicateCompanyTraineeVaultEntries(){
+  let removedCount = 0;
+  clients.forEach(c=>{
+    if(!c.companyTransferAllocated) return;
+    const dupEntries = vaultTx.filter(t=>t.autoClientId===c.id);
+    dupEntries.forEach(t=>{
+      softDeleteVaultTx(t.id, `قيد مكرر لعميل مُرحَّلة قيمته من حوالة شركة — المبلغ مُرحَّل بالفعل ضمن القيد الموحّد للحوالة`);
+      removedCount++;
+    });
+  });
+  return removedCount;
 }
 async function saveJournalEntries(){
   try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
@@ -7230,7 +7252,10 @@ function syncClientLedgerEntry(client){
   const prevSeqs = {};
   vaultTx.filter(t=>t.autoClientId===client.id).forEach(t=>{ prevSeqs[t.id] = t.seq; });
   removeClientLedgerEntries(client.id);
-  if(num(client.paid)>0){
+  // عميل مُرحَّلة قيمته من حوالة شركة (companyTransferAllocated): المبلغ مُرحَّل بالفعل مرة واحدة ضمن
+  // القيد المالي الموحّد لكامل الحوالة (companyTransferId) — فلا نُنشئ له قيداً فردياً إضافياً هنا
+  // تجنّباً لتكرار المبلغ في الحركات المالية.
+  if(num(client.paid)>0 && !client.companyTransferAllocated){
     const chan = settings.channels.find(c=>c.name===client.channel);
     const dest = chan ? chan.dest : 'other';
     // ملاحظة: يتم ترحيل الدفعة دائماً (حتى لو كانت طريقة الدفع "أخرى" مثل طبي/المركز) حتى تُحتسب
@@ -12434,6 +12459,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
   if(!t){ showToast('تعذّر تحديد الحوالة'); return; }
   const clientId = $('#ctr-id').value.trim();
   if(!clientId){ showToast('أدخل رقم الهوية'); return; }
+  if(!/^\d{10}$/.test(clientId)){ showToast('رقم الهوية يجب أن يتكون من 10 أرقام بالضبط (نفس تنسيق شيت العملاء) — تأكّد منه حتى يرتبط بسجل العميل الصحيح'); return; }
   const courseValue = num($('#ctr-course').value);
   const bagValue = num($('#ctr-bag').value);
   if(courseValue<=0 && bagValue<=0){ showToast('أدخل قيمة الدورة أو قيمة الحقيبة'); return; }
@@ -12466,6 +12492,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
         date: t.date || todayISO(),
         coursePrice: courseValue, bagSource: bagValue>0?'stock':'own', bagPrice: bagValue,
         bagStatus: bagValue>0?'purchased':'n/a', bagPurchaseDate: bagValue>0?(t.date||todayISO()):undefined, discount:0, paid: courseValue+bagValue,
+        companyTransferAllocated: true,
         channel:(()=>{ const ch = settings.channels.find(c=>c.name===t.channel); return ch ? ch.name : 'تحويل بنكي (شركة)'; })(), networkInvoice:'', paid2:0, channel2:'', networkInvoice2:'',
         stage:'جديد', cancelled:false,
         notes: `أُضيف تلقائياً (أثناء تعديل) من حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''}`
@@ -12529,6 +12556,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       bagPurchaseDate: bagValue>0 ? (t.date||todayISO()) : undefined,
       discount: 0,
       paid: courseValue+bagValue,
+      companyTransferAllocated: true,
       channel:payMethod0, networkInvoice:'',
       paid2:0, channel2:'', networkInvoice2:'',
       stage:'جديد', cancelled:false,
@@ -12779,12 +12807,15 @@ document.addEventListener('click', async e=>{
    تسبّب فيها فقدان الربط. يُنشئ سجل عميل كامل بنفس منطق الإنشاء التلقائي المستخدَم عند إضافة متدرب جديد. */
 /* يرحّل قيمة تخصيص متدرب (قيمة الدورة/الحقيبة) من حوالة الشركة إلى سجله في شيت العملاء —
    يُستبدل دائماً بقيمة تخصيصه في الحوالة (المصدر الرسمي لهذه القيمة)، بدون إنشاء أي قيد مالي/خزنة
-   جديد (المبلغ مُرحَّل بالفعل لمرة واحدة ضمن القيد الموحّد لكامل الحوالة). */
+   جديد (المبلغ مُرحَّل بالفعل لمرة واحدة ضمن القيد الموحّد لكامل الحوالة). نُعلِّم السجل بعلامة
+   companyTransferAllocated=true حتى لا تُنشئ آلية "الترحيل التلقائي لقيد العميل" (syncClientLedgerEntry)
+   قيداً إضافياً مكرراً بنفس المبلغ عند أي حفظ/تحديث لاحق لهذا العميل (تحديث شامل، تعديل، استيراد...). */
 function syncClientValueFromTraineeAllocation(client, courseValue, bagValue){
   if(!client) return;
   client.coursePrice = num(courseValue);
   client.bagPrice = num(bagValue);
   client.paid = num(courseValue) + num(bagValue);
+  client.companyTransferAllocated = true;
 }
 function createClientForUnlinkedTrainee(t, tr){
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
@@ -12805,6 +12836,7 @@ function createClientForUnlinkedTrainee(t, tr){
     bagPurchaseDate: bagValue>0 ? (t.date||todayISO()) : undefined,
     discount: 0,
     paid: num(tr.courseValue)+bagValue,
+    companyTransferAllocated: true,
     channel: payMethod0, networkInvoice:'',
     paid2:0, channel2:'', networkInvoice2:'',
     stage:'جديد', cancelled:false,
@@ -12872,6 +12904,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
   for(const row of json){
     const clientId = String(row['رقم الهوية']||'').trim();
     if(!clientId){ skipped++; continue; }
+    if(!/^\d{10}$/.test(clientId)){ skipped++; continue; } // رقم هوية غير صحيح الصيغة (يجب أن يكون 10 أرقام بالضبط) — يُتخطى لتجنّب إنشاء سجل عميل مكرر/غير مرتبط
     if(t.trainees.some(x=>x.clientId===clientId)){ skipped++; continue; } // موجود مسبقاً في نفس الحوالة
     if(companyTransfers.some(tt=>tt.id!==t.id && (tt.trainees||[]).some(x=>x.clientId===clientId))){ skipped++; continue; } // موجود مسبقاً في حوالة شركة أخرى — لتجنّب التكرار
 
@@ -12903,6 +12936,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
         bagPurchaseDate: bagValue>0 ? (t.date||todayISO()) : undefined,
         discount: 0,
         paid: courseValue+bagValue,
+        companyTransferAllocated: true,
         channel:payMethod0, networkInvoice:'',
         paid2:0, channel2:'', networkInvoice2:'',
         stage:'جديد', cancelled:false,
