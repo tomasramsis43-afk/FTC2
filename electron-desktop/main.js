@@ -30,9 +30,31 @@ function fetchText(url) {
 // مجلد بيانات المستخدم يُستخدم فقط لتخزين أي ملفات مُحدَّثة تم تنزيلها من
 // السيرفر لاحقاً — لا حاجة لنسخ أي شيء إليه عند أول تشغيل (تجنّباً لمشكلة
 // معروفة: نسخ الملفات من داخل أرشيف asar بأدوات مثل fs.cpSync قد تفشل).
+//
+// مجلد بيانات المستخدم لا يُمسح تلقائياً عند تثبيت نسخة جديدة من الـ setup
+// (وده مقصود بشكل عام — علشان لا تُفقد بيانات الكاش الأوفلاين). لكن لو كان
+// فيه ملفات واجهة قديمة محفوظة فيه من نسخة سابقة فيها خلل، لازم نتخلّص منها
+// أول ما نصدر نسخة جديدة من التطبيق، فنحفظ رقم إصدار التطبيق في هذا المجلد،
+// ولو اختلف عن إصدار الـ setup الحالي نمسح كل ملفات الواجهة القديمة (فقط
+// الملفات، مش بيانات IndexedDB الفعلية الخاصة بالعميل اللي هي منفصلة تماماً).
+function clearStaleAssetsIfVersionChanged() {
+  const versionFile = path.join(userAssetsDir, '.app-version');
+  const currentVersion = app.getVersion();
+  let storedVersion = null;
+  try { storedVersion = fs.readFileSync(versionFile, 'utf8').trim(); } catch (e) {}
+
+  if (storedVersion !== currentVersion) {
+    for (const file of SYNCED_FILES) {
+      try { fs.unlinkSync(path.join(userAssetsDir, file)); } catch (e) {}
+    }
+    try { fs.writeFileSync(versionFile, currentVersion, 'utf8'); } catch (e) {}
+  }
+}
+
 async function prepareAssets() {
   userAssetsDir = path.join(app.getPath('userData'), 'app-assets');
   try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
+  clearStaleAssetsIfVersionChanged();
   checkForFrontendUpdate().catch(() => {}); // في الخلفية، لا يوقف فتح البرنامج
 }
 
