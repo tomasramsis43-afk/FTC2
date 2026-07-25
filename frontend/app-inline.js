@@ -1162,6 +1162,20 @@ let auditLog = [];
 let currentUser = null;
 let currentUserRole = 'admin'; // 'admin' (صلاحيات كاملة) أو 'staff' (صلاحيات محدودة — بدون الإعدادات وسجل المراجعة)
 
+/* ================= عزل البيانات حسب المستخدم (كل مستخدم يشوف بياناته هو فقط) =================
+   المدير العام والمحاسب فقط يشوفون كل البيانات بدون استثناء. أي دور آخر (استقبال/موظف عام)
+   يشوف فقط السجلات التي أنشأها هو بنفسه (createdBy === اسم مستخدمه)، في كل شاشة تسجّل بيانات
+   (عملاء، شركات، دورات، مشتريات، موردين، حركات مخزون الحقائب). السجلات القديمة التي أُنشئت قبل
+   هذه الميزة (بدون حقل createdBy) لا تُعتبر مملوكة لأي مستخدم مقيَّد تحديداً، فتظهر فقط للمدير/المحاسب
+   حتى لا يُخمَّن مالكها خطأً. الخزنة والتقارير المالية والمحاسبة تبقى مقفولة بالكامل عن الاستقبال/الموظف
+   العام أصلاً (راجع settings.rolePermissions)، فلا داعي لعزلها هنا لأنها غير ظاهرة لهم من الأساس.
+*/
+function canSeeAllData(){ return currentUserRole==='admin' || currentUserRole==='accountant'; }
+function filterOwnRecords(arr){
+  if(canSeeAllData() || !Array.isArray(arr)) return arr;
+  return arr.filter(r=> r && r.createdBy && r.createdBy===currentUser);
+}
+
 /* دالة تأخير التنفيذ (debounce) — تُستخدم مع حقول البحث النصي حتى لا يُعاد رسم الجداول الكبيرة
    مع كل ضغطة حرف (وهذا هو السبب الرئيسي لبطء البرنامج مع كثرة البيانات)، بل بعد توقف الكتابة فقط */
 function debounce(fn, wait=280){
@@ -1195,7 +1209,7 @@ async function syncBagStockIssues(){
   clients.forEach(c=>{
     if(c.bagSource==='stock' && !bagStock.some(b=>b.type==='issue' && b.issuedClientId===c.id)){
       bagStock.push({
-        id: uid(), type:'issue', qty:-1, unitPrice:0,
+        id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
         date: c.bagPurchaseDate || c.date || todayISO(),
         createdAt: c.createdAt || Date.now(),
         issuedClientId: c.id, issuedClientName: c.name,
@@ -1226,6 +1240,10 @@ async function loadData(cacheOnly){
     const r = kv.clients;
     clients = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ clients = []; }
+  // عزل البيانات: كل مستخدم مقيَّد (غير أدمن/محاسب) يشوف فقط عملاءه الذين سجّلهم هو بنفسه
+  // (createdBy). السجلات القديمة بدون createdBy (قبل هذه الميزة) لا تظهر له تحديداً لعدم إمكان
+  // إثبات ملكيتها، وتبقى ظاهرة فقط للأدمن/المحاسب. راجع filterOwnRecords/canSeeAllData أعلى الملف.
+  if(!canSeeAllData()) clients = filterOwnRecords(clients);
   try{
     const r = kv.settings;
     settings = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -1426,6 +1444,9 @@ async function loadData(cacheOnly){
     const r = kv.purchases;
     purchases = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ purchases = []; }
+  // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
+  // سجّلها هو بنفسه.
+  if(!canSeeAllData()) purchases = filterOwnRecords(purchases);
   await migratePurchaseAttachmentsOut();
   try{
     const r = kv.manualSalesInvoices;
@@ -3492,6 +3513,10 @@ let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالي�
 // بعمود آخر (مثل الإجمالي/المدفوع/المتبقي، التي تحتاج حسابات معقّدة) يُبقي الوضع على المسار المحلي.
 const SERVER_SORTABLE_CLIENT_COLS = { name:1, date:1, clientId:1, courseType:1, nationality:1 };
 function clientsQueryIsSimple(){
+  // عزل البيانات: المسار السريع يستعلم مباشرة من السيرفر (كل العملاء بدون فلترة الملكية)، فيجب
+  // تعطيله لأي مستخدم مقيَّد وإجباره على المسار المحلي الكامل الذي يعمل فوق مصفوفة clients
+  // المُفلترة مسبقاً في loadData() لتظهر له بياناته فقط.
+  if(!canSeeAllData()) return false;
   if(showSuspendedOnly || showUnpurchasedBagsOnly) return false;
   if($('#filter-company')?.value) return false;
   if($('#filter-invoice')?.value) return false;
@@ -4369,7 +4394,7 @@ $('#client-form').addEventListener('submit', async e=>{
   }else{
     data.bagStatus = data.bagSource==='stock' ? 'purchased' : (data.bagSource==='buy' ? 'pending' : 'n/a');
     if(data.bagSource==='stock') data.bagPurchaseDate = data.bagPurchaseDate || todayISO();
-    clients.push({id:uid(), createdAt:Date.now(), ...data});
+    clients.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, ...data});
     showToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
@@ -4501,7 +4526,7 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
     const bagSource = 'stock';
     const rowDate = row.querySelector('.ba-date').value || todayISO();
     toAdd.push({
-      id: uid(), createdAt: Date.now(),
+      id: uid(), createdAt: Date.now(), createdBy: currentUser,
       clientId, name,
       phone: row.querySelector('.ba-phone').value.trim(),
       nationality: row.querySelector('.ba-nat').value,
@@ -4799,7 +4824,7 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
         rowData.bagStatus = 'purchased';
         rowData.bagPurchaseDate = todayISO();
       }
-      patches.push({mode:'add', data:{id:uid(), createdAt:Date.now(), ...rowData}});
+      patches.push({mode:'add', data:{id:uid(), createdAt:Date.now(), createdBy: currentUser, ...rowData}});
     }
   });
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
@@ -6639,7 +6664,7 @@ $('#btn-add-stock').addEventListener('click', async ()=>{
   }else{
     snapshotState(type==='withdraw' ? `سحب مبلغ من حساب الحقائب: ${fmt(amount)}` : `إيداع مبلغ في حساب الحقائب: ${fmt(amount)}`);
     bagStock.push({
-      id: uid(),
+      id: uid(), createdBy: currentUser,
       createdAt: Date.now(),
       type,
       date,
@@ -6805,7 +6830,7 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
   let added=0;
   const changedRows = [];
   for(const {date, type, amount, method, notes, manualQty} of items){
-    bagStock.push({ id: uid(), createdAt: Date.now(), type, date, amount, method, notes, manualQty });
+    bagStock.push({ id: uid(), createdAt: Date.now(), createdBy: currentUser, type, date, amount, method, notes, manualQty });
     recalcBagFundLedger();
     await saveBagStock();
     await saveSettings();
@@ -6883,7 +6908,7 @@ document.addEventListener('click', async e=>{
       // نسجّل عملية التسليم كسطر مستقل في سجل عمليات مخزون الحقائب (وليس فقط كحقل في شيت العملاء)،
       // حتى يبقى "المخزون الحالي" مبنياً بالكامل على سجل العمليات نفسه ويمكن تتبعه وحذفه بدقة عند الإلغاء
       bagStock.push({
-        id: uid(), type:'issue', qty:-1, unitPrice:0,
+        id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
         date: clients[idx].bagPurchaseDate,
         createdAt: Date.now(),
         issuedClientId: clients[idx].id, issuedClientName: clients[idx].name,
@@ -6983,7 +7008,7 @@ document.addEventListener('change', async e=>{
   clients[idx].bagStatus = 'purchased';
   clients[idx].bagPurchaseDate = clients[idx].bagPurchaseDate || todayISO();
   bagStock.push({
-    id: uid(), type:'issue', qty:-1, unitPrice:0,
+    id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
     date: clients[idx].bagPurchaseDate,
     createdAt: Date.now(),
     issuedClientId: clients[idx].id, issuedClientName: clients[idx].name,
@@ -7309,7 +7334,7 @@ $('#import-baginv-input').addEventListener('change', async e=>{
       c.bagStatus = 'purchased';
       if(oldSource!=='stock' || !bagStock.some(b=>b.type==='issue' && b.issuedClientId===c.id)){
         bagStock.push({
-          id: uid(), type:'issue', qty:-1, unitPrice:0,
+          id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
           date: c.bagPurchaseDate, createdAt: Date.now(),
           issuedClientId: c.id, issuedClientName: c.name,
           notes: `تسليم من المخزون للعميل: ${c.name} (استيراد فواتير/تواريخ الحقائب)`
@@ -8215,7 +8240,7 @@ $('#vault-form').addEventListener('submit', async e=>{
   if(isOut && !wasVaultEdit && $('#vf-bagdeposit').checked){
     snapshotState(`إيداع في حساب الحقائب عبر حركة مصروف: ${fmt(amount)}`);
     bagStock.push({
-      id: uid(),
+      id: uid(), createdBy: currentUser,
       createdAt: Date.now(),
       type: 'deposit',
       date: data.date,
@@ -8458,8 +8483,6 @@ $('#btn-export-audit').addEventListener('click', ()=>{
    (admin/staff) تُشتق مباشرة من هوية المستخدم الذي سجّل دخوله فعليًا على الخادم (SERVER_AUTH_USERNAME/
    SERVER_AUTH_ROLE)، وليس من أول مستخدم في قائمة "المستخدمين" الداخلية للبرنامج. */
 function autoSignInLocalUser(){
-  currentUser = SERVER_AUTH_USERNAME || 'غير معروف';
-  currentUserRole = normalizeRole(SERVER_AUTH_ROLE);
   $('#app-wrap').style.display = 'block';
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();
@@ -10993,7 +11016,7 @@ $('#session-form').addEventListener('submit', async e=>{
     }
     showToast('تم تحديث بيانات الدورة');
   }else{
-    courseSessions.push({id:uid(), createdAt:Date.now(), ...data});
+    courseSessions.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, ...data});
     showToast('تمت إضافة الدورة');
   }
   await saveCourseSessions();
@@ -11087,7 +11110,7 @@ function printAttendance(courseNumber){
 function addMinimalClientForCourseImport(clientId, courseNumber, courseDate){
   const rowDate = courseDate || todayISO();
   const c = {
-    id: uid(), createdAt: Date.now(),
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
     clientId, name: '',
     phone: '', nationality: '',
     clientType: 'center',
@@ -11112,7 +11135,7 @@ function addMinimalClientForCourseImport(clientId, courseNumber, courseDate){
 
 function addMinimalClientForRefnumImport(clientId, referNum){
   const c = {
-    id: uid(), createdAt: Date.now(),
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
     clientId, name: '',
     phone: '', nationality: '',
     clientType: 'center',
@@ -11171,7 +11194,7 @@ $('#import-coursenum-input').addEventListener('change', async e=>{
         if(sess){
           if(sess.date!==courseDate){ sess.date = courseDate; sessionsUpdated++; sessionNote = 'تحديث تاريخ الدورة'; }
         }else{
-          courseSessions.push({id:uid(), createdAt:Date.now(), courseNumber, courseType:c.courseType||'', date:courseDate, language:'', capacity:null, notes:''});
+          courseSessions.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, courseNumber, courseType:c.courseType||'', date:courseDate, language:'', capacity:null, notes:''});
           sessionsAdded++;
           sessionNote = 'إضافة دورة جديدة';
         }
@@ -11295,7 +11318,7 @@ $('#btn-cs-bulk-save').addEventListener('click', async ()=>{
         if(sess){
           if(sess.date!==courseDate){ sess.date = courseDate; sessionsUpdated++; sessionNote = 'تحديث تاريخ الدورة'; }
         }else{
-          courseSessions.push({id:uid(), createdAt:Date.now(), courseNumber, courseType:c.courseType||'', date:courseDate, language:'', capacity:null, notes:''});
+          courseSessions.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, courseNumber, courseType:c.courseType||'', date:courseDate, language:'', capacity:null, notes:''});
           sessionsAdded++;
           sessionNote = 'إضافة دورة جديدة';
         }
@@ -11420,7 +11443,7 @@ $('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
    الرقم المرجعي، لكن عبر جدول لصق داخل البرنامج فقط دون أي رفع لملف Excel. */
 function addMinimalClientForCompanyImport(clientId, companyName){
   const c = {
-    id: uid(), createdAt: Date.now(),
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
     clientId, name: '',
     phone: '', nationality: '',
     clientType: 'company',
@@ -12515,7 +12538,7 @@ $('#btn-add-company').addEventListener('click', async ()=>{
   }
 
   snapshotState(`إضافة شركة جديدة: ${name}`);
-  const companyRecord = {id:uid(), name, agreedAmount, taxNumber, createdAt:Date.now()};
+  const companyRecord = {id:uid(), name, agreedAmount, taxNumber, createdAt:Date.now(), createdBy: currentUser};
   if(categoriesUsed.length) companyRecord.categories = categoriesUsed.map(c=>({label:c.label, amount:num(c.amount)}));
   companies.push(companyRecord);
   await saveCompanies();
@@ -12577,7 +12600,7 @@ $('#btn-add-transfer').addEventListener('click', async ()=>{
     return;
   }
   snapshotState(`إضافة حوالة جديدة للشركة: ${company.name}`);
-  const transferRecord = {id:uid(), createdAt:Date.now(), companyId, companyName:company.name, date, amount, traineeCount:count, notes, channel, refNum, trainees:[]};
+  const transferRecord = {id:uid(), createdAt:Date.now(), createdBy: currentUser, companyId, companyName:company.name, date, amount, traineeCount:count, notes, channel, refNum, trainees:[]};
   if(groupsUsed.length) transferRecord.groups = groupsUsed.map(g=>({label:g.label, count:num(g.count), price:num(g.price)}));
   companyTransfers.push(transferRecord);
   // قيد مالي واحد فوري بكامل مبلغ الحوالة — المبلغ مُستلَم فعلياً بالكامل من الشركة سواء وُزِّع على المتدربين الآن أو لاحقاً
@@ -12688,7 +12711,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
     }else if(name){
       // إن لم يوجد سجل عميل ولكن تم إدخال اسم أثناء التعديل، يُنشأ السجل الآن
       client = {
-        id: uid(), createdAt: Date.now(),
+        id: uid(), createdAt: Date.now(), createdBy: currentUser,
         clientId, name, phone:'', nationality: nat||'',
         clientType:'company', companyName: t.companyName, creditDays:'',
         clientTaxNumber:'', courseType:'', courseNumber:'',
@@ -12704,7 +12727,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       clients.push(client);
       if(bagValue>0){
         bagStock.push({
-          id: uid(), type:'issue', qty:-1, unitPrice:0,
+          id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
           date: client.bagPurchaseDate, createdAt: Date.now(),
           issuedClientId: client.id, issuedClientName: client.name,
           notes: `تسليم من المخزون للعميل: ${client.name} (استيراد متدربي حوالة الشركة "${t.companyName}")`
@@ -12746,7 +12769,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
   if(!client){
     // لا يوجد سجل عميل بهذا الرقم بعد — نُنشئ سجلاً كاملاً في شيت العملاء (عميل شركات) حتى يظهر عند الفلترة بالشركة
     client = {
-      id: uid(), createdAt: Date.now(),
+      id: uid(), createdAt: Date.now(), createdBy: currentUser,
       clientId, name: $('#ctr-name').value.trim() || `متدرب شركة (${clientId})`,
       phone:'', nationality: $('#ctr-nat').value || '',
       clientType:'company', companyName: t.companyName, creditDays:'',
@@ -12769,7 +12792,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
     clients.push(client);
     if(bagValue>0){
       bagStock.push({
-        id: uid(), type:'issue', qty:-1, unitPrice:0,
+        id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
         date: client.bagPurchaseDate, createdAt: Date.now(),
         issuedClientId: client.id, issuedClientName: client.name,
         notes: `تسليم من المخزون للعميل: ${client.name} (استيراد متدربي حوالة الشركة "${t.companyName}")`
@@ -12792,7 +12815,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
   }
 
   t.trainees = t.trainees || [];
-  t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
+  t.trainees.push({id:traineeId, clientId, courseValue, bagValue, createdBy: currentUser});
   await saveCompanyTransfers();
   await logAudit('add','تحويلات الشركات', `تمت إضافة متدرب (${clientId}) لحوالة الشركة "${t.companyName}" بإجمالي ${fmt(courseValue+bagValue)} ﷼ (ضمن القيد المالي الواحد المسجَّل للحوالة)`);
 
@@ -13076,7 +13099,7 @@ function createClientForUnlinkedTrainee(t, tr){
   const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
   const bagValue = num(tr.bagValue);
   const client = {
-    id: uid(), createdAt: Date.now(),
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
     clientId: tr.clientId, name: `متدرب شركة (${tr.clientId})`,
     phone:'', nationality:'',
     clientType:'company', companyName: t.companyName, creditDays:'',
@@ -13099,7 +13122,7 @@ function createClientForUnlinkedTrainee(t, tr){
   clients.push(client);
   if(bagValue>0){
     bagStock.push({
-      id: uid(), type:'issue', qty:-1, unitPrice:0,
+      id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
       date: client.bagPurchaseDate, createdAt: Date.now(),
       issuedClientId: client.id, issuedClientName: client.name,
       notes: `تسليم من المخزون للعميل: ${client.name} (ربط يدوي من حوالة الشركة "${t.companyName}")`
@@ -13177,7 +13200,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
     if(!client){
       // لا يوجد سجل عميل بهذا الرقم بعد — نُنشئ سجلاً كاملاً في شيت العملاء (عميل شركات) حتى يظهر عند الفلترة بالشركة
       client = {
-        id: uid(), createdAt: Date.now(),
+        id: uid(), createdAt: Date.now(), createdBy: currentUser,
         clientId, name: String(row['الاسم']||'').trim() || `متدرب شركة (${clientId})`,
         phone:'', nationality: normalizeNationalityValue(row['الجنسية']),
         clientType:'company', companyName: t.companyName, creditDays:'',
@@ -13201,7 +13224,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
       newClients++;
       if(bagValue>0){
         bagStock.push({
-          id: uid(), type:'issue', qty:-1, unitPrice:0,
+          id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
           date: client.bagPurchaseDate, createdAt: Date.now(),
           issuedClientId: client.id, issuedClientName: client.name,
           notes: `تسليم من المخزون للعميل: ${client.name} (استيراد مجمّع لحوالة الشركة "${t.companyName}")`
@@ -13217,7 +13240,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
       syncClientValueFromTraineeAllocation(client, courseValue, bagValue, t);
     }
 
-    t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
+    t.trainees.push({id:traineeId, clientId, courseValue, bagValue, createdBy: currentUser});
     added++;
     changedRows.push({'رقم الهوية':clientId, 'الاسم':client?client.name:'', 'قيمة الدورة':courseValue, 'قيمة الحقيبة':bagValue, 'الإجمالي':courseValue+bagValue});
   }
@@ -13793,7 +13816,7 @@ $('#supplier-form')?.addEventListener('submit', async e=>{
       await savePurchases();
     }
   } else {
-    suppliers.push({id: uid(), name, phone, category, notes, createdAt: Date.now()});
+    suppliers.push({id: uid(), name, phone, category, notes, createdAt: Date.now(), createdBy: currentUser});
     await logAudit('add','المشتريات', `إضافة مورد جديد: ${name}`);
   }
   await saveSuppliers();
@@ -13877,7 +13900,7 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
     Object.assign(existing, {supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta});
     await logAudit('edit','المشتريات', `تعديل فاتورة شراء: ${invoiceNo||'—'} — ${supplier.name} (${fmt(total)} ﷼ شامل الضريبة)`);
   } else {
-    const newPurchase = {id: purchaseId, supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta, createdAt: Date.now()};
+    const newPurchase = {id: purchaseId, supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta, createdAt: Date.now(), createdBy: currentUser};
     purchases.push(newPurchase);
     autoPostPurchase(newPurchase);
     await saveJournalDE();
@@ -14040,6 +14063,12 @@ async function backgroundSyncCheck(){
 setInterval(()=>{ backgroundSyncCheck().catch(()=>{}); }, 120000);
 
 async function startApp(){
+  // يجب ضبط هوية المستخدم الحالي (currentUser/currentUserRole) *قبل* تحميل البيانات مباشرة، حتى
+  // تُطبَّق فلترة عزل البيانات لكل مستخدم (filterOwnRecords/canSeeAllData داخل loadData) بالدور
+  // الصحيح من أول لحظة تحميل — بدل الاعتماد على القيم الافتراضية (currentUserRole='admin') التي
+  // كانت تُضبَط سابقاً فقط بعد اكتمال التحميل والعرض بالكامل (autoSignInLocalUser في آخر السطر).
+  currentUser = SERVER_AUTH_USERNAME || 'غير معروف';
+  currentUserRole = normalizeRole(SERVER_AUTH_ROLE);
   const localFirst = await hasLocalCache();
   if(localFirst){
     // البدء فوراً من آخر نسخة محفوظة على هذا الجهاز، بدون انتظار أي اتصال بالسيرفر — البرنامج
