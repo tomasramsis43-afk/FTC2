@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const PORT = 17532;
 const REMOTE_BASE = 'https://ftc-6d0s.onrender.com';
@@ -64,7 +63,17 @@ async function checkForFrontendUpdate() {
       const remote = await fetchText(`${REMOTE_BASE}/${file}`);
       // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية
       if (remote && remote.length > 20) {
-        fs.writeFileSync(path.join(userAssetsDir, file), remote, 'utf8');
+        let content = remote;
+        if (file === 'app-inline.js') {
+          // نسخة السيرفر فيها API_BASE = '' (لأنها بتتقدَّم من نفس عنوان
+          // الـ API على Render). هنا بنعيد ضبطها للعنوان الكامل، لأن الاتصال
+          // بيتم مباشرة من نافذة Electron (وليس عبر وسيط) — أنظر webSecurity: false.
+          content = content.replace(
+            /const API_BASE = '[^']*';.*/,
+            `const API_BASE = '${REMOTE_BASE}'; // تم ضبطه تلقائياً لتطبيق سطح المكتب`
+          );
+        }
+        fs.writeFileSync(path.join(userAssetsDir, file), content, 'utf8');
       }
     } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
   }
@@ -74,21 +83,12 @@ async function checkForFrontendUpdate() {
 // الواجهة فوراً حتى بدون إنترنت إطلاقاً. يبحث أولاً عن نسخة مُحدَّثة في
 // مجلد بيانات المستخدم، ولو مش موجودة يرجع للنسخة الأصلية المرفقة مع الـ setup.
 // وبيانات IndexedDB/localStorage تُخزَّن في مجلد بيانات التطبيق الخاص بويندوز
-// (منفصل تماماً عن كروم)، فمسح كاش المتصفح لا يمسها أبداً.
+// (منفصل تماماً عن كروم)، فمسح كاش المتصفح لا يمسها أبداً. الاتصال بالـ API
+// نفسه بيتم مباشرة من النافذة (مش عبر هذا الخادم) — أنظر webSecurity: false
+// في createWindow لتفادي رفض المتصفح للطلب لاختلاف الأصل (CORS).
 function startLocalServer() {
   return new Promise((resolve) => {
     const srv = express();
-    // وسيط محلي: كل طلبات /api تُمرَّر للسيرفر البعيد على Render، بحيث تظل
-    // كل طلبات المتصفح (fetch) من نفس الأصل (http://127.0.0.1:PORT) ولا
-    // تصطدم بسياسة CORS المضبوطة على السيرفر (اللي بتسمح فقط لنفس دومين الموقع).
-    srv.use('/api', createProxyMiddleware({
-      target: REMOTE_BASE,
-      changeOrigin: true,
-      onError: (err, req, res) => {
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'تعذّر الاتصال بالسيرفر' }));
-      },
-    }));
     srv.use(express.static(userAssetsDir));
     srv.use(express.static(path.join(__dirname, 'app-assets')));
     srv.listen(PORT, '127.0.0.1', () => resolve());
@@ -106,6 +106,11 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // بيسمح بطلبات fetch من صفحة محلية (http://127.0.0.1) لسيرفر بعيد
+      // بأصل مختلف (Render) بدون رفض من سياسة CORS في المتصفح المدمج —
+      // آمن هنا لأن التطبيق ده مصمَّم يفتح صفحة واحدة ثابتة معروفة بس،
+      // مش متصفح عام يتصفح فيه مواقع غير موثوقة.
+      webSecurity: false,
     },
     show: false,
   });
