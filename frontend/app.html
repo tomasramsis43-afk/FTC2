@@ -235,6 +235,7 @@
       width:100%; max-width:none; height:auto; max-height:none;
       flex-direction:row; align-items:stretch; gap:0;
       overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;
+      direction:rtl; /* تثبيت صريح لاتجاه التمرير الداخلي على أقصى اليمين، بدل الاعتماد الضمني على dir="rtl" الموروثة من <html> فقط */
       border-radius:0; box-shadow:0 -4px 16px rgba(0,0,0,.28);
       padding:4px 4px calc(4px + env(safe-area-inset-bottom, 0px));
       scrollbar-width:none;
