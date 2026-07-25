@@ -25,17 +25,13 @@ function fetchText(url) {
   });
 }
 
-// يجهّز مجلد الواجهة الفعّال: أول تشغيل يُنسخ من النسخة المرفقة مع الـ setup،
-// وبعد كده يُحدَّث من السيرفر كل ما يكون فيه نت (بدون انتظار — البرنامج يفتح
-// فوراً بالنسخة الموجودة، والتحديث يتم في الخلفية ويظهر أثره من المرة الجاية).
+// مجلد الواجهة المرفق فعلياً مع الـ setup (ثابت، جوه حزمة التطبيق).
+// مجلد بيانات المستخدم يُستخدم فقط لتخزين أي ملفات مُحدَّثة تم تنزيلها من
+// السيرفر لاحقاً — لا حاجة لنسخ أي شيء إليه عند أول تشغيل (تجنّباً لمشكلة
+// معروفة: نسخ الملفات من داخل أرشيف asar بأدوات مثل fs.cpSync قد تفشل).
 async function prepareAssets() {
   userAssetsDir = path.join(app.getPath('userData'), 'app-assets');
-  const bundledDir = path.join(__dirname, 'app-assets');
-
-  if (!fs.existsSync(userAssetsDir)) {
-    fs.cpSync(bundledDir, userAssetsDir, { recursive: true });
-  }
-
+  try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
   checkForFrontendUpdate().catch(() => {}); // في الخلفية، لا يوقف فتح البرنامج
 }
 
@@ -61,14 +57,16 @@ async function checkForFrontendUpdate() {
   }
 }
 
-// خادم محلي صغير يقدّم ملفات الواجهة (app.html, app-inline.js...) من داخل
-// التطبيق نفسه — بهذا الشكل تفتح الواجهة فوراً حتى بدون إنترنت إطلاقاً،
-// وبيانات IndexedDB/localStorage تُخزَّن في مجلد بيانات التطبيق الخاص
-// بويندوز (منفصل تماماً عن كروم)، فمسح كاش المتصفح لا يمسها أبداً.
+// خادم محلي صغير يقدّم ملفات الواجهة من داخل التطبيق — بهذا الشكل تفتح
+// الواجهة فوراً حتى بدون إنترنت إطلاقاً. يبحث أولاً عن نسخة مُحدَّثة في
+// مجلد بيانات المستخدم، ولو مش موجودة يرجع للنسخة الأصلية المرفقة مع الـ setup.
+// وبيانات IndexedDB/localStorage تُخزَّن في مجلد بيانات التطبيق الخاص بويندوز
+// (منفصل تماماً عن كروم)، فمسح كاش المتصفح لا يمسها أبداً.
 function startLocalServer() {
   return new Promise((resolve) => {
     const srv = express();
     srv.use(express.static(userAssetsDir));
+    srv.use(express.static(path.join(__dirname, 'app-assets')));
     srv.listen(PORT, '127.0.0.1', () => resolve());
   });
 }
