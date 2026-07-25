@@ -1282,6 +1282,7 @@ async function loadData(cacheOnly){
     const valuesMigratedCount = migrateCompanyTraineeValuesToClients();
     if(valuesMigratedCount>0){
       await saveClients();
+      await saveVaultTx(); // syncClientValueFromTraineeAllocation قد تكون حذفت قيوداً فردية قديمة تخص هؤلاء العملاء
       await logAudit('edit','شيت العملاء', `مزامنة تلقائية: تم تحديث قيمة الدورة/الحقيبة/المدفوع لـ ${valuesMigratedCount} عميل من تخصيصهم في حوالات الشركات`);
     }
     const dupRemovedCount = cleanupDuplicateCompanyTraineeVaultEntries();
@@ -1289,6 +1290,11 @@ async function loadData(cacheOnly){
       await saveVaultTx();
       await saveDeletedVaultTx();
       await logAudit('delete','الحركات المالية', `إصلاح تلقائي: تم حذف ${dupRemovedCount} قيد مالي مكرر لعملاء مُرحَّلة قيمتهم من حوالات الشركات (مبلغهم مُرحَّل بالفعل ضمن القيد الموحّد لكل حوالة)`);
+    }
+    const orphanFixedCount = await reconcileOrphanedCompanyTransferClients();
+    if(orphanFixedCount>0){
+      await saveClients();
+      await logAudit('edit','شيت العملاء', `إصلاح تلقائي: تم تصفير تخصيص ${orphanFixedCount} عميل كانوا معلَّمين كمُرحَّلين من حوالة شركة رغم عدم ارتباطهم بأي حوالة حالية (بيانات قديمة قبل حذف متدرب/حوالة)`);
     }
   }
   try{
@@ -1466,6 +1472,20 @@ function migrateCompanyTraineeValuesToClients(){
     });
   });
   return changedCount;
+}
+/* ================= إصلاح تلقائي لبيانات قديمة: عملاء بقوا معلَّمين companyTransferAllocated=true رغم
+   أنهم لم يعودوا ضمن متدربي أي حوالة شركة (بسبب حذف متدرب أو حذف حوالة كاملة قبل توفّر هذا الإصلاح).
+   نمرّ على كل عملاء شيت العملاء المعلَّمين بهذه العلامة، ونتحقق: هل ما زال رقم هويتهم موجوداً ضمن
+   متدربي أي حوالة شركة حالية؟ إن لم يكن، تُصفَّر قيمهم المُزامَنة (نفس منطق unlinkClientFromCompanyTransferIfOrphaned). */
+async function reconcileOrphanedCompanyTransferClients(){
+  let fixedCount = 0;
+  for(const c of clients){
+    if(!c.companyTransferAllocated || !c.clientId) continue;
+    const linked = companyTransfers.some(tt=>(tt.trainees||[]).some(tr=>tr.clientId===c.clientId));
+    if(linked) continue;
+    if(await unlinkClientFromCompanyTransferIfOrphaned(c.clientId, null)) fixedCount++;
+  }
+  return fixedCount;
 }
 /* ================= إصلاح تلقائي: حذف القيود المالية المكرَّرة التي أُنشئت خطأً سابقاً =================
    لعملاء مُرحَّلة قيمتهم من حوالة شركة (companyTransferAllocated)، أي قيد تلقائي فردي (autoClientId) في
@@ -7285,7 +7305,10 @@ function syncClientLedgerEntry(client){
       createdAt: Date.now()
     });
   }
-  if(num(client.paid2)>0){
+  // نفس استثناء عميل حوالة الشركة أعلاه، يُطبَّق أيضاً على الدفعة الثانية: بدونه كان يُنشأ قيد
+  // auto2_ فردي حقيقي في الحركات المالية، ثم تأتي دالة التنظيف (cleanupDuplicateCompanyTraineeVaultEntries)
+  // في التحميل التالي وتُلغيه تلقائياً باعتباره مكرراً — فتظهر "معاملة اختفت" رغم أنها كانت حقيقية.
+  if(num(client.paid2)>0 && !client.companyTransferAllocated){
     const chan2 = settings.channels.find(c=>c.name===client.channel2);
     const dest2 = chan2 ? chan2.dest : 'other';
     vaultTx.push({
@@ -12528,7 +12551,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
         await saveSettings();
       }
     }
-    if(client) await saveClients();
+    if(client){ await saveClients(); await saveVaultTx(); }
 
     tr.courseValue = courseValue;
     tr.bagValue = bagValue;
@@ -12601,6 +12624,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
     }
     syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     await saveClients();
+    await saveVaultTx();
   }
 
   t.trainees = t.trainees || [];
@@ -12637,7 +12661,7 @@ document.addEventListener('change', async e=>{
       if(client){ syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue); clientsChanged = true; }
     }
   });
-  if(clientsChanged) await saveClients();
+  if(clientsChanged){ await saveClients(); await saveVaultTx(); }
   await saveCompanyTransfers();
   await logAudit('edit','تحويلات الشركات', `${checked?'تفعيل':'إلغاء'} تقسيم الحقيبة لكل متدربي حوالة الشركة "${t.companyName}" — تم تعديل ${changed} متدرب`);
   renderCompanies();
@@ -12707,8 +12731,11 @@ document.addEventListener('click', async e=>{
       const tr = (t.trainees||[]).find(x=>x.id===traineeId);
       snapshotState(`حذف متدرب من حوالة الشركة: ${t.companyName}`);
       t.trainees = (t.trainees||[]).filter(x=>x.id!==traineeId);
+      let unlinked = false;
+      if(tr) unlinked = await unlinkClientFromCompanyTransferIfOrphaned(tr.clientId, t.id);
+      if(unlinked) await saveClients();
       await saveCompanyTransfers();
-      await logAudit('delete','تحويلات الشركات', `تم حذف متدرب (${tr?tr.clientId:''}) من حوالة الشركة "${t.companyName}"`);
+      await logAudit('delete','تحويلات الشركات', `تم حذف متدرب (${tr?tr.clientId:''}) من حوالة الشركة "${t.companyName}"${unlinked?' — وتم تصفير قيمة تخصيصه في شيت العملاء لعدم ارتباطه بأي حوالة أخرى':''}`);
       renderCompanies();
       if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
       showToast('تم الحذف');
@@ -12726,11 +12753,16 @@ document.addEventListener('click', async e=>{
     const t = companyTransfers.find(x=>x.id===transferId);
     if(t && await customConfirm(`حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} كاملة مع كل المتدربين المرتبطين بها والقيد المالي المرتبط؟`)){
       snapshotState(`حذف حوالة شركة: ${t.companyName}`);
+      let unlinkedCount = 0;
+      for(const tr of (t.trainees||[])){
+        if(await unlinkClientFromCompanyTransferIfOrphaned(tr.clientId, transferId)) unlinkedCount++;
+      }
+      if(unlinkedCount) await saveClients();
       vaultTx = vaultTx.filter(v=>v.companyTransferId!==transferId);
       companyTransfers = companyTransfers.filter(x=>x.id!==transferId);
       await saveVaultTx();
       await saveCompanyTransfers();
-      await logAudit('delete','تحويلات الشركات', `تم حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} بقيمة ${fmt(num(t.amount))}`);
+      await logAudit('delete','تحويلات الشركات', `تم حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} بقيمة ${fmt(num(t.amount))}${unlinkedCount?` — وتم تصفير تخصيص ${unlinkedCount} متدرب في شيت العملاء لعدم ارتباطهم بأي حوالة أخرى`:''}`);
       renderCompanies(); renderVault();
       showToast('تم حذف الحوالة');
     }
@@ -12834,6 +12866,35 @@ function syncClientValueFromTraineeAllocation(client, courseValue, bagValue){
   client.bagPrice = num(bagValue);
   client.paid = num(courseValue) + num(bagValue);
   client.companyTransferAllocated = true;
+  // إن كان هذا العميل مسجَّلاً بالفعل قبل انضمامه لحوالة الشركة (وله قيد فردي تلقائي قديم في الحركات
+  // المالية بمبلغ مختلف)، يجب حذف هذا القيد فوراً هنا، وليس الانتظار لدالة التنظيف عند التحميل التالي
+  // فقط — وإلا يظهر للمستخدم "قيد مكرر" (القيد الفردي القديم + قيد الحوالة الموحّد) حتى يُعاد تحميل الصفحة.
+  removeClientLedgerEntries(client.id);
+}
+/* ================= إصلاح: إلغاء ربط عميل بحوالة شركة عند حذف متدربه منها (أو حذف الحوالة كلها) =================
+   عند حذف متدرب من حوالة، أو حذف الحوالة بالكامل، كان سجل العميل في شيت العملاء يبقى بلا تغيير:
+   لا يزال companyTransferAllocated=true وقيمه (coursePrice/bagPrice/paid) هي نفس القيم القديمة —
+   رغم أن المبلغ لم يعد مُرحَّلاً له من أي حوالة فعلية. النتيجة: العميل يظهر "مسدَّد بالكامل" (متبقي=0)
+   رغم أن ماله لم يعد موجوداً ضمن أي قيد مالي حقيقي مرتبط به — وهو عكس مشكلة "متبقي عليه" الأصلية،
+   لكن بنفس الجذر (تضارب بين حالة العميل وحالة الحوالة الفعلية).
+   الحل: بعد الحذف، نتحقق: هل هذا العميل لا يزال ضمن متدربي أي حوالة شركة أخرى؟ إن لم يكن، تُصفَّر
+   قيمه المُزامَنة من الحوالة، وتُلغى عملية تسليم الحقيبة من المخزون المرتبطة به إن وُجدت (حتى ترجع
+   الحقيبة لرصيد المخزون المتاح ولا يبقى خصم بلا مقابل)، حتى يعود العميل لحالة طبيعية يمكن تسجيل
+   مدفوعاته فيها يدوياً من جديد إن لزم. */
+async function unlinkClientFromCompanyTransferIfOrphaned(clientId, excludeTransferId){
+  const stillLinked = companyTransfers.some(tt => tt.id!==excludeTransferId && (tt.trainees||[]).some(tr=>tr.clientId===clientId));
+  if(stillLinked) return false;
+  const client = clients.find(c=>c.clientId===clientId);
+  if(!client || !client.companyTransferAllocated) return false;
+  if(client.bagSource==='stock'){
+    const stIdx = bagStock.findIndex(b=>b.type==='issue' && b.issuedClientId===client.id);
+    if(stIdx>-1){ bagStock.splice(stIdx,1); recalcBagFundLedger(); await saveBagStock(); }
+  }
+  client.companyTransferAllocated = false;
+  client.coursePrice = 0; client.bagPrice = 0; client.paid = 0;
+  client.bagSource = 'own'; client.bagStatus = 'n/a';
+  delete client.bagPurchaseDate;
+  return true;
 }
 function createClientForUnlinkedTrainee(t, tr){
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
@@ -12985,6 +13046,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
   }
   if(bagsIssuedFromStock>0) recalcBagFundLedger();
   await saveClients();
+  await saveVaultTx();
   if(bagsIssuedFromStock>0) await saveBagStock();
   await saveSettings();
   await saveCompanyTransfers();
