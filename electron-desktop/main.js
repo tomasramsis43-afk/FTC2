@@ -128,6 +128,7 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.loadURL(`http://127.0.0.1:${PORT}/app.html`);
+  mainWindow.webContents.openDevTools({ mode: 'right' }); // تشخيص مؤقت — هيتشال بعد حل المشكلة
 
   // أي رابط خارجي (لو موجود) يفتح في المتصفح الافتراضي بدل نافذة التطبيق
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
