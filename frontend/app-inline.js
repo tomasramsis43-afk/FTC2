@@ -2084,6 +2084,13 @@ function paidTotal(c){
   // (الدفعة عند التسجيل + أي دفعات لاحقة تُسجَّل مباشرة في تبويب الحركات المالية بنفس رقم الهوية)
   // ناقصاً أي مردودات مبيعات سُجِّلت له، فتُخصم من إجمالي مدفوعاته فوراً.
   if(!c.clientId) return num(c.paid) + num(c.paid2);
+  // عميل مُرحَّلة قيمته من حوالة شركة (companyTransferAllocated): مبلغه لا يظهر أبداً كقيد فردي مستقل
+  // في "الحركات المالية" بنفس رقم هويته — لأنه مُرحَّل عمداً ضمن القيد الموحّد الواحد لكامل الحوالة
+  // (companyTransferId)، لتفادي تكرار المبلغ في شيت الحركات المالية. لذلك فهرسة vaultInTxIndex لن
+  // تجده أبداً، وستُرجع 0 دائماً، فيظهر العميل "متبقي عليه" كامل المبلغ رغم أنه مسدَّد بالفعل.
+  // الحل: نثق مباشرة بقيمة "المدفوع" المسجَّلة في سجله (والمُزامَنة من تخصيصه في الحوالة عبر
+  // syncClientValueFromTraineeAllocation) بدلاً من البحث عنها في الحركات المالية.
+  if(c.companyTransferAllocated) return num(c.paid) + num(c.paid2);
   const txs = vaultInTxIndex().get(c.clientId);
   const inSum = txs ? txs.reduce((s,t)=>s+num(t.amount),0) : 0;
   const returnTxs = vaultReturnTxIndex().get(c.clientId);
