@@ -1278,6 +1278,15 @@ async function loadData(cacheOnly){
       await logAudit('edit','تحويلات الشركات', `ترحيل تلقائي: تم توحيد القيود المالية لـ ${migratedCount} حوالة شركة قديمة في قيد واحد لكل حوالة`);
     }
   }
+  if(!settings.companyTraineeValuesMigrated){
+    const valuesMigratedCount = migrateCompanyTraineeValuesToClients();
+    settings.companyTraineeValuesMigrated = true;
+    await saveSettings();
+    if(valuesMigratedCount>0){
+      await saveClients();
+      await logAudit('edit','شيت العملاء', `ترحيل تلقائي بأثر رجعي: تم نقل قيمة الدورة/الحقيبة/المدفوع من تخصيص ${valuesMigratedCount} متدرب في حوالات الشركات المسجّلة إلى سجلاتهم بشيت العملاء`);
+    }
+  }
   try{
     const r = kv.journalEntries;
     journalEntries = r && r.value ? JSON.parse(r.value) : [];
@@ -1431,6 +1440,21 @@ function migrateCompanyTransfersToLumpSum(){
       companyTransferId: t.id
     });
     migratedCount++;
+  });
+  return migratedCount;
+}
+/* ================= ترحيل تلقائي بأثر رجعي: نقل قيمة تخصيص كل متدرب في حوالات الشركات المسجّلة
+   سابقاً إلى قيمة الدورة/الحقيبة/المدفوع في سجله بشيت العملاء (لو كان مرتبطاً بعميل موجود).
+   يُستبدل دائماً بقيمة تخصيصه في الحوالة. يعمل مرة واحدة فقط (settings.companyTraineeValuesMigrated). */
+function migrateCompanyTraineeValuesToClients(){
+  let migratedCount = 0;
+  companyTransfers.forEach(t=>{
+    (t.trainees||[]).forEach(tr=>{
+      const client = clients.find(x=>x.clientId===tr.clientId);
+      if(!client) return;
+      syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue);
+      migratedCount++;
+    });
   });
   return migratedCount;
 }
@@ -12426,6 +12450,8 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
         client.clientType = 'company';
         client.companyName = t.companyName;
       }
+      // ترحيل قيمة تخصيصه في الحوالة إلى قيمة الدورة/المدفوع في سجله بشيت العملاء
+      syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     }else if(name){
       // إن لم يوجد سجل عميل ولكن تم إدخال اسم أثناء التعديل، يُنشأ السجل الآن
       client = {
@@ -12518,10 +12544,13 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       await saveSettings();
     }
     await saveClients();
-  }else if(client.companyName!==t.companyName || client.clientType!=='company'){
-    // العميل موجود بالفعل بشيت العملاء (ربما بدون شركة أو تابع لشركة أخرى) — نربطه تلقائياً بهذه الشركة حتى يظهر عند الفلترة بها
-    client.clientType = 'company';
-    client.companyName = t.companyName;
+  }else{
+    // العميل موجود بالفعل بشيت العملاء — نربطه تلقائياً بهذه الشركة إن لزم، ونرحّل قيمة تخصيصه بالحوالة لسجله
+    if(client.companyName!==t.companyName || client.clientType!=='company'){
+      client.clientType = 'company';
+      client.companyName = t.companyName;
+    }
+    syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     await saveClients();
   }
 
@@ -12546,6 +12575,7 @@ document.addEventListener('change', async e=>{
   snapshotState(`${checked?'تفعيل':'إلغاء'} شراء الحقيبة لكل متدربي حوالة الشركة: ${t.companyName}`);
   t.bagForAll = checked;
   let changed = 0;
+  let clientsChanged = false;
   (t.trainees||[]).forEach(tr=>{
     const total = num(tr.courseValue) + num(tr.bagValue);
     const newBag = checked ? Math.min(bagPrice, total) : 0;
@@ -12554,8 +12584,11 @@ document.addEventListener('change', async e=>{
       tr.bagValue = newBag ? Math.round(newBag*100)/100 : 0;
       tr.courseValue = newCourse;
       changed++;
+      const client = clients.find(x=>x.clientId===tr.clientId);
+      if(client){ syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue); clientsChanged = true; }
     }
   });
+  if(clientsChanged) await saveClients();
   await saveCompanyTransfers();
   await logAudit('edit','تحويلات الشركات', `${checked?'تفعيل':'إلغاء'} تقسيم الحقيبة لكل متدربي حوالة الشركة "${t.companyName}" — تم تعديل ${changed} متدرب`);
   renderCompanies();
@@ -12741,6 +12774,15 @@ document.addEventListener('click', async e=>{
 /* ---------------- ربط متدرب حالي (موجود ضمن حوالة شركة) بشيت العملاء إن لم يكن مرتبطاً ----------------
    يُستخدم لإصلاح حوالات قديمة أُضيف لها متدربون قبل ربطهم تلقائياً بشيت العملاء، أو أي حالة أخرى
    تسبّب فيها فقدان الربط. يُنشئ سجل عميل كامل بنفس منطق الإنشاء التلقائي المستخدَم عند إضافة متدرب جديد. */
+/* يرحّل قيمة تخصيص متدرب (قيمة الدورة/الحقيبة) من حوالة الشركة إلى سجله في شيت العملاء —
+   يُستبدل دائماً بقيمة تخصيصه في الحوالة (المصدر الرسمي لهذه القيمة)، بدون إنشاء أي قيد مالي/خزنة
+   جديد (المبلغ مُرحَّل بالفعل لمرة واحدة ضمن القيد الموحّد لكامل الحوالة). */
+function syncClientValueFromTraineeAllocation(client, courseValue, bagValue){
+  if(!client) return;
+  client.coursePrice = num(courseValue);
+  client.bagPrice = num(bagValue);
+  client.paid = num(courseValue) + num(bagValue);
+}
 function createClientForUnlinkedTrainee(t, tr){
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
   const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
@@ -12874,9 +12916,12 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
         });
         bagsIssuedFromStock++;
       }
-    }else if(client.companyName!==t.companyName || client.clientType!=='company'){
-      client.clientType = 'company';
-      client.companyName = t.companyName;
+    }else{
+      if(client.companyName!==t.companyName || client.clientType!=='company'){
+        client.clientType = 'company';
+        client.companyName = t.companyName;
+      }
+      syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     }
 
     t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
