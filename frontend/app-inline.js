@@ -9041,6 +9041,11 @@ function balanceOfAsOf(dest, asOf){
 /* ---- ذمم العملاء (مدينون) كأرصدة تراكمية حتى تاريخ معيّن ---- */
 function paidTotalAsOf(c, asOf){
   if(!c.clientId) return (!asOf || (c.date||'')<=asOf) ? (num(c.paid)+num(c.paid2)) : 0;
+  // نفس مشكلة paidTotal() تماماً: عميل حوالة شركة (companyTransferAllocated) ماله ما يظهرش
+  // كقيد فردي بـ clientId في الحركات المالية (مُرحَّل ضمن القيد الموحّد لكامل الحوالة)، فكانت
+  // فهرسة vaultInTxIndex ترجع 0 دائماً، ويظهر كامل مبلغه كذمة مدينة (غير مسدَّد) في التقارير
+  // المحاسبية (ذمم العملاء، قائمة الدخل، ميزان المراجعة) رغم تحصيله فعلياً ضمن الحوالة.
+  if(c.companyTransferAllocated) return (!asOf || (c.date||'')<=asOf) ? (num(c.paid)+num(c.paid2)) : 0;
   const txs = vaultInTxIndex().get(c.clientId);
   if(!txs) return 0;
   return txs.reduce((s,t)=> (!asOf || (t.date||'')<=asOf) ? s+num(t.amount) : s, 0);
@@ -9271,7 +9276,10 @@ function buildCashFlowStatement(from, to){
   rows.forEach(t=>{
     const amt = num(t.amount);
     if(t.type==='in'){
-      if(t.clientId) opIn += amt; else finIn += amt;
+      // قيد الحوالة الموحّد لحوالات الشركات (companyTransferId) هو أيضاً دخل تشغيلي حقيقي من عميل
+      // (شركة)، تماماً مثل أي قيد عادي بـ clientId — فقط لا يحمل clientId لأنه يمثّل عدة متدربين
+      // دفعة واحدة. بدون هذا الشرط كان يُصنَّف خطأً كـ "تمويلي" (تبرعات/قروض) بدل "تشغيلي".
+      if(t.clientId || t.companyTransferId) opIn += amt; else finIn += amt;
     } else if(t.type==='out'){
       if(t.isReturn) opReturns += amt;
       else if(isFinancingCat(t.category)) finOut += amt;
@@ -12543,6 +12551,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
   if(!/^\d{10}$/.test(clientId)){ showToast('رقم الهوية يجب أن يتكون من 10 أرقام بالضبط (نفس تنسيق شيت العملاء) — تأكّد منه حتى يرتبط بسجل العميل الصحيح'); return; }
   const courseValue = num($('#ctr-course').value);
   const bagValue = num($('#ctr-bag').value);
+  const invoiceNo = $('#ctr-invoice').value.trim();
   if(courseValue<=0 && bagValue<=0){ showToast('أدخل قيمة الدورة أو قيمة الحقيبة'); return; }
 
   if(ctEditingTraineeId){
@@ -12561,6 +12570,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
         client.companyName = t.companyName;
       }
       // ترحيل قيمة تخصيصه في الحوالة إلى قيمة الدورة/المدفوع في سجله بشيت العملاء
+      if(invoiceNo) client.invoice = invoiceNo;
       syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     }else if(name){
       // إن لم يوجد سجل عميل ولكن تم إدخال اسم أثناء التعديل، يُنشأ السجل الآن
@@ -12569,7 +12579,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
         clientId, name, phone:'', nationality: nat||'',
         clientType:'company', companyName: t.companyName, creditDays:'',
         clientTaxNumber:'', courseType:'', courseNumber:'',
-        referNum:'', invoice:'', bagInvoice:'',
+        referNum:'', invoice: invoiceNo, bagInvoice:'',
         date: t.date || todayISO(),
         coursePrice: courseValue, bagSource: bagValue>0?'stock':'own', bagPrice: bagValue,
         bagStatus: bagValue>0?'purchased':'n/a', bagPurchaseDate: bagValue>0?(t.date||todayISO()):undefined, discount:0, paid: courseValue+bagValue,
@@ -12628,7 +12638,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       phone:'', nationality: $('#ctr-nat').value || '',
       clientType:'company', companyName: t.companyName, creditDays:'',
       clientTaxNumber:'', courseType:'', courseNumber:'',
-      referNum:'', invoice:'', bagInvoice:'',
+      referNum:'', invoice: invoiceNo, bagInvoice:'',
       date: t.date || todayISO(),
       coursePrice: courseValue,
       bagSource: bagValue>0 ? 'stock' : 'own',
@@ -12662,6 +12672,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       client.clientType = 'company';
       client.companyName = t.companyName;
     }
+    if(invoiceNo) client.invoice = invoiceNo;
     syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     await saveClients();
     await saveVaultTx();
@@ -12718,6 +12729,7 @@ document.addEventListener('click', async e=>{
     const share = (t && num(t.traineeCount)>0) ? num(t.amount)/num(t.traineeCount) : 0;
     $('#ctr-id').value = '';
     $('#ctr-name').value = '';
+    $('#ctr-invoice').value = '';
     populateSelect($('#ctr-nat'), settings.nationalities, true);
     $('#wrap-ctr-newclient').style.display = '';
     $('#wrap-ctr-newclient2').style.display = '';
@@ -12744,6 +12756,7 @@ document.addEventListener('click', async e=>{
     $('#ctr-name').value = c ? c.name : '';
     populateSelect($('#ctr-nat'), settings.nationalities, true);
     $('#ctr-nat').value = c ? (c.nationality||'') : '';
+    $('#ctr-invoice').value = c ? (c.invoice||'') : '';
     $('#wrap-ctr-newclient').style.display = '';
     $('#wrap-ctr-newclient2').style.display = '';
     $('#ctr-client-info').textContent = c
@@ -13004,8 +13017,8 @@ async function linkAllUnlinkedTrainees(){
 /* ---------------- استيراد متدربين مجمّع لحوالة شركة (Excel) ---------------- */
 $('#btn-template-trainees').addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_متدربين_لحوالة_شركة.xlsx', 'نموذج', [
-    {'رقم الهوية':'1234567890', 'الاسم':'محمد أحمد', 'الجنسية':'Yemeni', 'المبلغ الإجمالي':980, 'شراء الحقيبة':'نعم'},
-    {'رقم الهوية':'2345678901', 'الاسم':'', 'الجنسية':'', 'المبلغ الإجمالي':'', 'شراء الحقيبة':''}
+    {'رقم الهوية':'1234567890', 'الاسم':'محمد أحمد', 'الجنسية':'Yemeni', 'المبلغ الإجمالي':980, 'رقم الفاتورة':'', 'شراء الحقيبة':'نعم'},
+    {'رقم الهوية':'2345678901', 'الاسم':'', 'الجنسية':'', 'المبلغ الإجمالي':'', 'رقم الفاتورة':'', 'شراء الحقيبة':''}
   ]);
 });
 /* منطق مشترك لاستيراد مجمّع لمتدربين لحوالة شركة — يُستخدم من مصدر Excel أو من اللصق النصي المباشر.
@@ -13034,6 +13047,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
     const bagValue = wantsBag ? Math.min(bagPrice, total) : 0;
     const courseValue = Math.round((total-bagValue)*100)/100;
     if(courseValue<=0 && bagValue<=0){ skipped++; continue; }
+    const invoiceNo = String(row['رقم الفاتورة']||'').trim();
 
     let client = clients.find(x=>x.clientId===clientId);
     const traineeId = uid();
@@ -13046,7 +13060,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
         phone:'', nationality: normalizeNationalityValue(row['الجنسية']),
         clientType:'company', companyName: t.companyName, creditDays:'',
         clientTaxNumber:'', courseType:'', courseNumber:'',
-        referNum:'', invoice:'', bagInvoice:'',
+        referNum:'', invoice: invoiceNo, bagInvoice:'',
         date: t.date || todayISO(),
         coursePrice: courseValue,
         bagSource: bagValue>0 ? 'stock' : 'own',
@@ -13077,6 +13091,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
         client.clientType = 'company';
         client.companyName = t.companyName;
       }
+      if(invoiceNo) client.invoice = invoiceNo;
       syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
     }
 
@@ -13185,7 +13200,8 @@ function ctitRowHtml(rowId){
     <td><input type="text" class="ctit-name" data-col="1" placeholder="اسم المتدرب" style="min-width:130px;"></td>
     <td><select class="ctit-nat" data-col="2" style="min-width:110px;">${natOptions}</select></td>
     <td><input type="number" step="0.01" class="ctit-amount" data-col="3" placeholder="نصيب افتراضي" style="min-width:100px;"></td>
-    <td><select class="ctit-bag" data-col="4" style="min-width:100px;">${ctitBagOptionsHtml('')}</select></td>
+    <td><input type="text" class="ctit-invoice" data-col="4" placeholder="اختياري" style="min-width:100px;"></td>
+    <td><select class="ctit-bag" data-col="5" style="min-width:100px;">${ctitBagOptionsHtml('')}</select></td>
     <td><button type="button" class="btn btn-danger btn-sm ctit-remove-row" title="حذف الصف">✕</button></td>
   </tr>`;
 }
@@ -13227,7 +13243,7 @@ $('#ctit-table-body').addEventListener('paste', e=>{
     const row = tbody.children[rowIdx];
     line.split('\t').forEach((val, j)=>{
       const col = startCol + j;
-      if(col>4) return;
+      if(col>5) return;
       const field = row.querySelector(`[data-col="${col}"]`);
       if(!field) return;
       if(field.tagName==='SELECT'){
@@ -13255,6 +13271,7 @@ $('#btn-ctit-save').addEventListener('click', async ()=>{
       'المبلغ الإجمالي': row.querySelector('.ctit-amount').value.trim(),
       'الاسم': row.querySelector('.ctit-name').value.trim(),
       'الجنسية': row.querySelector('.ctit-nat').value,
+      'رقم الفاتورة': row.querySelector('.ctit-invoice').value.trim(),
       'شراء الحقيبة': row.querySelector('.ctit-bag').value
     });
   });
