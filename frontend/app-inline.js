@@ -647,7 +647,8 @@ const DEFAULT_SETTINGS = {
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
     accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
-    reception: ['dashboard','clients','courses','courseinvoices','bags']
+    // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط ولا شيء غيرها إطلاقاً — بناءً على طلب صريح.
+    reception: ['clients']
   }
 };
 /* كل الأقسام (التبويبات) المتاحة في البرنامج، وأسماؤها المعروضة — تُستخدم في بناء
@@ -1176,6 +1177,29 @@ function filterOwnRecords(arr){
   return arr.filter(r=> r && r.createdBy && r.createdBy===currentUser);
 }
 
+/* ================= قيود خاصة بدور "الاستقبال" على شيت العملاء =================
+   1) ممنوع تماماً من حذف أي بيانات مهما كان الوقت — الحذف للأدمن فقط دائماً.
+   2) يقدر يعدّل سجل العميل (مثلاً تصحيح قيمة مدفوعة) فقط خلال 5 ساعات من وقت تسجيله (createdAt)،
+      بعدها يتحول السجل لعرض فقط بالنسبة له حتى يعدّله الأدمن بنفسه لاحقاً. */
+const RECEPTION_EDIT_WINDOW_MS = 5 * 60 * 60 * 1000;
+function canDeleteClients(){ return currentUserRole!=='reception'; }
+function canReceptionEditClient(client){
+  if(currentUserRole!=='reception') return true; // القيد الزمني خاص بدور الاستقبال فقط
+  if(!client || !client.createdAt) return false; // بدون تاريخ تسجيل معروف: يُمنع التعديل احترازياً
+  return (Date.now() - client.createdAt) <= RECEPTION_EDIT_WINDOW_MS;
+}
+// حذف بيانات العملاء ممنوع تماماً على أي مستخدم مقيَّد (غير أدمن/محاسب)، إلا خلال أول 5 ساعات
+// فقط من تسجيل العميل نفسه، وبشرط أن يكون هو من سجَّله أصلاً (createdBy). بعد انقضاء 5 ساعات،
+// يعود حق الحذف حصراً للمدير العام أو المحاسب. هذا لا يمنع التعديل (تحديث القيم مثلاً)، فقط الحذف.
+const SELF_DELETE_WINDOW_MS = 5*60*60*1000; // 5 ساعات
+function canDeleteClientRecord(client){
+  if(!client) return false;
+  if(canSeeAllData()) return true;
+  if(client.createdBy !== currentUser) return false;
+  const createdAt = client.createdAt || 0;
+  return (Date.now() - createdAt) <= SELF_DELETE_WINDOW_MS;
+}
+
 /* دالة تأخير التنفيذ (debounce) — تُستخدم مع حقول البحث النصي حتى لا يُعاد رسم الجداول الكبيرة
    مع كل ضغطة حرف (وهذا هو السبب الرئيسي لبطء البرنامج مع كثرة البيانات)، بل بعد توقف الكتابة فقط */
 function debounce(fn, wait=280){
@@ -1314,6 +1338,14 @@ async function loadData(cacheOnly){
     if(!settings.rolePermissions) settings.rolePermissions = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.rolePermissions));
     else{
       EDITABLE_ROLES.forEach(r=>{ if(!Array.isArray(settings.rolePermissions[r.id])) settings.rolePermissions[r.id] = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.rolePermissions[r.id])); });
+    }
+    // ترحيل تلقائي لمرة واحدة فقط: تقييد دور "الاستقبال" على شاشة العملاء (التسجيل) دون أي شاشة
+    // أخرى إطلاقاً، حتى لو كان قد أُعطي صلاحيات أوسع سابقاً من الإعدادات. يمكن للأدمن توسيعها يدوياً
+    // لاحقاً من الإعدادات إن احتاج، لكن الافتراضي الآن أضيق عمداً بناءً على طلب صريح.
+    if(!settings.receptionLockedToClientsOnlyV1){
+      if(settings.rolePermissions) settings.rolePermissions.reception = ['clients'];
+      settings.receptionLockedToClientsOnlyV1 = true;
+      await saveSettings();
     }
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
@@ -3641,12 +3673,12 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-            ${c.taxInvoiceNo ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
-            <button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>
+            ${(c.taxInvoiceNo && canDeleteClients()) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
+            ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
             ${c.suspended
               ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
               : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
-            <button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>
+            ${canDeleteClients() ? `<button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>` : ''}
           </div>
         </div>
       </td>
@@ -3696,6 +3728,7 @@ $('#btn-clear-selection').addEventListener('click', ()=>{
   renderTable();
 });
 $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
+  if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
   const ids = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
   if(!ids.length){ showToast('لا يوجد عملاء محددين'); return; }
   const namesPreview = clients.filter(c=>ids.includes(c.id)).slice(0,5).map(c=>c.name).join('، ');
@@ -3935,6 +3968,7 @@ document.addEventListener('click', async e=>{
   const delInvoiceId = e.target.dataset.delinvoice;
   if(invId){ await printInvoice(invId); return; }
   if(delInvoiceId){
+    if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات — راجع الأدمن'); return; }
     const c = clients.find(x=>x.id===delInvoiceId);
     if(!c || !c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل'); return; }
     const invLabel = formatInvoiceNo(c.taxInvoiceNo);
@@ -3952,7 +3986,14 @@ document.addEventListener('click', async e=>{
     }
     return;
   }
-  if(editId) openModal(editId);
+  if(editId){
+    const targetClient = clients.find(x=>x.id===editId);
+    if(!canReceptionEditClient(targetClient)){
+      showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
+    }else{
+      openModal(editId);
+    }
+  }
   if(cancelBagId){
     const c = clients.find(x=>x.id===cancelBagId);
     if(c && await customConfirm(`تأكيد إلغاء الحقيبة المسجّلة لـ"${c.name}"؟ ستُحذف تماماً من سجل شراء الحقائب المكتملة (إن وُجدت) ومن سجل "اشتروا حقيبتهم الخاصة" (إن كانت كذلك)، ويُمسح رقم الفاتورة وتاريخ الشراء، وتعود حالته إلى "مطلوب شراء" — وإن كانت من المخزون تُعاد تلقائياً لرصيد التمويل.`)){
@@ -3987,6 +4028,7 @@ document.addEventListener('click', async e=>{
     }
   }
   if(delId){
+    if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
     if(await customConfirm('تأكيد حذف هذا السجل؟ سيُحذف أيضاً أي ترحيل مالي مرتبط به.')){
       const removedClient = clients.find(c=>c.id===delId);
       snapshotState(`حذف عميل: ${removedClient?.name || delId}`);
@@ -4332,6 +4374,11 @@ function updateComputed(){
 
 $('#client-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(editingId && !canReceptionEditClient(clients.find(x=>x.id===editingId))){
+    showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
+    closeModal();
+    return;
+  }
   const data = {
     name: $('#f-name').value.trim(),
     clientId: $('#f-id').value.trim(),
@@ -4913,6 +4960,7 @@ $('#bulk-delete-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-bulk-delete-save').addEventListener('click', async ()=>{
+  if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
   const rows = [...$('#bulk-delete-table-body').querySelectorAll('tr')];
   const idsInBatch = [...new Set(rows.map(r=>r.querySelector('.bd-id').value.trim()).filter(Boolean))];
   if(!idsInBatch.length){ showToast('لم تُدخل أي رقم هوية'); return; }
