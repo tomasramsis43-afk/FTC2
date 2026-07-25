@@ -263,8 +263,8 @@ self.addEventListener('push', event => {
   
   const options = {
     body: data.body || 'New notification',
-    icon: data.icon || '/icon-192x192.png',
-    badge: '/badge-72x72.png',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: data.tag || 'notification',
     requireInteraction: data.requireInteraction || false,
     actions: data.actions || []
