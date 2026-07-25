@@ -2481,6 +2481,11 @@ function pinNavTabsToRightEdge(){
   });
 }
 window.addEventListener('resize', ()=>{ pinNavTabsToRightEdge(); });
+/* خط Tajawal يتحمّل من جوجل فونتس بعد الرسم الأول (font-display:swap)، وده ممكن يغيّر عرض
+   نص أزرار الشريط بعد ما التثبيت اتنفذ أول مرة على خط احتياطي — نعيد التثبيت لما الخط يخلص فعليًا. */
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(()=>{ pinNavTabsToRightEdge(); });
+}
 
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){
