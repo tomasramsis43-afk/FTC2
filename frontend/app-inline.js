@@ -7356,7 +7356,18 @@ function vaultFilteredRows(){
     if(dupOnly && !(t.clientId && dupIds.has(t.clientId))) return false;
     if(noMethodOnly && String(t.method||'').trim()) return false;
     if(q){
-      const hay = [t.clientName,t.clientId,t.manual,t.category,t.notes].join(' ').toLowerCase();
+      // قيد الحوالة الموحّد (companyTransferId) لا يحمل clientId خاص به — لأنه يمثّل كامل مبلغ الحوالة
+      // وليس متدرباً بعينه. فبدون هذه الإضافة، البحث برقم هوية متدرب مرتبط بحوالة شركة لا يُظهر شيئاً
+      // رغم أن مبلغه فعلياً مُرحَّل ضمن هذا القيد. فنضيف أرقام هويات وأسماء كل متدربي الحوالة لمجال البحث.
+      const companyTraineeInfo = t.companyTransferId ? (()=>{
+        const tr = companyTransfers.find(ct=>ct.id===t.companyTransferId);
+        if(!tr) return '';
+        return (tr.trainees||[]).map(x=>{
+          const cl = clients.find(c=>c.clientId===x.clientId);
+          return [x.clientId, cl?cl.name:''].join(' ');
+        }).join(' ');
+      })() : '';
+      const hay = [t.clientName,t.clientId,t.manual,t.category,t.notes,companyTraineeInfo].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
