@@ -528,11 +528,20 @@ function showServerLoginScreen(errorMsg){
   else { errEl.style.display = 'none'; }
 }
 async function serverLogin(username, password){
-  const res = await fetch(API_BASE + '/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
+  let res;
+  try{
+    res = await fetch(API_BASE + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+  }catch(e){
+    // فشل اتصال فعلي بالسيرفر (لا رد إطلاقاً) — نميّزه هنا بعلامة صريحة حتى لا يُعامَل كخطأ
+    // "بيانات دخول غير صحيحة"، فيمكن لاحقاً تجربة الدخول بالوضع المحلي بدلاً منه.
+    const netErr = new Error('تعذّر الاتصال بالسيرفر لتسجيل الدخول');
+    netErr.networkError = true;
+    throw netErr;
+  }
   const data = await res.json();
   if(!res.ok) throw new Error(data.error || 'تعذّر تسجيل الدخول');
   SERVER_AUTH_TOKEN = data.token;
@@ -547,7 +556,41 @@ async function serverLogin(username, password){
     sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
     sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
   }catch(e){}
+  // نحفظ (بشكل غير قابل للعكس) تجزئة لكلمة المرور محلياً على هذا الجهاز فقط، حتى يمكن لاحقاً
+  // فتح البرنامج بلا إنترنت إطلاقاً بنفس اسم المستخدم/كلمة المرور — راجع tryOfflineLogin أسفله.
+  await cacheOfflineLogin(SERVER_AUTH_USERNAME, password, SERVER_AUTH_ROLE);
   return data;
+}
+
+/* ---------------- الدخول بلا إنترنت إطلاقاً (لمرة أولى أو بعد إغلاق التطبيق بالكامل) ----------------
+   لا نخزّن كلمة المرور نفسها أبداً ولا حتى التوكن الحقيقي، فقط تجزئة (PBKDF2) مربوطة بملح عشوائي
+   خاص بكل مستخدم، محفوظة في localStorage على نفس الجهاز فقط. لا تُصلِح أي جلسة أُنشئت على جهاز آخر،
+   ولا تمنح أي صلاحية لم يسبق فعلاً التحقق منها من السيرفر لهذا المستخدم بالذات على هذا الجهاز تحديداً. */
+const OFFLINE_LOGIN_CACHE_KEY = 'ftcOfflineLoginCacheV1';
+async function hashPasswordForOfflineCache(password, saltBytes){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt: saltBytes, iterations: 100000, hash:'SHA-256'}, keyMaterial, 256);
+  return bytesToBase64(new Uint8Array(bits));
+}
+async function cacheOfflineLogin(username, password, role){
+  try{
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const hash = await hashPasswordForOfflineCache(password, salt);
+    const store = (()=>{ try{ return JSON.parse(localStorage.getItem(OFFLINE_LOGIN_CACHE_KEY)||'{}'); }catch(e){ return {}; } })();
+    store[String(username||'').toLowerCase()] = { role, saltB64: bytesToBase64(salt), hashB64: hash, cachedAt: Date.now() };
+    localStorage.setItem(OFFLINE_LOGIN_CACHE_KEY, JSON.stringify(store));
+  }catch(e){}
+}
+async function tryOfflineLogin(username, password){
+  try{
+    const store = JSON.parse(localStorage.getItem(OFFLINE_LOGIN_CACHE_KEY)||'{}');
+    const entry = store[String(username||'').toLowerCase()];
+    if(!entry) return null;
+    const hash = await hashPasswordForOfflineCache(password, base64ToBytes(entry.saltB64));
+    if(hash !== entry.hashB64) return null;
+    return { username, role: entry.role };
+  }catch(e){ return null; }
 }
 
 
@@ -14038,14 +14081,36 @@ async function ensureServerLoginThenStart(){
         await startApp();
         return;
       }
-    }catch(e){}
-    SERVER_AUTH_TOKEN = null;
-    try{
-      sessionStorage.removeItem('serverAuthToken');
-      sessionStorage.removeItem('serverAuthUsername');
-      sessionStorage.removeItem('serverAuthRole');
-    }catch(e){}
+      // رد صريح من السيرفر (401/403 غالباً) بأن الجلسة نفسها لم تعد صالحة — هنا فقط نطلب دخولاً
+      // جديداً، لأن هذا رفض فعلي وليس مجرد تعذّر اتصال.
+      SERVER_AUTH_TOKEN = null;
+      try{
+        sessionStorage.removeItem('serverAuthToken');
+        sessionStorage.removeItem('serverAuthUsername');
+        sessionStorage.removeItem('serverAuthRole');
+      }catch(e){}
+      showServerLoginScreen(null);
+      return;
+    }catch(e){
+      // تعذّر اتصال فعلي بالسيرفر (لا رد إطلاقاً، مثل انقطاع الإنترنت) — الجلسة نفسها قد تكون
+      // لا تزال صالحة تماماً، فلا داعي لإجبار المستخدم على إعادة الدخول لمجرد انقطاع مؤقت. نكمل
+      // بنفس بيانات الجلسة المحفوظة، وندخل تلقائياً في وضع "العمل من الجهاز فقط".
+      try{
+        SERVER_AUTH_USERNAME = sessionStorage.getItem('serverAuthUsername') || null;
+        SERVER_AUTH_ROLE = normalizeRole(sessionStorage.getItem('serverAuthRole'));
+      }catch(e2){ SERVER_AUTH_ROLE = 'staff'; }
+      setManualOfflineMode(true);
+      showToast('⚠️ تعذّر الاتصال بالسيرفر — تم المتابعة تلقائياً بوضع العمل من الجهاز فقط');
+      $('#server-login-screen').style.display = 'none';
+      await startApp();
+      return;
+    }
   }
+  // لا توجد جلسة محفوظة لهذا التشغيل (أول فتح، أو بعد إغلاق التطبيق بالكامل وإعادة فتحه). نتحقق
+  // أولاً هل السيرفر قابل للوصول أصلاً (حتى بدون توكن) — أي رد فعلي منه (ولو 401) يعني أن الاتصال
+  // سليم، فتظهر شاشة الدخول العادية كالمعتاد. الفشل الوحيد الذي يُفعِّل مسار "الدخول بلا إنترنت"
+  // أسفل شاشة الدخول هو فشل اتصال حقيقي (راجع سجل نموذج الدخول، حيث تُجرَّب بيانات الدخول أولاً
+  // ضد السيرفر ثم محلياً فقط إن تعذّر الوصول إليه إطلاقاً).
   showServerLoginScreen(null);
 }
 $('#server-login-form').addEventListener('submit', async e=>{
@@ -14060,8 +14125,27 @@ $('#server-login-form').addEventListener('submit', async e=>{
     $('#server-login-screen').style.display = 'none';
     await startApp();
   }catch(err){
-    $('#server-login-error').textContent = err.message || 'تعذّر تسجيل الدخول، تحقق من اسم المستخدم وكلمة المرور';
-    $('#server-login-error').style.display = 'block';
+    if(err && err.networkError){
+      // تعذّر الوصول للسيرفر إطلاقاً (لا إنترنت) — نجرّب التحقق من بيانات الدخول نفسها محلياً
+      // مقابل التجزئة المحفوظة من آخر تسجيل دخول ناجح لهذا المستخدم بالذات على هذا الجهاز، بدل
+      // حجب البرنامج بالكامل لمجرد انقطاع الإنترنت.
+      const offline = await tryOfflineLogin(uname, upass);
+      if(offline){
+        SERVER_AUTH_TOKEN = null;
+        SERVER_AUTH_USERNAME = offline.username;
+        SERVER_AUTH_ROLE = normalizeRole(offline.role);
+        setManualOfflineMode(true);
+        showToast('⚠️ تعذّر الاتصال بالسيرفر — تم الدخول بوضع العمل من الجهاز فقط ببيانات هذا المستخدم المحفوظة محلياً');
+        $('#server-login-screen').style.display = 'none';
+        await startApp();
+        return;
+      }
+      $('#server-login-error').textContent = 'تعذّر الاتصال بالسيرفر، ولا يوجد تسجيل دخول محفوظ بهذا الاسم/كلمة المرور على هذا الجهاز';
+      $('#server-login-error').style.display = 'block';
+    }else{
+      $('#server-login-error').textContent = err.message || 'تعذّر تسجيل الدخول، تحقق من اسم المستخدم وكلمة المرور';
+      $('#server-login-error').style.display = 'block';
+    }
   }finally{
     if(btn) btn.disabled = false;
   }
