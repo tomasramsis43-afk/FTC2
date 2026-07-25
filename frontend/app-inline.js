@@ -1545,8 +1545,18 @@ function migrateCompanyTraineeValuesToClients(){
       const client = clients.find(x=>x.clientId===tr.clientId);
       if(!client) return;
       const newCourse = num(tr.courseValue), newBag = num(tr.bagValue), newPaid = newCourse+newBag;
-      if(client.companyTransferAllocated && num(client.coursePrice)===newCourse && num(client.bagPrice)===newBag && num(client.paid)===newPaid) return; // مطابق بالفعل ومُعلَّم مسبقاً
-      syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue);
+      const resolvedChannel = (()=>{ const ch = settings.channels.find(c=>c.name===t.channel); return ch ? ch.name : (t.channel || 'تحويل بنكي (شركة)'); })();
+      const typeMismatch = client.clientType!=='company' || client.companyName!==t.companyName;
+      // نتحقق أيضاً من طريقة الدفع ونوع العميل/اسم الشركة (وليس فقط القيمة المالية) — عملاء كثيرون
+      // مُزامَنون بالفعل بالمبلغ الصحيح لكن ظلّوا مُصنَّفين "عميل مركز" بدل "عميل شركات" (أو باسم شركة
+      // قديم/فارغ)، أو بدون طريقة دفع مسجَّلة أصلاً، لأن هذه المزامنة التلقائية عند كل تحميل لم تكن
+      // تضبط هذين الحقلين من قبل — رغم أن باقي مسارات الإضافة/التعديل اليدوية كانت تضبطهما بالفعل.
+      if(client.companyTransferAllocated && num(client.coursePrice)===newCourse && num(client.bagPrice)===newBag && num(client.paid)===newPaid && client.channel===resolvedChannel && !typeMismatch) return; // مطابق بالفعل ومُعلَّم مسبقاً
+      if(typeMismatch){
+        client.clientType = 'company';
+        client.companyName = t.companyName;
+      }
+      syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue, t);
       changedCount++;
     });
   });
@@ -12610,7 +12620,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       }
       // ترحيل قيمة تخصيصه في الحوالة إلى قيمة الدورة/المدفوع في سجله بشيت العملاء
       if(invoiceNo) client.invoice = invoiceNo;
-      syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
+      syncClientValueFromTraineeAllocation(client, courseValue, bagValue, t);
     }else if(name){
       // إن لم يوجد سجل عميل ولكن تم إدخال اسم أثناء التعديل، يُنشأ السجل الآن
       client = {
@@ -12712,7 +12722,7 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
       client.companyName = t.companyName;
     }
     if(invoiceNo) client.invoice = invoiceNo;
-    syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
+    syncClientValueFromTraineeAllocation(client, courseValue, bagValue, t);
     await saveClients();
     await saveVaultTx();
   }
@@ -12748,7 +12758,7 @@ document.addEventListener('change', async e=>{
       tr.courseValue = newCourse;
       changed++;
       const client = clients.find(x=>x.clientId===tr.clientId);
-      if(client){ syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue); clientsChanged = true; }
+      if(client){ syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue, t); clientsChanged = true; }
     }
   });
   if(clientsChanged){ await saveClients(); await saveVaultTx(); }
@@ -12952,12 +12962,21 @@ document.addEventListener('click', async e=>{
    جديد (المبلغ مُرحَّل بالفعل لمرة واحدة ضمن القيد الموحّد لكامل الحوالة). نُعلِّم السجل بعلامة
    companyTransferAllocated=true حتى لا تُنشئ آلية "الترحيل التلقائي لقيد العميل" (syncClientLedgerEntry)
    قيداً إضافياً مكرراً بنفس المبلغ عند أي حفظ/تحديث لاحق لهذا العميل (تحديث شامل، تعديل، استيراد...). */
-function syncClientValueFromTraineeAllocation(client, courseValue, bagValue){
+function syncClientValueFromTraineeAllocation(client, courseValue, bagValue, transfer){
   if(!client) return;
   client.coursePrice = num(courseValue);
   client.bagPrice = num(bagValue);
   client.paid = num(courseValue) + num(bagValue);
   client.companyTransferAllocated = true;
+  // طريقة الدفع تُرحَّل دائماً من طريقة الدفع المُحدَّدة لحوالة الشركة نفسها (transfer.channel)،
+  // بدل تركها بدون قيمة — وهو سبب ظهور عمود "طريقة الدفع" فارغاً في شيت العملاء لمتدربي الشركات:
+  // القيد المالي الفعلي أصبح قيداً موحّداً واحداً للحوالة كاملة (companyTransferId) وليس قيداً
+  // فردياً لكل متدرب، فلم تعد paymentChannelsLabel() تجده عند البحث في الحركات المالية بحسب رقم
+  // هوية العميل، وكانت تعتمد حينها على client.channel الذي لم يكن يُضبَط هنا إطلاقاً.
+  if(transfer){
+    const ch = settings.channels.find(c=>c.name===transfer.channel);
+    client.channel = ch ? ch.name : (transfer.channel || 'تحويل بنكي (شركة)');
+  }
   // إن كان هذا العميل مسجَّلاً بالفعل قبل انضمامه لحوالة الشركة (وله قيد فردي تلقائي قديم في الحركات
   // المالية بمبلغ مختلف)، يجب حذف هذا القيد فوراً هنا، وليس الانتظار لدالة التنظيف عند التحميل التالي
   // فقط — وإلا يظهر للمستخدم "قيد مكرر" (القيد الفردي القديم + قيد الحوالة الموحّد) حتى يُعاد تحميل الصفحة.
@@ -13131,7 +13150,7 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
         client.companyName = t.companyName;
       }
       if(invoiceNo) client.invoice = invoiceNo;
-      syncClientValueFromTraineeAllocation(client, courseValue, bagValue);
+      syncClientValueFromTraineeAllocation(client, courseValue, bagValue, t);
     }
 
     t.trainees.push({id:traineeId, clientId, courseValue, bagValue});
