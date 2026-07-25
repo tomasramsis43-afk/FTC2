@@ -5427,6 +5427,7 @@
       <div class="field" id="wrap-ctr-newclient" style="margin-bottom:12px;"><label>الاسم (لعميل جديد فقط)</label><input type="text" id="ctr-name" placeholder="اسم المتدرب"></div>
       <div class="field" id="wrap-ctr-newclient2" style="margin-bottom:12px;"><label>الجنسية (لعميل جديد فقط)</label><select id="ctr-nat"></select></div>
       <div class="field" style="margin-bottom:12px;"><label>المبلغ الإجمالي (نصيب هذا المتدرب من الحوالة)</label><input type="number" step="0.01" min="0" id="ctr-total"></div>
+      <div class="field" style="margin-bottom:12px;"><label>رقم الفاتورة (اختياري — بدونه لن يظهر هذا المتدرب في تقرير ضريبة القيمة المضافة وسجل فواتير الدورات)</label><input type="text" id="ctr-invoice" placeholder="رقم فاتورة النظام"></div>
       <div class="field" style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
         <input type="checkbox" id="ctr-bag-purchased" style="width:auto; margin:0;">
         <label for="ctr-bag-purchased" style="margin:0; cursor:pointer;">المركز اشترى الحقيبة لهذا المتدرب (يُخصم سعر الحقيبة الافتراضي من المبلغ تلقائياً)</label>
@@ -5464,6 +5465,7 @@
             <th style="min-width:140px;">الاسم</th>
             <th style="min-width:120px;">الجنسية</th>
             <th style="min-width:110px;">المبلغ الإجمالي</th>
+            <th style="min-width:110px;">رقم الفاتورة</th>
             <th style="min-width:110px;">شراء الحقيبة</th>
             <th style="width:34px;"></th>
           </tr>
