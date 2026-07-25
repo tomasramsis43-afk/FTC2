@@ -53,7 +53,7 @@ async function validateLicenseKey(rawKey){
       encKeyRaw: data.encKey, // base64 — يُستورد لاحقاً في activateAndStart
     };
   }catch(e){
-    return { valid:false, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص، تحقق من اتصال الإنترنت' };
+    return { valid:false, reason:'تعذّر الاتصال بالسيرفر للتحقق من الترخيص — تفاصيل تقنية: ' + (e && e.message ? e.message : String(e)) };
   }
 }
 
