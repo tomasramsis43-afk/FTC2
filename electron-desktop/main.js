@@ -87,11 +87,22 @@ async function checkForFrontendUpdate() {
 // نفسه بيتم مباشرة من النافذة (مش عبر هذا الخادم) — أنظر webSecurity: false
 // في createWindow لتفادي رفض المتصفح للطلب لاختلاف الأصل (CORS).
 function startLocalServer() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const srv = express();
     srv.use(express.static(userAssetsDir));
     srv.use(express.static(path.join(__dirname, 'app-assets')));
-    srv.listen(PORT, '127.0.0.1', () => resolve());
+    const listener = srv.listen(PORT, '127.0.0.1', () => resolve());
+    listener.on('error', (err) => {
+      const { dialog } = require('electron');
+      dialog.showErrorBox(
+        'تعذّر فتح البرنامج',
+        err.code === 'EADDRINUSE'
+          ? 'يبدو أن نسخة أخرى من البرنامج شغالة بالفعل. يرجى إغلاقها من مدير المهام (Task Manager) ثم إعادة المحاولة.'
+          : ('حدث خطأ غير متوقع: ' + err.message)
+      );
+      app.quit();
+      reject(err);
+    });
   });
 }
 
@@ -127,16 +138,33 @@ function createWindow() {
   Menu.setApplicationMenu(null); // شريط قوائم نظيف بدون عناصر Electron الافتراضية
 }
 
-app.whenReady().then(async () => {
-  await prepareAssets();
-  await startLocalServer();
-  createWindow();
+// لو المستخدم فتح البرنامج ونسخة تانية شغالة بالفعل في الخلفية (نسي يقفلها،
+// أو النافذة مختفية في الـ System Tray)، النسخة الجديدة تاخد القفل وترفض
+// الفتح، وبدل ما تحاول تفتح خادم تاني على نفس المنفذ (وده اللي كان بيسبب
+// خطأ "address already in use")، بنركّز نافذة النسخة الأصلية الشغالة فعلاً.
+const gotTheLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+  app.whenReady().then(async () => {
+    await prepareAssets();
+    await startLocalServer();
+    createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
