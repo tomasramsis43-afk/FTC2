@@ -183,11 +183,17 @@ async function networkWithCacheFallback(request) {
  */
 async function staleWhileRevalidate(request) {
   const cached = await caches.match(request);
-  
+
   const fetchPromise = fetch(request).then(response => {
     if (response.ok) {
-      const cache = caches.open(RUNTIME_CACHE);
-      cache.then(c => c.put(request, response.clone()));
+      // لازم الاستنساخ يحصل فوراً وبشكل متزامن هنا، قبل أي عملية async (زي caches.open)
+      // وقبل ما نرجّع response للمتصفح. كانت النسخة القديمة بتستدعي response.clone() جوه
+      // .then() منفصل تاني (بعد caches.open غير المنتظرة/unawaited) — وبما إن الدالة دي
+      // بترجّع response فوراً بعدها، المتصفح ممكن يبدأ فعلياً في قراءة/استهلاك محتواها
+      // قبل ما الـ .then() المتأخر ده يوصل لسطر response.clone()، فيطلع الخطأ:
+      // "Failed to execute 'clone' on 'Response': Response body is already used".
+      const responseClone = response.clone();
+      caches.open(RUNTIME_CACHE).then(c => c.put(request, responseClone));
     }
     return response;
   });
