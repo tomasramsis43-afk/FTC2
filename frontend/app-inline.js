@@ -1278,13 +1278,11 @@ async function loadData(cacheOnly){
       await logAudit('edit','تحويلات الشركات', `ترحيل تلقائي: تم توحيد القيود المالية لـ ${migratedCount} حوالة شركة قديمة في قيد واحد لكل حوالة`);
     }
   }
-  if(!settings.companyTraineeValuesMigrated){
+  {
     const valuesMigratedCount = migrateCompanyTraineeValuesToClients();
-    settings.companyTraineeValuesMigrated = true;
-    await saveSettings();
     if(valuesMigratedCount>0){
       await saveClients();
-      await logAudit('edit','شيت العملاء', `ترحيل تلقائي بأثر رجعي: تم نقل قيمة الدورة/الحقيبة/المدفوع من تخصيص ${valuesMigratedCount} متدرب في حوالات الشركات المسجّلة إلى سجلاتهم بشيت العملاء`);
+      await logAudit('edit','شيت العملاء', `مزامنة تلقائية: تم تحديث قيمة الدورة/الحقيبة/المدفوع لـ ${valuesMigratedCount} عميل من تخصيصهم في حوالات الشركات`);
     }
   }
   try{
@@ -1443,20 +1441,25 @@ function migrateCompanyTransfersToLumpSum(){
   });
   return migratedCount;
 }
-/* ================= ترحيل تلقائي بأثر رجعي: نقل قيمة تخصيص كل متدرب في حوالات الشركات المسجّلة
-   سابقاً إلى قيمة الدورة/الحقيبة/المدفوع في سجله بشيت العملاء (لو كان مرتبطاً بعميل موجود).
-   يُستبدل دائماً بقيمة تخصيصه في الحوالة. يعمل مرة واحدة فقط (settings.companyTraineeValuesMigrated). */
+/* ================= مزامنة تلقائية دائمة: نقل قيمة تخصيص كل متدرب في حوالات الشركات إلى قيمة
+   الدورة/الحقيبة/المدفوع في سجله بشيت العملاء (لو كان مرتبطاً بعميل موجود). الحوالة هي المصدر
+   الرسمي لهذه القيمة فتُستبدل بها دائماً. تعمل عند كل تحميل بيانات (وليس مرة واحدة فقط) — لأن أول
+   تحميل قد يعتمد على نسخة كاش محلية ناقصة على بعض الأجهزة (قبل اكتمال المزامنة مع السيرفر)، فلازم
+   تُعاد المحاولة عند كل تحميل حتى تلتقط أي حوالات/عملاء لم تُرحَّل بعد. آمنة للتكرار: لا تُحدِّث ولا
+   تحسب أي شيء إلا لو القيمة فعلاً مختلفة عمّا هو مسجّل، ولا تُنشئ أي قيد مالي/خزنة جديد. */
 function migrateCompanyTraineeValuesToClients(){
-  let migratedCount = 0;
+  let changedCount = 0;
   companyTransfers.forEach(t=>{
     (t.trainees||[]).forEach(tr=>{
       const client = clients.find(x=>x.clientId===tr.clientId);
       if(!client) return;
+      const newCourse = num(tr.courseValue), newBag = num(tr.bagValue), newPaid = newCourse+newBag;
+      if(num(client.coursePrice)===newCourse && num(client.bagPrice)===newBag && num(client.paid)===newPaid) return; // مطابق بالفعل
       syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue);
-      migratedCount++;
+      changedCount++;
     });
   });
-  return migratedCount;
+  return changedCount;
 }
 async function saveJournalEntries(){
   try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
