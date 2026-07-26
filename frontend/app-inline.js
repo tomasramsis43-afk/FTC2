@@ -2803,8 +2803,23 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
     SoundFX.nav();
     $all('nav.tabs button[data-view]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    $all('section.view').forEach(v=>v.classList.remove('active'));
-    $('#view-'+btn.dataset.view).classList.add('active');
+    const newView = $('#view-'+btn.dataset.view);
+    const oldView = $('section.view.active');
+    if(oldView && newView && oldView !== newView){
+      const mc = document.querySelector('.main-content');
+      if(mc) mc.classList.add('nav-transitioning');
+      oldView.classList.remove('active');
+      oldView.classList.add('view-leaving');
+      newView.classList.add('active','view-entering');
+      setTimeout(()=>{
+        oldView.classList.remove('view-leaving');
+        newView.classList.remove('view-entering');
+        if(mc) mc.classList.remove('nav-transitioning');
+      }, 340);
+    } else if(newView){
+      $all('section.view').forEach(v=>v.classList.remove('active'));
+      newView.classList.add('active');
+    }
     if(btn.dataset.view==='clients') renderTable();
     if(btn.dataset.view==='dashboard') renderDashboard();
     if(btn.dataset.view==='settings') renderSettings();
