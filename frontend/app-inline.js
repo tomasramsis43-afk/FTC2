@@ -664,8 +664,8 @@ const DEFAULT_SETTINGS = {
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
-  themeColors: { navy:'#0F766E', navyDark:'#064E45', gold:'#D97757', goldDark:'#B85C3F', goldSoft:'#EDA98A', teal:'#0891B2', red:'#DC2626' },
-  themePresetId: 'midnightslate',
+  themeColors: { navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' },
+  themePresetId: 'floqastblue',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
@@ -708,7 +708,8 @@ const EDITABLE_ROLES = [
 // الألوان الكلاسيكية القديمة (قبل صدور طقم "كحلي نيلي وذهبي" الجديد) — تُستخدم فقط لمقارنة ترقية لمرة واحدة أدناه
 const DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS = { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' };
 const THEME_PRESETS = [
-  { id:'emeraldterra', name:'زمردي وتراكوتا (الافتراضي الجديد)', colors:{ navy:'#0F766E', navyDark:'#064E45', gold:'#D97757', goldDark:'#B85C3F', goldSoft:'#EDA98A', teal:'#0891B2', red:'#DC2626' } },
+  { id:'floqastblue', name:'أزرق FloQast (مسطح وعصري)', colors:{ navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' } },
+  { id:'emeraldterra', name:'زمردي وتراكوتا', colors:{ navy:'#0F766E', navyDark:'#064E45', gold:'#D97757', goldDark:'#B85C3F', goldSoft:'#EDA98A', teal:'#0891B2', red:'#DC2626' } },
   { id:'oceanslate', name:'أزرق محيطي ورملي', colors:{ navy:'#155E75', navyDark:'#0C3B49', gold:'#C9A063', goldDark:'#A17F45', goldSoft:'#E0C99A', teal:'#0D9488', red:'#B4453A' } },
   { id:'plumrose', name:'أرجواني عنابي ووردي غبش', colors:{ navy:'#6D28D9', navyDark:'#4C1D95', gold:'#D6789C', goldDark:'#B85A7D', goldSoft:'#E9A9C2', teal:'#7C6BC4', red:'#B03F5A' } },
   { id:'charcoalamber', name:'فحمي وكهرماني دافئ', colors:{ navy:'#3F3F46', navyDark:'#232327', gold:'#D97706', goldDark:'#B45F04', goldSoft:'#F0AA53', teal:'#57534E', red:'#A8402E' } },
@@ -3369,7 +3370,7 @@ function drawBars(sel, entries, limit=20, formatter){
 }
 
 /* لوحة ألوان الشارت الدائري — امتداد من نفس هوية ألوان البرنامج (gold/navy/teal/red) لعدد فئات أكبر */
-const DONUT_COLORS = ['#E8A33D','#3F5EDB','#0E9488','#DC4C4C','#C27F1E','#7C93E0','#4FBFAE','#F0C27A','#8C6E3E','#9AACEE','#F2C98A','#5E76C9'];
+const DONUT_COLORS = ['#2E6BE6','#E8752C','#2FA84F','#E24C3D','#8B5CF6','#0EA5B7','#F0935B','#5B8DEF','#4FCB7A','#C85F1E','#94A3B8','#1B4DB8'];
 
 /* رسم بياني دائري (Donut) بألوان هوية البرنامج — يجمع بين الأناقة (فراغ مركزي، نهايات مدورة، فواصل ناعمة)
    وحيوية بصرية أعصر (تدرّج لوني خفيف وظل رقيق لكل شريحة) دون كسر الطابع الهادئ للواجهة. */
@@ -3384,29 +3385,22 @@ function drawDonut(sel, entries, limit=20, formatter){
   const circumference = 2*Math.PI*r;
   const gap = entries.length>1 ? 3 : 0;
   let angleStart = -90;
-  let defsHtml = '<defs>';
   let segsHtml = '';
   entries.forEach(([k,v],i)=>{
     const color = DONUT_COLORS[i % DONUT_COLORS.length];
-    const gid = `${sel.replace(/[^a-zA-Z0-9]/g,'')}-g${i}`;
-    defsHtml += `<linearGradient id="${gid}" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${color}" stop-opacity="1"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity=".8"/>
-    </linearGradient>`;
     const frac = num(v)/total;
     const angle = frac*360 - gap;
     const dash = Math.max(angle,0)/360*circumference;
     const rest = circumference - dash;
     segsHtml += `<circle class="donut-seg" cx="${cx}" cy="${cy}" r="${r}" fill="none"
-      stroke="url(#${gid})" stroke-width="${strokeW}" stroke-linecap="round"
+      stroke="${color}" stroke-width="${strokeW}" stroke-linecap="round"
       stroke-dasharray="${dash.toFixed(1)} ${rest.toFixed(1)}"
       transform="rotate(${angleStart} ${cx} ${cy})"
-      style="filter:drop-shadow(0 2px 4px rgba(20,30,40,.14)); transition:opacity .15s ease, filter .15s ease;">
+      style="transition:opacity .15s ease;">
       <title>${escapeHtml(String(k))}: ${formatter ? formatter(v) : v}</title>
     </circle>`;
     angleStart += frac*360;
   });
-  defsHtml += '</defs>';
 
   const legendHtml = entries.map(([k,v],i)=>{
     const color = DONUT_COLORS[i % DONUT_COLORS.length];
@@ -3422,7 +3416,7 @@ function drawDonut(sel, entries, limit=20, formatter){
   el.innerHTML = `
     <div style="display:flex; align-items:center; gap:22px; flex-wrap:wrap; justify-content:center;">
       <svg width="200" height="200" viewBox="0 0 200 200" style="flex:none;">
-        ${defsHtml}${segsHtml}
+        ${segsHtml}
         <g text-anchor="middle" style="font-family:'IBM Plex Mono',monospace;">
           <text x="${cx}" y="${cy-3}" font-size="19" font-weight="700" fill="var(--navy-dark)">${fmt(total)}</text>
           <text x="${cx}" y="${cy+15}" font-size="10" fill="var(--text-muted)">الإجمالي</text>
