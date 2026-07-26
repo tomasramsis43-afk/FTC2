@@ -413,6 +413,22 @@ async function serverFetch(path, options = {}) {
   return res;
 }
 
+// فك تشفير "غير قابل للتجاهل": لو فشل فك التشفير (مثال: هذا الجهاز مفتاح تشفيره غير جاهز
+// أو خاطئ، بينما القيمة المخزَّنة على السيرفر مشفَّرة فعلاً بمفتاح جهاز آخر)، لا يجوز أبداً
+// معاملة النتيجة كأنها "لا توجد بيانات" (null/[])، لأن هذه القيمة الفارغة تُستخدم لاحقاً
+// كأساس لأي عملية حفظ تالية (مثال: إضافة عميل واحد) فتُكتب فوق كل بيانات السيرفر الحقيقية
+// وتمحوها بالكامل لكل المستخدمين. لذلك نُلبِّس الخطأ علامة صريحة (isDecryptFailure) ونتركه
+// يخرج من get() دون أي "catch" صامت يحوّله لقيمة فارغة — يجب أن يتعامل معه المستدعي
+// (loadData) كخطأ قاتل يوقف تحميل البيانات بدل إسكاته.
+async function _decryptOrFail(stored){
+  try{
+    return await decryptValue(stored);
+  }catch(e){
+    const err = new Error('تعذّر فك تشفير البيانات المحفوظة على السيرفر بهذا الجهاز: ' + (e && e.message ? e.message : String(e)));
+    err.isDecryptFailure = true;
+    throw err;
+  }
+}
 window.storage = {
     async get(key, shared, cacheOnly){
       const cached = await _kvCacheRead(key);
@@ -423,64 +439,71 @@ window.storage = {
         if(!cached) return null;
         _kvVersions[key] = cached.version;
         if(cached.value === null || cached.value === undefined) return null;
-        try{
-          const value = await decryptValue(cached.value);
-          return { key, value, shared: !!shared };
-        }catch(e){ return null; }
+        const value = await _decryptOrFail(cached.value);
+        return { key, value, shared: !!shared };
       }
+      let res;
       try{
         const headers = cached ? { 'If-None-Match': String(cached.version) } : {};
-        const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
-        if(res.status === 304 && cached){
-          _kvVersions[key] = cached.version;
-          markOnline();
-          if(cached.value === null || cached.value === undefined) return null;
-          const value = await decryptValue(cached.value);
-          return { key, value, shared: !!shared };
-        }
-        if(!res.ok){
-          // السيرفر استجاب لكن بخطأ (مش انقطاع شبكة) — نرجّع آخر نسخة محلية معروفة لو موجودة
-          // بدل عرض شاشة فارغة، حتى لو الخطأ مؤقت (مثال: الخادم "نائم" على استضافة مجانية).
-          if(cached){
-            markOffline();
-            if(cached.value === null || cached.value === undefined) return null;
-            const value = await decryptValue(cached.value);
-            return { key, value, shared: !!shared };
-          }
-          return null;
-        }
-        const data = await res.json();
-        _kvVersions[key] = data.version || 0;
-        _kvCacheWrite(key, data.version || 0, data.value ?? null);
-        markOnline();
-        if(data.value === null || data.value === undefined) return null;
-        const value = await decryptValue(data.value);
-        return { key, value, shared: !!shared };
+        res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
       }catch(e){
-        // فشل الاتصال بالسيرفر تماماً (بدون إنترنت غالباً) — نعمل بآخر نسخة محفوظة محلياً
+        // فشل اتصال فعلي بالسيرفر تماماً (بدون إنترنت غالباً) — نعمل بآخر نسخة محفوظة محلياً
         // بدل تفريغ الشاشة، حتى يبقى البرنامج قابلاً للاستخدام (قراءة على الأقل) بدون نت.
         markOffline();
-        try{
-          if(cached){
-            if(cached.value === null || cached.value === undefined) return null;
-            const value = await decryptValue(cached.value);
-            return { key, value, shared: !!shared };
-          }
-        }catch(_e){}
+        if(cached){
+          if(cached.value === null || cached.value === undefined) return null;
+          const value = await _decryptOrFail(cached.value);
+          return { key, value, shared: !!shared };
+        }
         return null;
       }
+      // من هنا: وصل رد فعلي من السيرفر (متصلين فعلاً) — أي خطأ فك تشفير بعد هذه النقطة
+      // خطأ حقيقي بمفتاح التشفير نفسه، وليس مجرد انقطاع اتصال، فيجب أن يخرج كخطأ صريح.
+      if(res.status === 304 && cached){
+        _kvVersions[key] = cached.version;
+        markOnline();
+        if(cached.value === null || cached.value === undefined) return null;
+        const value = await _decryptOrFail(cached.value);
+        return { key, value, shared: !!shared };
+      }
+      if(!res.ok){
+        // السيرفر استجاب لكن بخطأ (مش انقطاع شبكة) — نرجّع آخر نسخة محلية معروفة لو موجودة
+        // بدل عرض شاشة فارغة، حتى لو الخطأ مؤقت (مثال: الخادم "نائم" على استضافة مجانية).
+        if(cached){
+          markOffline();
+          if(cached.value === null || cached.value === undefined) return null;
+          const value = await _decryptOrFail(cached.value);
+          return { key, value, shared: !!shared };
+        }
+        return null;
+      }
+      const data = await res.json();
+      _kvVersions[key] = data.version || 0;
+      _kvCacheWrite(key, data.version || 0, data.value ?? null);
+      markOnline();
+      if(data.value === null || data.value === undefined) return null;
+      const value = await _decryptOrFail(data.value);
+      return { key, value, shared: !!shared };
     },
-    async set(key, value, shared){
+    async set(key, value, shared, meta){
       const toStore = await encryptValue(value);
       try{
         const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, {
           method: 'PUT',
-          body: JSON.stringify({ value: toStore, version: _kvVersions[key] || 0 }),
+          body: JSON.stringify({ value: toStore, version: _kvVersions[key] || 0, ...(meta||{}) }),
         });
         if(res.status === 409){
           const conflict = await res.json();
           _kvVersions[key] = conflict.currentVersion || _kvVersions[key];
           showToast('⚠️ ' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات، يرجى تحديث الصفحة وإعادة المحاولة'));
+          return null;
+        }
+        if(res.status === 422){
+          // حماية من فقدان بيانات: السيرفر رفض حفظاً يمحو عدداً كبيراً من السجلات فجأة (غالباً
+          // بسبب جهاز يعمل بنسخة قديمة من البيانات في الذاكرة). لا نطبّق التعديل محلياً ولا نضعه
+          // في طابور الرفع، حتى لا نُصر على تكرار نفس الحفظ الخطير تلقائياً لاحقاً.
+          const guard = await res.json().catch(()=>({}));
+          showToast('⛔ ' + (guard.error || 'تم رفض هذا الحفظ وقائياً لأنه سيحذف عدداً كبيراً من السجلات دفعة واحدة — يرجى تحديث الصفحة (Ctrl+Shift+R) والتأكد من آخر بيانات قبل إعادة المحاولة'));
           return null;
         }
         if(!res.ok) throw new Error('save request failed');
@@ -1256,6 +1279,34 @@ async function syncBagStockIssues(){
   if(migrated){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
   return migrated;
 }
+// شاشة إيقاف كاملة عند فشل فك تشفير بيانات حقيقية (راجع window.storage.get/_decryptOrFail
+// وloadData أعلاه لتفاصيل الخطر بالتحديد). الهدف: منع أي تفاعل مع البرنامج (وبالتالي منع أي
+// عملية حفظ) على هذا الجهاز إلى أن يُحل السبب، بدل عرض شاشة فارغة كأنها بيانات حقيقية.
+let _fatalDecryptScreenShown = false;
+function showFatalDecryptErrorScreen(err){
+  if(_fatalDecryptScreenShown) return;
+  _fatalDecryptScreenShown = true;
+  try{
+    const div = document.createElement('div');
+    div.id = 'fatal-decrypt-error-screen';
+    div.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#1a0000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;direction:rtl;';
+    div.innerHTML = `
+      <div style="max-width:560px;">
+        <div style="font-size:48px;margin-bottom:16px;">⛔</div>
+        <h2 style="margin:0 0 12px;">تعذّر فتح البرنامج بأمان على هذا الجهاز</h2>
+        <p style="line-height:1.8;">${escapeHtml(err && err.message ? err.message : 'خطأ غير معروف في فك تشفير البيانات')}</p>
+        <p style="line-height:1.8;opacity:0.85;">
+          هذا يعني عادةً أن هذا المتصفح/الجهاز لا يدعم التشفير المطلوب (Web Crypto)، أو أن رابط
+          الدخول ليس عبر HTTPS صحيح. تم إيقاف البرنامج عمداً هنا لمنع أي عملية حفظ قد تمحو بيانات
+          باقي المستخدمين. تأكد من الرابط المستخدم (يجب أن يبدأ بـ https://) ثم أعد تحميل الصفحة،
+          أو تواصل مع المطوّر إن استمرت المشكلة.
+        </p>
+        <button id="fatal-decrypt-reload-btn" style="margin-top:12px;padding:10px 24px;border:none;border-radius:8px;background:#c62828;color:#fff;font-size:15px;cursor:pointer;">إعادة تحميل الصفحة</button>
+      </div>`;
+    document.body.appendChild(div);
+    document.getElementById('fatal-decrypt-reload-btn').addEventListener('click', ()=> location.reload());
+  }catch(e){ alert('تعذّر فتح البرنامج بأمان على هذا الجهاز — يرجى إعادة تحميل الصفحة'); }
+}
 async function loadData(cacheOnly){
   // نجلب كل مفاتيح kv_store بالتوازي (كل الطلبات تُرسل دفعة واحدة) بدل التتابع (طلب وراء طلب)
   // المستخدم سابقاً. زمن الانتظار الأكبر هو زمن الشبكة/استجابة الخادم — خصوصاً على استضافة مجانية
@@ -1267,9 +1318,24 @@ async function loadData(cacheOnly){
     'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
   ].concat(wantUsers ? ['users'] : []);
   const kv = {};
+  const decryptFailedKeys = [];
   await Promise.all(kvKeys.map(async k=>{
-    try{ kv[k] = await window.storage.get(k, false, cacheOnly); }catch(e){ kv[k] = null; }
+    try{ kv[k] = await window.storage.get(k, false, cacheOnly); }
+    catch(e){
+      if(e && e.isDecryptFailure) decryptFailedKeys.push(k);
+      kv[k] = null;
+    }
   }));
+  if(decryptFailedKeys.length){
+    // خطأ قاتل: نوقف هنا قبل أي عرض أو حفظ. الاستمرار كان سيعني التعامل مع بيانات مشفَّرة
+    // حقيقية موجودة على السيرفر كأنها "غير موجودة" (فارغة)، وأي عملية حفظ لاحقة من هذا الجهاز
+    // (مثال: إضافة عميل واحد) كانت ستكتب مصفوفة شبه فارغة فوق بيانات كل المستخدمين على
+    // السيرفر وتمحوها بالكامل. راجع window.storage.get/_decryptOrFail أعلى الملف.
+    const err = new Error('تعذّر فك تشفير البيانات المحفوظة (' + decryptFailedKeys.join('، ') + ') على هذا الجهاز');
+    err.isDecryptFailure = true;
+    err.failedKeys = decryptFailedKeys;
+    throw err;
+  }
 
   try{
     const r = kv.clients;
@@ -1526,8 +1592,11 @@ async function logAudit(action, section, description){
   });
   await saveAuditLog();
 }
-async function saveClients(){
-  try{ await window.storage.set('clients', JSON.stringify(clients), false); }catch(e){ showToast('تعذر حفظ البيانات'); }
+// allowDrop=true تُستخدم فقط عند حذف عملاء دفعة واحدة عن قصد (بعد تأكيد المستخدم صراحة عبر
+// customConfirm)، لتخطّي حماية "رفض الحذف المفاجئ الكبير" على السيرفر (راجع PUT /api/storage/:key)
+// التي هدفها منع فقدان بيانات بسبب جهاز يحفظ نسخة قديمة من المصفوفة فوق نسخة السيرفر الحالية.
+async function saveClients(allowDrop){
+  try{ await window.storage.set('clients', JSON.stringify(clients), false, allowDrop ? { allowLargeDrop: true } : undefined); }catch(e){ showToast('تعذر حفظ البيانات'); }
 }
 async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
@@ -1837,7 +1906,7 @@ async function restoreFullBackup(file){
   journalDE = data.journalDE || [];
   budgetEntries = data.budgetEntries || [];
   await Promise.allSettled([
-    saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
+    saveClients(true), saveSettings(), saveBagStock(), saveVaultTx(),
     saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
     saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
     saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries()
@@ -2025,7 +2094,7 @@ async function applyStateSnapshot(entry){
   users = entry.users;
   companies = entry.companies || [];
   companyTransfers = entry.companyTransfers || [];
-  await saveClients();
+  await saveClients(true);
   await saveVaultTx();
   await saveBagStock();
   await saveCourseSessions();
@@ -3762,7 +3831,7 @@ $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
   const removedNames = clients.filter(c=>ids.includes(c.id)).map(c=>c.name);
   clients = clients.filter(c=>!ids.includes(c.id));
   ids.forEach(id=>removeClientLedgerEntries(id));
-  await saveClients(); await saveVaultTx();
+  await saveClients(true); await saveVaultTx();
   await logAudit('delete','العملاء', `تم حذف ${ids.length} عميل دفعة واحدة: ${removedNames.slice(0,20).join('، ')}${removedNames.length>20?` وآخرين (${removedNames.length-20})`:''}`);
   selectedClientIds.clear();
   renderTable(); renderDashboard(); refreshFilterOptions(); renderReports(); renderCourses(); renderBags();
@@ -5003,7 +5072,7 @@ $('#btn-bulk-delete-save').addEventListener('click', async ()=>{
   const removedNames = matched.map(c=>c.name);
   clients = clients.filter(c=>!idsSet.has(c.id));
   idsSet.forEach(id=>{ removeClientLedgerEntries(id); selectedClientIds.delete(id); });
-  await saveClients(); await saveVaultTx();
+  await saveClients(true); await saveVaultTx();
   await logAudit('delete','العملاء', `تم حذف ${matched.length} عميل عبر جدول داخل البرنامج: ${removedNames.slice(0,20).join('، ')}${removedNames.length>20?` وآخرين (${removedNames.length-20})`:''}${notFoundCount?` — تم تجاهل ${notFoundCount} رقم هوية غير موجود بالنظام`:''}`);
   closeBulkDeleteModal();
   renderTable(); renderDashboard(); refreshFilterOptions(); renderReports(); renderCourses(); renderBags();
@@ -6238,7 +6307,7 @@ $('#btn-reset').addEventListener('click', async ()=>{
     const countBefore = clients.length;
     snapshotState(`حذف جميع بيانات العملاء (${countBefore} سجل)`);
     clients = [];
-    await saveClients();
+    await saveClients(true);
     await logAudit('delete','العملاء', `تم حذف جميع بيانات العملاء دفعة واحدة (${countBefore} سجل)`);
     renderTable(); renderDashboard(); renderBags();
     showToast('تم حذف جميع البيانات');
@@ -14154,7 +14223,10 @@ async function backgroundSyncCheck(){
       await loadData(false);
       await renderAllViewsAfterLoad();
     }
-  }catch(e){ markOffline(); } finally { _bgSyncInFlight = false; }
+  }catch(e){
+    if(e && e.isDecryptFailure){ showFatalDecryptErrorScreen(e); }
+    else { markOffline(); }
+  } finally { _bgSyncInFlight = false; }
 }
 // إعادة فحص دورية كل دقيقتين، حتى تنعكس تعديلات جهاز/مستخدم آخر تلقائياً بدون الحاجة لإغلاق
 // البرنامج وإعادة فتحه — بتكلفة شبكة ضئيلة جداً (طلب واحد صغير) لو لم يتغيّر شيء.
@@ -14167,21 +14239,26 @@ async function startApp(){
   // كانت تُضبَط سابقاً فقط بعد اكتمال التحميل والعرض بالكامل (autoSignInLocalUser في آخر السطر).
   currentUser = SERVER_AUTH_USERNAME || 'غير معروف';
   currentUserRole = normalizeRole(SERVER_AUTH_ROLE);
-  const localFirst = await hasLocalCache();
-  if(localFirst){
-    // البدء فوراً من آخر نسخة محفوظة على هذا الجهاز، بدون انتظار أي اتصال بالسيرفر — البرنامج
-    // يظهر فوراً بنفس البيانات المحفوظة محلياً، ثم تتم المزامنة الفعلية مع السحابة في الخلفية.
-    await loadData(true);
-  } else {
-    // أول تشغيل على هذا الجهاز (لا توجد نسخة محلية بعد) — تحميل كامل من السحابة كالمعتاد.
-    await loadData(false);
+  try{
+    const localFirst = await hasLocalCache();
+    if(localFirst){
+      // البدء فوراً من آخر نسخة محفوظة على هذا الجهاز، بدون انتظار أي اتصال بالسيرفر — البرنامج
+      // يظهر فوراً بنفس البيانات المحفوظة محلياً، ثم تتم المزامنة الفعلية مع السحابة في الخلفية.
+      await loadData(true);
+    } else {
+      // أول تشغيل على هذا الجهاز (لا توجد نسخة محلية بعد) — تحميل كامل من السحابة كالمعتاد.
+      await loadData(false);
+    }
+  }catch(e){
+    if(e && e.isDecryptFailure){ showFatalDecryptErrorScreen(e); return; }
+    throw e;
   }
   updateOfflineIndicator();
   await renderAllViewsAfterLoad();
   await maybeRunAutoBackup();
   autoSignInLocalUser();
   SoundFX.login();
-  backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج
+  backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج (الأخطاء القاتلة تُعالَج داخلها)
 }
 
 /* ---------------- License gate: يجب التحقق من كود الترخيص قبل تشغيل أي جزء من البرنامج ---------------- */
