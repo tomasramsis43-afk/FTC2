@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
-const { signToken, requireAuth, requireRole, hashPassword, verifyPassword } = require('./auth');
+const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken } = require('./auth');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -56,6 +56,24 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
   }
   try {
+    // تحقق أولاً من حساب الطوارئ (مخزّن بالكامل في متغيرات البيئة، مستقل عن قاعدة
+    // البيانات) — يسمح بالدخول للنظام حتى لو قاعدة البيانات اتغيرت أو كانت فاضية
+    // تماماً أو معطّلة. لا يؤثر على حسابات جدول server_users العادية بأي شكل.
+    const isEmergencyLogin = await verifyEmergencyAdmin(username.trim(), password);
+    if (isEmergencyLogin) {
+      const token = signEmergencyToken(username.trim());
+      const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
+        [username.trim(), 'admin', loginIp]
+      ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+      return res.json({
+        token,
+        username: username.trim(),
+        role: 'admin',
+        user: { username: username.trim(), displayName: 'حساب الطوارئ', role: 'admin' },
+      });
+    }
     const r = await pool.query('SELECT * FROM server_users WHERE username = $1', [username.trim()]);
     const user = r.rows[0];
     if (!user) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
