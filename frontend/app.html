@@ -684,6 +684,11 @@
       <select id="filter-invoice"><option value="">كل العملاء (رقم الفاتورة)</option><option value="no">بدون رقم فاتورة</option><option value="yes">لديه رقم فاتورة</option></select>
       <select id="filter-coursenum"><option value="">كل العملاء (رقم الدورة)</option><option value="no">بدون رقم دورة</option><option value="yes">لديه رقم دورة</option></select>
       <select id="filter-refnum"><option value="">كل العملاء (الرقم المرجعي)</option><option value="no">بدون رقم مرجعي</option><option value="yes">لديه رقم مرجعي</option></select>
+      <span id="filter-reception-wrap" style="display:none;">
+        <select id="filter-reception" title="عرض عملاء موظف استقبال بعينه فقط">
+          <option value="">كل موظفي الاستقبال</option>
+        </select>
+      </span>
       <input type="date" id="cl-date-from" title="تاريخ التسجيل من">
       <input type="date" id="cl-date-to" title="تاريخ التسجيل إلى">
       <input type="number" id="cl-paid-min" placeholder="المبلغ المدفوع من" style="max-width:140px;">
@@ -2359,6 +2364,11 @@
           <option value="network">الشبكة</option>
         </select>
         <select id="v-filter-type"><option value="">كل الحركات</option><option value="in">وارد فقط</option><option value="out">صادر فقط</option></select>
+        <span id="v-filter-reception-wrap" style="display:none;">
+          <select id="v-filter-reception" title="عرض عمليات موظف استقبال بعينه فقط">
+            <option value="">كل موظفي الاستقبال</option>
+          </select>
+        </span>
         <input type="text" id="v-search" placeholder="بحث بالاسم / رقم الهوية / البيان">
         <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap;">
           <input type="checkbox" id="v-filter-dup" style="width:auto; margin:0;"> عرض رقم الهوية المكرر فقط
