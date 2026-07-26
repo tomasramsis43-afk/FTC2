@@ -1177,6 +1177,11 @@ let currentUserRole = 'admin'; // 'admin' (صلاحيات كاملة) أو 'staf
    العام أصلاً (راجع settings.rolePermissions)، فلا داعي لعزلها هنا لأنها غير ظاهرة لهم من الأساس.
 */
 function canSeeAllData(){ return currentUserRole==='admin' || currentUserRole==='accountant'; }
+// ملحوظة أمان: هذه الدالة تُستخدم فقط لتصفية العرض (أي شاشة تعرض قائمة)، ولا يجوز أبداً استخدامها
+// لإعادة تعيين المصفوفة الأصلية (مثال: `clients = filterOwnRecords(clients)`) لأن نفس تلك المصفوفة
+// تُستخدم لاحقاً عند أي عملية حفظ — وقد حدث بسبب هذا بالضبط حادث فقدان بيانات سابق (راجع تعليق
+// loadData أعلاه). استخدامها الصحيح الوحيد هو داخل `.filter()` عند بناء قائمة عرض جديدة كل مرة.
+function isOwnRecord(r){ return canSeeAllData() || (r && r.createdBy===currentUser); }
 function filterOwnRecords(arr){
   if(canSeeAllData() || !Array.isArray(arr)) return arr;
   return arr.filter(r=> r && r.createdBy && r.createdBy===currentUser);
@@ -3448,6 +3453,7 @@ function filteredClients(){
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
   const rows = clients.filter(c=>{
+    if(!isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
     if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
@@ -3560,6 +3566,10 @@ let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالي�
 // بعمود آخر (مثل الإجمالي/المدفوع/المتبقي، التي تحتاج حسابات معقّدة) يُبقي الوضع على المسار المحلي.
 const SERVER_SORTABLE_CLIENT_COLS = { name:1, date:1, clientId:1, courseType:1, nationality:1 };
 function clientsQueryIsSimple(){
+  // عزل البيانات: المسار السريع يستعلم مباشرة من السيرفر بكل العملاء بدون فلترة الملكية، فيجب
+  // تعطيله لأي مستخدم مقيَّد لإجباره على المسار المحلي الذي يطبّق isOwnRecord() في filteredClients().
+  // (هذا فقط يختار أي مسار عرض يُستخدم — لا يُعيد تعيين مصفوفة clients نفسها بأي شكل).
+  if(!canSeeAllData()) return false;
   if(showSuspendedOnly || showUnpurchasedBagsOnly) return false;
   if($('#filter-company')?.value) return false;
   if($('#filter-invoice')?.value) return false;
@@ -3642,7 +3652,7 @@ async function renderTable(){
 // حتى لا يتكرر كود بناء HTML للصف في مكانين قد يختلفان عن بعض بمرور الوقت.
 function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
-  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = clients.length;
+  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = canSeeAllData() ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
 
   $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
 
