@@ -4708,7 +4708,7 @@
 
   <!-- SETTINGS -->
   <section class="view active" id="view-settings">
-    <div class="panel" id="panel-app-update" style="border-right:4px solid var(--gold);">
+    <div class="panel" id="panel-app-update" >
       <h3 style="margin:0 0 4px;">تحديث البرنامج</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">لتحديث البرنامج إلى نسخة جديدة، اختر ملف <span class="mono">index.html</span> الخاص بالتحديث. سيتم استبدال النسخة الحالية بالكامل بالنسخة الجديدة تلقائياً، مع الاحتفاظ بنسخة احتياطية من النسخة القديمة قبل الاستبدال. <b>بياناتك المحفوظة (العملاء، الدورات، الحقائب، المالية...) لن تتأثر إطلاقاً</b> لأنها محفوظة بشكل منفصل تماماً عن ملف البرنامج نفسه. يمكنك أيضاً تصدير نسخة من ملف البرنامج الحالي (بكل التحديثات والاختصارات المضافة) لحفظها كأرشيف أو لتثبيتها على جهاز آخر.</p>
       <input type="file" id="update-file-input" accept=".html,.htm" style="display:none;">
@@ -4716,7 +4716,7 @@
       <button class="btn btn-ghost btn-sm" id="btn-export-app">📤 تصدير نسخة من البرنامج (index.html)</button>
       <div id="update-status" class="hint" style="margin-top:10px; display:none;"></div>
     </div>
-    <div class="panel" style="border-right:4px solid var(--teal);">
+    <div class="panel" >
       <h3 style="margin:0 0 4px;">💾 النسخ الاحتياطي والاستعادة</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">نسخة احتياطية كاملة تشمل كل بيانات البرنامج في ملف واحد (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) يمكن استخدامها لاستعادة البرنامج بالكامل عند الحاجة.</p>
       <div class="formgrid" style="margin-bottom:10px; align-items:end;">
@@ -4734,7 +4734,7 @@
       </div>
       <div class="hint" style="margin-top:10px;">النسخة الاحتياطية التلقائية تُنزَّل تلقائياً كملف على جهازك عند فتح البرنامج إذا مرّت المدة المحددة منذ آخر نسخة — تأكد من مراجعة مجلد التنزيلات لديك بشكل دوري أو نقل الملفات لمكان آمن.</div>
     </div>
-    <div class="panel" style="border-right:4px solid var(--gold);">
+    <div class="panel" >
       <h3 style="margin:0 0 4px;">🔔 إعدادات التنبيهات الذكية</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
       <div class="formgrid" style="align-items:end;">
@@ -4769,7 +4769,7 @@
         <button class="btn btn-ghost btn-sm" id="btn-save-vat-wa-numbers">حفظ هذه الأرقام</button>
       </div>
     </div>
-    <div class="panel" style="border-right:4px solid var(--teal);">
+    <div class="panel" >
       <h3 style="margin:0 0 4px;">🔗 ربط Power Automate (Webhooks)</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>
       <div class="formgrid" style="margin-bottom:10px;">
@@ -4784,7 +4784,7 @@
         <button class="btn btn-ghost btn-sm" id="btn-test-pa-webhook">🧪 إرسال اختبار</button>
       </div>
     </div>
-    <div class="panel" id="panel-server-sync" style="border-right:4px solid var(--gold);">
+    <div class="panel" id="panel-server-sync" >
       <h3 style="margin:0 0 4px;">🔌 الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تسويه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -4792,12 +4792,12 @@
         <button class="btn btn-sm" id="btn-toggle-server-sync"></button>
       </div>
     </div>
-    <div class="panel" id="panel-theme-colors" style="border-right:4px solid var(--teal);">
+    <div class="panel" id="panel-theme-colors" >
       <h3 style="margin:0 0 4px;">🎨 ألوان البرنامج (سيمز جاهزة)</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر أحد الأطقم الجاهزة، ويتطبّق فوراً على كل شاشات البرنامج ويبقى ثابتاً في الوضعين الليلي والنهاري. لا حاجة لاختيار ألوان يدوياً.</p>
       <div id="theme-presets-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px;"></div>
     </div>
-    <div class="panel" id="panel-app-reset" style="border-right:4px solid var(--red, #c0392b);">
+    <div class="panel" id="panel-app-reset" >
       <h3 style="margin:0 0 4px;">إعادة ضبط المصنع</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">هذا الإجراء يحذف <b>كل</b> البيانات المحفوظة في البرنامج نهائياً: العملاء، الدورات، الحقائب ومخزونها، الحركات المالية، الشركات وتحويلاتها، الإعدادات (بيانات المركز وأنواع الدورات والجنسيات وطرق الدفع)، المستخدمين، وسجل المراجعة — ليعود البرنامج فارغاً تماماً كأول مرة يُفتح فيها، في كل الشيتات والتبويبات. <b>لا يمكن التراجع عن هذا الإجراء إلا إذا كان لديك نسخة احتياطية مصدَّرة مسبقاً.</b></p>
       <button class="btn btn-danger btn-sm" id="btn-reset-app">🏭 إعادة ضبط المصنع</button>
@@ -4902,7 +4902,7 @@
         <b>محاسب:</b> لوحة التحكم، العملاء، الحركات المالية، المحاسبة، الموازنة، التقارير، المشتريات، الشركات — بدون الإعدادات أو سجل المراجعة أو الحقائب أو الدورات.<br>
         <b>استقبال:</b> لوحة التحكم، العملاء، الدورات، فواتير الدورات، الحقائب فقط — بدون أي وصول للأرقام المالية أو المحاسبة.
       </div>
-      <div class="hint" style="margin-top:10px; border-right:3px solid var(--gold); padding-right:8px;">✅ هذه القائمة أصبحت متصلة مباشرة بخادم الدخول المركزي — أي مستخدم تضيفه هنا يقدر يسجّل دخول فوراً بالصلاحية المحددة. كلمات المرور تُشفَّر (bcrypt) على الخادم قبل التخزين ولا تُحفظ أبداً كنص واضح.</div>
+      <div class="hint" style="margin-top:10px; padding-right:8px;">✅ هذه القائمة أصبحت متصلة مباشرة بخادم الدخول المركزي — أي مستخدم تضيفه هنا يقدر يسجّل دخول فوراً بالصلاحية المحددة. كلمات المرور تُشفَّر (bcrypt) على الخادم قبل التخزين ولا تُحفظ أبداً كنص واضح.</div>
       <div class="hint" style="margin-top:14px;">لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به (لتفادي فقدان الوصول بالخطأ) — سجّل دخول بحساب مدير آخر أولاً لو احتجت حذفه.</div>
     </div>
     <div class="panel" id="panel-role-permissions">
@@ -4931,7 +4931,7 @@
       <button class="btn btn-ghost btn-sm" id="btn-refresh-login-history" style="margin-bottom:10px;">🔄 تحديث السجل</button>
       <div id="login-history-list"><div class="hint">اضغط "تحديث السجل" لعرض آخر عمليات الدخول</div></div>
     </div>
-    <div class="panel" id="panel-pin-lock" style="border-right:4px solid var(--navy);">
+    <div class="panel" id="panel-pin-lock" >
       <h3 style="margin:0 0 4px;">🔒 قفل الشاشة بـ PIN</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">يقفل البرنامج تلقائياً بعد مدة خمول محددة، ويطلب رقم PIN لإعادة الدخول — مفيد لو تركت الجهاز بدون مراقبة. القفل شغّال على هذا الجهاز فقط ولا يؤثر على أي جهاز آخر.</p>
       <div class="formgrid" style="align-items:end;">
@@ -4946,7 +4946,7 @@
         <button class="btn btn-ghost btn-sm" id="btn-lock-now">🔒 قفل الآن</button>
       </div>
     </div>
-    <div class="panel" id="panel-settings-export" style="border-right:4px solid var(--teal);">
+    <div class="panel" id="panel-settings-export" >
       <h3 style="margin:0 0 4px;">📤 تصدير / استيراد إعدادات البرنامج</h3>
       <p class="hint" style="margin:0 0 12px;">تصدير نسخة من إعدادات البرنامج (الألوان، أسعار الدورات، طرق الدفع، تصنيفات المصروفات، بيانات المركز، الجنسيات...) كملف واحد لنقلها لجهاز أو حساب آخر بسهولة. هذا الملف لا يشمل بيانات العملاء أو الحركات المالية أو كلمات المرور إطلاقاً.</p>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
