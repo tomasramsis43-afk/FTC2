@@ -7736,6 +7736,12 @@ $('#settlement-table-body')?.addEventListener('click', async e=>{
   t.settledAt = Date.now();
   await saveVaultTx();
   await logAudit('edit','الحركات المالية', `تمت تسوية دفعة نقدية معلّقة للعميل: ${t.clientName||''} بمبلغ ${fmt(num(t.amount))} ﷼`);
+  // بعد التسوية، لو فاتورة دورة هذا العميل كانت مؤجَّلة عن القيد المزدوج بسبب التعليق، نحاول ترحيلها الآن تلقائياً
+  const client = clients.find(c=>c.id===t.autoClientId);
+  if(client && typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(client)){
+    await Promise.all([saveJournalDE(), saveClients()]);
+    await logAudit('add','المحاسبة', `تم ترحيل فاتورة الدورة تلقائياً للقيد المزدوج بعد التسوية: ${client.name||''}`);
+  }
   renderSettlementPanel();
   showToast('تمت التسوية بنجاح');
 });
@@ -10381,9 +10387,16 @@ function buildDELinesForCourseInvoice(c){
   if(vat>0.004) lines.push({accountId:vatAcc.id, debit:0, credit:vat});
   return lines;
 }
+/* هل عند هذا العميل دفعة نقدية (خزنة) سجّلها الاستقبال ولسه معلّقة (لم يؤكد المسؤول عن الخزنة
+   استلامها فعلياً من صندوق تسويات الاستقبال)؟ لو كذلك، فاتورة دورته لا تُرحَّل تلقائياً للقيد
+   المزدوج حتى تتم التسوية — نفس منطق تعليق رصيد الخزنة الفعلي، مطبَّق هنا على دفتر الأستاذ. */
+function clientHasUnsettledCash(client){
+  return vaultTx.some(t=> t.autoClientId===client.id && (t.destination||'vault')==='vault' && !t.deletedAt && t.settled===false);
+}
 function autoPostCourseInvoice(c){
   if(c.courseInvoiceDEId) return false;
   if(!(c.receiptIssueDate && num(c.receiptActualValue)>0)) return false;
+  if(clientHasUnsettledCash(c)) return false;
   const lines = buildDELinesForCourseInvoice(c);
   if(!lines) return false;
   const entry = { id: uid(), createdAt: Date.now(), date: c.receiptIssueDate, description: `[ترحيل تلقائي] فاتورة دورة ${c.invoice||''} — ${c.name||''}`, lines, sourceClientId: c.id, isAuto: true };
