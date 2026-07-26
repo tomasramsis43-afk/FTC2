@@ -965,12 +965,12 @@ function fillThemeColorInputs(){ renderThemePresetsGrid(); }
 function renderThemePresetsGrid(){
   const wrap = $('#theme-presets-grid');
   if(!wrap) return;
-  const activeId = settings.themePresetId || 'midnightslate';
+  const activeId = settings.themePresetId || 'floqastblue';
   wrap.innerHTML = THEME_PRESETS.map(p=>{
     const isActive = p.id === activeId;
     const dots = ['navy','gold','teal','red'].map(k=>`<span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:${p.colors[k]}; border:1px solid rgba(0,0,0,.15);"></span>`).join('');
     return `
-      <button type="button" data-themepreset="${p.id}" class="theme-preset-card" style="cursor:pointer; text-align:right; border-radius:10px; padding:12px; border:2px solid ${isActive?'var(--gold)':'var(--border, #ddd)'}; background:${isActive?'rgba(232,149,31,.08)':'transparent'}; display:flex; flex-direction:column; gap:8px; font-family:inherit;">
+      <button type="button" data-themepreset="${p.id}" class="theme-preset-card" style="cursor:pointer; text-align:right; border-radius:10px; padding:12px; border:2px solid ${isActive?'var(--gold)':'var(--border, #ddd)'}; background:${isActive?'rgba(232,117,44,.08)':'transparent'}; display:flex; flex-direction:column; gap:8px; font-family:inherit;">
         <div style="display:flex; gap:6px;">${dots}</div>
         <div style="font-size:13px; font-weight:${isActive?'700':'500'};">${escapeHtml(p.name)}${isActive?' ✓':''}</div>
       </button>`;
@@ -1411,19 +1411,18 @@ async function loadData(cacheOnly){
       // إكمال أي لون مفقود بالقيمة الافتراضية (توافقاً مع نسخ قديمة محفوظة)
       Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
     }
-    if(!settings.themePresetId) settings.themePresetId = 'midnightslate';
-    // ترقية لمرة واحدة: أي حساب اتظبط تلقائياً على الطقم الكلاسيكي القديم (قبل صدور هذا التحديث)
-    // ولم يغيّر ألوانه يدوياً بنفسه، يُنقل تلقائياً للطقم الجديد الافتراضي (كحلي نيلي وذهبي).
-    // لا تُطبَّق على أي حساب اختار "كلاسيكي" بنفسه بعد تعديل ألوانه يدوياً.
-    if(!settings._themeDefaultMigratedV2){
+    if(!settings.themePresetId) settings.themePresetId = 'floqastblue';
+    // ترقية لمرة واحدة: أي حساب كان لا يزال على الطقم الكلاسيكي القديم (قبل صدور هذا التحديث)
+    // ولم يغيّر ألوانه يدوياً بنفسه، يُنقل تلقائياً للطقم الجديد الافتراضي (أزرق حديث مسطح).
+    // لا تُطبَّق على أي حساب اختار طقماً آخر بنفسه بعد تعديل ألوانه يدوياً.
+    if(!settings._themeDefaultMigratedV3){
       const oldClassicColors = DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS;
-      const isUnmodifiedClassic = settings.themePresetId==='classic' &&
-        Object.keys(oldClassicColors).every(k=> settings.themeColors[k]===oldClassicColors[k]);
+      const isUnmodifiedClassic = Object.keys(oldClassicColors).every(k=> settings.themeColors[k]===oldClassicColors[k]);
       if(isUnmodifiedClassic || !settings.themePresetId){
-        settings.themePresetId = 'midnightslate';
-        settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='midnightslate').colors));
+        settings.themePresetId = 'floqastblue';
+        settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='floqastblue').colors));
       }
-      settings._themeDefaultMigratedV2 = true;
+      settings._themeDefaultMigratedV3 = true;
       await saveSettings();
     }
     if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
@@ -1975,7 +1974,7 @@ function showFatalErrorBox(title, err){
     document.body.appendChild(box);
   }
   const msg = (err && (err.stack || err.message)) || String(err);
-  box.innerHTML = `<div style="direction:rtl; font-family:'Tajawal',sans-serif; font-weight:800; margin-bottom:8px; display:flex; justify-content:space-between;"><span>⚠️ خطأ برمجي: ${title}</span><button style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:2px 10px;cursor:pointer;" onclick="document.getElementById('js-error-box').remove()">إغلاق</button></div><pre style="white-space:pre-wrap; margin:0;">${String(msg).replace(/</g,'&lt;')}</pre>`;
+  box.innerHTML = `<div style="direction:rtl; font-family:'Cairo',sans-serif; font-weight:800; margin-bottom:8px; display:flex; justify-content:space-between;"><span>⚠️ خطأ برمجي: ${title}</span><button style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:2px 10px;cursor:pointer;" onclick="document.getElementById('js-error-box').remove()">إغلاق</button></div><pre style="white-space:pre-wrap; margin:0;">${String(msg).replace(/</g,'&lt;')}</pre>`;
 }
 window.addEventListener('error', e=>{
   showFatalErrorBox(e.message || 'خطأ غير معروف', e.error);
@@ -4118,7 +4117,7 @@ function phoneWithWhatsapp(phone){
    بدل تكرار نفس قواعد CSS يدوياً في كل دالة طباعة على حدة —
    أي تعديل على شكل الطباعة (لون، خط، مسافات) يتم هنا فقط ويظهر في كل المستندات.
    ============================================================ */
-const PRINT_PALETTE = { navy:'#232C5C', gold:'#C27F1E', red:'#DC4C4C', text:'#171B2E', muted:'#6B7290', border:'#E1E5F2', surfaceAlt:'#EEF1FA' };
+const PRINT_PALETTE = { navy:'#1B4DB8', gold:'#E8752C', red:'#E24C3D', text:'#1B1F26', muted:'#6B7280', border:'#E4E6EB', surfaceAlt:'#F7F8FA' };
 
 function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, variant = 'full'} = {}){
   const p = PRINT_PALETTE;
