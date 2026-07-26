@@ -2744,7 +2744,7 @@ function clearAllSheetFilters(){
 
   const selectIds = [
     'filter-course','filter-nat','filter-status','filter-company','filter-invoice','filter-coursenum','filter-refnum',
-    'ci-filter-diff','v-filter-dest','v-filter-type',
+    'ci-filter-diff','v-filter-dest','v-filter-type','filter-reception','v-filter-reception',
     'cbp-year-filter','ownbag-year-filter',
     'purchase-supplier-filter','purchase-status-filter',
     'audit-filter-action','audit-filter-section',
@@ -3493,8 +3493,38 @@ function changeBadgeNegative(pct){
 function populateSelect(sel, values, withEmpty){
   sel.innerHTML = (withEmpty?'<option value="">—</option>':'') + values.map(v=>`<option value="${v}">${v}</option>`).join('');
 }
+/* ---------------- فلتر "موظفي الاستقبال" (شيت العملاء + شيت الحركات المالية) ----------------
+   يتيح للمدير/المحاسب اختيار موظف استقبال بعينه من قائمة منسدلة ورؤية عملياته هو فقط
+   (العملاء الذين سجّلهم، وحركات الخزنة التلقائية الناتجة عن تسجيلهم). لا يظهر هذا الفلتر
+   أصلاً لغير المدير/المحاسب لأن الاستقبال والموظف العام أصلاً مقيَّدون ببياناتهم فقط (isOwnRecord). */
+let receptionUsersCache = null;
+async function loadReceptionUsersList(force){
+  if(!canSeeAllData()) return receptionUsersCache = [];
+  if(receptionUsersCache && !force) return receptionUsersCache;
+  try{
+    const res = await fetch(API_BASE + '/api/users', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
+    const data = await res.json();
+    receptionUsersCache = (res.ok && Array.isArray(data.users)) ? data.users.filter(u=>u.role==='reception') : [];
+  }catch(e){ receptionUsersCache = receptionUsersCache || []; }
+  return receptionUsersCache;
+}
+async function populateReceptionFilterSelects(){
+  const wraps = ['filter-reception-wrap','v-filter-reception-wrap'].map(id=>document.getElementById(id));
+  if(!canSeeAllData()){ wraps.forEach(w=>{ if(w) w.style.display='none'; }); return; }
+  const users = await loadReceptionUsersList();
+  const opts = users.map(u=>`<option value="${escapeHtml(u.username)}">${escapeHtml(u.display_name||u.username)}</option>`).join('');
+  ['filter-reception','v-filter-reception'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">كل موظفي الاستقبال</option>' + opts;
+    sel.value = users.some(u=>u.username===cur) ? cur : '';
+  });
+  wraps.forEach(w=>{ if(w) w.style.display = users.length ? '' : 'none'; });
+}
 function refreshFilterOptions(){
   if(typeof populateYearFilterSelect==='function') populateYearFilterSelect();
+  if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   const courseFilterVal = $('#filter-course').value;
   populateSelect($('#filter-course'), settings.courses.map(c=>c.name), false);
   $('#filter-course').insertAdjacentHTML('afterbegin','<option value="__unknown__">⚠ الدورات غير المعلومة (بدون نوع دورة)</option>');
@@ -3528,8 +3558,10 @@ function filteredClients(){
   const paidMaxRaw = $('#cl-paid-max').value;
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
+  const frecep = $('#filter-reception') ? $('#filter-reception').value : '';
   const rows = clients.filter(c=>{
     if(!isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
+    if(frecep && c.createdBy!==frecep) return false;
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
     if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
@@ -4001,6 +4033,7 @@ $('#table-page-next')?.addEventListener('click', ()=>{ tableCurrentPage = tableC
 $('#table-page-last')?.addEventListener('click', ()=>{ tableCurrentPage = Infinity; renderTable(); });
 $('#filter-course').addEventListener('change', renderTable);
 $('#filter-nat').addEventListener('change', renderTable);
+$('#filter-reception')?.addEventListener('change', renderTable);
 $('#filter-status').addEventListener('change', renderTable);
 $('#btn-filter-suspended').addEventListener('click', ()=>{
   showSuspendedOnly = !showSuspendedOnly;
@@ -7786,7 +7819,12 @@ function vaultFilteredRows(){
   const dupOnly = $('#v-filter-dup')?.checked;
   const dupIds = dupOnly ? vaultDuplicateClientIds() : null;
   const noMethodOnly = $('#v-filter-nomethod')?.checked;
+  const frecepV = $('#v-filter-reception') ? $('#v-filter-reception').value : '';
   return vaultTx.filter(t=>{
+    if(frecepV){
+      const linkedClient = t.autoClientId ? clients.find(c=>c.id===t.autoClientId) : null;
+      if(!linkedClient || linkedClient.createdBy!==frecepV) return false;
+    }
     if(from && t.date < from) return false;
     if(to && t.date > to) return false;
     if(type && t.type!==type) return false;
@@ -7869,6 +7907,7 @@ function renderVault(){
   renderVaultLockStatus();
   if(typeof renderBankRecon==='function') renderBankRecon();
   if(typeof renderSettlementPanel==='function') renderSettlementPanel();
+  if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   const dl = $('#dl-clients');
   dl.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
@@ -8153,7 +8192,7 @@ function renderDenomHistory(){
     });
   });
 }
-['#v-from','#v-to','#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod'].forEach(sel=>{ $(sel).addEventListener('input', renderVault); $(sel).addEventListener('change', renderVault); });
+['#v-from','#v-to','#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-reception'].forEach(sel=>{ $(sel).addEventListener('input', renderVault); $(sel).addEventListener('change', renderVault); });
 onSearchInput('#v-search', renderVault);
 $('#vault-page-size')?.addEventListener('change', ()=>{ vaultCurrentPage = 1; renderVault(); });
 $('#vault-page-first')?.addEventListener('click', ()=>{ vaultCurrentPage = 1; renderVault(); });
