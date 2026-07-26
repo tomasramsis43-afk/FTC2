@@ -393,10 +393,30 @@ async function syncClientsRows(value) {
   }
 }
 
+// حماية من "انحدار التشفير" (encryption downgrade): لو كانت القيمة الحالية المخزَّنة لهذا
+// المفتاح مشفّرة فعلاً (تبدأ بـ 'ENC1:') والقيمة الجديدة المُرسَلة من هذا الحفظ غير مشفّرة،
+// هذا نمط يطابق تحديداً جهازاً يعمل بدون مفتاح تشفير صالح (مثال: فُتح البرنامج عبر رابط غير
+// HTTPS فلا يتوفر Web Crypto، أو تعطّل تفعيل الترخيص) بينما توجد بيانات حقيقية مشفّرة بالفعل.
+// هذا الجهاز يفشل في فك تشفير تلك البيانات فيتعامل معها كأنها فارغة، ثم يحفظ نسخته الناقصة/الفارغة
+// فوقها — فيمحو بيانات كل المستخدمين الآخرين من السيرفر. لا يحتاج هذا الفحص فك أي تشفير: مجرد
+// مقارنة نصية للبادئة كافية لرصد هذا النمط تحديداً ومنعه قبل وقوع أي ضرر.
+async function wouldDowngradeEncryption(key, newValue) {
+  if (typeof newValue !== 'string' || newValue.startsWith('ENC1:')) return false;
+  const cur = await pool.query('SELECT value FROM kv_store WHERE key = $1', [key]);
+  const curValue = cur.rows[0] && cur.rows[0].value;
+  return typeof curValue === 'string' && curValue.startsWith('ENC1:');
+}
+
 app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
+    if (await wouldDowngradeEncryption(req.params.key, value)) {
+      console.error(`رُفض حفظ خطير: ${req.user.username} حاول استبدال بيانات مشفّرة بأخرى غير مشفّرة للمفتاح "${req.params.key}"`);
+      return res.status(422).json({
+        error: 'تم رفض هذا الحفظ وقائياً: البيانات الحالية على السيرفر مشفّرة، لكن جهازك حاول حفظ بيانات غير مشفّرة — على الأرجح لأن مفتاح التشفير غير جاهز على هذا المتصفح/الجهاز (تأكد أنك تفتح البرنامج عبر رابط HTTPS صحيح). أعد تحميل الصفحة وسجّل الدخول من جديد قبل إعادة المحاولة، حتى لا تُفقد بيانات باقي المستخدمين.',
+      });
+    }
     const upsert = await pool.query(
       `INSERT INTO kv_store (key, value, version, updated_by)
        VALUES ($1, $2, 1, $3)
