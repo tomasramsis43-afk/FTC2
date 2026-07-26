@@ -7833,8 +7833,13 @@ document.querySelectorAll('#view-vault thead th.sortable').forEach(th=>{
     renderVault();
   });
 });
+/* دفعة نقدية معلّقة (سُجّلت من الاستقبال ولم يؤكد المسؤول عن الخزنة استلامها فعلياً بعد)
+   لا تُحتسب ضمن رصيد الخزنة الفعلي حتى تتم تسويتها من "صندوق تسويات الاستقبال" */
+function vaultTxCountsTowardBalance(t){
+  return !(t.autoClientId && (t.destination||'vault')==='vault' && t.settled===false);
+}
 function balanceOf(dest){
-  return vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in').reduce((s,t)=>s+num(t.amount),0)
+  return vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0)
        - vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='out').reduce((s,t)=>s+num(t.amount),0);
 }
 function seqNumbers(){
@@ -7863,10 +7868,10 @@ function renderVault(){
   dl.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
 
   const rows = applyVaultColumnSort(vaultFilteredRows());
-  const periodIn = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
+  const periodIn = rows.filter(t=>t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0);
   const periodOut = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
   const netOfDestFiltered = dest => rows.filter(t=>(t.destination||'vault')===dest)
-    .reduce((s,t)=> s + (t.type==='in' ? num(t.amount) : -num(t.amount)), 0);
+    .reduce((s,t)=> s + (t.type==='in' ? (vaultTxCountsTowardBalance(t) ? num(t.amount) : 0) : -num(t.amount)), 0);
 
   $('#vault-cards').innerHTML = `
     <div class="card"><div class="k">الخزنة (كاش) — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('vault')<0?'red':''}">${fmt(netOfDestFiltered('vault'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('vault'))}</div></div>
@@ -7925,7 +7930,7 @@ function renderVault(){
       <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
+      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}</td>
       <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : (t.type==='in' && t.companyTransferId) ? `
@@ -9403,7 +9408,7 @@ function journalInRange(from, to){ return journalEntries.filter(j=> inRange(j.da
 /* ---- أرصدة الخزنة/البنك/الشبكة كأرصدة تراكمية حتى تاريخ معيّن ---- */
 function balanceOfAsOf(dest, asOf){
   const rows = vaultTx.filter(t=> !asOf || (t.date||'') <= asOf);
-  return rows.filter(t=>(t.destination||'vault')===dest && t.type==='in').reduce((s,t)=>s+num(t.amount),0)
+  return rows.filter(t=>(t.destination||'vault')===dest && t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0)
        - rows.filter(t=>(t.destination||'vault')===dest && t.type==='out').reduce((s,t)=>s+num(t.amount),0);
 }
 /* ---- ذمم العملاء (مدينون) كأرصدة تراكمية حتى تاريخ معيّن ---- */

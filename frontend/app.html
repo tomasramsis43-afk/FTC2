@@ -2322,7 +2322,7 @@
 
     <div class="panel" style="border-right:4px solid var(--red); margin-bottom:14px;" id="reception-settlement-panel">
       <h3 style="margin:0 0 4px;">صندوق تسويات الاستقبال</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">كل دفعة نقدية يسجّلها موظف استقبال لعميل جديد تُرحَّل تلقائياً لحساب الخزنة في النظام، لكنها تبقى هنا "معلّقة" حتى يستلمها المسؤول عن الخزنة فعلياً (نقداً في اليد) ويؤكد ذلك بالضغط على "تسوية" — بعدها تختفي من هذه القائمة وتبقى محسوبة في أرصدة الخزنة كالمعتاد.</p>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">كل دفعة نقدية يسجّلها موظف استقبال لعميل جديد تُسجَّل كحركة "خزنة" لكنها تبقى هنا "معلّقة" ولا تُحتسب ضمن رصيد الخزنة الفعلي، حتى يستلمها المسؤول عن الخزنة فعلياً (نقداً في اليد) ويؤكد ذلك بالضغط على "تسوية" — عندها فقط تُضاف للرصيد وتختفي من هذه القائمة.</p>
       <div class="computed" style="margin-bottom:10px;">
         <span>عمليات معلّقة بانتظار التسوية: <b class="mono" id="settlement-pending-count" style="color:var(--red);">0</b></span>
         <span>إجمالي المبلغ المعلّق: <b class="mono" id="settlement-pending-total">0 ﷼</b></span>
