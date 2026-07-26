@@ -947,18 +947,12 @@ function applyTheme(isDark){
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
-/* تطبيق ألوان مخصصة يختارها المستخدم — تُفرض عبر inline style على body فتتغلب على
-   ألوان الوضع الليلي/النهاري الافتراضية في styles.css، وتبقى ثابتة في الحالتين معاً */
+/* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
+   (no-op) حتى لا تفرض أي لون عبر inline style على body، وتبقى ألوان الواجهة كما هي
+   مضبوطة في CSS الثابت فقط (رمادي محايد). أُبقيت الدالة موجودة بلا محتوى فقط لتفادي
+   كسر أي استدعاء قديم لها في باقي الكود. */
 function applyThemeColors(colors){
-  const c = { navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' };
-  const s = document.body.style;
-  s.setProperty('--navy', c.navy);
-  s.setProperty('--navy-dark', c.navyDark);
-  s.setProperty('--gold', c.gold);
-  s.setProperty('--gold-dark', c.goldDark);
-  s.setProperty('--gold-soft', c.goldSoft);
-  s.setProperty('--teal', c.teal);
-  s.setProperty('--red', c.red);
+  return;
 }
 /* تعبئة عناصر اختيار الألوان بقيم الإعدادات الحالية */
 function fillThemeColorInputs(){ renderThemePresetsGrid(); }
