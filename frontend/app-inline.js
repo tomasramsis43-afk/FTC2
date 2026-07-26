@@ -1273,7 +1273,13 @@ async function loadData(cacheOnly){
   // عزل البيانات: كل مستخدم مقيَّد (غير أدمن/محاسب) يشوف فقط عملاءه الذين سجّلهم هو بنفسه
   // (createdBy). السجلات القديمة بدون createdBy (قبل هذه الميزة) لا تظهر له تحديداً لعدم إمكان
   // إثبات ملكيتها، وتبقى ظاهرة فقط للأدمن/المحاسب. راجع filterOwnRecords/canSeeAllData أعلى الملف.
-  if(!canSeeAllData()) clients = filterOwnRecords(clients);
+  // ملحوظة أمان حرجة: أُزيل هنا فلتر "عزل البيانات" الذي كان يستبدل مصفوفة clients الكاملة
+  // بنسخة مبتورة (بيانات المستخدم الحالي فقط) عند التحميل. لأن نفس هذه المصفوفة تُستخدم لاحقاً
+  // عند أي حفظ (saveClients عبر أي عملية تعديل/ترحيل تلقائي)، كان أي حفظ من جهاز مستخدم مقيَّد
+  // يكتب فوق قاعدة البيانات المشتركة بالنسخة المبتورة فقط — مما يمحو فعلياً بيانات كل المستخدمين
+  // الآخرين (بما فيهم الأدمن) من السيرفر بمجرد أن تتم أي عملية حفظ من جهاز ذلك المستخدم. عزل
+  // البيانات في العرض (الشاشة) يجب أن يتم لاحقاً بمصفوفة منفصلة للعرض فقط، ولا يجب إطلاقاً أن
+  // يُستبدل بها المصدر الأساسي الذي يُحفظ للسيرفر.
   try{
     const r = kv.settings;
     settings = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -1487,7 +1493,7 @@ async function loadData(cacheOnly){
   }catch(e){ purchases = []; }
   // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
   // سجّلها هو بنفسه.
-  if(!canSeeAllData()) purchases = filterOwnRecords(purchases);
+  // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
   try{
     const r = kv.manualSalesInvoices;
@@ -3554,10 +3560,6 @@ let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالي�
 // بعمود آخر (مثل الإجمالي/المدفوع/المتبقي، التي تحتاج حسابات معقّدة) يُبقي الوضع على المسار المحلي.
 const SERVER_SORTABLE_CLIENT_COLS = { name:1, date:1, clientId:1, courseType:1, nationality:1 };
 function clientsQueryIsSimple(){
-  // عزل البيانات: المسار السريع يستعلم مباشرة من السيرفر (كل العملاء بدون فلترة الملكية)، فيجب
-  // تعطيله لأي مستخدم مقيَّد وإجباره على المسار المحلي الكامل الذي يعمل فوق مصفوفة clients
-  // المُفلترة مسبقاً في loadData() لتظهر له بياناته فقط.
-  if(!canSeeAllData()) return false;
   if(showSuspendedOnly || showUnpurchasedBagsOnly) return false;
   if($('#filter-company')?.value) return false;
   if($('#filter-invoice')?.value) return false;
