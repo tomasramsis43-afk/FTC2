@@ -2870,7 +2870,10 @@ function renderDashboard(){
     <div class="card"><div class="k">حصيلة الحقائب (تمريري)</div><div class="v">${fmt(totalBags)}</div></div>
     <div class="card"><div class="k">إجمالي المتبقي على العملاء</div><div class="v red">${fmt(totalRemaining)}</div></div>
   `;
-  $('#quickstats').innerHTML = `
+  // لا تُعرض أرقام الملخص السريع (عميل/مستلم/متبقي) لدور "استقبال" — هذا الشريط موجود في الهيدر
+  // العلوي بمعزل عن تبويب لوحة التحكم نفسه (المحجوب عنهم أصلاً عبر rolePermissions)، فكان يفضح
+  // إجمالي المبالغ المالية للاستقبال رغم عدم وصولهم لأي شاشة مالية أخرى في البرنامج.
+  $('#quickstats').innerHTML = (currentUserRole==='reception') ? '' : `
     <div><div class="n">${c.length}</div><div class="l">عميل</div></div>
     <div><div class="n">${fmt(totalPaid)}</div><div class="l">مستلم</div></div>
     <div><div class="n">${fmt(totalRemaining)}</div><div class="l">متبقي</div></div>
