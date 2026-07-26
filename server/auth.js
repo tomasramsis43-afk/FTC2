@@ -8,6 +8,33 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
+/* ---------------- حساب الطوارئ (Break-glass account) ----------------
+   حساب دخول ثابت مخزّن بالكامل في متغيرات البيئة (اسم المستخدم + hash كلمة
+   المرور)، مستقل تماماً عن جدول server_users وعن قاعدة البيانات بشكل عام.
+   الغرض منه: ضمان إمكانية الدخول للنظام حتى لو تغيّرت قاعدة البيانات بالكامل،
+   أو أُفرغت، أو حصل خطأ في جدول المستخدمين. إن لم تُضبط القيمتان في البيئة،
+   يبقى هذا الحساب معطّلاً تلقائياً بدون أي تأثير على باقي النظام. */
+const EMERGENCY_ADMIN_USERNAME = process.env.EMERGENCY_ADMIN_USERNAME || '';
+const EMERGENCY_ADMIN_PASSWORD_HASH = process.env.EMERGENCY_ADMIN_PASSWORD_HASH || '';
+
+async function verifyEmergencyAdmin(username, password) {
+  if (!EMERGENCY_ADMIN_USERNAME || !EMERGENCY_ADMIN_PASSWORD_HASH) return false;
+  if (username !== EMERGENCY_ADMIN_USERNAME) return false;
+  try {
+    return await bcrypt.compare(password, EMERGENCY_ADMIN_PASSWORD_HASH);
+  } catch (e) {
+    return false;
+  }
+}
+
+function signEmergencyToken(username) {
+  return jwt.sign(
+    { sub: 'emergency-admin', username, role: 'admin', emergency: true },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+}
+
 function signToken(user) {
   return jwt.sign(
     // أضفنا role داخل التوكن نفسه، حتى تصل صلاحية المستخدم (admin/staff) إلى الواجهة
@@ -28,6 +55,17 @@ async function requireAuth(req, res, next) {
     payload = jwt.verify(token, JWT_SECRET);
   } catch (e) {
     return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
+  }
+  // توكن حساب الطوارئ: لا يمر على قاعدة البيانات إطلاقاً، فيستمر في العمل حتى لو
+  // كانت قاعدة البيانات غير متاحة أو تم استبدالها بالكامل. نتحقق فقط أن متغيرات
+  // البيئة لا تزال تطابق نفس اسم المستخدم المذكور في التوكن (تُبطَل الجلسات القديمة
+  // تلقائياً لو غُيّر EMERGENCY_ADMIN_USERNAME لاحقاً).
+  if (payload.emergency && payload.sub === 'emergency-admin') {
+    if (!EMERGENCY_ADMIN_USERNAME || payload.username !== EMERGENCY_ADMIN_USERNAME) {
+      return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
+    }
+    req.user = { sub: 'emergency-admin', username: payload.username, role: 'admin' };
+    return next();
   }
   try {
     const r = await pool.query('SELECT role, token_version FROM server_users WHERE id = $1', [payload.sub]);
@@ -66,4 +104,4 @@ async function verifyPassword(plain, hash) {
   return bcrypt.compare(plain, hash);
 }
 
-module.exports = { signToken, requireAuth, requireRole, hashPassword, verifyPassword };
+module.exports = { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken };
