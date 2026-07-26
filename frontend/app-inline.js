@@ -949,7 +949,7 @@ function applyTheme(isDark){
 /* تطبيق ألوان مخصصة يختارها المستخدم — تُفرض عبر inline style على body فتتغلب على
    ألوان الوضع الليلي/النهاري الافتراضية في styles.css، وتبقى ثابتة في الحالتين معاً */
 function applyThemeColors(colors){
-  const c = Object.assign({}, DEFAULT_SETTINGS.themeColors, colors || (typeof settings!=='undefined' ? settings.themeColors : null));
+  const c = { navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' };
   const s = document.body.style;
   s.setProperty('--navy', c.navy);
   s.setProperty('--navy-dark', c.navyDark);
