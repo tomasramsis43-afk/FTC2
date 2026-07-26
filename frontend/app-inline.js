@@ -3502,9 +3502,9 @@ async function loadReceptionUsersList(force){
   if(!canSeeAllData()) return receptionUsersCache = [];
   if(receptionUsersCache && !force) return receptionUsersCache;
   try{
-    const res = await fetch(API_BASE + '/api/users', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
+    const res = await fetch(API_BASE + '/api/users/reception', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
     const data = await res.json();
-    receptionUsersCache = (res.ok && Array.isArray(data.users)) ? data.users.filter(u=>u.role==='reception') : [];
+    receptionUsersCache = (res.ok && Array.isArray(data.users)) ? data.users : [];
   }catch(e){ receptionUsersCache = receptionUsersCache || []; }
   return receptionUsersCache;
 }
