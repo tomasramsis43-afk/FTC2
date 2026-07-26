@@ -664,8 +664,8 @@ const DEFAULT_SETTINGS = {
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
-  themeColors: { navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' },
-  themePresetId: 'floqastblue',
+  themeColors: { navy:'#374151', navyDark:'#1F2937', gold:'#6B7280', goldDark:'#4B5563', goldSoft:'#9CA3AF', teal:'#4B5563', red:'#52525B' },
+  themePresetId: 'nocolor',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
@@ -708,6 +708,7 @@ const EDITABLE_ROLES = [
 // الألوان الكلاسيكية القديمة (قبل صدور طقم "كحلي نيلي وذهبي" الجديد) — تُستخدم فقط لمقارنة ترقية لمرة واحدة أدناه
 const DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS = { navy:'#2F6C9E', navyDark:'#1C3A52', gold:'#E8951F', goldDark:'#C97814', goldSoft:'#F2B563', teal:'#2B7568', red:'#B03F31' };
 const THEME_PRESETS = [
+  { id:'nocolor', name:'بدون ألوان (رمادي محايد)', colors:{ navy:'#374151', navyDark:'#1F2937', gold:'#6B7280', goldDark:'#4B5563', goldSoft:'#9CA3AF', teal:'#4B5563', red:'#52525B' } },
   { id:'floqastblue', name:'أزرق FloQast (مسطح وعصري)', colors:{ navy:'#2E6BE6', navyDark:'#1B4DB8', gold:'#E8752C', goldDark:'#C85F1E', goldSoft:'#F2A575', teal:'#2FA84F', red:'#E24C3D' } },
   { id:'emeraldterra', name:'زمردي وتراكوتا', colors:{ navy:'#0F766E', navyDark:'#064E45', gold:'#D97757', goldDark:'#B85C3F', goldSoft:'#EDA98A', teal:'#0891B2', red:'#DC2626' } },
   { id:'oceanslate', name:'أزرق محيطي ورملي', colors:{ navy:'#155E75', navyDark:'#0C3B49', gold:'#C9A063', goldDark:'#A17F45', goldSoft:'#E0C99A', teal:'#0D9488', red:'#B4453A' } },
@@ -1411,18 +1412,13 @@ async function loadData(cacheOnly){
       // إكمال أي لون مفقود بالقيمة الافتراضية (توافقاً مع نسخ قديمة محفوظة)
       Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
     }
-    if(!settings.themePresetId) settings.themePresetId = 'floqastblue';
-    // ترقية لمرة واحدة: أي حساب كان لا يزال على الطقم الكلاسيكي القديم (قبل صدور هذا التحديث)
-    // ولم يغيّر ألوانه يدوياً بنفسه، يُنقل تلقائياً للطقم الجديد الافتراضي (أزرق حديث مسطح).
-    // لا تُطبَّق على أي حساب اختار طقماً آخر بنفسه بعد تعديل ألوانه يدوياً.
-    if(!settings._themeDefaultMigratedV3){
-      const oldClassicColors = DEFAULT_SETTINGS_LEGACY_CLASSIC_COLORS;
-      const isUnmodifiedClassic = Object.keys(oldClassicColors).every(k=> settings.themeColors[k]===oldClassicColors[k]);
-      if(isUnmodifiedClassic || !settings.themePresetId){
-        settings.themePresetId = 'floqastblue';
-        settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='floqastblue').colors));
-      }
-      settings._themeDefaultMigratedV3 = true;
+    if(!settings.themePresetId) settings.themePresetId = 'nocolor';
+    // ترقية لمرة واحدة: إزالة كل الألوان من واجهة البرنامج بناءً على طلب صريح — يُنقل
+    // أي حساب (مهما كان الطقم المختار سابقاً) تلقائياً لطقم "بدون ألوان" الرمادي المحايد.
+    if(!settings._themeDefaultMigratedV4){
+      settings.themePresetId = 'nocolor';
+      settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='nocolor').colors));
+      settings._themeDefaultMigratedV4 = true;
       await saveSettings();
     }
     if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
@@ -4117,7 +4113,7 @@ function phoneWithWhatsapp(phone){
    بدل تكرار نفس قواعد CSS يدوياً في كل دالة طباعة على حدة —
    أي تعديل على شكل الطباعة (لون، خط، مسافات) يتم هنا فقط ويظهر في كل المستندات.
    ============================================================ */
-const PRINT_PALETTE = { navy:'#1B4DB8', gold:'#E8752C', red:'#E24C3D', text:'#1B1F26', muted:'#6B7280', border:'#E4E6EB', surfaceAlt:'#F7F8FA' };
+const PRINT_PALETTE = { navy:'#374151', gold:'#6B7280', red:'#52525B', text:'#1B1F26', muted:'#6B7280', border:'#E4E6EB', surfaceAlt:'#F7F8FA' };
 
 function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, variant = 'full'} = {}){
   const p = PRINT_PALETTE;
