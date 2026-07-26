@@ -2857,7 +2857,6 @@ function applyRolePermissions(){
 function pinNavTabsToRightEdge(){
   const nav = document.querySelector('nav.tabs');
   if(!nav) return;
-  if(window.innerWidth > 900) return; // هذا السلوك خاص بوضع الشريط الأفقي في الجوال فقط
   requestAnimationFrame(()=>{
     // نجرّب القيمة القياسية أولاً (0)، ثم نتحقق أن أول عنصر فعلاً ظاهر بالكامل عند الحافة اليمنى
     nav.scrollLeft = 0;
