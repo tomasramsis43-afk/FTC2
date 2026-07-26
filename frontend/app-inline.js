@@ -649,7 +649,12 @@ const DEFAULT_SETTINGS = {
     accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
     // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط ولا شيء غيرها إطلاقاً — بناءً على طلب صريح.
     reception: ['clients']
-  }
+  },
+  // مهلة تعديل/حذف قابلة للتغيير من الإعدادات في أي وقت (بالساعات، من وقت تسجيل العميل نفسه)،
+  // خاصة بدور "استقبال" فقط. بعدها يتحول السجل لعرض فقط لهذا الدور حتى يتدخل الأدمن.
+  receptionEditDeleteWindowHours: 5,
+  receptionAllowEdit: true,
+  receptionAllowDelete: true,
 };
 /* كل الأقسام (التبويبات) المتاحة في البرنامج، وأسماؤها المعروضة — تُستخدم في بناء
    جدول صلاحيات الأدوار في الإعدادات، وكمرجع كامل للأقسام الموجودة فعلياً. */
@@ -1177,27 +1182,28 @@ function filterOwnRecords(arr){
   return arr.filter(r=> r && r.createdBy && r.createdBy===currentUser);
 }
 
-/* ================= قيود خاصة بدور "الاستقبال" على شيت العملاء =================
-   1) ممنوع تماماً من حذف أي بيانات مهما كان الوقت — الحذف للأدمن فقط دائماً.
-   2) يقدر يعدّل سجل العميل (مثلاً تصحيح قيمة مدفوعة) فقط خلال 5 ساعات من وقت تسجيله (createdAt)،
-      بعدها يتحول السجل لعرض فقط بالنسبة له حتى يعدّله الأدمن بنفسه لاحقاً. */
-const RECEPTION_EDIT_WINDOW_MS = 5 * 60 * 60 * 1000;
-function canDeleteClients(){ return currentUserRole!=='reception'; }
-function canReceptionEditClient(client){
-  if(currentUserRole!=='reception') return true; // القيد الزمني خاص بدور الاستقبال فقط
-  if(!client || !client.createdAt) return false; // بدون تاريخ تسجيل معروف: يُمنع التعديل احترازياً
-  return (Date.now() - client.createdAt) <= RECEPTION_EDIT_WINDOW_MS;
+/* ================= قيود خاصة بدور "الاستقبال" على شيت العملاء (قابلة للتعديل من الإعدادات) =================
+   settings.receptionEditDeleteWindowHours: عدد الساعات المسموح بها للتعديل/الحذف بعد وقت تسجيل
+   العميل (createdAt). settings.receptionAllowEdit / receptionAllowDelete: تفعيل/تعطيل كل ميزة
+   على حدة. بعد انتهاء المهلة (أو لو الميزة معطَّلة أصلاً) يتحول السجل لعرض فقط لهذا الدور حتى
+   يتدخل الأدمن، الذي يبقى غير متأثر بهذه القيود مطلقاً في كل الأحوال. */
+function receptionWindowMs(){
+  const h = (settings && typeof settings.receptionEditDeleteWindowHours==='number') ? settings.receptionEditDeleteWindowHours : 5;
+  return Math.max(0, h) * 60 * 60 * 1000;
 }
-// حذف بيانات العملاء ممنوع تماماً على أي مستخدم مقيَّد (غير أدمن/محاسب)، إلا خلال أول 5 ساعات
-// فقط من تسجيل العميل نفسه، وبشرط أن يكون هو من سجَّله أصلاً (createdBy). بعد انقضاء 5 ساعات،
-// يعود حق الحذف حصراً للمدير العام أو المحاسب. هذا لا يمنع التعديل (تحديث القيم مثلاً)، فقط الحذف.
-const SELF_DELETE_WINDOW_MS = 5*60*60*1000; // 5 ساعات
+function withinReceptionWindow(client){
+  if(!client || !client.createdAt) return false; // بدون تاريخ تسجيل معروف: يُمنع احترازياً
+  return (Date.now() - client.createdAt) <= receptionWindowMs();
+}
+function canReceptionEditClient(client){
+  if(currentUserRole!=='reception') return true; // القيد خاص بدور الاستقبال فقط
+  if(settings && settings.receptionAllowEdit===false) return false;
+  return withinReceptionWindow(client);
+}
 function canDeleteClientRecord(client){
-  if(!client) return false;
-  if(canSeeAllData()) return true;
-  if(client.createdBy !== currentUser) return false;
-  const createdAt = client.createdAt || 0;
-  return (Date.now() - createdAt) <= SELF_DELETE_WINDOW_MS;
+  if(currentUserRole!=='reception') return true; // القيد خاص بدور الاستقبال فقط
+  if(settings && settings.receptionAllowDelete===false) return false;
+  return withinReceptionWindow(client);
 }
 
 /* دالة تأخير التنفيذ (debounce) — تُستخدم مع حقول البحث النصي حتى لا يُعاد رسم الجداول الكبيرة
@@ -1347,6 +1353,9 @@ async function loadData(cacheOnly){
       settings.receptionLockedToClientsOnlyV1 = true;
       await saveSettings();
     }
+    if(typeof settings.receptionEditDeleteWindowHours!=='number' || settings.receptionEditDeleteWindowHours<0) settings.receptionEditDeleteWindowHours = DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
+    if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
+    if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
     const r = kv.bagStock;
@@ -3673,12 +3682,12 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-            ${(c.taxInvoiceNo && canDeleteClients()) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
+            ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
             ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
             ${c.suspended
               ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
               : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
-            ${canDeleteClients() ? `<button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>` : ''}
+            ${canDeleteClientRecord(c) ? `<button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>` : ''}
           </div>
         </div>
       </td>
@@ -3728,9 +3737,12 @@ $('#btn-clear-selection').addEventListener('click', ()=>{
   renderTable();
 });
 $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
-  if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
-  const ids = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
-  if(!ids.length){ showToast('لا يوجد عملاء محددين'); return; }
+  const allIds = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
+  if(!allIds.length){ showToast('لا يوجد عملاء محددين'); return; }
+  const ids = allIds.filter(id=>canDeleteClientRecord(clients.find(c=>c.id===id)));
+  const blockedCount = allIds.length - ids.length;
+  if(!ids.length){ showToast(blockedCount ? `🔒 كل السجلات المحددة (${blockedCount}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك` : 'لا يوجد عملاء محددين'); return; }
+  if(blockedCount) showToast(`⚠️ تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
   const namesPreview = clients.filter(c=>ids.includes(c.id)).slice(0,5).map(c=>c.name).join('، ');
   const extra = ids.length>5 ? ` وآخرين (${ids.length-5})` : '';
   if(!await customConfirm(`تأكيد حذف ${ids.length} عميل دفعة واحدة؟ (${namesPreview}${extra})\nسيُحذف أيضاً أي ترحيل مالي تلقائي مرتبط بكل عميل منهم. هذا الإجراء لا يمكن التراجع عنه.`)) return;
@@ -3968,8 +3980,8 @@ document.addEventListener('click', async e=>{
   const delInvoiceId = e.target.dataset.delinvoice;
   if(invId){ await printInvoice(invId); return; }
   if(delInvoiceId){
-    if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات — راجع الأدمن'); return; }
     const c = clients.find(x=>x.id===delInvoiceId);
+    if(!canDeleteClientRecord(c)){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
     if(!c || !c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل'); return; }
     const invLabel = formatInvoiceNo(c.taxInvoiceNo);
     const reason = await customPrompt(`توثيقاً للمعايير المحاسبية، لا يمكن حذف رقم الفاتورة التسلسلي (${invLabel}) نهائياً أو إعادة استخدامه — سيتم حذف الفاتورة من سجل العميل "${c.name}" فقط مع الاحتفاظ بالرقم والسبب في سجل الفواتير المحذوفة. عند طباعة فاتورة جديدة لهذا العميل لاحقاً سيُمنح رقماً تسلسلياً جديداً.\nيرجى كتابة سبب الحذف (إلزامي):`, {title:'سبب حذف الفاتورة', required:true, placeholder:'اكتب سبب الحذف هنا...'});
@@ -4028,7 +4040,7 @@ document.addEventListener('click', async e=>{
     }
   }
   if(delId){
-    if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
+    if(!canDeleteClientRecord(clients.find(c=>c.id===delId))){ showToast('🔒 غير مسموح لصلاحيتك بحذف هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
     if(await customConfirm('تأكيد حذف هذا السجل؟ سيُحذف أيضاً أي ترحيل مالي مرتبط به.')){
       const removedClient = clients.find(c=>c.id===delId);
       snapshotState(`حذف عميل: ${removedClient?.name || delId}`);
@@ -4960,13 +4972,16 @@ $('#bulk-delete-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-bulk-delete-save').addEventListener('click', async ()=>{
-  if(!canDeleteClients()){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات العملاء — راجع الأدمن'); return; }
   const rows = [...$('#bulk-delete-table-body').querySelectorAll('tr')];
   const idsInBatch = [...new Set(rows.map(r=>r.querySelector('.bd-id').value.trim()).filter(Boolean))];
   if(!idsInBatch.length){ showToast('لم تُدخل أي رقم هوية'); return; }
-  const matched = clients.filter(c=>idsInBatch.includes(c.clientId));
+  const matchedAll = clients.filter(c=>idsInBatch.includes(c.clientId));
   const notFoundCount = idsInBatch.filter(id=>!clients.some(c=>c.clientId===id)).length;
-  if(!matched.length){ showToast('لم يتم العثور على أي عميل بأرقام الهوية المدخلة'); return; }
+  if(!matchedAll.length){ showToast('لم يتم العثور على أي عميل بأرقام الهوية المدخلة'); return; }
+  const matched = matchedAll.filter(c=>canDeleteClientRecord(c));
+  const blockedCount = matchedAll.length - matched.length;
+  if(!matched.length){ showToast(`🔒 كل السجلات المطابقة (${matchedAll.length}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك`); return; }
+  if(blockedCount) showToast(`⚠️ تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
   const namesPreview = matched.slice(0,5).map(c=>c.name).join('، ');
   const extra = matched.length>5 ? ` وآخرين (${matched.length-5})` : '';
   const notFoundMsg = notFoundCount ? `\n(تنبيه: ${notFoundCount} رقم هوية غير موجودين أصلاً بالنظام وسيتم تجاهلهم)` : '';
@@ -5740,6 +5755,7 @@ function renderSettings(){
   renderServerSyncPanel();
   renderPinLockPanel();
   renderRolePermissionsPanel();
+  renderReceptionRestrictionsPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -5790,6 +5806,28 @@ if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventList
   await logAudit('edit','الإعدادات','تم تعديل صلاحيات الأدوار (أي أقسام تظهر لكل دور)');
   applyRolePermissions();
   showToast('تم حفظ الصلاحيات');
+});
+/* ---------------- قيود دور الاستقبال (مهلة التعديل/الحذف بالساعات، قابلة للتغيير في أي وقت) ---------------- */
+function renderReceptionRestrictionsPanel(){
+  const hoursInput = $('#rp-reception-window-hours');
+  const editCb = $('#rp-reception-allow-edit');
+  const delCb = $('#rp-reception-allow-delete');
+  if(!hoursInput || !editCb || !delCb) return;
+  hoursInput.value = (typeof settings.receptionEditDeleteWindowHours==='number') ? settings.receptionEditDeleteWindowHours : DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
+  editCb.checked = settings.receptionAllowEdit !== false;
+  delCb.checked = settings.receptionAllowDelete !== false;
+}
+if($('#btn-save-reception-restrictions')) $('#btn-save-reception-restrictions').addEventListener('click', async ()=>{
+  const hoursRaw = num($('#rp-reception-window-hours').value);
+  const hours = (isFinite(hoursRaw) && hoursRaw>=0) ? hoursRaw : 5;
+  settings.receptionEditDeleteWindowHours = hours;
+  settings.receptionAllowEdit = !!$('#rp-reception-allow-edit').checked;
+  settings.receptionAllowDelete = !!$('#rp-reception-allow-delete').checked;
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تم تعديل قيود دور الاستقبال: المهلة ${hours} ساعة، التعديل ${settings.receptionAllowEdit?'مسموح':'ممنوع'}، الحذف ${settings.receptionAllowDelete?'مسموح':'ممنوع'}`);
+  renderReceptionRestrictionsPanel();
+  showToast('تم حفظ قيود الاستقبال');
+  renderTable();
 });
 async function renderLoginHistory(){
   const el = $('#login-history-list');

@@ -4845,6 +4845,20 @@
       <div class="table-scroll table-scroll-compact" id="role-permissions-table-wrap"></div>
       <button class="btn btn-primary btn-sm" id="btn-save-role-permissions" style="margin-top:12px;">حفظ الصلاحيات</button>
     </div>
+    <div class="panel" id="panel-reception-restrictions">
+      <h3 style="margin:0 0 4px;">⏱️ قيود دور الاستقبال على شيت العملاء</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تحكّم في المهلة المسموح بها لدور "استقبال" لتعديل أو حذف سجل عميل بعد تسجيله، وفي إتاحة كل ميزة من عدمها. بعد انتهاء المهلة المحددة (محسوبة من وقت تسجيل العميل نفسه)، يتحول السجل لعرض فقط بالنسبة لهذا الدور، ولا يمكنه تعديله أو حذفه إلا الأدمن. يمكنك تعديل هذه القيم في أي وقت.</p>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+        <label style="display:flex; align-items:center; gap:6px;">عدد الساعات المسموح بها بعد التسجيل:
+          <input type="number" id="rp-reception-window-hours" min="0" step="0.5" style="width:90px;">
+        </label>
+      </div>
+      <div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:14px;">
+        <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="rp-reception-allow-edit"> السماح بالتعديل خلال المهلة</label>
+        <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="rp-reception-allow-delete"> السماح بالحذف خلال المهلة</label>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-save-reception-restrictions">حفظ قيود الاستقبال</button>
+    </div>
     <div class="panel" id="panel-login-history">
       <h3 style="margin:0 0 4px;">🕓 سجل الدخول والجلسات</h3>
       <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
