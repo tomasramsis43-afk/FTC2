@@ -2320,6 +2320,31 @@
       <div id="bankrecon-wrap"><div class="empty-state" style="padding:20px;"><div class="big">🏦</div>لم يتم استيراد كشف حساب بنكي بعد</div></div>
     </div>
 
+    <div class="panel" style="border-right:4px solid var(--red); margin-bottom:14px;" id="reception-settlement-panel">
+      <h3 style="margin:0 0 4px;">صندوق تسويات الاستقبال</h3>
+      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">كل دفعة نقدية يسجّلها موظف استقبال لعميل جديد تُرحَّل تلقائياً لحساب الخزنة في النظام، لكنها تبقى هنا "معلّقة" حتى يستلمها المسؤول عن الخزنة فعلياً (نقداً في اليد) ويؤكد ذلك بالضغط على "تسوية" — بعدها تختفي من هذه القائمة وتبقى محسوبة في أرصدة الخزنة كالمعتاد.</p>
+      <div class="computed" style="margin-bottom:10px;">
+        <span>عمليات معلّقة بانتظار التسوية: <b class="mono" id="settlement-pending-count" style="color:var(--red);">0</b></span>
+        <span>إجمالي المبلغ المعلّق: <b class="mono" id="settlement-pending-total">0 ﷼</b></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>العميل</th>
+              <th>رقم الهوية</th>
+              <th>المبلغ</th>
+              <th>موظف الاستقبال</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="settlement-table-body"></tbody>
+        </table>
+        <div class="empty-state" id="settlement-empty" style="padding:16px; display:none;">لا توجد عمليات معلّقة حالياً — كل الدفعات النقدية مُسوّاة.</div>
+      </div>
+    </div>
+
     <div class="grid-cards" id="vault-cards"></div>
 
     <div class="panel">
@@ -4603,6 +4628,7 @@
         <option value="delete">حذف</option>
       </select>
       <select id="audit-filter-section"><option value="">—</option><option value="الإعدادات">الإعدادات</option><option value="العملاء">العملاء</option><option value="النظام">النظام</option><option value="مخزون الحقائب">مخزون الحقائب</option><option value="الحركات المالية">الحركات المالية</option><option value="تحويلات الشركات">تحويلات الشركات</option><option value="فواتير الدورات">فواتير الدورات</option><option value="الدورات">الدورات</option><option value="المشتريات">المشتريات</option></select>
+      <select id="audit-filter-user"><option value="">كل المستخدمين</option></select>
       <input type="date" id="audit-date-from" title="من تاريخ">
       <input type="date" id="audit-date-to" title="إلى تاريخ">
       <span class="spacer"></span>

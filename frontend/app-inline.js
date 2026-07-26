@@ -2665,6 +2665,10 @@ async function cleanupDuplicatePaymentMethods(){
       const ch = (settings.channels||[]).find(c=>c.dest===t.destination);
       if(ch){ t.method = ch.name; vaultChanged = true; inferredCount++; }
     }
+    // ترحيل بأثر رجعي: أي حركة خزنة قديمة (موجودة قبل ميزة "صندوق تسويات الاستقبال") لا
+    // تحمل حقل settled إطلاقاً تُعتبر مُسوّاة تلقائياً — فقط الحركات الجديدة بعد تفعيل
+    // الميزة تبدأ فعلياً كـ"معلّقة" (settled:false) حتى تظهر في صندوق التسويات
+    if(t.settled === undefined){ t.settled = true; vaultChanged = true; }
   });
   bagStock.forEach(b=>{
     if(!b.method) return;
@@ -7624,7 +7628,13 @@ function removeClientLedgerEntries(clientRecordId){
 function syncClientLedgerEntry(client){
   // نحافظ على الرقم التسلسلي الرسمي القديم لهذين القيدين إن كانا موجودين مسبقاً (يُعاد توليدهما عند كل حفظ لبيانات العميل)
   const prevSeqs = {};
-  vaultTx.filter(t=>t.autoClientId===client.id).forEach(t=>{ prevSeqs[t.id] = t.seq; });
+  // نحافظ أيضاً على حالة "تسوية الاستقبال" (settled) القديمة، حتى لا يفقد المسؤول عن الخزنة
+  // تأكيده السابق لاستلام النقدية فعلياً لمجرد تعديل بسيط في بيانات العميل لاحقاً
+  const prevSettle = {};
+  vaultTx.filter(t=>t.autoClientId===client.id).forEach(t=>{
+    prevSeqs[t.id] = t.seq;
+    prevSettle[t.id] = { settled: !!t.settled, settledBy: t.settledBy||'', settledAt: t.settledAt||null };
+  });
   removeClientLedgerEntries(client.id);
   // عميل مُرحَّلة قيمته من حوالة شركة (companyTransferAllocated): المبلغ مُرحَّل بالفعل مرة واحدة ضمن
   // القيد المالي الموحّد لكامل الحوالة (companyTransferId) — فلا نُنشئ له قيداً فردياً إضافياً هنا
@@ -7649,7 +7659,10 @@ function syncClientLedgerEntry(client){
       networkInvoice: dest==='network' ? (client.networkInvoice||'') : '',
       notes: dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : ''),
       autoClientId: client.id,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : false) : true,
+      settledBy: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledBy : '') : '',
+      settledAt: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledAt : null) : null,
     });
   }
   // نفس استثناء عميل حوالة الشركة أعلاه، يُطبَّق أيضاً على الدفعة الثانية: بدونه كان يُنشأ قيد
@@ -7673,11 +7686,60 @@ function syncClientLedgerEntry(client){
       networkInvoice: dest2==='network' ? (client.networkInvoice2||'') : '',
       notes: dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين',
       autoClientId: client.id,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : false) : true,
+      settledBy: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledBy : '') : '',
+      settledAt: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledAt : null) : null,
     });
   }
 }
-/* اتجاه يومي (وارد/صادر/صافي) لنتائج الفلتر الحالي في شاشة الحركات المالية */
+
+/* ---------------- صندوق تسويات الاستقبال ----------------
+   الدفعات النقدية التي يسجّلها موظفو الاستقبال تُرحَّل تلقائياً كحركة "خزنة" (دون تدخل
+   يدوي) بمجرد إضافة العميل — لكنها تبقى "معلّقة" حتى يؤكد المسؤول عن الخزنة استلامه
+   الفعلي (اليدوي) للنقدية بالضغط على "تسوية". هذا لا يغيّر أي مبلغ أو رصيد؛ المبلغ محسوب
+   بالفعل ضمن أرصدة الخزنة من لحظة إنشائه — الغرض فقط تتبّع تسليم/استلام النقدية فعلياً. */
+function pendingSettlementRows(){
+  return vaultTx.filter(t=> (t.destination||'vault')==='vault' && t.autoClientId && !t.deletedAt && !t.settled)
+    .sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+}
+function renderSettlementPanel(){
+  const body = $('#settlement-table-body');
+  if(!body) return;
+  const rows = pendingSettlementRows();
+  $('#settlement-pending-count').textContent = rows.length;
+  $('#settlement-pending-total').textContent = fmt(rows.reduce((s,t)=>s+num(t.amount),0));
+  $('#settlement-empty').style.display = rows.length ? 'none' : 'block';
+  body.innerHTML = rows.map(t=>{
+    const client = clients.find(c=>c.id===t.autoClientId);
+    const recepUser = client ? (client.createdBy || '—') : '—';
+    return `
+    <tr>
+      <td class="mono" data-label="التاريخ">${escapeHtml(t.date||'')}</td>
+      <td data-label="العميل">${escapeHtml(t.clientName||'')}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(t.clientId||'—')}</td>
+      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
+      <td data-label="موظف الاستقبال">${escapeHtml(recepUser)}</td>
+      <td data-label=""><button type="button" class="btn btn-gold btn-sm" data-settle-id="${t.id}">تسوية</button></td>
+    </tr>`;
+  }).join('');
+}
+$('#settlement-table-body')?.addEventListener('click', async e=>{
+  const id = e.target.dataset.settleId;
+  if(!id) return;
+  const t = vaultTx.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm(`تأكيد استلام مبلغ ${fmt(num(t.amount))} ﷼ نقداً من العميل "${t.clientName||''}" فعلياً في الخزنة؟`)) return;
+  snapshotState(`تسوية دفعة استقبال: ${t.clientName||''} (${fmt(num(t.amount))})`);
+  t.settled = true;
+  t.settledBy = currentUser;
+  t.settledAt = Date.now();
+  await saveVaultTx();
+  await logAudit('edit','الحركات المالية', `تمت تسوية دفعة نقدية معلّقة للعميل: ${t.clientName||''} بمبلغ ${fmt(num(t.amount))} ﷼`);
+  renderSettlementPanel();
+  showToast('تمت التسوية بنجاح');
+});
+
 function vaultFilteredDailyTrend(rows){
   const map = {};
   rows.forEach(t=>{
@@ -7795,6 +7857,7 @@ function currentVaultPageSize(){
 function renderVault(){
   renderVaultLockStatus();
   if(typeof renderBankRecon==='function') renderBankRecon();
+  if(typeof renderSettlementPanel==='function') renderSettlementPanel();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   const dl = $('#dl-clients');
   dl.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
