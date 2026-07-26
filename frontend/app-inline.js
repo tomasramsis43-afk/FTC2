@@ -856,6 +856,14 @@ const I18N = {
     btnDownloadTemplate:'تحميل نموذج استيراد المتدربين', btnExportCsvFiltered:'تصدير CSV (حسب الفلتر الحالي)',
     compSummaryTitle:'ملخص أعداد المتدربين حسب الشركة (إجمالي كل الحوالات)',
     compSummaryHint:'جدول ثابت يعرض لكل شركة إجمالي عدد متدربيها في كل حوالاتها المسجّلة، وكم منهم أخذ الدورة فعلاً (تاريخ دورته الفعلي وصل أو فات) وكم لم يأخذها بعد — بغض النظر عن أي فلترة مستخدمة أدناه في سجل الحوالات.',
+    closeRingLabel:'نسبة تحصيل المستحقات', closeRingDone:'مكتمل', closeRingPending:'غير مكتمل',
+    closeTarget:'الهدف المعتمد: ١٠٠٪ تحصيل', closeRemainingPrefix:'المتبقي تحصيله من', closeRemainingSuffix:'عميل',
+    closeStatusPaid:'مسدد بالكامل', closeStatusOwe:'متبقي عليه', closeStatusOverdue:'متأخر السداد',
+    closeMetricCollections:'تحصيل مستحقات العملاء', closeMetricBags:'تجهيز الحقائب المطلوب شراؤها',
+    closeMetricFullyPaid:'العملاء المسددون بالكامل', closeMetricAlerts:'تنبيهات مفتوحة تحتاج متابعة',
+    closeEntitiesTitle:'الدورات النشطة حسب حالة الاكتمال',
+    closeEntityEarly:'مبكرة', closeEntityOnTrack:'على الموعد', closeEntityNearFull:'قاربت الاكتمال', closeEntityComplete:'مكتملة العدد',
+    closeEntityOf:'من', closeEntityCourses:'دورة',
   },
   en: {
     appTitle:'Client & Course Management System', appSubtitle:'A digital alternative to Excel — clients, courses, bags, and payments',
@@ -898,6 +906,14 @@ const I18N = {
     btnDownloadTemplate:'Download Trainee Import Template', btnExportCsvFiltered:'Export CSV (current filter)',
     compSummaryTitle:'Trainee Count Summary by Company (all transfers total)',
     compSummaryHint:'A fixed table showing, for each company, the total number of trainees across all its recorded transfers, how many have actually taken the course (actual course date has passed or arrived) and how many have not yet — regardless of any filter used below in the transfers log.',
+    closeRingLabel:'Collection completion', closeRingDone:'Complete', closeRingPending:'Incomplete',
+    closeTarget:'Target: 100% collected', closeRemainingPrefix:'Remaining across', closeRemainingSuffix:'client(s)',
+    closeStatusPaid:'Fully paid', closeStatusOwe:'Balance due', closeStatusOverdue:'Overdue',
+    closeMetricCollections:'Client collections', closeMetricBags:'Bags pending purchase prepared',
+    closeMetricFullyPaid:'Fully paid clients', closeMetricAlerts:'Open alerts needing follow-up',
+    closeEntitiesTitle:'Active courses by completion status',
+    closeEntityEarly:'Early', closeEntityOnTrack:'On track', closeEntityNearFull:'Nearly full', closeEntityComplete:'Complete',
+    closeEntityOf:'of', closeEntityCourses:'course(s)',
   }
 };
 function tr(key){ return (I18N[currentLang] && I18N[currentLang][key]) || I18N.ar[key] || key; }
@@ -2899,6 +2915,7 @@ function renderDashboard(){
   drawDonut('#chart-channel', groupChannelAmounts(c), 20, v=>fmt(v)+' ﷼');
   renderCfoDashboard();
   renderSmartAlerts();
+  renderCloseOverview(c, totalPaid, totalRemaining);
 }
 
 /* ============ التنبيهات الذكية (Smart Alerts) ============ */
@@ -2964,6 +2981,7 @@ function renderSmartAlerts(){
     }
   }
 
+  window.__openAlertsCount = alerts.length;
   if(!alerts.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--red);">
     <h3 style="margin:0 0 8px;">🔔 تنبيهات تحتاج انتباهك</h3>
@@ -2990,6 +3008,133 @@ $('#smart-alerts-panel')?.addEventListener('click', async e=>{
   document.querySelector(`nav.tabs button[data-view="${item.dataset.saView}"]`)?.click();
 });
 
+
+/* ============ لوحة "النظرة التنفيذية" — عصرية بطابع لوحات إقفال الحسابات ============ */
+function closeRingSvg(pct, size, strokeW, color){
+  const p = Math.max(0, Math.min(100, pct));
+  const r = (size/2) - (strokeW/2) - 1;
+  const circumference = 2 * Math.PI * r;
+  const dash = (p/100) * circumference;
+  return `<svg viewBox="0 0 ${size} ${size}">
+    <circle class="close-ring-track" cx="${size/2}" cy="${size/2}" r="${r}" stroke-width="${strokeW}"></circle>
+    <circle class="close-ring-fill" cx="${size/2}" cy="${size/2}" r="${r}" stroke-width="${strokeW}"
+      style="stroke:${color}; stroke-dasharray:${dash} ${circumference};"></circle>
+  </svg>`;
+}
+function closeEntityRingSvg(pct, color){
+  const size=44, strokeW=5;
+  const r = (size/2) - (strokeW/2);
+  const circumference = 2 * Math.PI * r;
+  const dash = (Math.max(0,Math.min(100,pct))/100) * circumference;
+  return `<svg viewBox="0 0 ${size} ${size}">
+    <circle class="close-entity-ring-track" cx="${size/2}" cy="${size/2}" r="${r}"></circle>
+    <circle class="close-entity-ring-fill" cx="${size/2}" cy="${size/2}" r="${r}"
+      style="stroke:${color}; stroke-dasharray:${dash} ${circumference};"></circle>
+  </svg>`;
+}
+function renderCloseOverview(c, totalPaid, totalRemaining){
+  const el = $('#close-overview');
+  if(!el) return;
+  const overdueDays = settings.paymentOverdueDays || 30;
+  const active = c.filter(x=>!x.suspended && !x.cancelled);
+  const fullyPaid = active.filter(x=> remaining(x) <= 0);
+  const owing = active.filter(x=> remaining(x) > 0);
+  const overdue = owing.filter(x=> daysSinceDate(x.date) > overdueDays);
+  const onTrack = owing.filter(x=> daysSinceDate(x.date) <= overdueDays);
+
+  const collectionBase = totalPaid + totalRemaining;
+  const collectionPct = collectionBase > 0 ? (totalPaid/collectionBase)*100 : 100;
+  const isDone = collectionPct >= 99.5;
+
+  const purchasedBuy = clients.filter(x=>x.bagSource==='buy' && x.bagStatus==='purchased' && !x.suspended);
+  const pendingBuy = clients.filter(x=>x.bagSource==='buy' && x.bagStatus!=='purchased' && !x.suspended);
+  const bagsBase = purchasedBuy.length + pendingBuy.length;
+  const bagsPct = bagsBase > 0 ? (purchasedBuy.length/bagsBase)*100 : 100;
+
+  const fullyPaidPct = active.length > 0 ? (fullyPaid.length/active.length)*100 : 100;
+  const alertsCount = window.__openAlertsCount || 0;
+  const alertsPct = alertsCount === 0 ? 100 : Math.max(10, 100 - alertsCount*15);
+
+  const metric = (name, tag, num, pct, warn) => `
+    <div class="close-metric">
+      <div class="close-metric-head">
+        <span class="close-metric-name">${escapeHtml(name)}</span>
+        ${tag ? `<span class="close-metric-tag">${escapeHtml(tag)}</span>` : ''}
+      </div>
+      <div class="close-metric-num">${num}</div>
+      <div class="close-metric-track"><div class="close-metric-fill ${warn?'warn':''}" style="width:${pct.toFixed(0)}%"></div></div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="close-ring-col">
+      <div class="close-ring-wrap">
+        ${closeRingSvg(collectionPct, 168, 10, isDone ? 'var(--teal)' : 'var(--gold)')}
+        <div class="close-ring-center">
+          <div class="close-ring-pct">${collectionPct.toFixed(0)}<span>%</span></div>
+          <div class="close-ring-label">${tr('closeRingLabel')}</div>
+        </div>
+      </div>
+      <div class="close-status-chip ${isDone?'done':'pending'}">${isDone ? tr('closeRingDone') : tr('closeRingPending')}</div>
+      <div class="close-target">${tr('closeTarget')}</div>
+      <div class="close-remaining">${tr('closeRemainingPrefix')} <b>${fmt(totalRemaining)}</b> ${tr('closeRemainingSuffix')} (${owing.length})</div>
+    </div>
+    <div class="close-body">
+      <div class="close-status-row">
+        <div class="close-status-item teal"><span class="dot"></span><span class="n">${fullyPaid.length}</span><span class="l">${tr('closeStatusPaid')}</span></div>
+        <div class="close-status-item navy"><span class="dot"></span><span class="n">${onTrack.length}</span><span class="l">${tr('closeStatusOwe')}</span></div>
+        <div class="close-status-item gold"><span class="dot"></span><span class="n">${overdue.length}</span><span class="l">${tr('closeStatusOverdue')}</span></div>
+      </div>
+      <div class="close-metrics-grid">
+        ${metric(tr('closeMetricCollections'), null, fmt(totalPaid)+' / '+fmt(collectionBase), collectionPct, collectionPct<80)}
+        ${metric(tr('closeMetricBags'), pendingBuy.length? `${pendingBuy.length} ${currentLang==='ar'?'متبقية':'left'}`:null, `${purchasedBuy.length} / ${bagsBase}`, bagsPct, bagsPct<80)}
+        ${metric(tr('closeMetricFullyPaid'), null, `${fullyPaid.length} / ${active.length}`, fullyPaidPct, fullyPaidPct<70)}
+        ${metric(tr('closeMetricAlerts'), null, String(alertsCount), alertsPct, alertsCount>0)}
+      </div>
+    </div>
+  `;
+  renderCloseEntities();
+}
+function renderCloseEntities(){
+  const panel = $('#close-entities-panel');
+  const grid = $('#close-entities-grid');
+  if(!panel || !grid) return;
+  if(typeof courseSessions==='undefined' || typeof groupClientsByCourseNumber!=='function'){ panel.style.display='none'; return; }
+  const sessionsWithCapacity = courseSessions.filter(s=>s.capacity);
+  if(!sessionsWithCapacity.length){ panel.style.display='none'; return; }
+  const byCourseNumber = groupClientsByCourseNumber();
+  const buckets = { early:[], onTrack:[], nearFull:[], complete:[] };
+  sessionsWithCapacity.forEach(s=>{
+    const enrolled = (byCourseNumber.get(s.courseNumber)||[]).filter(c=>!c.cancelled).length;
+    const ratio = s.capacity ? enrolled/s.capacity : 0;
+    if(ratio >= 1) buckets.complete.push(s);
+    else if(ratio >= 0.8) buckets.nearFull.push(s);
+    else if(ratio >= 0.25) buckets.onTrack.push(s);
+    else buckets.early.push(s);
+  });
+  const total = sessionsWithCapacity.length;
+  panel.style.display = '';
+  const card = (key, label, color) => {
+    const n = buckets[key].length;
+    const pct = total ? (n/total)*100 : 0;
+    return `<div class="close-entity-card">
+      <div class="close-entity-info">
+        <div class="l"><span class="dot" style="background:${color}"></span>${escapeHtml(label)}</div>
+        <div class="n">${n}</div>
+        <div class="of">${tr('closeEntityOf')} ${total} ${tr('closeEntityCourses')}</div>
+      </div>
+      <div class="close-entity-ring">
+        ${closeEntityRingSvg(pct, color)}
+        <div class="close-entity-ring-txt">${pct.toFixed(0)}%</div>
+      </div>
+    </div>`;
+  };
+  grid.innerHTML = [
+    card('early', tr('closeEntityEarly'), 'var(--gold-soft)'),
+    card('onTrack', tr('closeEntityOnTrack'), 'var(--navy)'),
+    card('nearFull', tr('closeEntityNearFull'), 'var(--gold)'),
+    card('complete', tr('closeEntityComplete'), 'var(--teal)')
+  ].join('');
+}
 
 /* ================= لوحة تحكم CFO-Style: أيقونات + دوال مساعدة ================= */
 const CFO_ICONS = {
