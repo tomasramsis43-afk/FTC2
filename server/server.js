@@ -131,6 +131,21 @@ app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   }
 });
 
+// GET /api/users/reception -> قائمة مختصرة (اسم المستخدم + الاسم الظاهر فقط) بموظفي دور الاستقبال حصراً،
+// متاحة للمدير والمحاسب معاً (على عكس /api/users الكاملة المقصورة على المدير فقط) — تُستخدم فقط لتعبئة
+// فلتر "موظفي الاستقبال" في شيت العملاء وشيت الحركات المالية، ولا تُرجع أي بيانات حساسة أخرى.
+app.get('/api/users/reception', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT username, display_name FROM server_users WHERE role = 'reception' ORDER BY created_at ASC"
+    );
+    res.json({ users: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب قائمة موظفي الاستقبال' });
+  }
+});
+
 // POST /api/users  body: { username, password, displayName, role } -> إنشاء مستخدم جديد أو تحديث كلمة مرور/صلاحية مستخدم موجود
 app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   const { username, password, displayName, role } = req.body || {};
