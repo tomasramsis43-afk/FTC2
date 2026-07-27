@@ -245,12 +245,14 @@ async function syncData() {
 }
 
 async function getPendingSync() {
-  // محاكاة جلب البيانات المعلقة من قاعدة البيانات
+  // لا يوجد حالياً مخزن بيانات معلقة — Background Sync غير مفعّل بعد.
+  // عند تفعيله مستقبلاً: اقرأ البيانات من IndexedDB هنا وأرجعها.
   return [];
 }
 
 async function clearPendingSync() {
-  // محاكاة حذف البيانات المعلقة
+  // لا يوجد حالياً مخزن بيانات معلقة — Background Sync غير مفعّل بعد.
+  // عند تفعيله مستقبلاً: احذف البيانات المُرسَلة من IndexedDB هنا.
 }
 
 /**
