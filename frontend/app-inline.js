@@ -1587,6 +1587,11 @@ async function loadData(cacheOnly){
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
   }catch(e){ zakatAdjustments = {}; }
+  // ترحيل تلقائي شامل للقيد المزدوج: يشمل كل القيود اليدوية القديمة المعلّقة، وفواتير المشتريات
+  // والمبيعات اليدوية وفواتير الدورات التي لم تُرحَّل بعد — بدل انتظار ضغط المستخدم على أزرار
+  // الترحيل اليدوية. يعمل تلقائياً في كل تحميل للبيانات (بداية التشغيل والمزامنة الخلفية)، وهو
+  // آمن للتكرار لأن كل دالة autoPost* تتحقق أولاً من عدم وجود ترحيل سابق لنفس السجل.
+  try{ await autoPostAllPendingDoubleEntries(); }catch(e){ /* لا نوقف تحميل البيانات بسبب فشل الترحيل */ }
 }
 async function saveUsers(){
   try{ await window.storage.set('users', JSON.stringify(users), false); }catch(e){ showToast('تعذر حفظ بيانات المستخدمين'); }
@@ -5388,8 +5393,10 @@ $('#ci-table-body')?.addEventListener('change', async e=>{
     if(c){
       snapshotState(`تعديل تاريخ صدور فاتورة الدورة: ${c.name}`);
       c.receiptIssueDate = e.target.value || '';
+      const posted = typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(c);
       await saveClients();
-      await logAudit('edit','فواتير الدورات', `تم تعديل تاريخ صدور فاتورة الدورة للعميل: ${c.name} (${c.invoice||''})`);
+      if(posted) await saveJournalDE();
+      await logAudit('edit','فواتير الدورات', `تم تعديل تاريخ صدور فاتورة الدورة للعميل: ${c.name} (${c.invoice||''})${posted?' — ورُحّلت تلقائياً للقيد المزدوج':''}`);
       renderCourseInvoices();
     }
   }
@@ -5398,8 +5405,10 @@ $('#ci-table-body')?.addEventListener('change', async e=>{
     if(c){
       snapshotState(`تعديل القيمة الفعلية لفاتورة الدورة: ${c.name}`);
       c.receiptActualValue = e.target.value===''? '' : num(e.target.value);
+      const posted = typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(c);
       await saveClients();
-      await logAudit('edit','فواتير الدورات', `تم تعديل القيمة الفعلية (من الإيصال) لفاتورة الدورة للعميل: ${c.name} (${c.invoice||''})`);
+      if(posted) await saveJournalDE();
+      await logAudit('edit','فواتير الدورات', `تم تعديل القيمة الفعلية (من الإيصال) لفاتورة الدورة للعميل: ${c.name} (${c.invoice||''})${posted?' — ورُحّلت تلقائياً للقيد المزدوج':''}`);
       renderCourseInvoices();
     }
   }
@@ -5441,7 +5450,7 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
     snapshotState('استيراد فواتير الدورات من Excel');
-    let updated=0, skipped=0, invoiceChanged=0;
+    let updated=0, skipped=0, invoiceChanged=0, postedCount=0;
     const changedRows = [];
     for(const row of json){
       const clientId = String(row['رقم الهوية']||'').trim();
@@ -5468,6 +5477,7 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
       const newDate = normalizeExcelDate(rawDate);
       if(newDate) c.receiptIssueDate = newDate;
       if(rawValue!==''){ c.receiptActualValue = num(rawValue); }
+      if(typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(c)) postedCount++;
       updated++;
       changedRows.push({
         'رقم الهوية':clientId, 'الاسم':c.name, 'رقم الدورة':c.courseNumber||'',
@@ -5477,7 +5487,8 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
       });
     }
     await saveClients();
-    await logAudit('edit','فواتير الدورات', `استيراد فواتير الدورات من Excel: تحديث ${updated} سجل${skipped?`، وتخطي ${skipped} صف بدون تطابق`:''}${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}`);
+    if(postedCount>0) await saveJournalDE();
+    await logAudit('edit','فواتير الدورات', `استيراد فواتير الدورات من Excel: تحديث ${updated} سجل${skipped?`، وتخطي ${skipped} صف بدون تطابق`:''}${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}${postedCount?` — ورُحّلت ${postedCount} فاتورة تلقائياً للقيد المزدوج`:''}`);
     if(invoiceChanged && typeof refreshEverything==='function'){
       // رقم الفاتورة تغيّر فعلياً لسجل واحد أو أكثر → يُحدَّث النظام بالكامل (شيت العملاء، لوحة التحكم، الدورات، التقارير...)
       refreshEverything();
@@ -10517,6 +10528,24 @@ function autoPostLegacyEntry(j){
   j.linkedDEId = deEntry.id;
   return true;
 }
+/* ترحيل تلقائي شامل: كل القيود اليدوية القديمة + فواتير المشتريات/المبيعات اليدوية/الدورات
+   المعلّقة، دفعة واحدة. تُستخدم عند كل تحميل بيانات (بدل الاعتماد على أزرار الترحيل اليدوية)،
+   وأيضاً يمكن استدعاؤها يدوياً من الأزرار (تبقى موجودة لإعادة الطمأنة/كتابة سجل تدقيق مخصص). */
+async function autoPostAllPendingDoubleEntries(){
+  let legacyCount = 0, invoicesCount = 0;
+  journalEntries.filter(j=>!j.linkedDEId).forEach(j=>{ if(autoPostLegacyEntry(j)) legacyCount++; });
+  purchases.filter(p=>!p.linkedDEId).forEach(p=>{ if(autoPostPurchase(p)) invoicesCount++; });
+  manualSalesInvoices.filter(m=>!m.linkedDEId).forEach(m=>{ if(autoPostManualSale(m)) invoicesCount++; });
+  if(typeof courseInvoiceClients==='function'){
+    courseInvoiceClients().filter(c=>!c.courseInvoiceDEId).forEach(c=>{ if(autoPostCourseInvoice(c)) invoicesCount++; });
+  }
+  const count = legacyCount + invoicesCount;
+  if(count>0){
+    await Promise.all([saveJournalEntries(), saveJournalDE(), savePurchases(), saveManualSalesInvoices(), saveClients()]);
+    await logAudit('add','المحاسبة', `ترحيل تلقائي عند التحميل: تم ترحيل ${count} عملية إلى القيد المزدوج (${legacyCount} قيد يدوي، ${invoicesCount} فاتورة)`);
+  }
+  return count;
+}
 $('#btn-migrate-legacy')?.addEventListener('click', async ()=>{
   const pending = journalEntries.filter(j=>!j.linkedDEId);
   if(!pending.length){ showToast('كل القيود اليدوية مُرحّلة بالفعل'); return; }
@@ -12080,7 +12109,7 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
   snapshotState(`تحديث/استيراد فواتير الدورات من جدول داخل البرنامج (${items.length} صف)`);
-  let updated=0, invoiceChanged=0;
+  let updated=0, invoiceChanged=0, postedCount=0;
   const changedRows = [];
   items.forEach(({clientId, invoice, date, valueRaw, c})=>{
     const oldInvoice = c.invoice||'';
@@ -12094,6 +12123,7 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
     }
     if(date) c.receiptIssueDate = date;
     if(valueRaw!==''){ c.receiptActualValue = num(valueRaw); }
+    if(typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(c)) postedCount++;
     updated++;
     changedRows.push({
       'رقم الهوية':clientId, 'الاسم':c.name, 'رقم الدورة':c.courseNumber||'',
@@ -12103,7 +12133,8 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
     });
   });
   await saveClients();
-  await logAudit('edit','فواتير الدورات', `تحديث/استيراد فواتير الدورات من جدول داخل البرنامج: تحديث ${updated} سجل${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}`);
+  if(postedCount>0) await saveJournalDE();
+  await logAudit('edit','فواتير الدورات', `تحديث/استيراد فواتير الدورات من جدول داخل البرنامج: تحديث ${updated} سجل${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}${postedCount?` — ورُحّلت ${postedCount} فاتورة تلقائياً للقيد المزدوج`:''}`);
   closeCiBulkModal();
   if(invoiceChanged && typeof refreshEverything==='function'){
     // رقم الفاتورة تغيّر فعلياً لسجل واحد أو أكثر → يُحدَّث النظام بالكامل (شيت العملاء، لوحة التحكم، الدورات، التقارير...)
