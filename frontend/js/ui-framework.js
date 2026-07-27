@@ -348,34 +348,9 @@ function applyThemeColors(colors){
   return;
 }
 /* تعبئة عناصر اختيار الألوان بقيم الإعدادات الحالية */
-function fillThemeColorInputs(){ renderThemePresetsGrid(); }
-/* يعرض شبكة الأطقم الجاهزة في الإعدادات، مع تمييز الطقم الحالي، وتطبيق أي طقم آخر بضغطة واحدة */
-function renderThemePresetsGrid(){
-  const wrap = $('#theme-presets-grid');
-  if(!wrap) return;
-  const activeId = settings.themePresetId || 'floqastblue';
-  wrap.innerHTML = THEME_PRESETS.map(p=>{
-    const isActive = p.id === activeId;
-    const dots = ['navy','gold','teal','red'].map(k=>`<span style="display:inline-block; width:16px; height:16px; border-radius:50%; background:${p.colors[k]}; border:1px solid rgba(0,0,0,.15);"></span>`).join('');
-    return `
-      <button type="button" data-themepreset="${p.id}" class="theme-preset-card" style="cursor:pointer; text-align:right; border-radius:10px; padding:12px; border:2px solid ${isActive?'var(--gold)':'var(--border, #ddd)'}; background:${isActive?'rgba(232,117,44,.08)':'transparent'}; display:flex; flex-direction:column; gap:8px; font-family:inherit;">
-        <div style="display:flex; gap:6px;">${dots}</div>
-        <div style="font-size:13px; font-weight:${isActive?'700':'500'};">${escapeHtml(p.name)}${isActive?' ✓':''}</div>
-      </button>`;
-  }).join('');
-}
-if($('#theme-presets-grid')) $('#theme-presets-grid').addEventListener('click', async e=>{
-  const btn = e.target.closest('[data-themepreset]');
-  if(!btn) return;
-  const preset = THEME_PRESETS.find(p=>p.id===btn.dataset.themepreset);
-  if(!preset) return;
-  settings.themePresetId = preset.id;
-  settings.themeColors = Object.assign({}, preset.colors);
-  applyThemeColors(settings.themeColors);
-  renderThemePresetsGrid();
-  await saveSettings();
-  showToast(`تم تطبيق طقم الألوان: ${preset.name}`);
-});
+
+
+
 /* يعرض حالة الاتصال بالسيرفر الحالية (تلقائي/متوقف يدوياً) في لوحة الإعدادات */
 /* ---------------- تصدير/استيراد إعدادات البرنامج كملف واحد ----------------
    قائمة محدودة عمداً: إعدادات "تهيئة/تفضيل" فقط (ألوان، أسعار، تصنيفات، بيانات المركز...)،
