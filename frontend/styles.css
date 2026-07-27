@@ -334,14 +334,63 @@ nav.tabs {
   padding: 12px 10px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  position: sticky;
-  top: 12px;
+  position: static;
   align-self: flex-start;
-  max-height: calc(100vh - 24px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  will-change: contents;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  transition: width 0.18s ease;
+}
+
+nav.tabs.collapsed {
+  width: 56px;
+  padding: 12px 6px;
+}
+
+.nav-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  margin-bottom: 4px;
+}
+
+.nav-collapse-toggle:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.nav-collapse-toggle svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  stroke: currentColor;
+  transition: transform 0.2s ease;
+}
+
+nav.tabs.collapsed .nav-collapse-toggle svg {
+  transform: rotate(180deg);
+}
+
+nav.tabs.collapsed button span,
+nav.tabs.collapsed .nav-caret {
+  display: none;
+}
+
+nav.tabs.collapsed button {
+  justify-content: center;
+  padding: 9px;
+}
+
+nav.tabs.collapsed .nav-flyout-row {
+  justify-content: center;
 }
 
 nav.tabs button {
