@@ -2881,16 +2881,8 @@ if(document.fonts && document.fonts.ready){
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){
   const c = clients.filter(x=>matchYear(x.date));
-  const totalIncome = c.reduce((s,x)=>s+centerIncome(x),0);
-  const totalBags = c.filter(x=>!x.suspended).reduce((s,x)=>s+bagAmount(x),0);
   const totalPaid = c.reduce((s,x)=>s+paidTotal(x),0);
   const totalRemaining = c.filter(x=>!x.suspended && !x.cancelled).reduce((s,x)=>s+remaining(x),0);
-  $('#cards').innerHTML = `
-    <div class="card"><div class="k">عدد العملاء</div><div class="v">${c.length}</div></div>
-    <div class="card"><div class="k">دخل المركز الصافي (الدورات)</div><div class="v gold">${fmt(totalIncome)}</div></div>
-    <div class="card"><div class="k">حصيلة الحقائب (تمريري)</div><div class="v">${fmt(totalBags)}</div></div>
-    <div class="card"><div class="k">إجمالي المتبقي على العملاء</div><div class="v red">${fmt(totalRemaining)}</div></div>
-  `;
   // لا تُعرض أرقام الملخص السريع (عميل/مستلم/متبقي) لدور "استقبال" — هذا الشريط موجود في الهيدر
   // العلوي بمعزل عن تبويب لوحة التحكم نفسه (المحجوب عنهم أصلاً عبر rolePermissions)، فكان يفضح
   // إجمالي المبالغ المالية للاستقبال رغم عدم وصولهم لأي شاشة مالية أخرى في البرنامج.
@@ -2899,9 +2891,6 @@ function renderDashboard(){
     <div><div class="n">${fmt(totalPaid)}</div><div class="l">مستلم</div></div>
     <div><div class="n">${fmt(totalRemaining)}</div><div class="l">متبقي</div></div>
   `;
-  drawDonut('#chart-course', groupCount(c,'courseType'));
-  drawDonut('#chart-nat', groupCount(c,'nationality'), 8);
-  drawDonut('#chart-channel', groupChannelAmounts(c), 20, v=>fmt(v)+' ﷼');
   renderCfoDashboard();
   renderSmartAlerts();
   renderCloseOverview(c, totalPaid, totalRemaining);
@@ -3257,58 +3246,7 @@ function renderCfoDashboard(){
   const purchasesTrend = monthlyPurchasesTrend(12);
   const apBars = supplierUnpaidTotals();
 
-  // === القسم التنفيذي الجديد (Ring Overview) ===
-  const activeNow = clients.filter(c=>!c.cancelled && !c.suspended);
-  const paidFullCount = activeNow.filter(c=>remaining(c)<=0).length;
-  const hasRemainingCount = activeNow.filter(c=>remaining(c)>0).length;
-  const newThisMonthCount = clients.filter(c=>(c.date||'').slice(0,7)===thisMonthKey).length;
-  const collectDenom = collectedYear + totalRemainingNow;
-  const overallPct = collectDenom>0 ? Math.round(collectedYear/collectDenom*100) : 100;
-  const ringR = 72, ringC = 2*Math.PI*ringR;
-  const ringDash = Math.max(0, Math.min(100, overallPct))/100*ringC;
-  const collectVsNetPct = netYear>0 ? Math.min(100, Math.round(collectedYear/netYear*100)) : 0;
-  const growthRatio = netLastYear>0 ? (netYear/netLastYear*100) : (netYear>0?100:0);
-  const growthPct = Math.round(growthRatio);
-
   el.innerHTML = `
-    <div class="panel close-overview" style="margin-bottom:16px;">
-      <div class="close-ring-col">
-        <div class="close-ring-wrap">
-          <svg viewBox="0 0 168 168">
-            <circle class="close-ring-track" cx="84" cy="84" r="${ringR}"></circle>
-            <circle class="close-ring-fill" cx="84" cy="84" r="${ringR}" style="stroke:var(--navy); stroke-dasharray:${ringDash.toFixed(1)} ${(ringC-ringDash).toFixed(1)};"></circle>
-          </svg>
-          <div class="close-ring-center">
-            <div class="close-ring-pct">${overallPct}<span>%</span></div>
-            <div class="close-ring-label">نسبة التحصيل</div>
-          </div>
-        </div>
-        <div class="close-status-chip ${overallPct>=85?'done':'pending'}">${overallPct>=85?'مكتمل':'قيد التحصيل'}</div>
-        <div class="close-target">الهدف: 100%</div>
-        <div class="close-remaining">متبقي على العملاء<br><b>${fmt(totalRemainingNow)} ﷼</b></div>
-      </div>
-      <div class="close-body">
-        <div class="close-section-label">نظرة عامة — ${thisYear}</div>
-        <div class="close-status-row">
-          <div class="close-status-item navy"><span class="dot"></span><span class="n">${paidFullCount}</span><span class="l">عملاء مسدّدين بالكامل</span></div>
-          <div class="close-status-item gold"><span class="dot"></span><span class="n">${hasRemainingCount}</span><span class="l">عملاء عليهم متبقي</span></div>
-          <div class="close-status-item teal"><span class="dot"></span><span class="n">${newThisMonthCount}</span><span class="l">تسجيلات هذا الشهر</span></div>
-        </div>
-        <div class="close-metrics-grid">
-          <div>
-            <div class="close-metric-head"><span class="close-metric-name">التحصيل مقابل صافي الدخل</span><span class="close-metric-num">${collectVsNetPct}%</span></div>
-            <div class="close-metric-track"><div class="close-metric-fill${collectVsNetPct<70?' warn':''}" style="width:${collectVsNetPct}%"></div></div>
-            <div class="close-metric-frac">${fmt(collectedYear)} ﷼ من ${fmt(netYear)} ﷼</div>
-          </div>
-          <div>
-            <div class="close-metric-head"><span class="close-metric-name">نمو صافي الدخل عن العام الماضي</span><span class="close-metric-num">${growthPct}%</span></div>
-            <div class="close-metric-track"><div class="close-metric-fill${growthPct<70?' warn':''}" style="width:${Math.min(growthPct,100)}%"></div></div>
-            <div class="close-metric-frac">${fmt(netYear)} ﷼ مقابل ${fmt(netLastYear)} ﷼ العام الماضي</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="cfo-panel">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
       <div class="cfo-kpis">
