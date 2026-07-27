@@ -462,7 +462,7 @@ app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
       [req.params.key, value, req.user.username, knownVersion]
     );
     if (upsert.rows[0]) {
-      if (req.params.key === 'clients') syncClientsRows(upsert.rows[0].value).catch(()=>{});
+      if (req.params.key === 'clients') syncClientsRows(upsert.rows[0].value).catch(e => console.error('تعذّرت مزامنة clients_rows بعد الحفظ:', e.message));
       return res.json({ key: req.params.key, value: upsert.rows[0].value, version: upsert.rows[0].version });
     }
     // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
@@ -717,25 +717,10 @@ app.post('/api/zatca/return', requireAuth, async (req, res) => {
 /* ---------------- استضافة واجهة البرنامج (نفس ملف HTML) ---------------- */
 // نمنع المتصفح من تخزين app.html في الكاش لفترة طويلة، حتى يصل أي تحديث جديد
 // للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة.
-// بالنسبة لبقية الملفات الثابتة (JS/CSS)، لا نستخدم مدة كاش ثابتة (كانت ساعة سابقاً)
-// لأن ذلك يخلي المتصفح يشغّل نسخة قديمة من app-inline.js لمدة تصل لساعة كاملة بعد كل
-// تحديث فعلي على السيرفر، وهذا يسبب ظهور البرنامج وكأنه "ما اتحدّث" رغم نجاح النشر.
 // بدون maxAge، يعتمد express.static على ETag/Last-Modified: المتصفح يتأكد من السيرفر
 // في كل مرة (رد سريع 304 لو الملف لم يتغيّر فعلياً)، فنحافظ على معظم فائدة الكاش
 // (تفادي إعادة تحميل المحتوى نفسه) دون خطر تقديم نسخة قديمة بعد كل نشر جديد.
-app.use((req, res, next) => {
-  if (req.path === '/' || req.path.endsWith('.html')) {
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-  }
-  next();
-});
-app.use(express.static(path.join(__dirname, '..', 'frontend'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    }
-  },
-}));
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'app.html'));
@@ -760,6 +745,17 @@ ensureSchema()
         }
       }
     } catch (e) { console.error('تعذّر الترحيل الأولي لـ clients_rows:', e.message); }
+
+    // تنظيف دوري لجدول login_history: نحتفظ بآخر 90 يوماً فقط حتى لا يكبر الجدول للأبد.
+    async function cleanLoginHistory() {
+      try {
+        const r = await pool.query(`DELETE FROM login_history WHERE logged_in_at < now() - INTERVAL '90 days'`);
+        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} سجل قديم من login_history`);
+      } catch (e) { console.error('تعذّر تنظيف login_history:', e.message); }
+    }
+    cleanLoginHistory();
+    setInterval(cleanLoginHistory, 24 * 60 * 60 * 1000); // كل 24 ساعة
+
     app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
   })
   .catch(e => {
