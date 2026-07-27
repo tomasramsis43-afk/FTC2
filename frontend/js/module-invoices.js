@@ -755,7 +755,6 @@ function renderSettings(){
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
   renderUsersList();
-  fillThemeColorInputs();
   renderServerSyncPanel();
   renderPinLockPanel();
   renderRolePermissionsPanel();
