@@ -413,6 +413,125 @@ nav.tabs button:hover svg {
   }
 }
 
+/* فاصل بصري رفيع بين مجموعات التبويبات (بدل التسمية النصية القديمة) — نفس الخط الواحد يفصل
+   بين المجموعة السابقة والتالية معاً (يمين المجموعة التالية ويسار السابقة في آنٍ واحد). */
+.nav-section-label {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin: 6px 8px;
+  background: var(--border);
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  color: transparent;
+}
+
+/* ============= NAV FLYOUT (قائمة "العملاء" المنسدلة لأنواع الدورات) ============= */
+.nav-flyout-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-flyout-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-caret {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin-inline-start: -6px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-caret svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  flex: none;
+  transition: transform 0.2s ease;
+}
+
+.nav-caret:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.nav-flyout-wrap.open .nav-caret svg {
+  transform: rotate(180deg);
+}
+
+.nav-submenu {
+  display: none;
+  position: absolute;
+  z-index: 55;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  max-width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-hover);
+  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+  animation: popIn 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+.nav-submenu.show {
+  display: flex;
+}
+
+.nav-submenu button {
+  width: 100%;
+  text-align: right;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.nav-submenu button:hover {
+  background: var(--surface-alt);
+}
+
+.nav-submenu button.active-course-filter {
+  background: var(--surface-alt);
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.nav-submenu-empty {
+  padding: 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: normal;
+}
+
 /* ============= FOCUS STATES ============= */
 a:focus-visible,
 button:focus-visible,
