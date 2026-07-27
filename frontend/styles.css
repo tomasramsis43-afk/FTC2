@@ -311,7 +311,8 @@ header.top p {
 
 .layout {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 16px;
 }
 
@@ -323,21 +324,22 @@ header.top p {
 /* ============= NAVIGATION ============= */
 nav.tabs {
   flex: none;
-  width: 100%;
+  width: 224px;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+  align-items: stretch;
   gap: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 12px 10px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   position: sticky;
-  top: 0;
-  z-index: 10;
-  max-height: none;
-  overflow-x: auto;
-  overflow-y: visible;
+  top: 12px;
+  align-self: flex-start;
+  max-height: calc(100vh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
   will-change: contents;
   -webkit-overflow-scrolling: touch;
 }
@@ -346,7 +348,7 @@ nav.tabs button {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: auto;
+  width: 100%;
   flex: none;
   border: none;
   background: transparent;
@@ -397,8 +399,30 @@ nav.tabs button:hover svg {
 }
 
 @media(max-width: 900px) {
+  .layout {
+    flex-direction: column;
+  }
+
   nav.tabs {
+    width: 100%;
+    flex-direction: row;
+    position: sticky;
+    top: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
     direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً بدل أي سلوك متضارب بين المتصفحات */
+  }
+
+  nav.tabs button {
+    width: auto;
+  }
+
+  .nav-section-label {
+    width: 1px;
+    height: auto;
+    align-self: stretch;
+    margin: 6px 8px;
   }
 }
 
@@ -414,13 +438,14 @@ nav.tabs button:hover svg {
   }
 }
 
-/* فاصل بصري رفيع بين مجموعات التبويبات (بدل التسمية النصية القديمة) — نفس الخط الواحد يفصل
-   بين المجموعة السابقة والتالية معاً (يمين المجموعة التالية ويسار السابقة في آنٍ واحد). */
+/* فاصل بصري رفيع بين مجموعات التبويبات (بدل التسمية النصية القديمة) — في الوضع الجانبي الافتراضي
+   يفصل أفقياً بين المجموعة السابقة والتالية، وفي شريط الجوال الأفقي يتحول لفاصل رأسي (انظر الوسائط أعلاه). */
 .nav-section-label {
   flex: none;
   align-self: stretch;
-  width: 1px;
-  margin: 6px 8px;
+  width: auto;
+  height: 1px;
+  margin: 6px 4px;
   background: var(--border);
   font-size: 0;
   line-height: 0;
