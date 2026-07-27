@@ -56,13 +56,13 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
   }
   try {
+    const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     // تحقق أولاً من حساب الطوارئ (مخزّن بالكامل في متغيرات البيئة، مستقل عن قاعدة
     // البيانات) — يسمح بالدخول للنظام حتى لو قاعدة البيانات اتغيرت أو كانت فاضية
     // تماماً أو معطّلة. لا يؤثر على حسابات جدول server_users العادية بأي شكل.
     const isEmergencyLogin = await verifyEmergencyAdmin(username.trim(), password);
     if (isEmergencyLogin) {
       const token = signEmergencyToken(username.trim());
-      const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
       pool.query(
         'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
         [username.trim(), 'admin', loginIp]
@@ -82,7 +82,6 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const token = signToken(user);
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
     // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
-    const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     pool.query(
       'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
       [user.username, user.role || 'staff', loginIp]
