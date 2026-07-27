@@ -1003,6 +1003,12 @@ section.view.active {
   transform: scale(0.92);
 }
 
+.topbar-user button.active {
+  background: var(--surface-alt);
+  border-color: var(--navy);
+  color: var(--navy);
+}
+
 .topbar-user .icon-btn span {
   font-size: 12px;
 }
@@ -1127,6 +1133,21 @@ tbody td {
   padding: 10px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
+}
+
+body.density-compact thead th {
+  padding: 5px 8px;
+  font-size: 10.5px;
+}
+
+body.density-compact tbody td {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+body.density-compact .stamp {
+  padding: 2px 7px;
+  font-size: 10px;
 }
 
 tbody tr {
