@@ -1836,3 +1836,79 @@ td select:hover:not(:focus) {
 .hint-info {
   display: none !important;
 }
+
+/* ============= شيت العملاء — تصميم مخصص (مُقيَّد بـ #view-clients فقط، لا يؤثر على أي شاشة أخرى) ============= */
+
+/* بطاقة أدوات علوية (بحث + فلاتر + أزرار) بدل الشريط المسطّح */
+#view-clients .toolbar-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+/* بطاقات إحصائية (مطابق للفلتر / إجمالي العملاء) بدل السطر النصي */
+#view-clients .client-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#view-clients .client-stats .stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+  box-shadow: var(--shadow);
+}
+
+#view-clients .client-stats .stat b {
+  font-size: 18px;
+}
+
+#view-clients .client-stats .stat span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* رأس الجدول بتينت أزرق فاتح (نفس روح لون القائمة الجانبية) */
+#view-clients thead th {
+  background: #EAF3F9;
+  color: var(--navy-dark);
+}
+
+body.dark-theme #view-clients thead th {
+  background: #1A2C3D;
+  color: var(--text);
+}
+
+/* شريط لون رفيع على يمين كل صف يوضّح حالة السداد بنظرة واحدة */
+#view-clients tbody tr.owe {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+#view-clients tbody tr.paid {
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+/* دائرة بحرف اسم العميل الأول قبل الاسم */
+#view-clients .client-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+  vertical-align: middle;
+  margin-left: 6px;
+}

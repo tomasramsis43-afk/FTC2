@@ -138,7 +138,7 @@
 
   <!-- CLIENTS -->
   <section class="view" id="view-clients">
-    <div class="toolbar">
+    <div class="toolbar toolbar-card">
       <button class="btn btn-ghost btn-sm" id="btn-filter-suspended" title="عرض العملاء الموقوفين فقط">الموقوفين</button>
       <button class="btn btn-ghost btn-sm" id="btn-filter-unpurchased-bags" title="عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد">الحقائب غير المشتراة</button>
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
@@ -173,7 +173,10 @@
       <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-advanced-filters">مسح الفلاتر المتقدمة</button>
     </div>
     <div class="hint hint-info" style="margin-top:-6px;" data-i18n="importExportHint">الاستيراد والتصدير مرتبطان برقم الهوية: إن كان رقم الهوية موجوداً مسبقاً سيتم تحديث الأعمدة التي بها قيمة في الملف فقط (الأعمدة الفارغة تبقى كما هي في النظام)، وإن لم يكن موجوداً سيُضاف كعميل جديد.</div>
-    <div class="computed" style="margin-bottom:10px;"><span>عدد العملاء المطابقين للفلتر الحالي: <b id="clients-filtered-count" class="mono">766</b> · من إجمالي <b id="clients-total-count" class="mono">5853</b> عميل</span></div>
+    <div class="client-stats" style="margin-bottom:10px;">
+      <div class="stat"><b id="clients-filtered-count" class="mono">766</b><span>مطابق للفلتر الحالي</span></div>
+      <div class="stat"><b id="clients-total-count" class="mono">5853</b><span>إجمالي العملاء</span></div>
+    </div>
     <div class="toolbar" id="bulk-actions-bar" style="display:none; background:rgba(180,72,58,.08); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
       <span>محدد حالياً: <b id="bulk-selected-count" class="mono">0</b> عميل</span>
       <button type="button" class="btn btn-ghost btn-sm" id="btn-select-all-filtered">تحديد كل النتائج المطابقة للفلتر (<span id="bulk-filtered-total">766</span>)</button>
