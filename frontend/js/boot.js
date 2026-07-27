@@ -1,7 +1,20 @@
 (async function bootWithLicense(){
   try{
     if(!(window.crypto && window.crypto.subtle)){
-      // بيئة لا تدعم Web Crypto: نشغّل البرنامج بدون تشفير بدل تعطيله بالكامل
+      // بيئة لا تدعم Web Crypto — غالباً لأن الرابط HTTP وليس HTTPS.
+      // نعرض تحذيراً صريحاً وثابتاً في أعلى الشاشة حتى لا يخفى على المستخدم،
+      // ونكمل التشغيل بدون تشفير (بيانات تُرسل/تُخزَّن كنص عادي).
+      const warn = document.createElement('div');
+      warn.id = 'http-warning-banner';
+      warn.style.cssText = [
+        'position:fixed','top:0','left:0','right:0','z-index:99999',
+        'background:#b91c1c','color:#fff','padding:10px 20px',
+        'text-align:center','font-size:13px','font-weight:700',
+        'letter-spacing:.2px','box-shadow:0 2px 8px rgba(0,0,0,.4)',
+        'font-family:inherit',
+      ].join(';');
+      warn.textContent = '⚠️ تحذير أمني: البرنامج يعمل عبر HTTP غير آمن — بياناتك لن تُشفَّر. استخدم رابط HTTPS دائماً لحماية البيانات.';
+      document.body.prepend(warn);
       $('#license-screen').style.display = 'none';
       await ensureServerLoginThenStart();
       return;

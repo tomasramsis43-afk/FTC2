@@ -3,29 +3,19 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v4';
-const RUNTIME_CACHE = 'ftc-runtime-v4';
+const CACHE_VERSION = 'ftc-cache-v5';
+const RUNTIME_CACHE = 'ftc-runtime-v5';
+// ملفات JS لا تُضاف هنا — يتم تحديثها تلقائياً عبر networkFirstStrategy
+// (شبكة أولاً) في كل تشغيل، وتُحفظ في RUNTIME_CACHE للاستخدام أوفلاين.
+// إضافتها للـ pre-cache تجعل المتصفح يستخدم النسخ القديمة حتى يتغير
+// CACHE_VERSION يدوياً بعد كل تحديث — وهو مصدر مشاكل ظهور نسخ قديمة.
 const STATIC_ASSETS = [
-  '/',
   '/app.html',
   '/styles.css',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/js/core-utils.js',
-  '/js/storage-sync.js',
-  '/js/auth-licensing.js',
-  '/js/ui-framework.js',
-  '/js/module-clients.js',
-  '/js/module-invoices.js',
-  '/js/module-bags.js',
-  '/js/module-finance.js',
-  '/js/module-reports.js',
-  '/js/module-accounting.js',
-  '/js/module-companies.js',
-  '/js/module-purchases.js',
-  '/js/module-zatca.js',
-  '/js/boot.js'
+  '/icons/icon-maskable-512.png',
 ];
 
 // تثبيت Service Worker وحفظ الموارد الثابتة
@@ -339,20 +329,24 @@ self.addEventListener('message', event => {
 async function getCacheSize() {
   const cacheNames = await caches.keys();
   let totalSize = 0;
-
   for (const name of cacheNames) {
     const cache = await caches.open(name);
-    const keys = await cache.keys();
-    
-    for (const request of keys) {
+    const requests = await cache.keys();
+    for (const request of requests) {
       const response = await cache.match(request);
-      if (response) {
-        const blob = await response.blob();
-        totalSize += blob.size;
+      if (!response) continue;
+      // Content-Length أسرع — وإلا نقرأ كنص ونحسب بايت (تفادياً لتحميل blob كامل في الذاكرة)
+      const cl = response.headers.get('content-length');
+      if (cl) {
+        totalSize += parseInt(cl, 10) || 0;
+      } else {
+        try {
+          const text = await response.clone().text();
+          totalSize += new TextEncoder().encode(text).length;
+        } catch (e) { /* تجاهل ملفات لا يمكن قراءتها */ }
       }
     }
   }
-
   return totalSize;
 }
 
