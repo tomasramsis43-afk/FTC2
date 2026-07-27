@@ -807,9 +807,17 @@ function applyYearFilterToAllViews(){
   if(typeof renderAccounting==='function') renderAccounting();
   if(typeof renderAuditLog==='function') renderAuditLog();
 }
+let yearFilterListenerBound = false;
 function initYearFilter(){
   populateYearFilterSelect();
   applyYearFilterToAllViews();
+  // ملاحظة مهمة: هذه الدالة تُستدعى أكثر من مرة (عند فتح البرنامج أولاً، وأيضاً بعد كل
+  // مزامنة خلفية تجلب تغييرات فعلية من السحابة — راجع renderAllViewsAfterLoad). بدون هذا
+  // الحارس (guard)، كان يُضاف مستمع 'change' جديد على #year-filter في كل مرة دون إزالة
+  // القديم، فيتراكم عدد المستمعين مع الوقت ويتكرر تنفيذ applyYearFilterToAllViews() ورسالة
+  // التنبيه عدة مرات لكل اختيار سنة واحد — وهو ما كان يجعل فلتر السنة يبدو "معطَّلاً" أو بطيئاً.
+  if(yearFilterListenerBound) return;
+  yearFilterListenerBound = true;
   $('#year-filter').addEventListener('change', e=>{
     selectedYearFilter = e.target.value;
     localStorage.setItem('selectedYearFilter', selectedYearFilter);
@@ -3690,6 +3698,7 @@ function filteredClients(){
   const frecep = $('#filter-reception') ? $('#filter-reception').value : '';
   const rows = clients.filter(c=>{
     if(!isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
+    if(!matchYear(c.date)) return false; // فلتر السنة العلوي (خط دفاع مباشر — بجانب مزامنته لحقلي من/إلى أدناه)
     if(frecep && c.createdBy!==frecep) return false;
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
