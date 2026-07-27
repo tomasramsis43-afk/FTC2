@@ -546,14 +546,14 @@
   .cfo-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-bottom:20px;}
   @media (max-width:1100px){ .cfo-grid{grid-template-columns:repeat(2, 1fr);} }
   @media (max-width:680px){ .cfo-grid{grid-template-columns:1fr;} }
-  .cfo-panel{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--e1); padding:17px; display:flex; flex-direction:column; transition:box-shadow .25s ease, transform .25s cubic-bezier(.16,1,.3,1);}
+  .cfo-panel{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--e1); padding:14px; display:flex; flex-direction:column; align-items:stretch; align-content:flex-start; transition:box-shadow .25s ease;}
   .cfo-panel:hover{box-shadow:var(--e2); transform:none;}
   .cfo-panel-title{margin:0 0 13px; font-size:14px; font-weight:700; color:var(--text); text-align:center; padding-bottom:11px; border-bottom:1px solid var(--border);}
   .cfo-kpis{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:13px;}
   .cfo-kpis.cfo-kpis-3{grid-template-columns:1fr 1fr 1fr;}
-  .cfo-kpi{background:var(--surface-alt); border-radius:var(--r-md); padding:11px; display:flex; align-items:flex-start; gap:9px; min-width:0;}
-  .cfo-kpi-icon{width:31px; height:31px; flex:none; border-radius:var(--r-sm); background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--navy); box-shadow:none; border:1px solid var(--border);}
-  .cfo-kpi-icon svg{width:16px; height:16px;}
+  .cfo-kpi{background:var(--surface-alt); border-radius:var(--r-md); padding:8px 9px; display:flex; align-items:flex-start; gap:7px; min-width:0;}
+  .cfo-kpi-icon{width:26px; height:26px; flex:none; border-radius:var(--r-sm); background:var(--surface); display:flex; align-items:center; justify-content:center; color:var(--navy); box-shadow:none; border:1px solid var(--border);}
+  .cfo-kpi-icon svg{width:14px; height:14px;}
   .cfo-kpi-body{min-width:0;}
   .cfo-kpi-label{font-size:10.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .cfo-kpi-value{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -562,7 +562,7 @@
   .cfo-deltas b.up{color:var(--teal); font-family:'IBM Plex Mono',monospace;}
   .cfo-deltas b.down{color:var(--red); font-family:'IBM Plex Mono',monospace;}
   .cfo-caption{font-size:11px; color:var(--text-muted); text-align:center; margin-bottom:6px;}
-  .cfo-visual{margin-top:auto;}
+  .cfo-visual{margin-top:10px;}
   .cfo-visual svg{width:100%; height:auto; display:block;}
   .cfo-bars{max-height:150px; overflow:auto;}
 
