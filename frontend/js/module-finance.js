@@ -540,8 +540,6 @@ function ensureDenomUiBuilt(){
   if(valueRow) valueRow.insertAdjacentHTML('beforeend', CASH_DENOMINATIONS.map(d=>`<td class="mono" data-denom-value="${d}">0</td>`).join(''));
   const grandTotalCell = $('#cash-count-grand-total');
   if(grandTotalCell) grandTotalCell.setAttribute('colspan', CASH_DENOMINATIONS.length);
-  const denomOptionsHtml = CASH_DENOMINATIONS.map(d=>`<option value="${d}">${fmt(d)} ﷼</option>`).join('');
-  if($('#denom-adj-denom')) $('#denom-adj-denom').innerHTML = denomOptionsHtml;
   if($('#denom-tx-batch-body')) $('#denom-tx-batch-body').innerHTML = CASH_DENOMINATIONS.map(d=>`
     <tr>
       <td>${fmt(d)} ﷼</td>
@@ -549,9 +547,7 @@ function ensureDenomUiBuilt(){
     </tr>
   `).join('');
   if($('#denom-tx-date') && !$('#denom-tx-date').value) $('#denom-tx-date').value = todayISO();
-  if($('#denom-adj-date') && !$('#denom-adj-date').value) $('#denom-adj-date').value = todayISO();
   $('#btn-denom-tx-save')?.addEventListener('click', saveDenomTx);
-  $('#btn-denom-adj-save')?.addEventListener('click', saveDenomAdjustment);
 }
 function recalcDenomTable(){
   let total = 0;
@@ -615,34 +611,6 @@ async function saveDenomTx(){
     if(el) el.value = '';
   });
   if($('#denom-tx-notes')) $('#denom-tx-notes').value = '';
-  recalcDenomTable();
-  renderDenomHistory();
-}
-async function saveDenomAdjustment(){
-  const denom = num($('#denom-adj-denom')?.value);
-  const actual = Math.floor(num($('#denom-adj-count')?.value));
-  const date = $('#denom-adj-date')?.value || todayISO();
-  const notes = $('#denom-adj-notes')?.value.trim() || '';
-  if(!denom || $('#denom-adj-count')?.value===''){
-    showToast('اختر الفئة وأدخل العدد الفعلي الموجود الآن');
-    return;
-  }
-  const current = denomBalance(denom);
-  const diff = actual - current;
-  if(diff===0){
-    showToast(`الرصيد مطابق بالفعل (${fmt(current)}) — لا حاجة لتسوية`);
-    return;
-  }
-  const type = diff>0 ? 'in' : 'out';
-  const count = Math.abs(diff);
-  const autoNote = `تسوية جرد فعلي: من ${fmt(current)} إلى ${fmt(actual)}${notes?` — ${notes}`:''}`;
-  const entry = { id: uid(), date, denom, type, count, isAdjustment:true, notes:autoNote, by: (typeof currentUser!=='undefined' && currentUser) ? currentUser : 'غير معروف', createdAt: Date.now() };
-  vaultDenomTx.unshift(entry);
-  await saveVaultDenomTx();
-  await logAudit('add','الحركات المالية', `تصنيف الفئات: ${autoNote} — فئة ${fmt(denom)} ﷼`);
-  showToast('تم تصحيح الرصيد');
-  if($('#denom-adj-count')) $('#denom-adj-count').value = '';
-  if($('#denom-adj-notes')) $('#denom-adj-notes').value = '';
   recalcDenomTable();
   renderDenomHistory();
 }
