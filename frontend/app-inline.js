@@ -10400,7 +10400,10 @@ $('#btn-de-save')?.addEventListener('click', async ()=>{
 function renderJournalDEList(){
   const tbody = $('#de-entries-body');
   if(!tbody) return;
-  const sorted = journalDE.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const sorted = journalDE.slice().sort((a,b)=>{
+    const d = String(a.date||'').localeCompare(String(b.date||''));
+    return d!==0 ? d : (a.createdAt||0)-(b.createdAt||0);
+  });
   tbody.innerHTML = sorted.map(e=>{
     const totalDebit = (e.lines||[]).reduce((s,l)=>s+num(l.debit),0);
     const totalCredit = (e.lines||[]).reduce((s,l)=>s+num(l.credit),0);
