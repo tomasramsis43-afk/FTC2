@@ -172,20 +172,23 @@ function applyYearFilterToAllViews(){
     if(fe) fe.value = from;
     if(te) te.value = to;
   });
-  if(typeof refreshFilterOptions==='function') refreshFilterOptions();
-  if(typeof renderDashboard==='function') renderDashboard();
-  if(typeof renderTable==='function') renderTable();
-  if(typeof renderVault==='function') renderVault();
-  if(typeof renderBags==='function') renderBags();
-  if(typeof renderOwnBagClients==='function') renderOwnBagClients();
-  if(typeof renderClientBagPurchases==='function') renderClientBagPurchases();
-  if(typeof renderCourses==='function') renderCourses();
-  if(typeof renderCourseInvoices==='function') renderCourseInvoices();
-  if(typeof renderMissingCourse==='function') renderMissingCourse();
-  if(typeof renderCompanies==='function') renderCompanies();
-  if(typeof renderReports==='function') renderReports();
-  if(typeof renderAccounting==='function') renderAccounting();
-  if(typeof renderAuditLog==='function') renderAuditLog();
+  // كل شاشة تُعاد رسمها بمعزل عن الأخرى: لو شاشة واحدة رمت استثناء غير متوقع، الباقي يكمل عادي
+  // بدل ما يتوقف كل شيء بعدها (وهو ما كان يجعل اختيار سنة يبدو بلا أي تأثير على الإطلاق).
+  const safeRender = (fn, label)=>{ try{ if(typeof fn==='function') fn(); }catch(e){ console.error(`applyYearFilterToAllViews: فشلت "${label}"`, e); } };
+  safeRender(typeof refreshFilterOptions!=='undefined' && refreshFilterOptions, 'refreshFilterOptions');
+  safeRender(typeof renderDashboard!=='undefined' && renderDashboard, 'renderDashboard');
+  safeRender(typeof renderTable!=='undefined' && renderTable, 'renderTable');
+  safeRender(typeof renderVault!=='undefined' && renderVault, 'renderVault');
+  safeRender(typeof renderBags!=='undefined' && renderBags, 'renderBags');
+  safeRender(typeof renderOwnBagClients!=='undefined' && renderOwnBagClients, 'renderOwnBagClients');
+  safeRender(typeof renderClientBagPurchases!=='undefined' && renderClientBagPurchases, 'renderClientBagPurchases');
+  safeRender(typeof renderCourses!=='undefined' && renderCourses, 'renderCourses');
+  safeRender(typeof renderCourseInvoices!=='undefined' && renderCourseInvoices, 'renderCourseInvoices');
+  safeRender(typeof renderMissingCourse!=='undefined' && renderMissingCourse, 'renderMissingCourse');
+  safeRender(typeof renderCompanies!=='undefined' && renderCompanies, 'renderCompanies');
+  safeRender(typeof renderReports!=='undefined' && renderReports, 'renderReports');
+  safeRender(typeof renderAccounting!=='undefined' && renderAccounting, 'renderAccounting');
+  safeRender(typeof renderAuditLog!=='undefined' && renderAuditLog, 'renderAuditLog');
 }
 let yearFilterListenerBound = false;
 function initYearFilter(){
