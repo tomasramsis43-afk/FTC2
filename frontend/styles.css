@@ -1592,7 +1592,8 @@ tbody tr:hover {
   flex: 1;
 }
 
-/* ============= TABLE INPUTS (bulk forms) ============= */
+/* ============= TABLE INPUTS (bulk / import forms) ============= */
+/* يغطي كل حقول الإدخال داخل الجداول (فورمات الاستيراد الجماعي وغيرها) */
 td input,
 td select,
 td textarea {
