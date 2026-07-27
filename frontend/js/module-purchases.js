@@ -564,26 +564,35 @@ document.addEventListener('click', async e=>{
 
 // كل شاشات العرض التي كانت تُرسم مرة واحدة عند فتح البرنامج — تم فصلها في دالة مستقلة حتى
 // تُستدعى أيضاً بعد أي مزامنة خلفية تجلب تغييرات فعلية من السحابة (راجع backgroundSyncCheck).
+// تُنفَّذ كل خطوة بمعزل عن الأخرى (try/catch مستقل لكل واحدة): لو فشلت خطوة واحدة (استثناء غير
+// متوقع)، كل الخطوات التالية لها كانت تتوقف تماماً ولا تُنفَّذ إطلاقاً — وهو ما كان يجعل فلتر
+// السنة (وأي شاشة أخرى) يبدو "معطَّلاً" بلا أي سبب ظاهر لمجرد فشل صامت في خطوة سابقة له.
+function safeStep(fn, label){
+  try{ return fn(); }
+  catch(e){ console.error(`renderAllViewsAfterLoad: فشلت خطوة "${label}"`, e); }
+}
 async function renderAllViewsAfterLoad(){
-  await cleanupDuplicateCourseTypes();
-  await cleanupDuplicateNationalities();
-  await cleanupDuplicatePaymentMethods();
-  initYearFilter();
-  refreshFilterOptions();
-  renderTable();
-  renderDashboard();
-  renderSettings();
-  renderBags();
-  renderCourses();
-  renderCourseInvoices();
-  renderVault();
-  renderAuditLog();
-  renderReports();
-  renderCompanies();
-  renderAccounting();
-  renderPurchases();
-  applyLanguage(currentLang);
-  applyTheme(!!settings.darkMode); applySoundIcon(); applyThemeColors();
+  // فلتر السنة يُهيَّأ أولاً قبل أي شيء آخر (حتى قبل عمليات التنظيف)، حتى يبقى شغالاً بالتأكيد
+  // مهما فشلت خطوة لاحقة له.
+  safeStep(()=>initYearFilter(), 'initYearFilter');
+  try{ await cleanupDuplicateCourseTypes(); }catch(e){ console.error('renderAllViewsAfterLoad: فشلت خطوة "cleanupDuplicateCourseTypes"', e); }
+  try{ await cleanupDuplicateNationalities(); }catch(e){ console.error('renderAllViewsAfterLoad: فشلت خطوة "cleanupDuplicateNationalities"', e); }
+  try{ await cleanupDuplicatePaymentMethods(); }catch(e){ console.error('renderAllViewsAfterLoad: فشلت خطوة "cleanupDuplicatePaymentMethods"', e); }
+  safeStep(()=>refreshFilterOptions(), 'refreshFilterOptions');
+  safeStep(()=>renderTable(), 'renderTable');
+  safeStep(()=>renderDashboard(), 'renderDashboard');
+  safeStep(()=>renderSettings(), 'renderSettings');
+  safeStep(()=>renderBags(), 'renderBags');
+  safeStep(()=>renderCourses(), 'renderCourses');
+  safeStep(()=>renderCourseInvoices(), 'renderCourseInvoices');
+  safeStep(()=>renderVault(), 'renderVault');
+  safeStep(()=>renderAuditLog(), 'renderAuditLog');
+  safeStep(()=>renderReports(), 'renderReports');
+  safeStep(()=>renderCompanies(), 'renderCompanies');
+  safeStep(()=>renderAccounting(), 'renderAccounting');
+  safeStep(()=>renderPurchases(), 'renderPurchases');
+  safeStep(()=>applyLanguage(currentLang), 'applyLanguage');
+  safeStep(()=>{ applyTheme(!!settings.darkMode); applySoundIcon(); applyThemeColors(); }, 'applyTheme');
 }
 
 // هل يوجد على هذا الجهاز نسخة محفوظة محلياً يمكن الانطلاق منها فوراً بدون انتظار الشبكة؟
