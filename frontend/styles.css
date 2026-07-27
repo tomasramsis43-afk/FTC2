@@ -329,8 +329,8 @@ nav.tabs {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: #EAF3F9;
+  border: 1px solid #D3E6F2;
   padding: 12px 10px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -342,6 +342,11 @@ nav.tabs {
   overflow-x: visible;
   transition: width 0.18s ease;
   scrollbar-width: thin;
+}
+
+body.dark-theme nav.tabs {
+  background: #1A2C3D;
+  border-color: #26405A;
 }
 
 nav.tabs.collapsed {
