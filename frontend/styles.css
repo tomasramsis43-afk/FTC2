@@ -618,9 +618,9 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.18);
+  border-radius: var(--radius);
 }
 
 nav.tabs button:focus-visible {
@@ -629,9 +629,9 @@ nav.tabs button:focus-visible {
 
 .toolbar input:focus,
 .toolbar select:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
-  border-color: var(--gold);
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
 }
 
 /* ============= USER PILL ============= */
@@ -1087,12 +1087,13 @@ section.view.active {
 .toolbar select {
   font-family: inherit;
   padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
   font-size: 13.5px;
   background: var(--surface);
   color: var(--text);
-  transition: border-color 0.2s ease;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .toolbar input[type=text] {
@@ -1386,20 +1387,21 @@ tbody tr:hover {
 .field textarea {
   width: 100%;
   padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
   font-family: inherit;
   font-size: 13.5px;
   background: var(--surface);
-  transition: border-color 0.2s ease, outline-color 0.2s ease;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
-  border-color: var(--gold);
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
 }
 
 .modal-actions {
