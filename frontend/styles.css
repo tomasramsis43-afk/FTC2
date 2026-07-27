@@ -237,6 +237,7 @@ header.top p {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  margin-right: auto;
 }
 
 .quickstats div {
