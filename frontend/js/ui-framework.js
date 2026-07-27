@@ -1664,7 +1664,7 @@ document.addEventListener('keydown', e=>{
   // Alt + S: تبويب الإعدادات
   if(e.altKey && !e.ctrlKey && e.key.toLowerCase()==='s'){
     e.preventDefault();
-    document.querySelector('nav.tabs button[data-view="settings"]')?.click();
+    document.querySelector('button[data-view="settings"]')?.click();
     return;
   }
   // Alt + 0..9: التنقل المباشر بين التبويبات
@@ -2217,14 +2217,14 @@ function canAccessView(view){
   if(Array.isArray(allow)) return allow.includes(view);
   return !RESTRICTED_STAFF_VIEWS.includes(view); // دور غير معروف: قائمة حظر احترازية قديمة كخط دفاع أخير
 }
-$all('nav.tabs button[data-view]').forEach(btn=>{
+$all('button[data-view]').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     if(!canAccessView(btn.dataset.view)){
       showToast('هذا القسم غير متاح لصلاحيتك الحالية');
       return;
     }
     SoundFX.nav();
-    $all('nav.tabs button[data-view]').forEach(b=>b.classList.remove('active'));
+    $all('button[data-view]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const newView = $('#view-'+btn.dataset.view);
     const oldView = $('section.view.active');
@@ -2262,11 +2262,11 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
 });
 /* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (settings.rolePermissions القابلة للتعديل من الإعدادات) */
 function applyRolePermissions(){
-  $all('nav.tabs button[data-view]').forEach(btn=>{
+  $all('button[data-view]').forEach(btn=>{
     btn.style.display = canAccessView(btn.dataset.view) ? '' : 'none';
   });
   // إن كان المستخدم على قسم غير مسموح له به (مثلاً بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده للوحة التحكم
-  const activeBtn = $('nav.tabs button.active');
+  const activeBtn = $('button[data-view].active');
   if(activeBtn && !canAccessView(activeBtn.dataset.view)){
     $('[data-view="dashboard"]').click();
   }
