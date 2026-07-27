@@ -9,10 +9,23 @@ const STATIC_ASSETS = [
   '/',
   '/app.html',
   '/styles.css',
-  '/app-inline.js',
   '/manifest.json',
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  '/js/core-utils.js',
+  '/js/storage-sync.js',
+  '/js/auth-licensing.js',
+  '/js/ui-framework.js',
+  '/js/module-clients.js',
+  '/js/module-invoices.js',
+  '/js/module-bags.js',
+  '/js/module-finance.js',
+  '/js/module-reports.js',
+  '/js/module-accounting.js',
+  '/js/module-companies.js',
+  '/js/module-purchases.js',
+  '/js/module-zatca.js',
+  '/js/boot.js'
 ];
 
 // تثبيت Service Worker وحفظ الموارد الثابتة

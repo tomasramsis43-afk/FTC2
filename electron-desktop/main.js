@@ -19,7 +19,14 @@ try {
 // الثابتة اللي نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده
 // نت، ونكتبها فوق النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد
 // التثبيت نفسه، عشان الكتابة تكون مسموحة من غير صلاحيات Admin).
-const SYNCED_FILES = ['app.html', 'app-inline.js', 'styles.css', 'sw.js'];
+const SYNCED_FILES = [
+  'app.html', 'styles.css', 'sw.js',
+  'js/core-utils.js', 'js/storage-sync.js', 'js/auth-licensing.js',
+  'js/ui-framework.js', 'js/module-clients.js', 'js/module-invoices.js',
+  'js/module-bags.js', 'js/module-finance.js', 'js/module-reports.js',
+  'js/module-accounting.js', 'js/module-companies.js', 'js/module-purchases.js',
+  'js/module-zatca.js', 'js/boot.js'
+];
 let mainWindow;
 let userAssetsDir;
 
@@ -71,12 +78,11 @@ async function checkForFrontendUpdate() {
     try {
       const remote = await fetchText(`${REMOTE_BASE}/${file}`);
       // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
-      // ملحوظة: مبقاش لازم نعدّل API_BASE هنا زي الأول — الخادم المحلي بقى بيعمل بروكسي
-      // شفاف لمسارات /api (أنظر startLocalServer)، فنسخة app-inline.js تفضل بنفس
-      // API_BASE = '' الأصلية (مسارات نسبية)، وتوصل فعلياً لنفس الأصل المحلي 127.0.0.1
-      // اللي هو نفسه اللي فاتح منه الصفحة — من غير أي مشكلة CORS.
       if (remote && remote.length > 20) {
-        fs.writeFileSync(path.join(userAssetsDir, file), remote, 'utf8');
+        const destPath = path.join(userAssetsDir, file);
+        // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.writeFileSync(destPath, remote, 'utf8');
       }
     } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
   }
