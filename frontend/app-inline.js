@@ -2674,6 +2674,16 @@ async function cleanupDuplicatePaymentMethods(){
     // تحمل حقل settled إطلاقاً تُعتبر مُسوّاة تلقائياً — فقط الحركات الجديدة بعد تفعيل
     // الميزة تبدأ فعلياً كـ"معلّقة" (settled:false) حتى تظهر في صندوق التسويات
     if(t.settled === undefined){ t.settled = true; vaultChanged = true; }
+    // تصحيح بأثر رجعي: حركات معلّقة سُجّلت أصلاً من الأدمن/المحاسب/الموظف العام (وليس
+    // من الاستقبال) — هذه لا تحتاج "تسوية" أصلاً وتُعتبر مؤكدة تلقائياً، حتى لا تظهر بالخطأ
+    // في صندوق تسويات الاستقبال (المخصص فقط لعمليات الاستقبال).
+    if(t.settled === false && t.autoClientId){
+      const linkedClient = clients.find(c=>c.id===t.autoClientId);
+      if(!linkedClient || !isReceptionUsername(linkedClient.createdBy)){
+        t.settled = true;
+        vaultChanged = true;
+      }
+    }
   });
   bagStock.forEach(b=>{
     if(!b.method) return;
@@ -7777,6 +7787,15 @@ $('#import-bagown-input').addEventListener('change', async e=>{
 function removeClientLedgerEntries(clientRecordId){
   vaultTx = vaultTx.filter(t=>t.autoClientId!==clientRecordId);
 }
+/* هل مستخدم (باسمه) هو صاحب دور "استقبال"؟ تُستخدم لتحديد هل دفعة العميل النقدية تحتاج
+   "تسوية" (تأكيد استلام فعلي) أم لا — فقط عمليات التسجيل التي يقوم بها الاستقبال نفسه
+   تحتاج تسوية، أما عمليات التسجيل التي يقوم بها الأدمن/المحاسب/الموظف العام فتُعتبر
+   محسوبة ومؤكدة تلقائياً فور تسجيلها، لأنها ليست تسليم نقدية من طرف لآخر. */
+function isReceptionUsername(username){
+  if(!username) return false;
+  const u = users.find(x=>x.username===username);
+  return !!(u && u.role==='reception');
+}
 function syncClientLedgerEntry(client){
   // نحافظ على الرقم التسلسلي الرسمي القديم لهذين القيدين إن كانا موجودين مسبقاً (يُعاد توليدهما عند كل حفظ لبيانات العميل)
   const prevSeqs = {};
@@ -7812,7 +7831,7 @@ function syncClientLedgerEntry(client){
       notes: dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : ''),
       autoClientId: client.id,
       createdAt: Date.now(),
-      settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : false) : true,
+      settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : !isReceptionUsername(client.createdBy)) : true,
       settledBy: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledBy : '') : '',
       settledAt: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledAt : null) : null,
     });
@@ -7839,7 +7858,7 @@ function syncClientLedgerEntry(client){
       notes: dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين',
       autoClientId: client.id,
       createdAt: Date.now(),
-      settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : false) : true,
+      settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : !isReceptionUsername(client.createdBy)) : true,
       settledBy: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledBy : '') : '',
       settledAt: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledAt : null) : null,
     });
