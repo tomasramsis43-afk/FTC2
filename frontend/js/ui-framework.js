@@ -823,6 +823,18 @@ async function loadData(cacheOnly){
       settings.receptionLockedToClientsOnlyV1 = true;
       await saveSettings();
     }
+    // ترحيل تلقائي لمرة واحدة (V2): إضافة شاشة "تسوية الاستقبال" لصلاحيات دور الاستقبال، حتى
+    // للحسابات التي نفّذت الترحيل V1 القديم أعلاه (الذي كان يحصر الاستقبال على "العملاء" فقط
+    // دون علم بإضافة شاشة التسوية لاحقاً) — بدون هذا، تبقى شاشة التسوية محجوبة فعلياً عن
+    // الاستقبال رغم ظهور تبويبها، لأن settings.rolePermissions.reception محفوظة مسبقاً كمصفوفة
+    // فتتجاوز DEFAULT_SETTINGS تلقائياً (الشرط في الأعلى Array.isArray لا يستبدلها).
+    if(!settings.receptionSettlementsAccessV2){
+      if(settings.rolePermissions && Array.isArray(settings.rolePermissions.reception) && !settings.rolePermissions.reception.includes('settlements')){
+        settings.rolePermissions.reception.push('settlements');
+      }
+      settings.receptionSettlementsAccessV2 = true;
+      await saveSettings();
+    }
     if(typeof settings.receptionEditDeleteWindowHours!=='number' || settings.receptionEditDeleteWindowHours<0) settings.receptionEditDeleteWindowHours = DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
     if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
