@@ -1592,6 +1592,34 @@ tbody tr:hover {
   flex: 1;
 }
 
+/* ============= TABLE INPUTS (bulk forms) ============= */
+td input,
+td select,
+td textarea {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 9px;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+td input:focus,
+td select:focus,
+td textarea:focus {
+  outline: none;
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
+}
+
+td input:hover:not(:focus),
+td select:hover:not(:focus) {
+  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
+}
+
 /* ============= TOASTS ============= */
 .toast {
   position: fixed;
