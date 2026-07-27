@@ -1,0 +1,343 @@
+// ---------------- طابور "تعديلات بانتظار الرفع" (يعمل فقط أثناء انقطاع الاتصال بالسيرفر) ----------------
+// كل مفتاح (clients, vaultTx, settings...) له قيد واحد فقط بالطابور (آخر نسخة غير مرفوعة له)، لأن
+// المطلوب هو حفظ آخر تعديل محلياً وليس سجل تاريخي لكل تعديل بينما التطبيق نفسه لا يزال مفتوحاً بلا اتصال.
+async function _pendingWrite(key, encryptedValue){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(KV_IDB_PENDING_STORE, 'readwrite');
+        tx.objectStore(KV_IDB_PENDING_STORE).put({ key, value: encryptedValue, queuedAt: Date.now() });
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){}
+}
+async function _pendingDelete(key){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(KV_IDB_PENDING_STORE, 'readwrite');
+        tx.objectStore(KV_IDB_PENDING_STORE).delete(key);
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){}
+}
+async function _pendingReadAll(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return [];
+    return await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(KV_IDB_PENDING_STORE, 'readonly');
+        const req = tx.objectStore(KV_IDB_PENDING_STORE).getAll();
+        req.onsuccess = ()=> resolve(req.result || []);
+        req.onerror = ()=> resolve([]);
+      }catch(e){ resolve([]); }
+    });
+  }catch(e){ return []; }
+}
+async function _pendingCount(){
+  try{ return (await _pendingReadAll()).length; }catch(e){ return 0; }
+}
+
+// ---------------- مؤشّر حالة الاتصال/المزامنة أعلى البرنامج ----------------
+// isOffline: آخر حالة معروفة لاتصال السيرفر (وليس فقط navigator.onLine، لأنه قد يكون
+// المتصفح متصل بشبكة محلية بينما السيرفر نفسه لا يستجيب — نعتمد نجاح/فشل الطلبات الفعلية).
+let _ftcIsOffline = false;
+// وضع "العمل من الجهاز فقط" — يُفعَّل يدوياً من المستخدم عبر زر في الإعدادات (بخلاف _ftcIsOffline
+// أعلاه الذي يُكتشف تلقائياً من فشل الاتصال الفعلي). لما يكون مفعَّلاً، serverFetch يرفض الاتصال
+// بالسيرفر عمداً من أول خطوة، فتعمل كل قراءة/كتابة عبر نفس مسار "بدون اتصال" الموجود أصلاً
+// (قراءة من الكاش المحلي، وقائمة انتظار للتعديلات) دون أي تكرار للمنطق.
+let manualOfflineMode = false;
+try{ manualOfflineMode = localStorage.getItem('ftcManualOfflineMode') === '1'; }catch(e){}
+function setManualOfflineMode(on){
+  manualOfflineMode = !!on;
+  try{ localStorage.setItem('ftcManualOfflineMode', manualOfflineMode ? '1' : '0'); }catch(e){}
+  updateOfflineIndicator();
+  if(!manualOfflineMode){
+    // إعادة التفعيل: يبدأ فوراً برفع أي تعديلات تراكمت محلياً أثناء إيقاف الاتصال
+    flushPendingWrites();
+  }
+}
+function markOffline(){
+  if(_ftcIsOffline) { updateOfflineIndicator(); return; }
+  _ftcIsOffline = true;
+  updateOfflineIndicator();
+}
+function markOnline(){
+  if(!_ftcIsOffline){ updateOfflineIndicator(); return; }
+  _ftcIsOffline = false;
+  updateOfflineIndicator();
+}
+async function updateOfflineIndicator(){
+  try{
+    const el = document.getElementById('offline-status-indicator');
+    if(!el) return;
+    const count = await _pendingCount();
+    if(manualOfflineMode){
+      el.style.display = 'flex';
+      el.style.background = '#4a3b1f';
+      el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — لا يتصل البرنامج بالسيرفر إطلاقاً، وأي تعديل يُحفظ محلياً فقط حتى تُعيد تفعيل الاتصال';
+      el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الرفع لاحقاً` : '');
+    } else if(_ftcIsOffline){
+      el.style.display = 'flex';
+      el.style.background = '#7a1f1f';
+      el.title = 'لا يوجد اتصال بالسيرفر حالياً — البرنامج يعمل من آخر نسخة محفوظة على هذا الجهاز، وأي تعديل سيُحفظ محلياً ويُرفع تلقائياً عند عودة الاتصال';
+      el.innerHTML = '⚠️ غير متصل' + (count ? ` (${count} بانتظار الرفع)` : '');
+    } else if(count > 0){
+      el.style.display = 'flex';
+      el.style.background = '#7a5a1f';
+      el.title = 'يوجد تعديلات محفوظة محلياً بانتظار رفعها للسيرفر — جارٍ المحاولة تلقائياً';
+      el.innerHTML = `⏳ جارٍ رفع ${count} تعديل...`;
+    } else {
+      el.style.display = 'none';
+    }
+  }catch(e){}
+}
+let _ftcSyncInFlight = false;
+// ---------------- تثبيت البرنامج كتطبيق (PWA) على الجهاز ----------------
+// يلتقط حدث beforeinstallprompt (مدعوم في Chrome/Edge/Android) ويُظهر زر "تثبيت البرنامج"
+// في الشريط العلوي بدل الاعتماد على خيار مخفي داخل قائمة المتصفح قد لا ينتبه له المستخدم.
+// على iOS/Safari (اللي مبيدعمش الحدث ده إطلاقاً) بيوضّح للمستخدم الطريقة اليدوية بدلاً من ذلك.
+let _deferredInstallPrompt = null;
+function isRunningAsInstalledApp(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  if(!isRunningAsInstalledApp()){
+    const btn = document.getElementById('btn-install-app');
+    if(btn) btn.style.display = '';
+  }
+});
+window.addEventListener('appinstalled', ()=>{
+  _deferredInstallPrompt = null;
+  const btn = document.getElementById('btn-install-app');
+  if(btn) btn.style.display = 'none';
+  showToast('تم تثبيت البرنامج على الجهاز بنجاح ✅ — هتلاقيه دلوقتي كأيقونة مستقلة زي أي برنامج تاني');
+});
+(function(){
+  const btn = document.getElementById('btn-install-app');
+  if(!btn) return;
+  btn.addEventListener('click', async ()=>{
+    if(_deferredInstallPrompt){
+      _deferredInstallPrompt.prompt();
+      const {outcome} = await _deferredInstallPrompt.userChoice;
+      _deferredInstallPrompt = null;
+      btn.style.display = 'none';
+      if(outcome!=='accepted') showToast('تمام، تقدر تثبّته لاحقاً من نفس الزر لو غيّرت رأيك');
+    }else{
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      showToast(isIOS
+        ? 'لتثبيت البرنامج على آيفون/آيباد: من Safari اضغط زر المشاركة (⬆️) ثم "إضافة إلى الشاشة الرئيسية"'
+        : 'المتصفح الحالي لسه بيجهّز خيار التثبيت — جرّب تاني بعد شوية، أو من قائمة المتصفح (⋮) اختر "تثبيت التطبيق"');
+    }
+  });
+})();
+// يحاول رفع كل التعديلات المعلّقة محلياً إلى السيرفر — يُستدعى عند استعادة الاتصال (حدث online)،
+// وأيضاً بشكل دوري احتياطاً (بعض الأجهزة لا تُطلق حدث online بدقة، خصوصاً على الجوال).
+async function flushPendingWrites(){
+  if(_ftcSyncInFlight) return;
+  const pending = await _pendingReadAll();
+  if(!pending.length){ markOnline(); return; }
+  _ftcSyncInFlight = true;
+  try{
+    for(const item of pending){
+      try{
+        const res = await serverFetch(`/api/storage/${encodeURIComponent(item.key)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ value: item.value, version: _kvVersions[item.key] || 0 }),
+        });
+        if(res.status === 409){
+          // تعارض حقيقي: عُدِّلت نفس البيانات من جهاز/جلسة أخرى أثناء انقطاعنا — لا نستطيع
+          // حسم هذا تلقائياً بأمان، فنتخلى عن هذا التعديل المعلّق تحديداً وننبّه المستخدم
+          // بدل تكرار محاولة فاشلة إلى ما لا نهاية، ونطلب منه مراجعة البيانات بعد تحديث الصفحة.
+          const conflict = await res.json().catch(()=>({}));
+          _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
+          await _pendingDelete(item.key);
+          showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+          continue;
+        }
+        if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
+        const data = await res.json();
+        _kvVersions[item.key] = data.version || 0;
+        await _kvCacheWrite(item.key, data.version || 0, item.value);
+        await _pendingDelete(item.key);
+      }catch(e){
+        // لا يزال بدون اتصال — نوقف المحاولة لباقي العناصر هذه الجولة ونعيدها كلها لاحقاً
+        markOffline();
+        break;
+      }
+    }
+  } finally {
+    _ftcSyncInFlight = false;
+    const remaining = await _pendingCount();
+    if(remaining === 0) markOnline(); else updateOfflineIndicator();
+  }
+}
+window.addEventListener('online', ()=>{ flushPendingWrites(); });
+window.addEventListener('offline', ()=>{ markOffline(); });
+// محاولة دورية احتياطية (كل 20 ثانية) بجانب حدث online، ولا تُكلّف شيئاً لو الطابور فارغ بالفعل
+setInterval(()=>{ flushPendingWrites().catch(()=>{}); }, 20000);
+
+async function serverFetch(path, options = {}) {
+  if(manualOfflineMode){
+    // وضع العمل من الجهاز فقط مفعَّل يدوياً — نرفض الاتصال بالسيرفر من أول خطوة، فتتعامل كل
+    // دالة قراءة/كتابة في window.storage مع هذا الرفض تماماً كما تتعامل مع انقطاع اتصال حقيقي
+    // (القراءة من الكاش المحلي، والكتابة في طابور الانتظار لحين إعادة تفعيل الاتصال).
+    throw new Error('وضع العمل من الجهاز فقط مفعَّل — لا يوجد اتصال بالسيرفر');
+  }
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(SERVER_AUTH_TOKEN ? { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (res.status === 401) {
+    // انتهت الجلسة أو لم يسجَّل الدخول بعد — أعد عرض شاشة الدخول على الخادم
+    SERVER_AUTH_TOKEN = null;
+    try { sessionStorage.removeItem('serverAuthToken'); } catch (e) {}
+    showServerLoginScreen('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+    throw new Error('غير مصرَّح — يرجى تسجيل الدخول');
+  }
+  return res;
+}
+
+// فك تشفير "غير قابل للتجاهل": لو فشل فك التشفير (مثال: هذا الجهاز مفتاح تشفيره غير جاهز
+// أو خاطئ، بينما القيمة المخزَّنة على السيرفر مشفَّرة فعلاً بمفتاح جهاز آخر)، لا يجوز أبداً
+// معاملة النتيجة كأنها "لا توجد بيانات" (null/[])، لأن هذه القيمة الفارغة تُستخدم لاحقاً
+// كأساس لأي عملية حفظ تالية (مثال: إضافة عميل واحد) فتُكتب فوق كل بيانات السيرفر الحقيقية
+// وتمحوها بالكامل لكل المستخدمين. لذلك نُلبِّس الخطأ علامة صريحة (isDecryptFailure) ونتركه
+// يخرج من get() دون أي "catch" صامت يحوّله لقيمة فارغة — يجب أن يتعامل معه المستدعي
+// (loadData) كخطأ قاتل يوقف تحميل البيانات بدل إسكاته.
+async function _decryptOrFail(stored){
+  try{
+    return await decryptValue(stored);
+  }catch(e){
+    const err = new Error('تعذّر فك تشفير البيانات المحفوظة على السيرفر بهذا الجهاز: ' + (e && e.message ? e.message : String(e)));
+    err.isDecryptFailure = true;
+    throw err;
+  }
+}
+window.storage = {
+    async get(key, shared, cacheOnly){
+      const cached = await _kvCacheRead(key);
+      if(cacheOnly){
+        // وضع "من الجهاز فقط" — بدون أي اتصال بالسيرفر، لعرض آخر نسخة محفوظة محلياً فوراً
+        // عند فتح البرنامج دون انتظار الشبكة. المزامنة الفعلية مع السحابة تحدث بعد ذلك
+        // في الخلفية عبر backgroundSyncCheck() دون تجميد الواجهة.
+        if(!cached) return null;
+        _kvVersions[key] = cached.version;
+        if(cached.value === null || cached.value === undefined) return null;
+        const value = await _decryptOrFail(cached.value);
+        return { key, value, shared: !!shared };
+      }
+      let res;
+      try{
+        const headers = cached ? { 'If-None-Match': String(cached.version) } : {};
+        res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { headers });
+      }catch(e){
+        // فشل اتصال فعلي بالسيرفر تماماً (بدون إنترنت غالباً) — نعمل بآخر نسخة محفوظة محلياً
+        // بدل تفريغ الشاشة، حتى يبقى البرنامج قابلاً للاستخدام (قراءة على الأقل) بدون نت.
+        markOffline();
+        if(cached){
+          if(cached.value === null || cached.value === undefined) return null;
+          const value = await _decryptOrFail(cached.value);
+          return { key, value, shared: !!shared };
+        }
+        return null;
+      }
+      // من هنا: وصل رد فعلي من السيرفر (متصلين فعلاً) — أي خطأ فك تشفير بعد هذه النقطة
+      // خطأ حقيقي بمفتاح التشفير نفسه، وليس مجرد انقطاع اتصال، فيجب أن يخرج كخطأ صريح.
+      if(res.status === 304 && cached){
+        _kvVersions[key] = cached.version;
+        markOnline();
+        if(cached.value === null || cached.value === undefined) return null;
+        const value = await _decryptOrFail(cached.value);
+        return { key, value, shared: !!shared };
+      }
+      if(!res.ok){
+        // السيرفر استجاب لكن بخطأ (مش انقطاع شبكة) — نرجّع آخر نسخة محلية معروفة لو موجودة
+        // بدل عرض شاشة فارغة، حتى لو الخطأ مؤقت (مثال: الخادم "نائم" على استضافة مجانية).
+        if(cached){
+          markOffline();
+          if(cached.value === null || cached.value === undefined) return null;
+          const value = await _decryptOrFail(cached.value);
+          return { key, value, shared: !!shared };
+        }
+        return null;
+      }
+      const data = await res.json();
+      _kvVersions[key] = data.version || 0;
+      _kvCacheWrite(key, data.version || 0, data.value ?? null);
+      markOnline();
+      if(data.value === null || data.value === undefined) return null;
+      const value = await _decryptOrFail(data.value);
+      return { key, value, shared: !!shared };
+    },
+    async set(key, value, shared, meta){
+      const toStore = await encryptValue(value);
+      try{
+        const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ value: toStore, version: _kvVersions[key] || 0, ...(meta||{}) }),
+        });
+        if(res.status === 409){
+          const conflict = await res.json();
+          _kvVersions[key] = conflict.currentVersion || _kvVersions[key];
+          showToast('⚠️ ' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات، يرجى تحديث الصفحة وإعادة المحاولة'));
+          return null;
+        }
+        if(res.status === 422){
+          // حماية من فقدان بيانات: السيرفر رفض حفظاً يمحو عدداً كبيراً من السجلات فجأة (غالباً
+          // بسبب جهاز يعمل بنسخة قديمة من البيانات في الذاكرة). لا نطبّق التعديل محلياً ولا نضعه
+          // في طابور الرفع، حتى لا نُصر على تكرار نفس الحفظ الخطير تلقائياً لاحقاً.
+          const guard = await res.json().catch(()=>({}));
+          showToast('⛔ ' + (guard.error || 'تم رفض هذا الحفظ وقائياً لأنه سيحذف عدداً كبيراً من السجلات دفعة واحدة — يرجى تحديث الصفحة (Ctrl+Shift+R) والتأكد من آخر بيانات قبل إعادة المحاولة'));
+          return null;
+        }
+        if(!res.ok) throw new Error('save request failed');
+        const data = await res.json();
+        _kvVersions[key] = data.version || 0;
+        _kvCacheWrite(key, data.version || 0, toStore);
+        await _pendingDelete(key); // لو كان معلقاً من محاولة سابقة أثناء انقطاع سابق ونجح الآن
+        markOnline();
+        return { key, value, shared: !!shared };
+      }catch(e){
+        // تعذّر الوصول للسيرفر (غالباً بدون إنترنت) — لا نفقد التعديل: نحدّث الكاش المحلي فوراً
+        // (حتى تبقى الشاشة الحالية والقراءات التالية متسقة مع آخر تعديل)، ونجدول رفعه تلقائياً
+        // عند عودة الاتصال، بدل عرض رسالة "تعذر الحفظ" وضياع البيانات المُدخلة.
+        await _kvCacheWrite(key, _kvVersions[key] || 0, toStore);
+        await _pendingWrite(key, toStore);
+        markOffline();
+        return { key, value, shared: !!shared, offline: true };
+      }
+    },
+    async delete(key, shared){
+      try{
+        await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { method: 'DELETE' });
+        delete _kvVersions[key];
+        _kvCacheDelete(key).catch(()=>{});
+        return { key, deleted: true, shared: !!shared };
+      }catch(e){ return null; }
+    },
+    async list(prefix, shared){
+      try{
+        const res = await serverFetch(`/api/storage?prefix=${encodeURIComponent(prefix||'')}`);
+        if(!res.ok) return null;
+        const data = await res.json();
+        return { keys: data.keys, prefix, shared: !!shared };
+      }catch(e){ return null; }
+    }
+};
+
