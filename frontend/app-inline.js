@@ -15197,6 +15197,22 @@ clientsCaretBtn?.addEventListener('click', (e)=>{
     clientsCourseSubmenu.classList.add('show');
     clientsFlyoutWrap.classList.add('open');
     clientsCaretBtn.setAttribute('aria-expanded','true');
+    // في وضع سطح المكتب: nav.tabs عنده overflow-x:auto (للتمرير الأفقي)، وهذا كان يُقصّ القائمة
+    // المنسدلة (position:absolute) عند حدود الشريط فتظهر "داخل الصندوق" بدل التحليق فوق كل شيء.
+    // الحل: نحوّلها لـ position:fixed ونحسب موضعها فعلياً بالنسبة للشاشة (خارج أي تأثير overflow)
+    // — فقط في سطح المكتب، لأن وضع الجوال أصلاً معالج بشكل منفصل وصحيح عبر CSS (bottom sheet).
+    if(window.innerWidth > 900){
+      const r = clientsCaretBtn.getBoundingClientRect();
+      clientsCourseSubmenu.style.position = 'fixed';
+      clientsCourseSubmenu.style.top = (r.bottom + 8) + 'px';
+      clientsCourseSubmenu.style.right = (window.innerWidth - r.right) + 'px';
+      clientsCourseSubmenu.style.left = 'auto';
+    }else{
+      clientsCourseSubmenu.style.position = '';
+      clientsCourseSubmenu.style.top = '';
+      clientsCourseSubmenu.style.right = '';
+      clientsCourseSubmenu.style.left = '';
+    }
   }
 });
 clientsCourseSubmenu?.addEventListener('click', (e)=>{
