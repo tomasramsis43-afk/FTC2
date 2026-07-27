@@ -5,7 +5,16 @@ const https = require('https');
 const express = require('express');
 
 const PORT = 17532;
-const REMOTE_BASE = 'https://ftc-6d0s.onrender.com';
+// عنوان السيرفر — يمكن تغييره بدون إعادة بناء التطبيق عبر ملف config.json
+// بجانب main.js (في مجلد التثبيت). لو الملف غير موجود يُستخدم العنوان الافتراضي.
+let REMOTE_BASE = 'https://ftc-6d0s.onrender.com';
+try {
+  const cfgPath = require('path').join(__dirname, 'config.json');
+  if (require('fs').existsSync(cfgPath)) {
+    const cfg = JSON.parse(require('fs').readFileSync(cfgPath, 'utf8'));
+    if (cfg.serverUrl) REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
+  }
+} catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
 // نفس الملفات اللي بتتحدّث فعلياً من الواجهة (بدون الأيقونات والـ manifest
 // الثابتة اللي نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده
 // نت، ونكتبها فوق النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد
