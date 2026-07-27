@@ -550,14 +550,7 @@ clientsCourseSubmenu?.addEventListener('click', (e)=>{
   const sel = $('#filter-course');
   if(sel) sel.value = courseName;
   renderTable();
-  // نُبقي القائمة مفتوحة بعد الاختيار (بدل إغلاقها فوراً)، ونُحدِّث فقط علامة "المختار حالياً"
-  // على الزر المضغوط عليه — حتى يقدر المستخدم يقارن بين أكتر من نوع دورة بسهولة من نفس القائمة
-  // دون إعادة فتحها في كل مرة، ويشوف بوضوح أي تبويب مفعَّل الآن.
-  clientsCourseSubmenu.querySelectorAll('[data-course-filter]').forEach(b=>{
-    const active = b === btn;
-    b.classList.toggle('active-course-filter', active);
-    if(active) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current');
-  });
+  closeClientsCourseSubmenu();
 });
 document.addEventListener('click', (e)=>{
   if(clientsCourseSubmenu?.classList.contains('show') && !clientsFlyoutWrap.contains(e.target)) closeClientsCourseSubmenu();
