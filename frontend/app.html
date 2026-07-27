@@ -957,7 +957,7 @@
   <section class="view" id="view-courses">
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">شيت الدورات</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.</p>
     </div>
     <div class="toolbar">
       <input type="date" id="cs-filter-from" title="من تاريخ">
@@ -991,7 +991,7 @@
 
     <div class="panel">
       <h3 style="margin:0 0 10px;">من سجّل ولم يُحدَّد له رقم دورة بعد</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;">تُعرض القائمة أدناه لكل عملاء الشيت الذين لم يُحدَّد لهم رقم دورة بعد. يمكنك اختيار نوع دورة معيّن لتضييق العرض عليه فقط، وفلاتر الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع تعمل على كامل القائمة بجميع أنواع الدورات.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;">تُعرض القائمة أدناه لكل عملاء الشيت الذين لم يُحدَّد لهم رقم دورة بعد. يمكنك اختيار نوع دورة معيّن لتضييق العرض عليه فقط، وفلاتر الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع تعمل على كامل القائمة بجميع أنواع الدورات.</p>
       <div class="toolbar" style="margin-bottom:10px;">
         <select id="cs-missing-course"><option value="">كل أنواع الدورات</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
         <input type="date" id="cs-missing-from" title="تاريخ التسجيل من">
@@ -1692,7 +1692,7 @@
   <section class="view" id="view-courseinvoices">
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">شيت فواتير الدورات</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">شيت مخصص فقط لأرقام فواتير الدورات: أدخل القيمة الفعلية الموجودة في الإيصال وتاريخ صدور الفاتورة لكل عميل، ويستخرج النظام تلقائياً ضريبة القيمة المضافة (15% مضمّنة ضمن القيمة) ويقارنها بقيمة الدورة المسجّلة في النظام (سعر الدورة بعد الخصم) ويُظهر الفرق بينهما. تُعرض هنا فقط سجلات العملاء الذين لديهم "رقم فاتورة" مسجّل في شيت العملاء.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">شيت مخصص فقط لأرقام فواتير الدورات: أدخل القيمة الفعلية الموجودة في الإيصال وتاريخ صدور الفاتورة لكل عميل، ويستخرج النظام تلقائياً ضريبة القيمة المضافة (15% مضمّنة ضمن القيمة) ويقارنها بقيمة الدورة المسجّلة في النظام (سعر الدورة بعد الخصم) ويُظهر الفرق بينهما. تُعرض هنا فقط سجلات العملاء الذين لديهم "رقم فاتورة" مسجّل في شيت العملاء.</p>
     </div>
     <div class="toolbar">
       <input type="text" id="ci-search" placeholder="بحث بالاسم / رقم الهوية / رقم الفاتورة">
@@ -2356,12 +2356,12 @@
   <section class="view" id="view-vault">
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">الخزنة (كاش) · البنك · الشبكة</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">عند تسجيل عميل ودفعه لمبلغ عبر طريقة دفع معيّنة، يُرحَّل المبلغ تلقائياً إلى الحساب المرتبط بها (حسب إعداد "طرق الدفع" في الإعدادات). استخدم فلتر "الوجهة" أدناه لعرض حركات حساب واحد فقط كأنه شيت مستقل.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">عند تسجيل عميل ودفعه لمبلغ عبر طريقة دفع معيّنة، يُرحَّل المبلغ تلقائياً إلى الحساب المرتبط بها (حسب إعداد "طرق الدفع" في الإعدادات). استخدم فلتر "الوجهة" أدناه لعرض حركات حساب واحد فقط كأنه شيت مستقل.</p>
     </div>
 
     <div class="panel" style="border-right:4px solid var(--navy); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">قفل الفترة المحاسبية</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">بعد اعتماد القوائم المالية لفترة معيّنة، اقفلها لمنع أي إضافة أو تعديل أو حذف لأي حركة مالية بتاريخ يقع ضمنها أو قبلها — حماية لسلامة الأرقام المعتمدة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">بعد اعتماد القوائم المالية لفترة معيّنة، اقفلها لمنع أي إضافة أو تعديل أو حذف لأي حركة مالية بتاريخ يقع ضمنها أو قبلها — حماية لسلامة الأرقام المعتمدة.</p>
       <div class="computed" style="margin-bottom:10px;">
         <span>الحالة الحالية: <b id="vault-lock-status" class="mono">مُقفلة حتى 2025-12-31 — لا يمكن إضافة/تعديل/حذف أي حركة بتاريخ يقع في هذه الفترة أو قبلها</b></span>
       </div>
@@ -2376,7 +2376,7 @@
 
     <div class="panel" style="border-right:4px solid var(--teal); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">مطابقة كشف الحساب البنكي</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">استورد كشف حساب البنك (Excel) هنا لمطابقته تلقائياً مع حركات "البنك" المسجّلة في شيت الحركات المالية حسب التاريخ والمبلغ ونوع الحركة. الحركات التي لا تُطابَق تلقائياً تظهر أدناه لربطها يدوياً بأقرب حركة، أو تبقى بلا ربط لتنبيهك بوجود فرق يستحق المراجعة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">استورد كشف حساب البنك (Excel) هنا لمطابقته تلقائياً مع حركات "البنك" المسجّلة في شيت الحركات المالية حسب التاريخ والمبلغ ونوع الحركة. الحركات التي لا تُطابَق تلقائياً تظهر أدناه لربطها يدوياً بأقرب حركة، أو تبقى بلا ربط لتنبيهك بوجود فرق يستحق المراجعة.</p>
       <div class="computed" style="margin-bottom:10px;" id="bankrecon-summary">
     <span>سطور كشف الحساب: <b class="mono">0</b></span>
     <span>مطابَقة: <b class="mono" style="color:var(--teal);">0</b></span>
@@ -2626,7 +2626,7 @@
 
     <div class="panel">
       <h3>اتجاه الحركات اليومي (حسب الفلتر الحالي)</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يتحدّث تلقائياً مع أي تغيير في فلاتر التاريخ / الوجهة / النوع / البحث أعلاه.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يتحدّث تلقائياً مع أي تغيير في فلاتر التاريخ / الوجهة / النوع / البحث أعلاه.</p>
       <div id="chart-vault-daily">
     <div style="margin-bottom:10px;"><span style="display:inline-flex; align-items:center; gap:5px; margin-left:16px; font-size:12px; color:var(--text-muted);"><span style="width:10px; height:10px; border-radius:50%; background:var(--teal); display:inline-block;"></span>وارد</span><span style="display:inline-flex; align-items:center; gap:5px; margin-left:16px; font-size:12px; color:var(--text-muted);"><span style="width:10px; height:10px; border-radius:50%; background:var(--red); display:inline-block;"></span>صادر</span><span style="display:inline-flex; align-items:center; gap:5px; margin-left:16px; font-size:12px; color:var(--text-muted);"><span style="width:10px; height:10px; border-radius:50%; background:var(--gold-dark); display:inline-block;"></span>الصافي</span></div>
     <svg viewBox="0 0 900 280" style="width:100%; height:auto; max-height:280px; display:block;">
@@ -2638,7 +2638,7 @@
 
     <div class="panel">
       <h3>توزيع الحركات حسب طريقة الدفع (حسب الفلتر الحالي)</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يتحدّث تلقائياً مع أي تغيير في فلاتر التاريخ / الوجهة / النوع / البحث أعلاه.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يتحدّث تلقائياً مع أي تغيير في فلاتر التاريخ / الوجهة / النوع / البحث أعلاه.</p>
       <div id="chart-vault-method"></div>
     </div>
 
@@ -2653,7 +2653,7 @@
   <section class="view" id="view-settlements">
     <div class="panel" style="border-right:4px solid var(--red); margin-bottom:14px;" id="reception-settlement-panel">
       <h3 style="margin:0 0 4px;">صندوق تسويات الاستقبال</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">كل دفعة نقدية يسجّلها موظف استقبال لعميل جديد تُسجَّل كحركة "خزنة" لكنها تبقى هنا "معلّقة" ولا تُحتسب ضمن رصيد الخزنة الفعلي، حتى يستلمها المسؤول عن الخزنة فعلياً (نقداً في اليد) ويؤكد ذلك بالضغط على "تسوية" — عندها فقط تُضاف للرصيد وتختفي من هذه القائمة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">كل دفعة نقدية يسجّلها موظف استقبال لعميل جديد تُسجَّل كحركة "خزنة" لكنها تبقى هنا "معلّقة" ولا تُحتسب ضمن رصيد الخزنة الفعلي، حتى يستلمها المسؤول عن الخزنة فعلياً (نقداً في اليد) ويؤكد ذلك بالضغط على "تسوية" — عندها فقط تُضاف للرصيد وتختفي من هذه القائمة.</p>
       <div class="computed" style="margin-bottom:10px;">
         <span>عمليات معلّقة بانتظار التسوية: <b class="mono" id="settlement-pending-count" style="color:var(--red);">0</b></span>
         <span>إجمالي المبلغ المعلّق: <b class="mono" id="settlement-pending-total">0 ﷼</b></span>
@@ -2715,7 +2715,7 @@
 
     <div class="panel" style="border-right:4px solid var(--gold);">
       <h3>تنبيه محاسبي</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">حصيلة الحقائب المُحصّلة من العملاء يجب أن تُخصَّص بالكامل لشراء الحقائب، وليست إيراداً للمركز. راقب الفرق بين "حصيلة الحقائب من العملاء" و"إجمالي المصروف على الحقائب" أدناه — إن كان الفرق كبيراً موجباً فهناك مبالغ محصّلة لم تُستخدم بعد لشراء حقائب.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">حصيلة الحقائب المُحصّلة من العملاء يجب أن تُخصَّص بالكامل لشراء الحقائب، وليست إيراداً للمركز. راقب الفرق بين "حصيلة الحقائب من العملاء" و"إجمالي المصروف على الحقائب" أدناه — إن كان الفرق كبيراً موجباً فهناك مبالغ محصّلة لم تُستخدم بعد لشراء حقائب.</p>
     </div>
 
     <div class="panel">
@@ -2764,7 +2764,7 @@
 
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;">سجل عمليات شراء الحقائب المكتملة للعملاء</h3>
-      <p style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">يجمع كل عميل حصل على حقيبته فعلياً — سواء بالشراء المباشر له (من شيت العملاء) أو بالتسليم من المخزون المموَّل (من شيت مخزون الحقائب) — في سجل واحد.</p>
+      <p class="hint-info" style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">يجمع كل عميل حصل على حقيبته فعلياً — سواء بالشراء المباشر له (من شيت العملاء) أو بالتسليم من المخزون المموَّل (من شيت مخزون الحقائب) — في سجل واحد.</p>
       <div class="toolbar" style="padding:0 20px 12px;">
         <input type="text" id="cbp-search" placeholder="بحث بالاسم / رقم الهوية / الجوال / رقم الفاتورة">
         <select id="cbp-year-filter" style="max-width:130px;"><option value="">كل السنوات</option><option value="2026">2026</option><option value="2025">2025</option></select>
@@ -3258,7 +3258,7 @@
 
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;">عملاء اشتروا حقائبهم الخاصة</h3>
-      <p style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">هؤلاء العملاء وفّروا حقيبتهم بأنفسهم دون شرائها من المركز أو من المخزون، ولذلك لا تُحسب عليهم أي قيمة حقيبة.</p>
+      <p class="hint-info" style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">هؤلاء العملاء وفّروا حقيبتهم بأنفسهم دون شرائها من المركز أو من المخزون، ولذلك لا تُحسب عليهم أي قيمة حقيبة.</p>
       <div class="toolbar" style="padding:0 20px 12px;">
         <input type="text" id="ownbag-search" placeholder="بحث بالاسم / رقم الهوية / الجوال">
         <select id="ownbag-year-filter" style="max-width:130px;"><option value="">كل السنوات</option><option value="2026">2026</option><option value="2025">2025</option></select>
@@ -3857,7 +3857,7 @@
 
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;">فواتير المشتريات</h3>
-      <p style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">كل فاتورة تُسجَّل بحالة "مدفوعة" تُنشئ تلقائياً حركة صادر مطابقة في "الحركات المالية" — بلا إدخال مزدوج.</p>
+      <p class="hint-info" style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">كل فاتورة تُسجَّل بحالة "مدفوعة" تُنشئ تلقائياً حركة صادر مطابقة في "الحركات المالية" — بلا إدخال مزدوج.</p>
       <div class="toolbar" style="padding:0 20px 12px;">
         <input type="text" id="purchase-search" placeholder="بحث برقم الفاتورة / المورد / الصنف">
         <select id="purchase-supplier-filter" style="max-width:180px;"><option value="">كل الموردين</option><option value="mrlqv2w0sf791">فايف تن واكثر</option><option value="mrnamp12qsmi2">بندة</option><option value="mrnaoi25w7rtk">stc</option><option value="mrnb27esewwev">بنزين</option></select>
@@ -3991,7 +3991,7 @@
   <section class="view" id="view-zatca">
     <div class="panel" style="border-right:4px solid var(--navy); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">الفوترة الضريبية والزكاة (هيئة الزكاة والضريبة والجمارك)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">تبويب مخصّص لتجميع كل ما يلزم لتقديم الإقرار الضريبي (ضريبة القيمة المضافة) وحساب الزكاة: فواتير المبيعات (من فواتير الدورات تلقائياً + إدخال يدوي)، مردودات المبيعات، المشتريات، وحساب الزكاة التقديري. الفواتير هنا تُصدَر بنفس رمز الاستجابة السريعة (QR) المتوافق مع متطلبات الفوترة الإلكترونية المبسّطة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">تبويب مخصّص لتجميع كل ما يلزم لتقديم الإقرار الضريبي (ضريبة القيمة المضافة) وحساب الزكاة: فواتير المبيعات (من فواتير الدورات تلقائياً + إدخال يدوي)، مردودات المبيعات، المشتريات، وحساب الزكاة التقديري. الفواتير هنا تُصدَر بنفس رمز الاستجابة السريعة (QR) المتوافق مع متطلبات الفوترة الإلكترونية المبسّطة.</p>
     </div>
 
     <!-- ربط فعلي مع منصة فاتورة (المرحلة الثانية) -->
@@ -4207,7 +4207,7 @@
   <section class="view" id="view-reports">
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>الميزانية العامة</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 4px;">نظرة شاملة على الوضع المالي للمركز حتى الآن — كل الأرصدة والإيرادات والمصروفات منذ بداية التشغيل.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 4px;">نظرة شاملة على الوضع المالي للمركز حتى الآن — كل الأرصدة والإيرادات والمصروفات منذ بداية التشغيل.</p>
     </div>
     <div class="grid-cards" id="budget-cards"></div>
 
@@ -4249,7 +4249,7 @@
     </div>
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;">جدول شهري: عدد المسجّلين والمبالغ المدفوعة (آخر 12 شهر)</h3>
-      <p style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">عدد المسجّلين محسوب من تاريخ تسجيل العميل، والمبالغ المدفوعة محسوبة من الحركات المالية (نوع "قبض") مقسّمة حسب حساب الاستلام: نقدي (الخزنة) / شبكة / بنك.</p>
+      <p class="hint-info" style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">عدد المسجّلين محسوب من تاريخ تسجيل العميل، والمبالغ المدفوعة محسوبة من الحركات المالية (نوع "قبض") مقسّمة حسب حساب الاستلام: نقدي (الخزنة) / شبكة / بنك.</p>
       <div class="toolbar" style="padding:0 20px 12px;">
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-monthly-report">📅 تقرير شهري تفصيلي (PDF)</button>
@@ -4264,7 +4264,7 @@
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
       <h3 style="margin:0 0 4px;">📤 إرسال التقارير عبر واتساب</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 14px;">جميع خيارات إرسال التقارير عبر واتساب في مكان واحد.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 14px;">جميع خيارات إرسال التقارير عبر واتساب في مكان واحد.</p>
 
       <div style="padding:12px 0; border-top:1px solid var(--border);">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📤 إرسال ملخص شهري عبر واتساب</div>
@@ -4275,7 +4275,7 @@
 
       <div style="padding:12px 0; border-top:1px solid var(--border);">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📎 إرسال 3 تقارير PDF شهرية عبر واتساب</div>
-        <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
+        <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
           يولّد 3 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٣) الحقائب المشتراة (من المخزون والعملاء).
           <br>تُنزَّل الملفات تلقائياً على جهازك، وتُفتح محادثة واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b> — أرفقها يدوياً من مجلد التنزيلات ثم أرسل.
         </p>
@@ -4286,7 +4286,7 @@
 
       <div style="padding:12px 0; border-top:1px solid var(--border);">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">🧾 إرسال الإقرار الضريبي (ربع سنوي) عبر واتساب</div>
-        <p style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
+        <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
           الإقرار الضريبي (ضريبة القيمة المضافة) يُقدَّم كل ثلاثة أشهر — اختر السنة والربع (الأول: يناير-مارس، الثاني: أبريل-يونيو، الثالث: يوليو-سبتمبر، الرابع: أكتوبر-ديسمبر) ليولّد ملف PDF واحد لكامل الربع.
           <br>يُفتح واتساب لكل رقم محفوظ في <b>الإعدادات → إرسال التقارير عبر واتساب</b>.
         </p>
@@ -4369,7 +4369,7 @@
   <section class="view" id="view-accounting">
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>المحاسبة — القوائم المالية وفق أساس الاستحقاق</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 4px;">تُبنى هذه القوائم تلقائياً من بيانات العملاء والحركات المالية ومخزون الحقائب على أساس الاستحقاق المحاسبي (لا الأساس النقدي فقط)، بتصنيف يتوافق مع عرض المعايير الدولية (IFRS): الأصول المتداولة وغير المتداولة، الخصوم، حقوق الملكية، الإيرادات، والمصروفات. يمكنك إضافة قيود تسوية يدوية (إهلاك، مستحقات، ذمم دائنة) من قسم "القيود اليدوية" أدناه.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 4px;">تُبنى هذه القوائم تلقائياً من بيانات العملاء والحركات المالية ومخزون الحقائب على أساس الاستحقاق المحاسبي (لا الأساس النقدي فقط)، بتصنيف يتوافق مع عرض المعايير الدولية (IFRS): الأصول المتداولة وغير المتداولة، الخصوم، حقوق الملكية، الإيرادات، والمصروفات. يمكنك إضافة قيود تسوية يدوية (إهلاك، مستحقات، ذمم دائنة) من قسم "القيود اليدوية" أدناه.</p>
     </div>
 
     <div class="panel">
@@ -4417,7 +4417,7 @@
       <div class="table-scroll">
         <table id="acc-balance-table"><tbody><tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">الأصول المتداولة</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">الخزنة (كاش)</td><td class="mono" style="text-align:left;">40</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">البنك</td><td class="mono" style="text-align:left;">2,688,532.57</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">الشبكة</td><td class="mono" style="text-align:left;">732,316.57</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">ذمم العملاء (مدينون)</td><td class="mono" style="text-align:left;">1,060</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">مخزون الحقائب</td><td class="mono" style="text-align:left;">456.55</td></tr><tr style=""><td style="">إجمالي الأصول المتداولة</td><td class="mono" style="text-align:left;">3,422,405.69</td></tr><tr style="font-weight:800; border-top:1px solid var(--border);"><td style="">إجمالي الأصول</td><td class="mono" style="text-align:left;">3,422,405.69</td></tr><tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">الخصوم</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">أمانات حقائب لدى العملاء (التزام تسليم)</td><td class="mono" style="text-align:left;">25,110.25</td></tr><tr style="font-weight:800; border-top:1px solid var(--border);"><td style="">إجمالي الخصوم</td><td class="mono" style="text-align:left;">25,110.25</td></tr><tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">حقوق الملكية</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">الأرباح المرحلة (متراكمة منذ البداية)</td><td class="mono" style="text-align:left;">925,817.51</td></tr><tr style="color:var(--text-muted);"><td style="padding-right:22px;">رأس المال ومساهمات أخرى (رصيد متبقٍّ)</td><td class="mono" style="text-align:left;">2,471,477.93</td></tr><tr style="font-weight:800; border-top:1px solid var(--border);"><td style="">إجمالي حقوق الملكية</td><td class="mono" style="text-align:left;">3,397,295.44</td></tr><tr style="font-weight:800; border-top:1px solid var(--border);"><td style="">إجمالي الخصوم وحقوق الملكية</td><td class="mono" style="text-align:left;">3,422,405.69</td></tr></tbody></table>
       </div>
-      <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0;">ملاحظة منهجية: بند "رأس المال ومساهمات أخرى" هو رصيد متبقٍّ (Plug) يمثّل الفرق بين إجمالي الأصول والخصوم والأرباح المرحلة — يشمل أي تمويل أو دعم من الشركاء لم يُصنَّف تلقائياً كإيراد تشغيلي أو التزام قرض. راجع "القيود اليدوية" لإضافة أصول ثابتة أو التزامات أو إهلاك غير مسجَّل تلقائياً بالنظام.</p>
+      <p class="hint-info" style="font-size:12px; color:var(--text-muted); margin:10px 0 0;">ملاحظة منهجية: بند "رأس المال ومساهمات أخرى" هو رصيد متبقٍّ (Plug) يمثّل الفرق بين إجمالي الأصول والخصوم والأرباح المرحلة — يشمل أي تمويل أو دعم من الشركاء لم يُصنَّف تلقائياً كإيراد تشغيلي أو التزام قرض. راجع "القيود اليدوية" لإضافة أصول ثابتة أو التزامات أو إهلاك غير مسجَّل تلقائياً بالنظام.</p>
     </div>
 
     <div class="panel" style="border-right:4px solid var(--teal);">
@@ -4428,7 +4428,7 @@
           <button class="btn btn-gold btn-sm" id="btn-print-cashflow">طباعة PDF</button>
         </div>
       </div>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">تُبنى بالطريقة المباشرة من حركات الخزنة والبنك والشبكة فعلياً خلال الفترة المحددة أعلاه (السنة المالية / الربع)، وتُسوّى تلقائياً مع رصيد النقدية الفعلي في الميزانية العمومية. المقبوضات المرتبطة بعميل تُصنَّف "تشغيلية"، والمبالغ بلا عميل (دعم شركاء، قروض، رأس مال) تُصنَّف "تمويلية"، ومصروفات "الأصول الثابتة" تُصنَّف "استثمارية".</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">تُبنى بالطريقة المباشرة من حركات الخزنة والبنك والشبكة فعلياً خلال الفترة المحددة أعلاه (السنة المالية / الربع)، وتُسوّى تلقائياً مع رصيد النقدية الفعلي في الميزانية العمومية. المقبوضات المرتبطة بعميل تُصنَّف "تشغيلية"، والمبالغ بلا عميل (دعم شركاء، قروض، رأس مال) تُصنَّف "تمويلية"، ومصروفات "الأصول الثابتة" تُصنَّف "استثمارية".</p>
       <div class="table-scroll">
         <table id="acc-cashflow-table"></table>
       </div>
@@ -4481,7 +4481,7 @@
           <button class="btn btn-gold btn-sm" id="btn-print-vat">طباعة PDF</button>
         </div>
       </div>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يُحتسب عن نفس الفترة المحددة أعلاه (السنة المالية / الربع). <b>ضريبة المخرجات</b> من فواتير الدورات التي لها رقم فاتورة وقيمة فعلية بالإيصال (بتاريخ صدور الفاتورة). <b>ضريبة المدخلات</b> من فواتير الشراء المسجّلة في شيت المشتريات (بتاريخ الشراء). هذا التقرير للمساعدة في تعبئة الإقرار على بوابة الهيئة، وليس بديلاً عن المراجعة الضريبية.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يُحتسب عن نفس الفترة المحددة أعلاه (السنة المالية / الربع). <b>ضريبة المخرجات</b> من فواتير الدورات التي لها رقم فاتورة وقيمة فعلية بالإيصال (بتاريخ صدور الفاتورة). <b>ضريبة المدخلات</b> من فواتير الشراء المسجّلة في شيت المشتريات (بتاريخ الشراء). هذا التقرير للمساعدة في تعبئة الإقرار على بوابة الهيئة، وليس بديلاً عن المراجعة الضريبية.</p>
       <div class="table-scroll">
         <table id="acc-vat-table"><tbody>
     <tr><td colspan="2" style="padding-top:14px; font-weight:800; color:var(--navy);">المبيعات (ضريبة المخرجات) — 305 فاتورة</td></tr>
@@ -4533,7 +4533,7 @@
 
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>القيود اليدوية (تسويات محاسبية)</h3>
-      <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;">لتسجيل عناصر لا يلتقطها النظام تلقائياً من الحركات المالية اليومية، مثل إهلاك الأصول الثابتة، أو مصروف مستحق لم يُدفع بعد، أو ذمم دائنة لمورّدين، أو تصحيح رصيد الأرباح المرحلة لفترة سابقة.</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;">لتسجيل عناصر لا يلتقطها النظام تلقائياً من الحركات المالية اليومية، مثل إهلاك الأصول الثابتة، أو مصروف مستحق لم يُدفع بعد، أو ذمم دائنة لمورّدين، أو تصحيح رصيد الأرباح المرحلة لفترة سابقة.</p>
       <div class="formgrid" style="margin-bottom:12px;">
         <div class="field"><label>نوع القيد</label>
           <select id="jf-type">
@@ -4567,6 +4567,7 @@
       <p class="hint hint-info" style="margin:0 0 12px;">وحدة محاسبة مزدوجة كاملة (دليل حسابات + قيود يومية مدين/دائن متوازنة + دفتر أستاذ عام + ميزان مراجعة) لتوثيق أي عمليات محاسبية بالطريقة الرسمية، بشكل مستقل عن التقارير التلقائية أعلاه (قائمة الدخل والميزانية العمومية) التي تُبنى تلقائياً من حركات الخزنة والعملاء والمشتريات. كل قيد يدوي جديد، وكل فاتورة شراء أو فاتورة مبيعات يدوية جديدة، تُرحَّل تلقائياً هنا كقيد مزدوج متوازن لحظة حفظها. فواتير الدورات التدريبية (فواتير العملاء) تُرحَّل بالجملة عبر الزر أدناه لأن تسجيلها يتم بالتعديل المباشر داخل الجدول.</p>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-legacy" style="margin-bottom:6px;">🔗 ترحيل القيود اليدوية القديمة غير المرحّلة تلقائياً</button>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-sales-purchases" style="margin-bottom:6px;">🔗 ترحيل فواتير المبيعات والمشتريات غير المرحّلة تلقائياً</button>
+      <button class="btn btn-ghost btn-sm" id="btn-diagnose-unposted" style="margin-bottom:6px;">🔍 تشخيص فواتير الدورات غير المُرحّلة (تقرير Excel بالسبب)</button>
 
       <h4 style="margin:16px 0 8px; color:var(--navy);">دليل الحسابات</h4>
       <div class="formgrid" style="margin-bottom:10px;">
@@ -4608,6 +4609,18 @@
       <button class="btn btn-primary btn-sm" id="btn-de-save" style="margin-top:10px;">حفظ القيد</button>
 
       <h4 style="margin:22px 0 8px; color:var(--navy);">سجل القيود اليومية</h4>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <input type="text" id="de-filter-search" placeholder="بحث بالبيان">
+        <input type="date" id="de-filter-from" title="من تاريخ">
+        <input type="date" id="de-filter-to" title="إلى تاريخ">
+        <select id="de-filter-type">
+          <option value="">كل القيود</option>
+          <option value="auto">تلقائي فقط</option>
+          <option value="manual">يدوي فقط</option>
+        </select>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-de-filter-clear">مسح الفلتر</button>
+      </div>
       <div class="table-scroll table-scroll-compact">
         <table>
           <thead><tr><th>التاريخ</th><th>البيان</th><th>إجمالي مدين</th><th>إجمالي دائن</th><th></th></tr></thead>
@@ -4616,7 +4629,7 @@
       </div>
       <div class="empty-state" id="de-entries-empty" style="display:none;">
         <div class="big">📒</div>
-        لا توجد قيود يومية مسجّلة بعد
+        لا توجد قيود يومية مطابقة للفلتر الحالي
       </div>
 
       <h4 style="margin:22px 0 8px; color:var(--navy);">دفتر الأستاذ العام</h4>
@@ -4655,7 +4668,7 @@
   <section class="view" id="view-budget">
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>الموازنة التقديرية والتخطيط المالي</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل نوع دورة (إيراد) وكل تصنيف مصروف، وقارنها تلقائياً بالأرقام الفعلية المسحوبة مباشرة من بيانات العملاء والحركات المالية الحقيقية في البرنامج. هذا القسم متاح للمدير فقط.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل نوع دورة (إيراد) وكل تصنيف مصروف، وقارنها تلقائياً بالأرقام الفعلية المسحوبة مباشرة من بيانات العملاء والحركات المالية الحقيقية في البرنامج. هذا القسم متاح للمدير فقط.</p>
     </div>
 
     <div class="panel">
@@ -4701,7 +4714,7 @@
   <section class="view" id="view-audit">
     <div class="panel" style="border-right:4px solid var(--gold);">
       <h3>سجل المراجعة (التعديلات والحذف)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0;">يسجّل هذا السجل تلقائياً كل عملية إضافة أو تعديل أو حذف تتم في أي شيت بالبرنامج، مع التاريخ والوقت واسم المستخدم الذي قام بها، للرجوع إليها عند المراجعة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">يسجّل هذا السجل تلقائياً كل عملية إضافة أو تعديل أو حذف تتم في أي شيت بالبرنامج، مع التاريخ والوقت واسم المستخدم الذي قام بها، للرجوع إليها عند المراجعة.</p>
     </div>
     <div class="toolbar">
       <input type="text" id="audit-search" placeholder="بحث بالمستخدم / القسم / الوصف">
@@ -4754,7 +4767,7 @@
   <section class="view" id="view-settings">
     <div class="panel" id="panel-app-update" >
       <h3 style="margin:0 0 4px;">تحديث البرنامج</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">لتحديث البرنامج إلى نسخة جديدة، اختر ملف <span class="mono">index.html</span> الخاص بالتحديث. سيتم استبدال النسخة الحالية بالكامل بالنسخة الجديدة تلقائياً، مع الاحتفاظ بنسخة احتياطية من النسخة القديمة قبل الاستبدال. <b>بياناتك المحفوظة (العملاء، الدورات، الحقائب، المالية...) لن تتأثر إطلاقاً</b> لأنها محفوظة بشكل منفصل تماماً عن ملف البرنامج نفسه. يمكنك أيضاً تصدير نسخة من ملف البرنامج الحالي (بكل التحديثات والاختصارات المضافة) لحفظها كأرشيف أو لتثبيتها على جهاز آخر.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">لتحديث البرنامج إلى نسخة جديدة، اختر ملف <span class="mono">index.html</span> الخاص بالتحديث. سيتم استبدال النسخة الحالية بالكامل بالنسخة الجديدة تلقائياً، مع الاحتفاظ بنسخة احتياطية من النسخة القديمة قبل الاستبدال. <b>بياناتك المحفوظة (العملاء، الدورات، الحقائب، المالية...) لن تتأثر إطلاقاً</b> لأنها محفوظة بشكل منفصل تماماً عن ملف البرنامج نفسه. يمكنك أيضاً تصدير نسخة من ملف البرنامج الحالي (بكل التحديثات والاختصارات المضافة) لحفظها كأرشيف أو لتثبيتها على جهاز آخر.</p>
       <input type="file" id="update-file-input" accept=".html,.htm" style="display:none;">
       <button class="btn btn-gold btn-sm" id="btn-update-app">📥 اختيار ملف التحديث وتثبيته</button>
       <button class="btn btn-ghost btn-sm" id="btn-export-app">📤 تصدير نسخة من البرنامج (index.html)</button>
@@ -4762,7 +4775,7 @@
     </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;">💾 النسخ الاحتياطي والاستعادة</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">نسخة احتياطية كاملة تشمل كل بيانات البرنامج في ملف واحد (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) يمكن استخدامها لاستعادة البرنامج بالكامل عند الحاجة.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">نسخة احتياطية كاملة تشمل كل بيانات البرنامج في ملف واحد (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) يمكن استخدامها لاستعادة البرنامج بالكامل عند الحاجة.</p>
       <div class="formgrid" style="margin-bottom:10px; align-items:end;">
         <div class="field">
           <label><input type="checkbox" id="set-autobackup-enabled" style="width:auto; margin-left:6px;">تفعيل نسخة احتياطية تلقائية عند فتح البرنامج</label>
@@ -4780,7 +4793,7 @@
     </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;">🔔 إعدادات التنبيهات الذكية</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:220px;"><label>حد أدنى لرصيد الخزنة + البنك (تنبيه لو أقل)</label><input type="number" id="set-low-balance" min="0" step="1"></div>
         <div class="field" style="max-width:220px;"><label>تنبيه بالحقائب غير المشتراة بعد (أيام)</label><input type="number" id="set-bag-overdue-days" min="1" step="1"></div>
@@ -4789,7 +4802,7 @@
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
       <h3 style="margin:0 0 4px;">📤 التقرير الشهري عبر واتساب</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أدخل رقم واتساب المستلم (بالصيغة الدولية بدون + أو أصفار، مثال: 966501234567). عند بداية كل شهر جديد سيظهر تنبيه في لوحة التحكم لإرسال ملخص الشهر الماضي بضغطة واحدة، ويمكنك أيضاً إرسال ملخص أي شهر يدوياً من شاشة التقارير.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أدخل رقم واتساب المستلم (بالصيغة الدولية بدون + أو أصفار، مثال: 966501234567). عند بداية كل شهر جديد سيظهر تنبيه في لوحة التحكم لإرسال ملخص الشهر الماضي بضغطة واحدة، ويمكنك أيضاً إرسال ملخص أي شهر يدوياً من شاشة التقارير.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:260px;"><label>رقم واتساب المستلم</label><input type="text" id="set-monthly-wa-number" placeholder="966501234567" dir="ltr"></div>
         <button class="btn btn-ghost btn-sm" id="btn-save-monthly-wa">حفظ الرقم</button>
@@ -4797,7 +4810,7 @@
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
       <h3 style="margin:0 0 4px;">📎 إرسال التقارير عبر واتساب (PDF)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
         احفظ أرقام واتساب المستلمين هنا (رقم أو أكثر، افصل بينها بفاصلة) — تبقى محفوظة دائماً ولا تُمسح عند إغلاق البرنامج أو إعادة فتحه. زر التوليد والإرسال الفعلي موجود بشاشة <b>التقارير</b>.
       </p>
       <div class="formgrid" style="align-items:end;">
@@ -4815,7 +4828,7 @@
     </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;">🔗 ربط Power Automate (Webhooks)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>
       <div class="formgrid" style="margin-bottom:10px;">
         <div class="field full"><label>رابط Webhook (HTTP POST URL من Power Automate)</label><input type="text" id="set-pa-webhook-url" placeholder="https://prod-00.westus.logic.azure.com/workflows/..."></div>
       </div>
@@ -4830,7 +4843,7 @@
     </div>
     <div class="panel" id="panel-server-sync" >
       <h3 style="margin:0 0 4px;">🔌 الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تسويه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تسويه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <span id="server-sync-status-label" style="font-weight:700;"></span>
         <button class="btn btn-sm" id="btn-toggle-server-sync"></button>
@@ -4946,13 +4959,13 @@
     </div>
     <div class="panel" id="panel-role-permissions">
       <h3 style="margin:0 0 4px;">🛡️ صلاحيات الأدوار (أي أقسام تظهر لكل دور)</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">حدّد أي أقسام تظهر لكل دور غير "مدير". المدير دائماً له كل الصلاحيات كاملة ولا يمكن تقييده إطلاقاً، لتفادي فقدان الوصول الكامل للبرنامج بالخطأ.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">حدّد أي أقسام تظهر لكل دور غير "مدير". المدير دائماً له كل الصلاحيات كاملة ولا يمكن تقييده إطلاقاً، لتفادي فقدان الوصول الكامل للبرنامج بالخطأ.</p>
       <div class="table-scroll table-scroll-compact" id="role-permissions-table-wrap"></div>
       <button class="btn btn-primary btn-sm" id="btn-save-role-permissions" style="margin-top:12px;">حفظ الصلاحيات</button>
     </div>
     <div class="panel" id="panel-reception-restrictions">
       <h3 style="margin:0 0 4px;">⏱️ قيود دور الاستقبال على شيت العملاء</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تحكّم في المهلة المسموح بها لدور "استقبال" لتعديل أو حذف سجل عميل بعد تسجيله، وفي إتاحة كل ميزة من عدمها. بعد انتهاء المهلة المحددة (محسوبة من وقت تسجيل العميل نفسه)، يتحول السجل لعرض فقط بالنسبة لهذا الدور، ولا يمكنه تعديله أو حذفه إلا الأدمن. يمكنك تعديل هذه القيم في أي وقت.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تحكّم في المهلة المسموح بها لدور "استقبال" لتعديل أو حذف سجل عميل بعد تسجيله، وفي إتاحة كل ميزة من عدمها. بعد انتهاء المهلة المحددة (محسوبة من وقت تسجيل العميل نفسه)، يتحول السجل لعرض فقط بالنسبة لهذا الدور، ولا يمكنه تعديله أو حذفه إلا الأدمن. يمكنك تعديل هذه القيم في أي وقت.</p>
       <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
         <label style="display:flex; align-items:center; gap:6px;">عدد الساعات المسموح بها بعد التسجيل:
           <input type="number" id="rp-reception-window-hours" min="0" step="0.5" style="width:90px;">
@@ -4966,13 +4979,13 @@
     </div>
     <div class="panel" id="panel-login-history">
       <h3 style="margin:0 0 4px;">🕓 سجل الدخول والجلسات</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
       <button class="btn btn-ghost btn-sm" id="btn-refresh-login-history" style="margin-bottom:10px;">🔄 تحديث السجل</button>
       <div id="login-history-list"><div class="hint hint-info">اضغط "تحديث السجل" لعرض آخر عمليات الدخول</div></div>
     </div>
     <div class="panel" id="panel-pin-lock" >
       <h3 style="margin:0 0 4px;">🔒 قفل الشاشة بـ PIN</h3>
-      <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">يقفل البرنامج تلقائياً بعد مدة خمول محددة، ويطلب رقم PIN لإعادة الدخول — مفيد لو تركت الجهاز بدون مراقبة. القفل شغّال على هذا الجهاز فقط ولا يؤثر على أي جهاز آخر.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">يقفل البرنامج تلقائياً بعد مدة خمول محددة، ويطلب رقم PIN لإعادة الدخول — مفيد لو تركت الجهاز بدون مراقبة. القفل شغّال على هذا الجهاز فقط ولا يؤثر على أي جهاز آخر.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:160px;"><label>تفعيل القفل التلقائي</label>
           <select id="pin-enabled-select"><option value="0">معطّل</option><option value="1">مفعَّل</option></select>
@@ -4996,7 +5009,7 @@
     </div>
     <div class="panel">
       <h3>بيانات النظام</h3>
-      <p style="font-size:13px; color:var(--text-muted);">جميع البيانات محفوظة بشكل خاص وتظهر فقط لك عند فتح هذا التطبيق. يمكنك تصدير نسخة CSV من تبويب "العملاء" في أي وقت للاحتفاظ بنسخة احتياطية.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted);">جميع البيانات محفوظة بشكل خاص وتظهر فقط لك عند فتح هذا التطبيق. يمكنك تصدير نسخة CSV من تبويب "العملاء" في أي وقت للاحتفاظ بنسخة احتياطية.</p>
       <button class="btn btn-danger btn-sm" id="btn-reset">حذف جميع البيانات</button>
     </div>
   </section>
@@ -5643,7 +5656,7 @@
 <div class="overlay" id="voided-overlay">
   <div class="modal" style="max-width:820px;">
     <h2>سجل الحركات المالية الملغاة (حذف منطقي)</h2>
-    <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">هذه الحركات مُلغاة ولا تدخل ضمن أي رصيد أو تقرير أو قائمة مالية، لكنها محفوظة بالكامل هنا مع سبب الإلغاء وتاريخه ومن قام به — تحقيقاً لمبدأ عدم الحذف الفعلي لأي حركة مالية.</p>
+    <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">هذه الحركات مُلغاة ولا تدخل ضمن أي رصيد أو تقرير أو قائمة مالية، لكنها محفوظة بالكامل هنا مع سبب الإلغاء وتاريخه ومن قام به — تحقيقاً لمبدأ عدم الحذف الفعلي لأي حركة مالية.</p>
     <div class="table-scroll" style="max-height:60vh;">
       <table>
         <thead><tr><th>الرقم التسلسلي</th><th>التاريخ</th><th>النوع</th><th>الحساب</th><th>المبلغ</th><th>البيان/التصنيف</th><th>سبب الإلغاء</th><th>ألغاها</th><th>وقت الإلغاء</th></tr></thead>
@@ -5676,7 +5689,7 @@
 <div class="overlay" id="shortcuts-overlay">
   <div class="modal" style="max-width:560px;">
     <h2>اختصارات لوحة المفاتيح</h2>
-    <p style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">هذه الاختصارات تعمل من أي مكان في البرنامج (ما لم تكن تكتب داخل حقل نصي حيث تُستثنى بعض الاختصارات لعدم التعارض مع الكتابة).</p>
+    <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">هذه الاختصارات تعمل من أي مكان في البرنامج (ما لم تكن تكتب داخل حقل نصي حيث تُستثنى بعض الاختصارات لعدم التعارض مع الكتابة).</p>
     <div class="table-scroll" style="max-height:60vh;">
       <table>
         <thead><tr><th>الاختصار</th><th>الوظيفة</th></tr></thead>

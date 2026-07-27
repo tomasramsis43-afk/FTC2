@@ -10397,10 +10397,23 @@ $('#btn-de-save')?.addEventListener('click', async ()=>{
   showToast('تم حفظ القيد اليومية');
   renderDoubleEntryModule();
 });
+function filteredJournalDE(){
+  const q = ($('#de-filter-search')?.value || '').trim().toLowerCase();
+  const from = $('#de-filter-from')?.value || '';
+  const to = $('#de-filter-to')?.value || '';
+  const type = $('#de-filter-type')?.value || '';
+  let rows = journalDE.slice();
+  if(q) rows = rows.filter(e=> String(e.description||'').toLowerCase().includes(q));
+  if(from) rows = rows.filter(e=> (e.date||'') >= from);
+  if(to) rows = rows.filter(e=> (e.date||'') <= to);
+  if(type==='auto') rows = rows.filter(e=> !!e.isAuto);
+  else if(type==='manual') rows = rows.filter(e=> !e.isAuto);
+  return rows;
+}
 function renderJournalDEList(){
   const tbody = $('#de-entries-body');
   if(!tbody) return;
-  const sorted = journalDE.slice().sort((a,b)=>{
+  const sorted = filteredJournalDE().sort((a,b)=>{
     const d = String(a.date||'').localeCompare(String(b.date||''));
     return d!==0 ? d : (a.createdAt||0)-(b.createdAt||0);
   });
@@ -10421,7 +10434,17 @@ function renderJournalDEList(){
     </tr>`;
   }).join('');
   $('#de-entries-empty') && ($('#de-entries-empty').style.display = sorted.length ? 'none' : '');
+  if($('#de-entries-empty')){
+    $('#de-entries-empty').lastChild.textContent = journalDE.length ? 'لا توجد قيود يومية مطابقة للفلتر الحالي' : 'لا توجد قيود يومية مسجّلة بعد';
+  }
 }
+['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=> $(sel)?.addEventListener('input', renderJournalDEList));
+$('#de-filter-type')?.addEventListener('change', renderJournalDEList);
+$('#btn-de-filter-clear')?.addEventListener('click', ()=>{
+  ['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=>{ if($(sel)) $(sel).value=''; });
+  if($('#de-filter-type')) $('#de-filter-type').value='';
+  renderJournalDEList();
+});
 $('#de-entries-body')?.addEventListener('click', async e=>{
   const btn = e.target.closest('[data-de-del]');
   if(!btn) return;
@@ -10620,6 +10643,37 @@ function buildDELinesForCourseInvoice(c){
 function clientHasUnsettledCash(client){
   return vaultTx.some(t=> t.autoClientId===client.id && (t.destination||'vault')==='vault' && !t.deletedAt && t.settled===false);
 }
+/* تشخيص: لكل عميل عنده رقم فاتورة دورة ولم تُرحَّل فاتورته بعد للقيد المزدوج، يحدد السبب
+   الدقيق (لا تُوجد بيانات كافية / دفعة نقدية غير مُسوّاة / حسابات ناقصة بدليل الحسابات)،
+   ويُصدّر تقريراً بالتفصيل مقسّماً حسب الشهر — يساعد على معرفة أين ولماذا توقف الترحيل. */
+function diagnoseUnpostedCourseInvoices(){
+  const rows = [];
+  const reasonCounts = {};
+  courseInvoiceClients().filter(c=>!c.courseInvoiceDEId).forEach(c=>{
+    let reason;
+    if(!c.receiptIssueDate) reason = 'لا يوجد تاريخ صدور فاتورة مُدخل';
+    else if(!(num(c.receiptActualValue)>0)) reason = 'لم تُدخل القيمة الفعلية من الإيصال';
+    else if(clientHasUnsettledCash(c)) reason = 'دفعة نقدية غير مُسوّاة بعد بصندوق تسويات الاستقبال';
+    else if(!buildDELinesForCourseInvoice(c)) reason = 'حسابات ناقصة بدليل الحسابات (1100 أو 4000 أو 2100)';
+    else reason = 'سبب غير محدد — راجع الدعم الفني';
+    reasonCounts[reason] = (reasonCounts[reason]||0) + 1;
+    rows.push({
+      'الشهر': (c.receiptIssueDate||'').slice(0,7) || 'بدون تاريخ',
+      'رقم الهوية': c.clientId||'', 'الاسم': c.name||'', 'رقم الفاتورة': c.invoice||'',
+      'تاريخ الفاتورة': c.receiptIssueDate||'', 'القيمة الفعلية': c.receiptActualValue||'',
+      'السبب': reason
+    });
+  });
+  return { rows, reasonCounts };
+}
+$('#btn-diagnose-unposted')?.addEventListener('click', ()=>{
+  const { rows, reasonCounts } = diagnoseUnpostedCourseInvoices();
+  if(!rows.length){ showToast('كل فواتير الدورات المؤهّلة مُرحّلة بالفعل للقيد المزدوج'); return; }
+  rows.sort((a,b)=> a['الشهر'].localeCompare(b['الشهر']));
+  downloadXlsx(`تشخيص_فواتير_غير_مرحلة_${stampNow()}.xlsx`, 'التشخيص', rows);
+  const summary = Object.entries(reasonCounts).map(([r,n])=>`${n}: ${r}`).join(' — ');
+  showToast(`${rows.length} فاتورة غير مُرحّلة. ${summary}`);
+});
 function autoPostCourseInvoice(c){
   if(c.courseInvoiceDEId) return false;
   if(!(c.receiptIssueDate && num(c.receiptActualValue)>0)) return false;
