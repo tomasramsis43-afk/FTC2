@@ -1018,10 +1018,11 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   currentPageClientIds = pageRows.map(c=>c.id);
   $('#table-body').innerHTML = pageRows.map(c=>{
     const rem = remaining(c);
-    const nameBadges = `${escapeHtml(c.name)}${phoneWithWhatsapp(c.phone)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
+    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
     return `<tr${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
       <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
+      <td data-label="رقم الهاتف">${phoneCellHtml(c.phone)}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
       <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
@@ -1132,12 +1133,14 @@ function whatsappLink(phone){
   return p ? `https://wa.me/${p}` : '';
 }
 const WA_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="flex:none;"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2zm0 18.06h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.34c0-4.54 3.7-8.24 8.25-8.24 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.83c0 4.55-3.7 8.24-8.24 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.17.24-.64.8-.78.97-.14.17-.29.19-.53.06-.25-.12-1.04-.38-1.99-1.22-.73-.66-1.23-1.47-1.37-1.72-.14-.25-.02-.38.11-.5.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.4-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.23.25-.86.84-.86 2.05s.88 2.38 1 2.55c.12.17 1.73 2.64 4.2 3.7.59.25 1.05.4 1.41.51.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.28z"/></svg>';
-/* يبني HTML للرقم بجانب اسم العميل: رابط واتساب قابل للنقر إن أمكن تطبيع الرقم، وإلا نص عادي */
-function phoneWithWhatsapp(phone){
-  if(!phone) return '';
+/* يبني HTML لخلية رقم الهاتف كعمود منفصل: نص الرقم عادي، وأيقونة واتساب صغيرة قابلة للنقر
+   بجانبه فقط إن أمكن تطبيع الرقم (النقر على الأيقونة نفسها هو ما يفتح واتساب، وليس الرقم) */
+function phoneCellHtml(phone){
+  if(!phone) return '—';
+  const numText = `<span class="mono">${escapeHtml(phone)}</span>`;
   const link = whatsappLink(phone);
-  if(!link) return ` <span class="mono" style="color:var(--text-muted); font-size:11.5px;">(${escapeHtml(phone)})</span>`;
-  return ` <a href="${link}" target="_blank" rel="noopener" class="mono" title="مراسلة العميل عبر واتساب" style="color:#25D366; font-size:11.5px; text-decoration:none; display:inline-flex; align-items:center; gap:3px; vertical-align:middle;">${WA_ICON}(${escapeHtml(phone)})</a>`;
+  if(!link) return numText;
+  return `<a href="${link}" target="_blank" rel="noopener" title="مراسلة العميل عبر واتساب" style="color:#25D366; display:inline-flex; align-items:center;">${WA_ICON}</a> ${numText}`;
 }
 
 // بديل عن window.open للطباعة: بعض تطبيقات Electron لا تدعم معاينة الطباعة (Print Preview)
