@@ -668,10 +668,11 @@ const DEFAULT_SETTINGS = {
   themePresetId: 'nocolor',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
-    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
-    accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
-    // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط ولا شيء غيرها إطلاقاً — بناءً على طلب صريح.
-    reception: ['clients']
+    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
+    accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
+    // الاستقبال مقصور على شاشة العملاء (التسجيل) وشاشة "تسوية الاستقبال" فقط (يرى فيها فقط
+    // الدفعات النقدية التي سجّلها هو بنفسه) — ولا شيء غيرهما إطلاقاً، بناءً على طلب صريح.
+    reception: ['clients','settlements']
   },
   // مهلة تعديل/حذف قابلة للتغيير من الإعدادات في أي وقت (بالساعات، من وقت تسجيل العميل نفسه)،
   // خاصة بدور "استقبال" فقط. بعدها يتحول السجل لعرض فقط لهذا الدور حتى يتدخل الأدمن.
@@ -688,6 +689,7 @@ const ALL_VIEWS = [
   {id:'courses', label:'الدورات'},
   {id:'courseinvoices', label:'فواتير الدورات'},
   {id:'vault', label:'الحركات المالية'},
+  {id:'settlements', label:'تسوية الاستقبال'},
   {id:'bags', label:'مخزون الحقائب'},
   {id:'purchases', label:'المشتريات'},
   {id:'zatca', label:'الفوترة الضريبية والزكاة'},
@@ -2828,6 +2830,7 @@ $all('nav.tabs button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='settings') renderSettings();
     if(btn.dataset.view==='bags') renderBags();
     if(btn.dataset.view==='vault') renderVault();
+    if(btn.dataset.view==='settlements' && typeof renderSettlementPanel==='function') renderSettlementPanel();
     if(btn.dataset.view==='courses') renderCourses();
     if(btn.dataset.view==='courseinvoices') renderCourseInvoices();
     if(btn.dataset.view==='audit') renderAuditLog();
@@ -7849,8 +7852,17 @@ function syncClientLedgerEntry(client){
    الفعلي (اليدوي) للنقدية بالضغط على "تسوية". هذا لا يغيّر أي مبلغ أو رصيد؛ المبلغ محسوب
    بالفعل ضمن أرصدة الخزنة من لحظة إنشائه — الغرض فقط تتبّع تسليم/استلام النقدية فعلياً. */
 function pendingSettlementRows(){
-  return vaultTx.filter(t=> (t.destination||'vault')==='vault' && t.autoClientId && !t.deletedAt && !t.settled)
-    .sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+  let rows = vaultTx.filter(t=> (t.destination||'vault')==='vault' && t.autoClientId && !t.deletedAt && !t.settled);
+  // دور "الاستقبال" لا يرى في هذه الشاشة إلا الدفعات النقدية التي سجّلها هو بنفسه (بناءً على
+  // اسم مستخدم صاحب سجل العميل createdBy) — وليس دفعات باقي موظفي الاستقبال. المدير/المحاسب/
+  // الموظف العام (الذين يصلون لهذه الشاشة عبر تبويب "الحركات المالية" أيضاً) يرون الكل كالمعتاد.
+  if(currentUserRole==='reception'){
+    rows = rows.filter(t=>{
+      const c = clients.find(cl=>cl.id===t.autoClientId);
+      return c && c.createdBy===currentUser;
+    });
+  }
+  return rows.sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
 }
 function renderSettlementPanel(){
   const body = $('#settlement-table-body');
