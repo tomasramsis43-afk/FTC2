@@ -568,7 +568,7 @@ async function extractInvoiceFile(f) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-4-5',
         max_tokens: 500,
         system: CI_EXTRACT_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'استخرج البيانات من هذه الفاتورة.' }] }],
