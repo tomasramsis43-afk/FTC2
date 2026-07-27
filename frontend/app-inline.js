@@ -3441,15 +3441,15 @@ function drawDonut(sel, entries, limit=20, formatter){
   }).join('');
 
   el.innerHTML = `
-    <div style="display:flex; align-items:center; gap:22px; flex-wrap:wrap; justify-content:center;">
-      <svg width="200" height="200" viewBox="0 0 200 200" style="flex:none;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:18px;">
+      <svg width="180" height="180" viewBox="0 0 200 200" style="flex:none;">
         ${segsHtml}
         <g text-anchor="middle" style="font-family:'IBM Plex Mono',monospace;">
-          <text x="${cx}" y="${cy-3}" font-size="19" font-weight="700" fill="var(--navy-dark)">${fmt(total)}</text>
+          <text x="${cx}" y="${cy-3}" font-size="19" font-weight="700" fill="var(--navy)">${fmt(total)}</text>
           <text x="${cx}" y="${cy+15}" font-size="10" fill="var(--text-muted)">الإجمالي</text>
         </g>
       </svg>
-      <div style="flex:1; min-width:160px; max-width:260px;">${legendHtml}</div>
+      <div style="width:100%; max-width:420px;">${legendHtml}</div>
     </div>`;
 }
 
