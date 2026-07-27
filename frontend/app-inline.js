@@ -3351,15 +3351,6 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
-    <div class="cfo-panel">
-      <h3 class="cfo-panel-title" data-i18n="chartByCourseCfo">التوزيع حسب نوع الدورة</h3>
-      <div class="cfo-visual" id="cfo-donut-course"></div>
-    </div>
-
-    <div class="cfo-panel">
-      <h3 class="cfo-panel-title" data-i18n="chartByChannelCfo">التوزيع حسب طريقة الدفع</h3>
-      <div class="cfo-visual" id="cfo-donut-channel"></div>
-    </div>
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -3367,9 +3358,6 @@ function renderCfoDashboard(){
   if(apBars.length){ drawBars('#cfo-bars-ap', apBars, 6, v=>fmt(v)+' ﷼'); }
   else { drawLineChart('#cfo-trend-purchases', purchasesTrend.labels, purchasesTrend.series); }
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
-  const cAll = clients.filter(x=>matchYear(x.date));
-  drawDonut('#cfo-donut-course', groupCount(cAll,'courseType'));
-  drawDonut('#cfo-donut-channel', groupChannelAmounts(cAll), 20, v=>fmt(v)+' ﷼');
 }
 function groupCount(list, field){
   const map = {};
