@@ -28,10 +28,13 @@ async function verifyEmergencyAdmin(username, password) {
 }
 
 function signEmergencyToken(username) {
+  // صلاحية قصيرة (8 ساعات) لتقليل نافذة الخطر لو تسرّب التوكن.
+  // لإبطال كل توكنات الطوارئ فوراً: امسح EMERGENCY_ADMIN_USERNAME من متغيرات البيئة
+  // وأعد تشغيل السيرفر — requireAuth يرفض أي توكن طوارئ لا يطابق هذا المتغيّر.
   return jwt.sign(
     { sub: 'emergency-admin', username, role: 'admin', emergency: true },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: '8h' }
   );
 }
 

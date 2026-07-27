@@ -19,7 +19,25 @@ app.set('trust proxy', 1);
 // cdnjs.cloudflare.com ولديها معالجات onclick مضمّنة عبر innerHTML، وتفعيل CSP
 // الصارم بدون اختبار حي قد يمنعها من العمل. تفعيله لاحقاً كخطوة منفصلة بعد
 // حصر كل مصادر السكريبت والتحقق من الواجهة فعلياً.
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:    ["'self'"],
+      // 'unsafe-inline' مطلوبة لأن الواجهة تستخدم innerHTML مع onclick ومعالجات أحداث مضمّنة.
+      // cdnjs.cloudflare.com مطلوب للمكتبات الخارجية (xlsx, qrious, html2canvas, jspdf).
+      scriptSrc:     ["'self'", "cdnjs.cloudflare.com", "'unsafe-inline'"],
+      styleSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+      fontSrc:       ["'self'", "fonts.gstatic.com"],
+      imgSrc:        ["'self'", "data:", "blob:"],
+      // api.anthropic.com مطلوب لميزة قراءة الفواتير بالذكاء الاصطناعي
+      connectSrc:    ["'self'", "https://api.anthropic.com"],
+      workerSrc:     ["'self'"],
+      frameAncestors:["'none'"],   // حماية من Clickjacking
+      objectSrc:     ["'none'"],
+      baseUri:       ["'self'"],
+    },
+  },
+}));
 // السماح فقط بالأصول المحدَّدة صراحة عبر متغيّر البيئة CORS_ORIGIN (قائمة مفصولة بفواصل).
 // الفرونت-إند والـ API يُخدَّمان أصلاً من نفس الأصل (نفس الدومين)، فلا حاجة فعلية لفتح CORS
 // للعالم كله؛ ده كان بيسمح لأي موقع تاني يكلّم الـ API مباشرة من متصفح أي زائر.
@@ -47,6 +65,14 @@ const licenseLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'محاولات كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
+});
+
+const storageLimiter = rateLimit({
+  windowMs: 60 * 1000, // نافذة دقيقة واحدة
+  max: 60,             // 60 عملية حفظ كحد أقصى لكل IP في الدقيقة
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات حفظ كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
 
 /* ---------------- تسجيل الدخول ---------------- */
@@ -425,6 +451,18 @@ async function syncClientsRows(value) {
   }
 }
 
+// طابور يمنع تداخل عمليتي مزامنة متزامنتين (Race Condition):
+// لو حفظ مستخدمان بيانات clients في نفس اللحظة، بدون طابور تبدأ عمليتا
+// مزامنة بالتوازي — العملية الأولى قد تحذف صفوفاً أضافتها الثانية عبر
+// DELETE...WHERE id != ALL($1)، فيختفي جزء من بيانات العملاء الفهرسة.
+// الطابور يضمن أن كل عملية تنتهي قبل أن تبدأ التالية.
+let _syncQueue = Promise.resolve();
+function queueSyncClientsRows(value) {
+  _syncQueue = _syncQueue
+    .then(() => syncClientsRows(value))
+    .catch(e => console.error('تعذّرت مزامنة clients_rows في الطابور:', e.message));
+}
+
 // حماية من "انحدار التشفير" (encryption downgrade): لو كانت القيمة الحالية المخزَّنة لهذا
 // المفتاح مشفّرة فعلاً (تبدأ بـ 'ENC1:') والقيمة الجديدة المُرسَلة من هذا الحفظ غير مشفّرة،
 // هذا نمط يطابق تحديداً جهازاً يعمل بدون مفتاح تشفير صالح (مثال: فُتح البرنامج عبر رابط غير
@@ -439,7 +477,7 @@ async function wouldDowngradeEncryption(key, newValue) {
   return typeof curValue === 'string' && curValue.startsWith('ENC1:');
 }
 
-app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
+app.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
@@ -462,7 +500,7 @@ app.put('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) =
       [req.params.key, value, req.user.username, knownVersion]
     );
     if (upsert.rows[0]) {
-      if (req.params.key === 'clients') syncClientsRows(upsert.rows[0].value).catch(e => console.error('تعذّرت مزامنة clients_rows بعد الحفظ:', e.message));
+      if (req.params.key === 'clients') queueSyncClientsRows(upsert.rows[0].value);
       return res.json({ key: req.params.key, value: upsert.rows[0].value, version: upsert.rows[0].version });
     }
     // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
