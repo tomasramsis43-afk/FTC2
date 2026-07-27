@@ -122,7 +122,7 @@ function publicStatus(row) {
 async function onboard({ environment, otp, orgProfile }) {
   const existing = await loadActiveEgsRow(environment);
   const egs_info = existing?.egs_info || {
-    uuid: require('crypto').randomUUID(),
+    uuid: crypto.randomUUID(),
     custom_id: `EGS-${Date.now()}`,
     model: 'WebApp',
     CRN_number: orgProfile.crnNumber,
@@ -303,7 +303,7 @@ async function submitSimplifiedInvoice(params) {
       zatcaResponse = { error: e.message || String(e) };
     }
 
-    const uuid = invoice.getXML().get('Invoice/cbc:UUID')?.[0]?.text || require('crypto').randomUUID();
+    const uuid = invoice.getXML().get('Invoice/cbc:UUID')?.[0]?.text || crypto.randomUUID();
     await client.query(
       `INSERT INTO zatca_invoice_log
         (invoice_uuid, invoice_type, document_type, source_ref, invoice_counter, previous_hash, invoice_hash, xml, signed_xml, qr_base64, status, zatca_response, created_by)
@@ -325,7 +325,7 @@ async function logUnsupportedStandardInvoice({ sourceRef, documentType, createdB
     `INSERT INTO zatca_invoice_log
       (invoice_uuid, invoice_type, document_type, source_ref, invoice_counter, previous_hash, invoice_hash, status, created_by)
      VALUES ($1,'standard',$2,$3,0,'','',$4,$5)`,
-    [require('crypto').randomUUID(), documentType, sourceRef, 'not_supported_yet', createdBy || null]
+    [crypto.randomUUID(), documentType, sourceRef, 'not_supported_yet', createdBy || null]
   );
 }
 
