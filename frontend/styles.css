@@ -334,10 +334,14 @@ nav.tabs {
   padding: 12px 10px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  position: static;
+  position: sticky;
+  top: 16px;
   align-self: flex-start;
-  overflow: visible;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overflow-x: visible;
   transition: width 0.18s ease;
+  scrollbar-width: thin;
 }
 
 nav.tabs.collapsed {
