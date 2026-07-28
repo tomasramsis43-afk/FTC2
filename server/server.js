@@ -499,12 +499,19 @@ app.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin, as
          updated_at = now(),
          updated_by = EXCLUDED.updated_by
        WHERE kv_store.version = $4
-       RETURNING value, version`,
+       RETURNING version`,
       [req.params.key, value, req.user.username, knownVersion]
     );
     if (upsert.rows[0]) {
-      if (req.params.key === 'clients') queueSyncClientsRows(upsert.rows[0].value);
-      return res.json({ key: req.params.key, value: upsert.rows[0].value, version: upsert.rows[0].version });
+      // نستخدم "value" (نفس القيمة اللي بعتها الواجهة للتو، موجودة أصلاً فى الذاكرة) بدل طلب
+      // "RETURNING value" من قاعدة البيانات — لا داعي لأي رحلة إضافية لنقل نفس البيانات الضخمة
+      // (قد تصل لعدة ميجابايت مع آلاف العملاء) من قاعدة البيانات ثم تخزينها فى المتغيّر مرة أخرى.
+      if (req.params.key === 'clients') queueSyncClientsRows(value);
+      // لا نُعيد "value" فى الرد: المتصفح أصلاً يملك نفس البيانات التي أرسلها للتو ولا يستخدم
+      // القيمة الراجعة من هذا الرد إطلاقاً (انظر window.storage.set فى storage-sync.js) — فإعادة
+      // إرسالها كانت تضاعف حجم البيانات المنقولة فى كل عملية حفظ (رفع + تنزيل لنفس البيانات)، وهو ما
+      // كان يُشعر المستخدم ببطء واضح فى وقت انتظار الرد بعد كل تسجيل/حذف كل ما تكبر البيانات.
+      return res.json({ key: req.params.key, version: upsert.rows[0].version });
     }
     // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
     // أو حالة نادرة (سباق بين عملية INSERT أولى من جهازين معاً على نفس المفتاح الجديد).
