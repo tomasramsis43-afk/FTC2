@@ -1887,28 +1887,8 @@ body.dark-theme #view-clients thead th {
   color: var(--text);
 }
 
-/* شريط لون رفيع على يمين كل صف يوضّح حالة السداد بنظرة واحدة */
-#view-clients tbody tr.owe {
-  box-shadow: inset 3px 0 0 var(--red);
-}
-
+/* شريط لون رفيع على يمين كل صف — لون موحّد لكل الصفوف بدل التفريق بين أحمر/أخضر */
+#view-clients tbody tr.owe,
 #view-clients tbody tr.paid {
-  box-shadow: inset 3px 0 0 var(--teal);
-}
-
-/* دائرة بحرف اسم العميل الأول قبل الاسم */
-#view-clients .client-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--navy);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  flex: none;
-  vertical-align: middle;
-  margin-left: 6px;
+  box-shadow: inset 3px 0 0 var(--navy);
 }

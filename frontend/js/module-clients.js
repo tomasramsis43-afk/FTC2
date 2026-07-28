@@ -1026,8 +1026,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   $('#table-body').innerHTML = pageRows.map(c=>{
     const rem = remaining(c);
     const rowStatusClass = (c.cancelled || c.suspended) ? '' : (rem>0 ? 'owe' : 'paid');
-    const avatarLetter = escapeHtml((c.name||'').trim().charAt(0) || '؟');
-    const nameBadges = `<span class="client-avatar">${avatarLetter}</span>${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
+    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
     return `<tr class="${rowStatusClass}"${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
       <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
