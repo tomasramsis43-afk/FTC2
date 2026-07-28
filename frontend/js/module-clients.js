@@ -11,9 +11,16 @@ function renderDashboard(){
     <div><div class="n">${fmt(totalPaid)}</div><div class="l">مستلم</div></div>
     <div><div class="n">${fmt(totalRemaining)}</div><div class="l">متبقي</div></div>
   `;
-  renderCfoDashboard();
-  renderSmartAlerts();
-  renderCloseOverview(c, totalPaid, totalRemaining);
+  // الشريط العلوي (quickstats) دايماً ظاهر فمحتاج يتحدّث دايماً — لكن باقي لوحة التحكم (CFO/التنبيهات
+  // الذكية/نظرة الإقفال) بيحسب على كل بيانات العملاء والخزنة، وده تقيل ومحتاجينه بس لو تبويب "لوحة
+  // التحكم" فعلاً مفتوح قدام المستخدم دلوقتي. لو مقفول، هيتحسب تلقائياً لحظة ما يفتحه (نفس السلوك
+  // الموجود فى معالج نقر أزرار التنقل). ده بيوفر حساب كامل مكرر بعد كل عملية إضافة/حذف/تعديل فى أي
+  // قسم تاني بالبرنامج (فواتير، خزنة، حقائب، دورات...) وهو أصلاً مش شايف لوحة التحكم دلوقتي.
+  if(isViewActive('dashboard')){
+    renderCfoDashboard();
+    renderSmartAlerts();
+    renderCloseOverview(c, totalPaid, totalRemaining);
+  }
 }
 
 /* ============ التنبيهات الذكية (Smart Alerts) ============ */
