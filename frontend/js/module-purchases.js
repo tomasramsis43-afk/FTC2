@@ -613,13 +613,21 @@ async function backgroundSyncCheck(){
   _bgSyncInFlight = true;
   try{
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
-    const res = await serverFetch('/api/storage-versions');
+    // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
+    // السجلات المستقلة الجديد (checkClientRecordsChanged) — طلب صغير جداً بدون نقل بيانات فعلية
+    // إلا لو تغيّر شيء فعلاً، بنفس فكرة storage-versions تماماً.
+    const [res, clientsChanged] = await Promise.all([
+      serverFetch('/api/storage-versions'),
+      checkClientRecordsChanged(),
+    ]);
     if(!res.ok){ markOffline(); return; }
     const data = await res.json();
     markOnline();
     const serverVersions = data.versions || {};
-    const changedKeys = Object.keys(serverVersions).filter(k => (_kvVersions[k] || 0) !== serverVersions[k]);
-    if(changedKeys.length){
+    // نتجاهل مفتاح 'clients' القديم هنا عمداً: أصبح غير مُحدَّث (لم يعد يُكتَب إليه فى المسار
+    // السريع الجديد)، والمصدر الصحيح لمعرفة تغيّر العملاء الآن هو checkClientRecordsChanged أعلاه.
+    const changedKeys = Object.keys(serverVersions).filter(k => k !== 'clients' && (_kvVersions[k] || 0) !== serverVersions[k]);
+    if(changedKeys.length || clientsChanged){
       // تحميل عادي عبر الشبكة: المفاتيح غير المتغيّرة ترجع 304 فوراً (بدون نقل بيانات)،
       // والمفاتيح المتغيّرة فقط هي التي تُنقل فعلياً من السحابة — ثم نعيد رسم كل الشاشات
       // لأننا لا نعرف مسبقاً أي شاشات تعتمد على المفاتيح التي تغيّرت تحديداً.

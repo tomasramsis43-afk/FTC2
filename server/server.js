@@ -552,6 +552,106 @@ app.get('/api/storage', requireAuth, async (req, res) => {
   }
 });
 
+/* ============================================================================
+   عملاء كسجلات مستقلة (client_records)
+   ==============================================================================
+   بديل عن حفظ كل العملاء ككتلة واحدة مشفّرة (راجع تعليق CREATE TABLE client_records
+   فى schema.sql). السيرفر هنا أيضاً لا يفك أي تشفير إطلاقاً؛ "enc" نص معتم تماماً
+   كما كان الحال دائماً فى kv_store('clients')، والفرق الوحيد أن كل عميل مُشفَّر
+   بمفرده بدل تشفير المصفوفة كاملة — فتسجيل/تعديل/حذف عميل واحد ينقل بيانات هذا
+   العميل فقط، بغض النظر عن إجمالي عدد العملاء. صلاحيات من يقدر يعدّل/يحذف عميلاً
+   بعينه مطبَّقة فى الواجهة كما كانت دائماً (canDeleteClientRecord وغيرها)؛ هذه
+   النقاط تحتاج requireAuth فقط، تماماً كحفظ مفتاح kv_store('clients') سابقاً. */
+
+app.get('/api/client-records', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, enc, version FROM client_records');
+    res.json({ records: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب سجلات العملاء' });
+  }
+});
+
+// رقم إصدار خفيف جداً (مجموع أرقام النسخ لكل الصفوف) يتغيّر مع أي إضافة/تعديل/حذف — تستخدمه
+// الأجهزة الأخرى للتحقّق الدوري السريع (طلب واحد صغير، بدون نقل أي بيانات فعلية) من وجود
+// تعديلات جديدة على العملاء من مستخدم آخر، بنفس فكرة GET /api/storage-versions لبقية المفاتيح.
+app.get('/api/client-records/version', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM client_records');
+    res.json({ version: Number(r.rows[0].v), count: r.rows[0].c });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب رقم إصدار العملاء' });
+  }
+});
+
+app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
+  const { enc } = req.body || {};
+  if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات العميل المرسلة غير صحيحة' });
+  const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
+  try {
+    const upsert = await pool.query(
+      `INSERT INTO client_records (id, enc, version, updated_by)
+       VALUES ($1, $2, 1, $3)
+       ON CONFLICT (id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = client_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by
+       WHERE client_records.version = $4
+       RETURNING version`,
+      [req.params.id, enc, req.user.username, knownVersion]
+    );
+    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version });
+    const current = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
+    return res.status(409).json({
+      error: 'تعارض: تم تعديل بيانات هذا العميل من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
+      currentVersion: current.rows[0] ? current.rows[0].version : 0,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حفظ بيانات العميل' });
+  }
+});
+
+app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM client_records WHERE id = $1', [req.params.id]);
+    res.json({ id: req.params.id, deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف بيانات العميل' });
+  }
+});
+
+// نقطة رفع مُجمَّع تُستخدم فقط فى: (أ) الترحيل لمرة واحدة من التخزين القديم (كل العملاء ككتلة
+// واحدة) إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 500 سجل
+// فى الطلب الواحد بدل طلب منفصل لكل عميل (5888 عميل مثلاً كانت ستعني 5888 طلباً منفصلاً تصطدم
+// فوراً بحد معدّل الطلبات). لا يوجد فحص تعارض هنا عمداً (نفس منطق العمليات الجماعية الكبيرة).
+app.post('/api/client-records/bulk-migrate', requireAuth, async (req, res) => {
+  const records = Array.isArray(req.body?.records) ? req.body.records : [];
+  if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  try {
+    const values = [];
+    const placeholders = records.map((r, idx) => {
+      const base = idx * 3;
+      values.push(String(r.id), String(r.enc), req.user.username);
+      return `($${base + 1},$${base + 2},1,$${base + 3})`;
+    }).join(',');
+    await pool.query(
+      `INSERT INTO client_records (id, enc, version, updated_by)
+       VALUES ${placeholders}
+       ON CONFLICT (id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = client_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by`,
+      values
+    );
+    res.json({ migrated: records.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
+  }
+});
+
 // GET /api/storage-versions -> { versions: { key: version } } لكل المفاتيح دفعة واحدة، بدل طلب
 // منفصل بالنسخة الحالية لكل مفتاح (كان يعني اتصالاً بالسيرفر لكل مفتاح في كل فتحة للبرنامج).
 // تستخدمها الواجهة عند فتح البرنامج للمقارنة السريعة بين النسخة المخزّنة محلياً على الجهاز ونسخة

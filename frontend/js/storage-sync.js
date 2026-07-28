@@ -341,3 +341,93 @@ window.storage = {
     }
 };
 
+/* ============================================================================
+   عملاء كسجلات مستقلة (client_records) — بديل عن حفظ كل العملاء ككتلة واحدة
+   ==============================================================================
+   بدل تشفير مصفوفة كل العملاء دفعة واحدة (ما كان يعني إعادة رفع كل الآلاف من
+   العملاء عند أي إضافة/تعديل/حذف لعميل واحد)، كل عميل يُشفَّر لوحده ويُحفظ/يُحذف
+   كصف مستقل. راجع تعليق CREATE TABLE client_records فى schema.sql للتفاصيل. */
+const _clientRecordVersions = {}; // id -> آخر version معروف لهذا العميل تحديداً (وليس للمصفوفة كلها)
+let _clientRecordsAggVersion = null; // آخر "مجموع نسخ" معروف — للتحقق الدوري السريع من وجود تعديل من جهاز آخر
+
+async function fetchAllClientRecords(){
+  const res = await serverFetch('/api/client-records');
+  if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
+  const data = await res.json();
+  const list = [];
+  const baseline = new Map();
+  for(const r of (data.records||[])){
+    _clientRecordVersions[r.id] = r.version;
+    let plain;
+    try{ plain = await _decryptOrFail(r.enc); }
+    catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل كباقي البرنامج، وليس تجاهلاً صامتاً
+    try{
+      const obj = JSON.parse(plain);
+      list.push(obj);
+      baseline.set(r.id, plain);
+    }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل العملاء */ }
+  }
+  return { list, baseline };
+}
+
+// يحفظ عميلاً واحداً فقط (تسجيل/تعديل). يرجع true لو نجح، false لو رُفض بسبب تعارض حقيقي
+// (عدّله شخص آخر بينما هذا الجهاز يعمل بنسخة أقدم)، أو null لو تعذّر الوصول للسيرفر أصلاً
+// (بدون إنترنت) — المستدعي فى هذه الحالة يقرر خط الرجعة (راجع saveClients فى ui-framework.js).
+async function saveOneClientRecord(client, plainJson){
+  try{
+    const enc = await encryptValue(plainJson);
+    const res = await serverFetch(`/api/client-records/${encodeURIComponent(client.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0 }),
+    });
+    if(res.status === 409){
+      const conflict = await res.json().catch(()=>({}));
+      _clientRecordVersions[client.id] = conflict.currentVersion || _clientRecordVersions[client.id];
+      showToast(`⚠️ تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة`);
+      return false;
+    }
+    if(!res.ok) return null;
+    const data = await res.json();
+    _clientRecordVersions[client.id] = data.version || 0;
+    return true;
+  }catch(e){ return null; }
+}
+
+async function deleteOneClientRecord(id){
+  try{
+    await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    delete _clientRecordVersions[id];
+    return true;
+  }catch(e){ return null; }
+}
+
+// رفع مُجمَّع (حتى 300 عميل فى الطلب الواحد) — يُستخدم فى الترحيل لمرة واحدة من التخزين القديم،
+// وفى العمليات الضخمة دفعة واحدة (استيراد، تحديث شامل) بدل طلب منفصل لكل عميل.
+async function bulkUploadClientRecords(clientsList){
+  const CHUNK = 300;
+  for(let i=0;i<clientsList.length;i+=CHUNK){
+    const chunk = clientsList.slice(i, i+CHUNK);
+    const records = [];
+    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)) });
+    const res = await serverFetch('/api/client-records/bulk-migrate', {
+      method: 'POST',
+      body: JSON.stringify({ records }),
+    });
+    if(!res.ok) throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
+  }
+}
+
+// تحقق دوري خفيف جداً: هل تغيّرت بيانات العملاء على السيرفر من جهاز آخر؟ (طلب صغير واحد، بدون
+// نقل أي بيانات فعلية إلا لو تغيّر شيء فعلاً). يُستخدم من backgroundSyncCheck.
+async function checkClientRecordsChanged(){
+  try{
+    const res = await serverFetch('/api/client-records/version');
+    if(!res.ok) return false;
+    const data = await res.json();
+    if(_clientRecordsAggVersion === null){ _clientRecordsAggVersion = data.version; return false; }
+    const changed = data.version !== _clientRecordsAggVersion;
+    _clientRecordsAggVersion = data.version;
+    return changed;
+  }catch(e){ return false; }
+}
+
