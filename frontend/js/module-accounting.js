@@ -1495,8 +1495,6 @@ $('#import-coursenum-input').addEventListener('change', async e=>{
     if(sessionsUpdated || sessionsAdded) await saveCourseSessions();
     await logAudit('edit','الدورات', `استيراد أرقام الدورات من Excel: تحديث ${updated} عميل${added?`(منهم ${added} عميل جديد أُضيف تلقائياً برقم الهوية والدورة فقط)`:''}${sessionsAdded||sessionsUpdated?`، وتحديث تاريخ ${sessionsUpdated} دورة وإضافة ${sessionsAdded} دورة جديدة`:''}${skipped?`، وتخطي ${skipped} صف بدون رقم هوية/دورة`:''}`);
     renderTable(); renderCourses();
-    // تقرير بالبيانات التي تم تحديثها فعلياً
-    downloadXlsx(`تقرير_استيراد_أرقام_الدورات_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
     showToast(`تم تحديث ${updated} عميل${added?`، منهم ${added} عميل جديد أُضيف تلقائياً`:''}${skipped?`، ${skipped} تم تخطيه`:''}`);
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد أن الأعمدة "رقم الهوية" و"رقم الدورة" (وتاريخ الدورة اختياري)');
@@ -1623,8 +1621,6 @@ $('#btn-cs-bulk-save').addEventListener('click', async ()=>{
   await logAudit('edit','الدورات', `تحديث/استيراد أرقام الدورات وفواتيرها من جدول داخل البرنامج: تحديث ${updated} عميل${newClientsCount?`(منهم ${newClientsCount} عميل جديد أُضيف تلقائياً برقم الهوية والدورة فقط)`:''}${sessionsAdded||sessionsUpdated?`، وتحديث تاريخ ${sessionsUpdated} دورة وإضافة ${sessionsAdded} دورة جديدة`:''}`);
   closeCsBulkModal();
   renderTable(); renderCourses();
-  // تقرير بالبيانات التي تم تحديثها فعلياً
-  downloadXlsx(`تقرير_تحديث_أرقام_الدورات_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
 });
 
@@ -1719,7 +1715,6 @@ $('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
   await logAudit('edit','العملاء', `استيراد/تحديث الرقم المرجعي من جدول داخل البرنامج: تحديث ${updated} عميل${newClientsCount?`(منهم ${newClientsCount} عميل جديد أُضيف تلقائياً برقم الهوية والرقم المرجعي فقط)`:''}`);
   closeRefnumBulkModal();
   renderTable();
-  downloadXlsx(`تقرير_استيراد_الرقم_المرجعي_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
 });
 
@@ -1954,8 +1949,6 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
     // لا يوجد تغيير في أرقام الفواتير (تحديث تاريخ/قيمة فعلية فقط) → يبقى التحديث محصوراً في شيت فواتير الدورات فقط
     renderCourseInvoices();
   }
-  // تقرير بالبيانات التي تم تحديثها فعلياً
-  downloadXlsx(`تقرير_تحديث_فواتير_الدورات_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
   showToast(`تم تحديث ${updated} سجل${invoiceChanged?` — ورُبط ${invoiceChanged} رقم فاتورة بجميع الشيتات`:''}`);
 });
 

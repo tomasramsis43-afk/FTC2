@@ -2293,7 +2293,6 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
   await logAudit('edit','العملاء', `تحديث/استيراد بيانات العملاء من جدول داخل البرنامج: تمت إضافة ${added} عميل جديد، وتحديث ${updated} عميل موجود`);
   closeBulkUpdateModal();
   renderTable(); renderDashboard(); refreshFilterOptions(); renderReports(); renderBags();
-  downloadXlsx(`تقرير_تحديث_العملاء_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
   showToast(`تم: ${added} جديد، ${updated} محدث`);
 });
 
