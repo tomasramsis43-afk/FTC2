@@ -50,8 +50,6 @@ $('#import-baginv-input').addEventListener('change', async e=>{
     await saveSettings();
     await logAudit('edit','مخزون الحقائب', `استيراد أرقام فواتير/تواريخ شراء الحقائب من Excel: تحديث ${updated} عميل (تم تسليم حقائبهم من المخزون تلقائياً)${skipped?`، وتخطي ${skipped} صف`:''}`);
     renderTable(); renderBags();
-    // تقرير بالبيانات التي تم تحديثها فعلياً
-    downloadXlsx(`تقرير_استيراد_فواتير_الحقائب_${stampNow()}.xlsx`, 'تقرير التحديث', changedRows);
     showToast(`تم تحديث ${updated} عميل${skipped?`، ${skipped} تم تخطيه`:''}`);
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد من أعمدة "رقم الهوية" و"رقم فاتورة الحقيبة" / "تاريخ شراء الحقيبة"');

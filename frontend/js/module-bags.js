@@ -722,7 +722,6 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
   }
   await logAudit('add','مخزون الحقائب', `إضافة حركات تمويل مخزون الحقائب من جدول داخل البرنامج: تمت إضافة ${added} حركة جديدة (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
   renderBags(); renderReports();
-  downloadXlsx(`تقرير_إضافة_تمويل_الحقائب_${stampNow()}.xlsx`, 'تقرير الإضافة', changedRows);
   closeBagfundBulkModal();
   showToast(`تمت إضافة ${added} حركة جديدة`);
 });
@@ -1065,7 +1064,6 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
     const added = addedIn + addedOut;
     await logAudit('add','الحركات المالية', `استيراد حركات وارد وصادر من Excel: تمت إضافة ${addedIn} حركة وارد و${addedOut} حركة صادر${skipped?`، وتخطي ${skipped} صف بدون مبلغ أو نوع حركة صحيح`:''}`);
     renderVault(); renderReports();
-    downloadXlsx(`تقرير_استيراد_حركات_مالية_${stampNow()}.xlsx`, 'تقرير الاستيراد', changedRows);
     showToast(`تم الاستيراد: ${addedIn} حركة وارد، ${addedOut} حركة صادر${skipped?`، ${skipped} تم تخطيه`:''}`);
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد من وجود أعمدة "المبلغ" و"نوع الحركة" على الأقل وأنه بصيغة Excel صحيحة');

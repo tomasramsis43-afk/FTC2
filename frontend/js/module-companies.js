@@ -1577,7 +1577,6 @@ $('#import-trainees-input').addEventListener('change', async e=>{
       `استيراد متدربين مجمّع لحوالة الشركة: ${t.companyName}`,
       'استيراد مجمّع لمتدربين (Excel)'
     );
-    if(changedRows.length) downloadXlsx(`تقرير_استيراد_متدربين_${stampNow()}.xlsx`, 'تقرير الاستيراد', changedRows);
     showToast(`تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد من وجود عمود "رقم الهوية" على الأقل وأنه بصيغة Excel صحيحة');
