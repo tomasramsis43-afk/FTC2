@@ -1244,7 +1244,7 @@ function printDocHead(title, {accent, borderColor, amountColor, variant, extraCs
 }
 /* زر الطباعة/الحفظ الموحّد أسفل كل مستند */
 function printDocFooterButton(){
-  return `<div class="no-print" style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 24px; background:${PRINT_PALETTE.navy}; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">طباعة / حفظ PDF</button></div>`;
+  return `<div class="no-print" style="text-align:center; margin-top:20px;"><button id="doc-print-btn" type="button" style="padding:10px 24px; background:${PRINT_PALETTE.navy}; color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer;">طباعة / حفظ PDF</button></div>`;
 }
 
 function openPrintTarget(){
@@ -1269,6 +1269,11 @@ function openPrintTarget(){
   document.body.appendChild(overlay);
 
   const win = iframe.contentWindow;
+  // نربط زر "طباعة / حفظ PDF" برمجياً بعد تحميل مستند الطباعة (بدل onclick مضمّن في الـ HTML)،
+  // حتى تعمل الطباعة بشكل مضمون تحت سياسة CSP الحالية (script-src) بغض النظر عن أي تشديد مستقبلي لها.
+  win.addEventListener('load', ()=>{
+    win.document.getElementById('doc-print-btn')?.addEventListener('click', ()=> win.print());
+  });
   win.addEventListener('afterprint', ()=>{ setTimeout(()=> overlay.remove(), 400); });
   return win;
 }
