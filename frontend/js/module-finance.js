@@ -538,12 +538,9 @@ function ensureDenomUiBuilt(){
   if(valueRow) valueRow.insertAdjacentHTML('beforeend', CASH_DENOMINATIONS.map(d=>`<td class="mono" data-denom-value="${d}">0</td>`).join(''));
   const grandTotalCell = $('#cash-count-grand-total');
   if(grandTotalCell) grandTotalCell.setAttribute('colspan', CASH_DENOMINATIONS.length);
-  if($('#denom-tx-batch-body')) $('#denom-tx-batch-body').innerHTML = CASH_DENOMINATIONS.map(d=>`
-    <tr>
-      <td>${fmt(d)} ﷼</td>
-      <td><input type="number" min="0" step="1" data-batch-denom-count="${d}" placeholder="0" style="max-width:110px;"></td>
-    </tr>
-  `).join('');
+  const batchHeaderRow = $('#denom-tx-batch-header');
+  if(batchHeaderRow) batchHeaderRow.insertAdjacentHTML('beforeend', CASH_DENOMINATIONS.map(d=>`<th class="mono">${fmt(d)} ﷼</th>`).join(''));
+  if($('#denom-tx-batch-body')) $('#denom-tx-batch-body').insertAdjacentHTML('beforeend', CASH_DENOMINATIONS.map(d=>`<td><input type="number" min="0" step="1" data-batch-denom-count="${d}" placeholder="0" style="max-width:80px;"></td>`).join(''));
   if($('#denom-tx-date') && !$('#denom-tx-date').value) $('#denom-tx-date').value = todayISO();
   $('#btn-denom-tx-save')?.addEventListener('click', saveDenomTx);
 }
