@@ -207,7 +207,7 @@ function openPurchaseItemsPopup(id){
 
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 }
 
 function addPurchaseItemRow(item){

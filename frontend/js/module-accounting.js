@@ -516,7 +516,7 @@ function printAccountingReport(title, tableSel, opts){
     ${opts.extraHtml || ''}
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 }
 $('#btn-print-income')?.addEventListener('click', ()=> printAccountingReport('قائمة الدخل (الأرباح والخسائر)', '#acc-income-table'));
 $('#btn-print-balance')?.addEventListener('click', ()=> printAccountingReport('الميزانية العمومية (قائمة المركز المالي)', '#acc-balance-table', {asOfOnly:true}));
@@ -1117,7 +1117,7 @@ $('#btn-print-courses-report').addEventListener('click', ()=>{
     ${sectionsHtml || '<div style="text-align:center; color:#66707E; padding:40px;">لا توجد دورات مطابقة للفلتر الحالي</div>'}
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 });
 
 
@@ -1386,7 +1386,7 @@ function printAttendance(courseNumber){
     </table>
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 }
 
 /* عند استيراد/إدخال رقم دورة (أو رقم فاتورة) مرتبط برقم هوية غير موجود إطلاقاً في شيت العملاء ولا بأي مكان

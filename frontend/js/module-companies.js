@@ -544,7 +544,7 @@ function printCompanyStatement(companyId){
     </table>
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 }
 let ctransfersPageState = {page:1, sig:''};
 function renderCompanies(){

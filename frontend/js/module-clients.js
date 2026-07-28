@@ -642,7 +642,7 @@ function printMonthlyClientsReport(yearMonth){
     ${monthlyClientsReportBodyHtml(yearMonth)}
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
 }
 $('#btn-monthly-report')?.addEventListener('click', ()=>{
   const now = new Date();
@@ -1269,13 +1269,15 @@ function openPrintTarget(){
   document.body.appendChild(overlay);
 
   const win = iframe.contentWindow;
-  // نربط زر "طباعة / حفظ PDF" برمجياً بعد تحميل مستند الطباعة (بدل onclick مضمّن في الـ HTML)،
-  // حتى تعمل الطباعة بشكل مضمون تحت سياسة CSP الحالية (script-src) بغض النظر عن أي تشديد مستقبلي لها.
-  win.addEventListener('load', ()=>{
-    win.document.getElementById('doc-print-btn')?.addEventListener('click', ()=> win.print());
-  });
   win.addEventListener('afterprint', ()=>{ setTimeout(()=> overlay.remove(), 400); });
   return win;
+}
+// يُستدعى بدل win.document.close() مباشرة في كل دوال الطباعة: يغلق الكتابة للمستند ثم يربط
+// زر "طباعة / حفظ PDF" فوراً (document.write متزامن، فالزر موجود فعلياً في الدوم في هذه اللحظة —
+// لا داعي لانتظار حدث 'load' الذي قد يكون أُطلق بالفعل على الإطار الفارغ قبل كتابة المحتوى).
+function finishPrintDoc(win){
+  win.document.close();
+  win.document.getElementById('doc-print-btn')?.addEventListener('click', ()=> win.print());
 }
 
 onSearchInput('#search', renderTable);
