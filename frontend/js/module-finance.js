@@ -472,7 +472,7 @@ function renderVault(){
   $('#vault-table-body').innerHTML = pageRows.map(t=>{
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
     return `
-    <tr ${isDup?'style="background:rgba(180,72,58,.08);"':''}>
+    <tr>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
       <td class="sticky-col sticky-col-2" data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
       <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
