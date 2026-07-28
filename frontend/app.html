@@ -3619,14 +3619,15 @@
       <h3 style="margin:0 0 4px;">📤 إرسال التقارير عبر واتساب</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 14px;">جميع خيارات إرسال التقارير عبر واتساب في مكان واحد.</p>
 
-      <div style="padding:12px 0; border-top:1px solid var(--border);">
+      <div class="cfo-grid" style="align-items:start;">
+      <div style="padding:0 14px 0 0; border-left:1px solid var(--border);">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📤 إرسال ملخص شهري عبر واتساب</div>
         <div class="hint hint-info" style="margin:0 0 10px;">سيتم فتح واتساب (ويب أو التطبيق) برسالة الملخص جاهزة — اضغط "إرسال" هناك لإتمام الإرسال. تأكد من إدخال رقم المستلم من الإعدادات أولاً.</div>
         <div class="field" style="max-width:180px; margin-bottom:10px;"><label>الشهر</label><input type="month" id="wa-report-month"></div>
         <button class="btn btn-primary btn-sm" id="btn-send-monthly-wa">إرسال عبر واتساب</button>
       </div>
 
-      <div style="padding:12px 0; border-top:1px solid var(--border);">
+      <div style="padding:0 14px 0 0; border-left:1px solid var(--border);">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">📎 إرسال 3 تقارير PDF شهرية عبر واتساب</div>
         <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
           يولّد 3 ملفات PDF منفصلة للشهر المحدد: (١) جدول التسجيلات والمبالغ المدفوعة يومياً، (٢) الحركات المالية الصادرة (عدا ما يخص تمويل الحقائب)، (٣) الحقائب المشتراة (من المخزون والعملاء).
@@ -3637,7 +3638,7 @@
         <div id="wa3-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
       </div>
 
-      <div style="padding:12px 0; border-top:1px solid var(--border);">
+      <div style="padding:0;">
         <div style="font-size:14px; font-weight:700; margin:0 0 4px;">🧾 إرسال الإقرار الضريبي (ربع سنوي) عبر واتساب</div>
         <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">
           الإقرار الضريبي (ضريبة القيمة المضافة) يُقدَّم كل ثلاثة أشهر — اختر السنة والربع (الأول: يناير-مارس، الثاني: أبريل-يونيو، الثالث: يوليو-سبتمبر، الرابع: أكتوبر-ديسمبر) ليولّد ملف PDF واحد لكامل الربع.
@@ -3657,6 +3658,7 @@
         </div>
         <button class="btn btn-primary btn-sm" id="btn-send-vat-report-wa">🧾 توليد وإرسال الإقرار الضريبي</button>
         <div id="vat-report-status" style="font-size:12.5px; color:var(--text-muted); margin-top:8px;"></div>
+      </div>
       </div>
     </div>
     <div class="panel">
