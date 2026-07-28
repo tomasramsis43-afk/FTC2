@@ -1215,10 +1215,6 @@ tbody tr {
   will-change: background;
 }
 
-tbody tr:nth-child(even) {
-  background: var(--surface-alt);
-}
-
 tbody tr:hover {
   background: color-mix(in srgb, var(--gold) 12%, var(--surface));
 }

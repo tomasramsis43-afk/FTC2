@@ -372,7 +372,7 @@ function renderClientBagPurchases(){
       <td class="mono">${escapeHtml(c.clientId||'—')}</td>
       <td>${escapeHtml(c.nationality||'—')}</td>
       <td class="mono">${escapeHtml(c.phone||'—')}</td>
-      <td class="mono">${escapeHtml(c.bagInvoice||'—')}</td>
+      <td class="mono"><input type="text" class="cbp-invoice-input" data-invoice-id="${c.id}" value="${escapeHtml(c.bagInvoice||'')}" placeholder="رقم الفاتورة" style="width:120px;"></td>
       <td class="mono">${escapeHtml(purchaseDate||'—')}</td>
       <td><span class="stamp ${c.bagSource==='stock' ? 'teal':'paid'}">${c.bagSource==='stock' ? 'من المخزون' : 'شراء مباشر'}</span></td>
     </tr>`).join('') : `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد عمليات شراء حقائب مكتملة بعد</td></tr>`;
@@ -399,6 +399,23 @@ $('#btn-export-pending-bags')?.addEventListener('click', ()=>{
 $('#cbp-date-from')?.addEventListener('input', renderClientBagPurchases);
 $('#cbp-date-to')?.addEventListener('input', renderClientBagPurchases);
 $('#cbp-year-filter')?.addEventListener('change', renderClientBagPurchases);
+// حفظ رقم فاتورة الحقيبة مباشرة من داخل جدول "سجل عمليات شراء الحقائب المكتملة" — بدون الحاجة لملف Excel
+$('#client-bag-purchases-body')?.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && e.target.classList.contains('cbp-invoice-input')) e.target.blur();
+});
+$('#client-bag-purchases-body')?.addEventListener('change', async e=>{
+  const inp = e.target.closest('.cbp-invoice-input');
+  if(!inp) return;
+  const idx = clients.findIndex(c=>c.id===inp.dataset.invoiceId);
+  if(idx<0) return;
+  const newVal = inp.value.trim();
+  if((clients[idx].bagInvoice||'') === newVal) return;
+  snapshotState(`تعديل رقم فاتورة الحقيبة: ${clients[idx].name}`);
+  clients[idx].bagInvoice = newVal;
+  await saveClients();
+  await logAudit('edit','سجل شراء الحقائب', `تم تحديث رقم فاتورة الحقيبة للعميل ${clients[idx].name} إلى "${newVal||'—'}"`);
+  showToast('تم حفظ رقم الفاتورة');
+});
 $('#bst-date-from')?.addEventListener('input', renderBags);
 $('#bst-date-to')?.addEventListener('input', renderBags);
 $('#btn-export-bagstock')?.addEventListener('click', ()=>{
