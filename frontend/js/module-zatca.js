@@ -460,7 +460,7 @@ async function printManualSalesInvoice(id){
 
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
   renderZatca();
 }
 

@@ -530,7 +530,7 @@ async function printInvoice(id){
 
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
   renderTable();
 }
 
@@ -629,7 +629,7 @@ async function printReturnInvoice(id){
     ${zatcaStatusBadge(zatcaResult)}
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
   renderVault();
 }
 
@@ -708,7 +708,7 @@ async function printExpenseVoucher(id){
     </div>
     ${printDocFooterButton()}
   </body></html>`);
-  win.document.close();
+  finishPrintDoc(win);
   renderVault();
 }
 
