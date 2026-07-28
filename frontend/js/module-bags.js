@@ -727,6 +727,114 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
   showToast(`تمت إضافة ${added} حركة جديدة`);
 });
 
+/* ---------------- تسجيل أرقام فواتير الحقائب دفعة واحدة (جدول داخل البرنامج) ----------------
+   نفس منطق استيراد Excel بالضبط (تحديث عميل موجود مسبقاً فقط، وتحويل مصدر الحقيبة تلقائياً إلى
+   "من المخزون" مع تسجيل سطر تسليم مقابل)، لكن عبر جدول صفوف متعددة داخل البرنامج بدل رفع ملف. */
+let baginvBulkRowSeq = 0;
+function baginvBulkRowHtml(rowId){
+  return `<tr data-row="${rowId}">
+    <td><input type="text" class="bib-clientid" data-col="0" style="min-width:140px;"></td>
+    <td><input type="text" class="bib-invoice" data-col="1" style="min-width:140px;"></td>
+    <td><input type="date" class="bib-date" data-col="2" style="min-width:120px;"></td>
+    <td><button type="button" class="btn btn-danger btn-sm bib-remove-row" title="حذف الصف">✕</button></td>
+  </tr>`;
+}
+function addBaginvBulkRow(){
+  baginvBulkRowSeq++;
+  $('#baginv-bulk-table-body').insertAdjacentHTML('beforeend', baginvBulkRowHtml(baginvBulkRowSeq));
+}
+function openBaginvBulkModal(){
+  $('#baginv-bulk-table-body').innerHTML = '';
+  for(let i=0;i<5;i++) addBaginvBulkRow();
+  $('#baginv-bulk-overlay').classList.add('show'); SoundFX.open();
+}
+function closeBaginvBulkModal(){ $('#baginv-bulk-overlay').classList.remove('show'); }
+$('#btn-open-baginv-bulk')?.addEventListener('click', openBaginvBulkModal);
+$('#baginv-bulk-cancel')?.addEventListener('click', closeBaginvBulkModal);
+$('#baginv-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='baginv-bulk-overlay') closeBaginvBulkModal(); });
+$('#btn-baginv-bulk-row')?.addEventListener('click', addBaginvBulkRow);
+$('#baginv-bulk-table-body')?.addEventListener('click', e=>{
+  if(e.target.classList.contains('bib-remove-row')){
+    const rows = $('#baginv-bulk-table-body').querySelectorAll('tr');
+    if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
+    e.target.closest('tr').remove();
+  }
+});
+$('#baginv-bulk-table-body')?.addEventListener('paste', e=>{
+  const target = e.target;
+  if(!target || target.dataset.col===undefined) return;
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if(!text || (!text.includes('\n') && !text.includes('\t'))) return;
+  e.preventDefault();
+  let lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(lines.length && lines[lines.length-1]==='') lines.pop();
+  const tbody = $('#baginv-bulk-table-body');
+  const startRow = [...tbody.children].indexOf(target.closest('tr'));
+  const startCol = parseInt(target.dataset.col, 10);
+  lines.forEach((line, i)=>{
+    const rowIdx = startRow + i;
+    while(tbody.children.length <= rowIdx) addBaginvBulkRow();
+    const row = tbody.children[rowIdx];
+    line.split('\t').forEach((val, j)=>{
+      const col = startCol + j;
+      if(col>2) return;
+      const field = row.querySelector(`[data-col="${col}"]`);
+      if(!field) return;
+      field.value = val.trim();
+    });
+  });
+  showToast(`تم لصق ${lines.length} صف`);
+});
+$('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
+  const rows = [...$('#baginv-bulk-table-body').querySelectorAll('tr')];
+  const errors = [];
+  const items = [];
+  rows.forEach((row, i)=>{
+    const clientId = row.querySelector('.bib-clientid').value.trim();
+    const bagInvoice = row.querySelector('.bib-invoice').value.trim();
+    const bagDate = row.querySelector('.bib-date').value.trim();
+    if(!clientId && !bagInvoice && !bagDate) return; // صف فارغ بالكامل يُتجاهل بصمت
+    const rowLabel = `الصف ${i+1}`;
+    if(!clientId){ errors.push(`${rowLabel}: رقم الهوية مطلوب`); return; }
+    if(!bagInvoice && !bagDate){ errors.push(`${rowLabel}: أدخل رقم الفاتورة أو تاريخ الشراء على الأقل`); return; }
+    items.push({clientId, bagInvoice, bagDate});
+  });
+  if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
+  if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
+  snapshotState(`تسجيل أرقام فواتير الحقائب من جدول داخل البرنامج (${items.length} صف)`);
+  let updated=0, skipped=0, bagStockChanged=false;
+  for(const {clientId, bagInvoice, bagDate} of items){
+    const c = clients.find(x=>x.clientId===clientId);
+    if(!c){ skipped++; continue; }
+    const oldSource = c.bagSource;
+    if(bagInvoice) c.bagInvoice = bagInvoice;
+    if(bagDate) c.bagPurchaseDate = bagDate;
+    // تسجيل فاتورة/تاريخ شراء لعميل يعني أن حقيبته تُسلَّم من المخزون، لذلك يُحدَّث "مصدر الحقيبة"
+    // تلقائياً إلى "من المخزون" مهما كان مصدرها السابق (نفس سلوك استيراد Excel بالضبط).
+    if(!c.bagPurchaseDate) c.bagPurchaseDate = todayISO();
+    c.bagSource = 'stock';
+    c.bagStatus = 'purchased';
+    if(oldSource!=='stock' || !bagStock.some(b=>b.type==='issue' && b.issuedClientId===c.id)){
+      bagStock.push({
+        id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
+        date: c.bagPurchaseDate, createdAt: Date.now(),
+        issuedClientId: c.id, issuedClientName: c.name,
+        notes: `تسليم من المخزون للعميل: ${c.name} (تسجيل فواتير/تواريخ الحقائب من جدول داخل البرنامج)`
+      });
+      bagStockChanged = true;
+    }
+    updated++;
+  }
+  if(bagStockChanged) recalcBagFundLedger();
+  await saveClients();
+  if(bagStockChanged) await saveBagStock();
+  await saveSettings();
+  await logAudit('edit','مخزون الحقائب', `تسجيل أرقام فواتير/تواريخ شراء الحقائب من جدول داخل البرنامج: تحديث ${updated} عميل${skipped?`، وتخطي ${skipped} صف (رقم هوية غير موجود)`:''}`);
+  renderTable(); renderBags();
+  closeBaginvBulkModal();
+  showToast(`تم تحديث ${updated} عميل${skipped?`، ${skipped} تم تخطيه (رقم هوية غير موجود)`:''}`);
+});
+
 document.addEventListener('click', async e=>{
   if(e.target.closest('[data-refresh-bagstock]')){
     // إعادة حساب كامل: نُزامن أولاً أي بيانات قديمة غير متسقة، ثم نعيد رسم كل بطاقات/جداول الحقائب

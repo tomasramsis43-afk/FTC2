@@ -2146,10 +2146,10 @@
     </div>
 
     <div class="panel">
-      <h3>استيراد أرقام فواتير الحقائب وتواريخ الشراء (Excel)</h3>
-      <div class="hint hint-info">ملف Excel بالأعمدة: "رقم الهوية"، "رقم فاتورة الحقيبة"، "تاريخ شراء الحقيبة" — يتم الربط والتحديث برقم الهوية فقط، ودفعة واحدة لعدد كبير من العملاء.</div>
-      <button class="btn btn-ghost btn-sm" id="btn-template-bag-invoices">تحميل نموذج فارغ</button>
-      <button class="btn btn-ghost btn-sm" id="btn-import-bag-invoices">استيراد من Excel</button>
+      <h3>استيراد أرقام فواتير الحقائب وتواريخ الشراء</h3>
+      <button class="btn btn-primary btn-sm" id="btn-open-baginv-bulk">📋 تسجيل دفعة أرقام فواتير (جدول داخل البرنامج)</button>
+      <button class="btn btn-ghost btn-sm" id="btn-template-bag-invoices">تحميل نموذج فارغ (Excel)</button>
+      <button class="btn btn-ghost btn-sm" id="btn-import-bag-invoices">استيراد من ملف Excel</button>
       <input type="file" id="import-baginv-input" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>
 
@@ -4744,6 +4744,33 @@
       <div style="display:flex; gap:10px;">
         <button type="button" class="btn btn-ghost" id="bagfund-bulk-cancel">إلغاء</button>
         <button type="button" class="btn btn-primary" id="btn-bagfund-bulk-save">حفظ الكل</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="baginv-bulk-overlay">
+  <div class="modal" style="max-width:760px;">
+    <h2>تسجيل أرقام فواتير الحقائب دفعة واحدة</h2>
+    <div class="hint hint-info" style="margin:0 0 10px;">رقم الهوية إلزامي لكل صف للمطابقة مع العميل. يمكنك نسخ الأعمدة الثلاثة من إكسل ولصقها مباشرة داخل أي خلية.</div>
+    <div class="table-scroll" style="max-height:52vh;">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:150px;">رقم الهوية *</th>
+            <th style="min-width:150px;">رقم الفاتورة</th>
+            <th style="min-width:130px;">تاريخ الشراء</th>
+            <th style="width:34px;"></th>
+          </tr>
+        </thead>
+        <tbody id="baginv-bulk-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-baginv-bulk-row">+ إضافة صف</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-ghost" id="baginv-bulk-cancel">إلغاء</button>
+        <button type="button" class="btn btn-primary" id="btn-baginv-bulk-save">حفظ الكل</button>
       </div>
     </div>
   </div>
