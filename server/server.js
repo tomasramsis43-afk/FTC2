@@ -568,21 +568,20 @@ app.get('/api/storage', requireAuth, async (req, res) => {
    بعينه مطبَّقة فى الواجهة كما كانت دائماً (canDeleteClientRecord وغيرها)؛ هذه
    النقاط تحتاج requireAuth فقط، تماماً كحفظ مفتاح kv_store('clients') سابقاً. */
 
-// عزل بيانات الاستقبال (origin/status، راجع تعليق CREATE TABLE client_records فى schema.sql):
-// الأدمن فقط يرى كل شيء (عام + مسودات/معتمدات الاستقبال). الاستقبال يرى فقط تخزينه الخاص
-// (origin='reception') بمسوداته ومعتمداته معاً — مساحة واحدة مشتركة بين كل مستخدمي الاستقبال.
-// أي دور آخر (staff/accountant) يرى فقط السجلات المعتمدة status='confirmed' (نفس السلوك القديم
-// تماماً بالنسبة له، لأن كل سجل قديم/عام كان وما زال confirmed افتراضياً — الوحيد المستبعَد عنه
-// هو مسودات الاستقبال المعلّقة لم تكن موجودة قبل هذه الميزة أصلاً).
-function clientRecordsVisibilitySql(role) {
+// عزل بيانات الاستقبال (origin/status/created_by، راجع تعليق CREATE TABLE client_records فى
+// schema.sql): الأدمن فقط يرى كل شيء (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال
+// يرى فقط سجلاته هو شخصياً (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول
+// تماماً عن بقية مستخدمي الاستقبال، وليس مساحة مشتركة بينهم. أي دور آخر (staff/accountant) يرى
+// فقط السجلات المعتمدة status='confirmed' (نفس السلوك القديم تماماً بالنسبة له).
+function clientRecordsVisibilitySql(role, username) {
   if (role === 'admin') return { where: '', params: [] };
-  if (role === 'reception') return { where: 'WHERE origin = $1', params: ['reception'] };
+  if (role === 'reception') return { where: 'WHERE origin = $1 AND created_by = $2', params: ['reception', username] };
   return { where: 'WHERE status = $1', params: ['confirmed'] };
 }
 
 app.get('/api/client-records', requireAuth, async (req, res) => {
   try {
-    const { where, params } = clientRecordsVisibilitySql(req.user.role);
+    const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
     const r = await pool.query(`SELECT id, enc, version, origin, status FROM client_records ${where}`, params);
     res.json({ records: r.rows });
   } catch (e) {
@@ -597,7 +596,7 @@ app.get('/api/client-records', requireAuth, async (req, res) => {
 // نفس فلترة الرؤية أعلاه بالضبط، وإلا يظهر للمستخدم إشعار "يوجد تحديث" عن سجلات لا يحق له رؤيتها أصلاً.
 app.get('/api/client-records/version', requireAuth, async (req, res) => {
   try {
-    const { where, params } = clientRecordsVisibilitySql(req.user.role);
+    const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
     const r = await pool.query(`SELECT COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM client_records ${where}`, params);
     res.json({ version: Number(r.rows[0].v), count: r.rows[0].c });
   } catch (e) {
@@ -611,20 +610,21 @@ app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res)
   if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات العميل المرسلة غير صحيحة' });
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
-    // حماية عزل بيانات الاستقبال: يمنع نهائياً (حتى عبر طلب مباشر بمعرّف يعرفه) لمس أي سجل
-    // ليس origin='reception' — سواء كان تعديلاً لسجل قائم غير خاص به، أو حتى إعادة استخدام
-    // نفس المعرّف لسجل عام محذوف مسبقاً. لا يُطبَّق أي فحص إضافي على باقي الأدوار (سلوكها كالسابق).
+    // حماية عزل بيانات الاستقبال: يمنع نهائياً (حتى عبر طلب مباشر بمعرّف يعرفه) لمس أي سجل ليس
+    // origin='reception' AND created_by = هو نفسه — سواء كان تعديلاً لسجل قائم لمستخدم استقبال
+    // آخر، أو حتى إعادة استخدام نفس المعرّف لسجل عام محذوف مسبقاً. كل مستخدم استقبال معزول عن
+    // البقية تماماً، وليس فقط عن باقي الأدوار. لا يُطبَّق أي فحص إضافي على باقي الأدوار (سلوكها كالسابق).
     if (req.user.role === 'reception') {
-      const existing = await pool.query('SELECT origin FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && existing.rows[0].origin !== 'reception') {
+      const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
+      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
       }
     }
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
     const upsert = await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status)
-       VALUES ($1, $2, 1, $3, $5, $6)
+      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by)
+       VALUES ($1, $2, 1, $3, $5, $6, $3)
        ON CONFLICT (id) DO UPDATE SET
          enc = EXCLUDED.enc, version = client_records.version + 1,
          updated_at = now(), updated_by = EXCLUDED.updated_by
@@ -666,10 +666,10 @@ app.post('/api/client-records/:id/approve', requireAuth, requireRole('admin'), a
 
 app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   try {
-    // نفس حماية العزل: الاستقبال يقدر يحذف فقط سجلاته هو (تخزينه الخاص).
+    // نفس حماية العزل: مستخدم الاستقبال يقدر يحذف فقط سجلاته هو شخصياً، وليس سجلات مستخدم استقبال آخر.
     if (req.user.role === 'reception') {
-      const existing = await pool.query('SELECT origin FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && existing.rows[0].origin !== 'reception') {
+      const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
+      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
         return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
       }
     }
@@ -695,19 +695,21 @@ app.post('/api/client-records/bulk-migrate', requireAuth, async (req, res) => {
     const placeholders = records.map((r, idx) => {
       const base = idx * 5;
       values.push(String(r.id), String(r.enc), req.user.username, newOrigin, newStatus);
-      return `($${base + 1},$${base + 2},1,$${base + 3},$${base + 4},$${base + 5})`;
+      return `($${base + 1},$${base + 2},1,$${base + 3},$${base + 4},$${base + 5},$${base + 3})`;
     }).join(',');
     const roleParamIndex = values.length + 1; // بارامتر إضافي واحد فى آخر القائمة (بعد كل صفوف السجلات)
-    values.push(req.user.role);
+    const usernameParamIndex = values.length + 2;
+    values.push(req.user.role, req.user.username);
     await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status)
+      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by)
        VALUES ${placeholders}
        ON CONFLICT (id) DO UPDATE SET
          enc = EXCLUDED.enc, version = client_records.version + 1,
          updated_at = now(), updated_by = EXCLUDED.updated_by
        -- حماية عزل بيانات الاستقبال: لو المرسل بدور 'reception'، يُتجاهَل صامتاً أي تعارض مع
-       -- سجل ليس أصلاً origin='reception' (بدل الكتابة فوق بيانات عميل عام لا يملكه).
-       WHERE ($${roleParamIndex} <> 'reception' OR client_records.origin = 'reception')`,
+       -- سجل ليس أصلاً origin='reception' AND created_by له هو (بدل الكتابة فوق بيانات عميل
+       -- عام أو عميل مستخدم استقبال آخر لا يملكه).
+       WHERE ($${roleParamIndex} <> 'reception' OR (client_records.origin = 'reception' AND client_records.created_by = $${usernameParamIndex}))`,
       values
     );
     res.json({ migrated: records.length });

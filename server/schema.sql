@@ -143,6 +143,11 @@ CREATE TABLE IF NOT EXISTS client_records (
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'general';
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
 CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(origin, status);
+-- عزل كل مستخدم استقبال عن الآخر: created_by يُسجَّل مرة واحدة فقط عند إنشاء السجل ولا يتغيّر
+-- بعدها أبداً (بعكس updated_by الذي يتحدّث مع كل تعديل)، فيبقى دائماً هوية صاحب السجل الأصلي
+-- حتى لو حرّره الأدمن لاحقاً. للسجلات القديمة قبل هذا العمود نملأها افتراضياً من updated_by.
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS created_by TEXT;
+UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
 
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
