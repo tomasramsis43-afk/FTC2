@@ -350,14 +350,22 @@ window.storage = {
 const _clientRecordVersions = {}; // id -> آخر version معروف لهذا العميل تحديداً (وليس للمصفوفة كلها)
 let _clientRecordsAggVersion = null; // آخر "مجموع نسخ" معروف — للتحقق الدوري السريع من وجود تعديل من جهاز آخر
 
+// عزل بيانات الاستقبال: origin/status أعمدة صريحة فى قاعدة البيانات (غير مشفّرة، السيرفر
+// نفسه يفلتر عليها) — لا تُدمَج أبداً داخل كائن العميل المشفَّر (JSON.stringify(client) عند كل
+// حفظ)، حتى لا تتسرب لداخل enc أو تُغيّر بصمة المقارنة مع baseline. تُحفَظ هنا بمفتاح id فقط،
+// وتُستخدم حصراً لعرض شارة "قيد اعتماد الأدمن" وزر الاعتماد فى شاشة العملاء.
+let clientRecordMeta = {}; // id -> { origin: 'general'|'reception', status: 'confirmed'|'pending' }
+
 async function fetchAllClientRecords(){
   const res = await serverFetch('/api/client-records');
   if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
   const data = await res.json();
   const list = [];
   const baseline = new Map();
+  clientRecordMeta = {};
   for(const r of (data.records||[])){
     _clientRecordVersions[r.id] = r.version;
+    clientRecordMeta[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
     let plain;
     try{ plain = await _decryptOrFail(r.enc); }
     catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل كباقي البرنامج، وليس تجاهلاً صامتاً
@@ -389,6 +397,7 @@ async function saveOneClientRecord(client, plainJson){
     if(!res.ok) return null;
     const data = await res.json();
     _clientRecordVersions[client.id] = data.version || 0;
+    if(data.origin && data.status) clientRecordMeta[client.id] = { origin: data.origin, status: data.status };
     return true;
   }catch(e){ return null; }
 }
@@ -397,8 +406,22 @@ async function deleteOneClientRecord(id){
   try{
     await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
     delete _clientRecordVersions[id];
+    delete clientRecordMeta[id];
     return true;
   }catch(e){ return null; }
+}
+
+// اعتماد الأدمن لعميل سجّله الاستقبال (pending -> confirmed). لا حاجة لفك/إعادة تشفير أي شيء —
+// enc يبقى كما هو، فقط عمود status يتغيّر على السيرفر. يرجع true لو نجح.
+async function approveClientRecord(id){
+  try{
+    const res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+    if(!res.ok) return false;
+    const data = await res.json();
+    _clientRecordVersions[id] = data.version || _clientRecordVersions[id];
+    clientRecordMeta[id] = { origin: 'reception', status: 'confirmed' };
+    return true;
+  }catch(e){ return false; }
 }
 
 // رفع مُجمَّع (حتى 300 عميل فى الطلب الواحد) — يُستخدم فى الترحيل لمرة واحدة من التخزين القديم،

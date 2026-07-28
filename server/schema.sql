@@ -136,6 +136,13 @@ CREATE TABLE IF NOT EXISTS client_records (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by    TEXT
 );
+-- عزل بيانات الاستقبال: كل عميل يُسجَّله مستخدم بدور 'reception' يُوسَم origin='reception'
+-- ويبدأ status='pending' (مسودة معلّقة لا تظهر لغير الاستقبال/الأدمن ولا تدخل أي حسابات/تقارير/VAT)
+-- لحد ما الأدمن "يعتمدها" (status يتحول confirmed) فتصبح عميلاً عادياً ظاهراً للجميع كباقي العملاء.
+-- أي عميل أضافه أدمن/محاسب/موظف عام يبقى origin='general', status='confirmed' كالسابق تماماً (بلا أي تغيير).
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'general';
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
+CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(origin, status);
 
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).

@@ -803,7 +803,11 @@ function filteredClients(){
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
   const frecep = $('#filter-reception') ? $('#filter-reception').value : '';
   const rows = clients.filter(c=>{
-    if(!isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
+    // عزل البيانات: دور 'reception' مستثنى من isOwnRecord الفردية هنا تحديداً، لأن السيرفر
+    // أصلاً لا يُرجع له إلا تخزينه الخاص (origin='reception' — مساحة واحدة مشتركة بين كل
+    // مستخدمي الاستقبال معاً، وليست فردية لكل مستخدم كباقي الأدوار المقيَّدة). راجع
+    // clientRecordsVisibilitySql فى server.js وتعليق canSeeAllData فى ui-framework.js.
+    if(currentUserRole!=='reception' && !isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
     if(!matchYear(c.date)) return false; // فلتر السنة العلوي (خط دفاع مباشر — بجانب مزامنته لحقلي من/إلى أدناه)
     if(frecep && c.createdBy!==frecep) return false;
     if(showSuspendedOnly && !c.suspended) return false;
@@ -1004,7 +1008,7 @@ async function renderTable(){
 // حتى لا يتكرر كود بناء HTML للصف في مكانين قد يختلفان عن بعض بمرور الوقت.
 function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
-  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = canSeeAllData() ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
+  const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
 
   $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
 
@@ -1026,7 +1030,9 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   $('#table-body').innerHTML = pageRows.map(c=>{
     const rem = remaining(c);
     const rowStatusClass = (c.cancelled || c.suspended) ? '' : (rem>0 ? 'owe' : 'paid');
-    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}`;
+    const recMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[c.id] : null;
+    const isPendingApproval = !!(recMeta && recMeta.status==='pending');
+    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}${isPendingApproval ? ' <span class="stamp owe" title="سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}`;
     return `<tr class="${rowStatusClass}"${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
       <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
@@ -1047,6 +1053,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
+            ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
             ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
             ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
@@ -1354,7 +1361,45 @@ document.addEventListener('click', async e=>{
   const unsuspendId = e.target.dataset.unsuspend;
   const cancelBagId = e.target.dataset.cancelbag;
   const delInvoiceId = e.target.dataset.delinvoice;
-  if(invId){ await printInvoice(invId); return; }
+  const approveId = e.target.dataset.approve;
+  const rejectId = e.target.dataset.reject;
+  if(approveId){
+    const c = clients.find(x=>x.id===approveId);
+    if(await customConfirm(`تأكيد اعتماد العميل "${c?.name||''}"؟ سيدخل فوراً في الحسابات والداشبورد والتقارير كباقي العملاء.`)){
+      const ok = await approveClientRecord(approveId);
+      if(ok){
+        await logAudit('edit','العملاء', `تم اعتماد تسجيل الاستقبال للعميل "${c?.name||approveId}"`);
+        refreshEverything();
+        showToast('✅ تم اعتماد العميل');
+      }else{
+        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
+  if(rejectId){
+    const c = clients.find(x=>x.id===rejectId);
+    if(await customConfirm(`تأكيد رفض وحذف تسجيل "${c?.name||''}" نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.`)){
+      const ok = await deleteOneClientRecord(rejectId);
+      if(ok!==false){
+        clients = clients.filter(x=>x.id!==rejectId);
+        await logAudit('delete','العملاء', `تم رفض وحذف تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}"`);
+        refreshEverything();
+        showToast('تم رفض التسجيل وحذفه');
+      }else{
+        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
+  if(invId){
+    const invMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[invId] : null;
+    if(invMeta && invMeta.status==='pending'){
+      showToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
+      return;
+    }
+    await printInvoice(invId); return;
+  }
   if(delInvoiceId){
     const c = clients.find(x=>x.id===delInvoiceId);
     if(!canDeleteClientRecord(c)){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
