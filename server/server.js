@@ -464,17 +464,20 @@ function queueSyncClientsRows(value) {
 }
 
 // حماية من "انحدار التشفير" (encryption downgrade): لو كانت القيمة الحالية المخزَّنة لهذا
-// المفتاح مشفّرة فعلاً (تبدأ بـ 'ENC1:') والقيمة الجديدة المُرسَلة من هذا الحفظ غير مشفّرة،
+// المفتاح مشفّرة فعلاً (تبدأ بـ 'ENC1:' أو 'ENC2:') والقيمة الجديدة المُرسَلة من هذا الحفظ غير مشفّرة،
 // هذا نمط يطابق تحديداً جهازاً يعمل بدون مفتاح تشفير صالح (مثال: فُتح البرنامج عبر رابط غير
 // HTTPS فلا يتوفر Web Crypto، أو تعطّل تفعيل الترخيص) بينما توجد بيانات حقيقية مشفّرة بالفعل.
 // هذا الجهاز يفشل في فك تشفير تلك البيانات فيتعامل معها كأنها فارغة، ثم يحفظ نسخته الناقصة/الفارغة
 // فوقها — فيمحو بيانات كل المستخدمين الآخرين من السيرفر. لا يحتاج هذا الفحص فك أي تشفير: مجرد
 // مقارنة نصية للبادئة كافية لرصد هذا النمط تحديداً ومنعه قبل وقوع أي ضرر.
 async function wouldDowngradeEncryption(key, newValue) {
-  if (typeof newValue !== 'string' || newValue.startsWith('ENC1:')) return false;
-  const cur = await pool.query('SELECT value FROM kv_store WHERE key = $1', [key]);
-  const curValue = cur.rows[0] && cur.rows[0].value;
-  return typeof curValue === 'string' && curValue.startsWith('ENC1:');
+  // القيمة الجديدة مشفّرة بأي من الصيغتين المعتمدتين (ENC1 = قديمة، ENC2 = مضغوطة+مشفّرة)
+  if (typeof newValue !== 'string' || newValue.startsWith('ENC1:') || newValue.startsWith('ENC2:')) return false;
+  // نجلب أول 5 حروف فقط (بادئة التشفير) بدل جلب كامل القيمة التي قد تكون عدة ميجابايت —
+  // هذا يُقلّل الحمل على قاعدة البيانات بشكل كبير في كل عملية حفظ.
+  const cur = await pool.query('SELECT LEFT(value, 5) AS prefix FROM kv_store WHERE key = $1', [key]);
+  const prefix = cur.rows[0] && cur.rows[0].prefix;
+  return (prefix === 'ENC1:' || prefix === 'ENC2:');
 }
 
 app.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin, async (req, res) => {
