@@ -1450,18 +1450,25 @@ function customPrompt(message, {title, required=false, placeholder=''}={}){
 let undoStack = [];
 let redoStack = [];
 const UNDO_LIMIT = 20;
+// نسخ عميق سريع: structuredClone (مدعوم فى كل المتصفحات الحديثة) أسرع بكتير من دورة
+// JSON.stringify ثم JSON.parse على نفس البيانات، خصوصاً كل ما عدد العملاء/الحركات يكبر —
+// وهي نفس البيانات بالضبط (مصفوفات/كائنات عادية بدون Function أو Date معقدة تمنع النسخ).
+function _deepClone(x){
+  try{ return structuredClone(x); }
+  catch(e){ return JSON.parse(JSON.stringify(x)); } // احتياط لو المتصفح قديم جداً أو فى قيمة غير قابلة للنسخ
+}
 function currentStateSnapshot(label){
   return {
     label,
     ts: Date.now(),
-    clients: JSON.parse(JSON.stringify(clients)),
-    vaultTx: JSON.parse(JSON.stringify(vaultTx)),
-    bagStock: JSON.parse(JSON.stringify(bagStock)),
-    courseSessions: JSON.parse(JSON.stringify(courseSessions)),
-    settings: JSON.parse(JSON.stringify(settings)),
-    users: JSON.parse(JSON.stringify(users)),
-    companies: JSON.parse(JSON.stringify(companies)),
-    companyTransfers: JSON.parse(JSON.stringify(companyTransfers))
+    clients: _deepClone(clients),
+    vaultTx: _deepClone(vaultTx),
+    bagStock: _deepClone(bagStock),
+    courseSessions: _deepClone(courseSessions),
+    settings: _deepClone(settings),
+    users: _deepClone(users),
+    companies: _deepClone(companies),
+    companyTransfers: _deepClone(companyTransfers)
   };
 }
 function snapshotState(label){
@@ -2113,7 +2120,44 @@ async function cleanupDuplicatePaymentMethods(){
 /* ---------------- تحديث كامل الشيت ---------------- */
 /* يعيد رسم كل الشاشات (حتى غير الظاهرة حالياً) من البيانات الحالية في الذاكرة،
    لضمان أن أي معادلة أو قيمة محسوبة تغيّرت تنعكس فوراً على الشاشة دون الحاجة لإعادة تحميل الصفحة */
+// ملاحظة أداء: هذه الدالة كانت تعيد رسم/حساب كل شاشات البرنامج (حتى المقفولة وغير الظاهرة أصلاً)
+// فى كل مرة تُستدعى فيها — وهي تُستدعى بعد عمليات عادية جداً (حذف فاتورة، إيقاف عميل، إلغاء حقيبة...)
+// مش بس من زرار "تحديث الشيت بالكامل". بما أن كل تبويب أصلاً يُعاد رسمه من جديد لحظة فتحه (معالج نقر
+// button[data-view] تحت)، فلا داعي لحساب نفس الشاشة مرتين: مرة دلوقتي وهي مقفولة، ومرة تانية لما
+// المستخدم يفتحها فعلاً. فبنحسب هنا بس الشاشة المفتوحة حالياً؛ الباقي هيتحدّث تلقائياً عند فتحه.
 function refreshEverything(){
+  if(typeof refreshFilterOptions==='function') refreshFilterOptions();
+  if(typeof renderDashboard==='function') renderDashboard(); // بيحدّث شريط quickstats الدايم الظهور دايماً، وباقيه بيتحدد داخلياً حسب isViewActive
+  if(isViewActive('clients') && typeof renderTable==='function') renderTable();
+  if(isViewActive('vault') && typeof renderVault==='function') renderVault();
+  if(isViewActive('bags')){
+    if(typeof renderBags==='function') renderBags();
+    if(typeof renderOwnBagClients==='function') renderOwnBagClients();
+    if(typeof renderClientBagPurchases==='function') renderClientBagPurchases();
+  }
+  if(isViewActive('courses') && typeof renderCourses==='function') renderCourses();
+  if(isViewActive('courseinvoices')){
+    if(typeof renderCourseInvoices==='function') renderCourseInvoices();
+    if(typeof renderMissingCourse==='function') renderMissingCourse();
+  }
+  if(isViewActive('companies')){
+    if(typeof renderCompanies==='function') renderCompanies();
+    if(typeof renderCtGroups==='function') renderCtGroups();
+    if(typeof renderCmCats==='function') renderCmCats();
+  }
+  if(isViewActive('purchases') && typeof renderPurchases==='function') renderPurchases();
+  if(isViewActive('reports') && typeof renderReports==='function') renderReports();
+  if(isViewActive('budget') && typeof renderBudget==='function') renderBudget();
+  if(isViewActive('accounting') && typeof renderAccounting==='function') renderAccounting();
+  if(isViewActive('audit') && typeof renderAuditLog==='function') renderAuditLog();
+  if(isViewActive('settings') && typeof renderSettings==='function') renderSettings();
+  if(isViewActive('settings') && typeof renderUsersList==='function') renderUsersList();
+  if(typeof updateUndoRedoButtons==='function') updateUndoRedoButtons();
+}
+$('#btn-refresh-all').addEventListener('click', ()=>{
+  // زرار "تحديث الشيت بالكامل" فقط هو من يحتاج فعلاً حساب كل الشاشات (حتى المقفولة)، لأن الغرض
+  // منه صراحة هو إعادة مزامنة كل شيء دفعة واحدة — بخلاف باقي نداءات refreshEverything() المنتشرة
+  // بعد عمليات عادية (حذف فاتورة، إيقاف عميل...) واللي محتاجة بس الشاشة المفتوحة حالياً.
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();
   if(typeof renderDashboard==='function') renderDashboard();
   if(typeof renderTable==='function') renderTable();
@@ -2136,8 +2180,7 @@ function refreshEverything(){
   if(typeof renderUsersList==='function') renderUsersList();
   if(typeof updateUndoRedoButtons==='function') updateUndoRedoButtons();
   showToast('تم تحديث الشيت بالكامل');
-}
-$('#btn-refresh-all').addEventListener('click', refreshEverything);
+});
 
 /* ---------------- إلغاء كل الفلاتر وخانات البحث في كل الشيتات ---------------- */
 function clearAllSheetFilters(){

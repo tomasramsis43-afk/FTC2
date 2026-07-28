@@ -10,6 +10,14 @@
    ============================================================ */
 const $ = s => document.querySelector(s);
 const $all = s => document.querySelectorAll(s);
+// هل تبويب معيّن (مثال: 'reports', 'accounting', 'vault') ظاهر فعلاً على الشاشة الآن؟ نستخدمها
+// لتجنّب حساب/رسم شاشات كاملة (وأحياناً على كل بيانات البرنامج) وهي مقفولة أصلاً — بما أن كل تبويب
+// أصلاً يُعاد رسمه من جديد لحظة فتحه (انظر معالج نقر button[data-view] فى ui-framework.js)، فلا داعي
+// لتكرار نفس الحساب كل مرة يُحفظ فيها أي شيء فى أي مكان آخر بالبرنامج بينما هذا التبويب مقفول.
+function isViewActive(viewName){
+  const el = document.getElementById('view-' + viewName);
+  return !!(el && el.classList.contains('active'));
+}
 
 const LICENSE_STORAGE_KEY = "appLicenseKeyV1";
 // نسخة محلية مخبّأة من آخر تفعيل ناجح (مفتاح التشفير + تاريخ الانتهاء)، تُستخدم فقط
