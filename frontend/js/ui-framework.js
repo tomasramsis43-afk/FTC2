@@ -800,10 +800,11 @@ async function loadData(cacheOnly){
   const wantUsers = normalizeRole(SERVER_AUTH_ROLE) === 'admin';
   // 'clients' أُزيل من هذه القائمة: له مسار تحميل خاص أسفل (عملاء كسجلات مستقلة، أسرع بكثير مع
   // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
-  const kvKeys = ['settings','bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows',
-    'deletedInvoices','courseSessions','appLang','auditLog','companies','companyTransfers','journalEntries',
-    'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
-  ].concat(wantUsers ? ['users'] : []);
+  // 'clients' أُزيل من هذه القائمة: له مسار تحميل خاص أسفل (عملاء كسجلات مستقلة، أسرع بكثير مع
+  // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
+  // كذلك 17 مفتاحاً أخرى (الخزنة، المخزون، المحاسبة، الشركات...) أُزيلت أيضاً — كل منها له الآن
+  // مساره الخاص عبر loadCollectionGeneric (سجل فردي لكل عنصر بدل كتلة واحدة)، راجع الأسفل.
+  const kvKeys = ['settings','appLang','zakatAdjustments'].concat(wantUsers ? ['users'] : []);
   const kv = {};
   const decryptFailedKeys = [];
   await Promise.all(kvKeys.map(async k=>{
@@ -1023,18 +1024,20 @@ async function loadData(cacheOnly){
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
-    const r = kv.bagStock;
-    bagStock = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ bagStock = []; }
+    const { list, baseline } = await loadCollectionGeneric('bagStock', cacheOnly);
+    bagStock = list;
+    _collectionSyncBaseline['bagStock'] = baseline;
+  }catch(e){ bagStock = []; _collectionSyncBaseline['bagStock'] = null; }
   // ترحيل/تصحيح تلقائي: أي عميل مصدر حقيبته "من المخزون" (bagSource==='stock') ولم يكن له عملية "تسليم"
   // مقابلة في سجل عمليات مخزون الحقائب — تُضاف له عملية بأثر رجعي، حتى يبقى "المخزون الحالي" مبنياً دائماً
   // على سجل عمليات المخزون نفسه ومتزامناً مع شيت العملاء. الدالة نفسها تُستدعى أيضاً بعد أي استيراد Excel
   // قد يضبط مصدر حقيبة عميل على "من المخزون"، حتى يتحدّث رقم المخزون فوراً دون الحاجة لإعادة تحميل التطبيق.
   await syncBagStockIssues();
   try{
-    const r = kv.vaultTx;
-    vaultTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ vaultTx = []; }
+    const { list, baseline } = await loadCollectionGeneric('vaultTx', cacheOnly);
+    vaultTx = list;
+    _collectionSyncBaseline['vaultTx'] = baseline;
+  }catch(e){ vaultTx = []; _collectionSyncBaseline['vaultTx'] = null; }
   // ترحيل تلقائي لمرة واحدة: بعد حذف شاشة "تسوية الاستقبال" نهائياً، لم يعد هناك أي طريقة يدوية
   // لتأكيد استلام الدفعات النقدية المعلّقة (t.settled===false) التي سجّلها الاستقبال سابقاً — فتبقى
   // "معلّقة" إلى الأبد بدون هذا الترحيل، مما يمنع نهائياً وبصمت ترحيل فاتورة الدورة المرتبطة بها
@@ -1051,9 +1054,10 @@ async function loadData(cacheOnly){
     if(hadUnsettled) await saveVaultTx();
   }
   try{
-    const r = kv.deletedVaultTx;
-    deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ deletedVaultTx = []; }
+    const { list, baseline } = await loadCollectionGeneric('deletedVaultTx', cacheOnly);
+    deletedVaultTx = list;
+    _collectionSyncBaseline['deletedVaultTx'] = baseline;
+  }catch(e){ deletedVaultTx = []; _collectionSyncBaseline['deletedVaultTx'] = null; }
   {
     const renumberedCount = renumberVaultSeqChronologically();
     if(renumberedCount>0){
@@ -1063,21 +1067,25 @@ async function loadData(cacheOnly){
     }
   }
   try{
-    const r = kv.vaultDenomTx;
-    vaultDenomTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ vaultDenomTx = []; }
+    const { list, baseline } = await loadCollectionGeneric('vaultDenomTx', cacheOnly);
+    vaultDenomTx = list;
+    _collectionSyncBaseline['vaultDenomTx'] = baseline;
+  }catch(e){ vaultDenomTx = []; _collectionSyncBaseline['vaultDenomTx'] = null; }
   try{
-    const r = kv.bankStatementRows;
-    bankStatementRows = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ bankStatementRows = []; }
+    const { list, baseline } = await loadCollectionGeneric('bankStatementRows', cacheOnly);
+    bankStatementRows = list;
+    _collectionSyncBaseline['bankStatementRows'] = baseline;
+  }catch(e){ bankStatementRows = []; _collectionSyncBaseline['bankStatementRows'] = null; }
   try{
-    const r = kv.deletedInvoices;
-    deletedInvoices = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ deletedInvoices = []; }
+    const { list, baseline } = await loadCollectionGeneric('deletedInvoices', cacheOnly);
+    deletedInvoices = list;
+    _collectionSyncBaseline['deletedInvoices'] = baseline;
+  }catch(e){ deletedInvoices = []; _collectionSyncBaseline['deletedInvoices'] = null; }
   try{
-    const r = kv.courseSessions;
-    courseSessions = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ courseSessions = []; }
+    const { list, baseline } = await loadCollectionGeneric('courseSessions', cacheOnly);
+    courseSessions = list;
+    _collectionSyncBaseline['courseSessions'] = baseline;
+  }catch(e){ courseSessions = []; _collectionSyncBaseline['courseSessions'] = null; }
   try{
     const r = kv.appLang;
     currentLang = (r && r.value) ? r.value : 'ar';
@@ -1102,17 +1110,20 @@ async function loadData(cacheOnly){
     users = [];
   }
   try{
-    const r = kv.auditLog;
-    auditLog = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ auditLog = []; }
+    const { list, baseline } = await loadCollectionGeneric('auditLog', cacheOnly);
+    auditLog = list;
+    _collectionSyncBaseline['auditLog'] = baseline;
+  }catch(e){ auditLog = []; _collectionSyncBaseline['auditLog'] = null; }
   try{
-    const r = kv.companies;
-    companies = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ companies = []; }
+    const { list, baseline } = await loadCollectionGeneric('companies', cacheOnly);
+    companies = list;
+    _collectionSyncBaseline['companies'] = baseline;
+  }catch(e){ companies = []; _collectionSyncBaseline['companies'] = null; }
   try{
-    const r = kv.companyTransfers;
-    companyTransfers = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ companyTransfers = []; }
+    const { list, baseline } = await loadCollectionGeneric('companyTransfers', cacheOnly);
+    companyTransfers = list;
+    _collectionSyncBaseline['companyTransfers'] = baseline;
+  }catch(e){ companyTransfers = []; _collectionSyncBaseline['companyTransfers'] = null; }
   {
     const migratedCount = migrateCompanyTransfersToLumpSum();
     if(migratedCount>0){
@@ -1141,38 +1152,45 @@ async function loadData(cacheOnly){
     }
   }
   try{
-    const r = kv.journalEntries;
-    journalEntries = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ journalEntries = []; }
+    const { list, baseline } = await loadCollectionGeneric('journalEntries', cacheOnly);
+    journalEntries = list;
+    _collectionSyncBaseline['journalEntries'] = baseline;
+  }catch(e){ journalEntries = []; _collectionSyncBaseline['journalEntries'] = null; }
   try{
-    const r = kv.chartOfAccounts;
-    chartOfAccounts = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ chartOfAccounts = []; }
+    const { list, baseline } = await loadCollectionGeneric('chartOfAccounts', cacheOnly);
+    chartOfAccounts = list;
+    _collectionSyncBaseline['chartOfAccounts'] = baseline;
+  }catch(e){ chartOfAccounts = []; _collectionSyncBaseline['chartOfAccounts'] = null; }
   seedChartOfAccountsIfEmpty();
   try{
-    const r = kv.journalDE;
-    journalDE = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ journalDE = []; }
+    const { list, baseline } = await loadCollectionGeneric('journalDE', cacheOnly);
+    journalDE = list;
+    _collectionSyncBaseline['journalDE'] = baseline;
+  }catch(e){ journalDE = []; _collectionSyncBaseline['journalDE'] = null; }
   try{
-    const r = kv.budgetEntries;
-    budgetEntries = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ budgetEntries = []; }
+    const { list, baseline } = await loadCollectionGeneric('budgetEntries', cacheOnly);
+    budgetEntries = list;
+    _collectionSyncBaseline['budgetEntries'] = baseline;
+  }catch(e){ budgetEntries = []; _collectionSyncBaseline['budgetEntries'] = null; }
   try{
-    const r = kv.suppliers;
-    suppliers = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ suppliers = []; }
+    const { list, baseline } = await loadCollectionGeneric('suppliers', cacheOnly);
+    suppliers = list;
+    _collectionSyncBaseline['suppliers'] = baseline;
+  }catch(e){ suppliers = []; _collectionSyncBaseline['suppliers'] = null; }
   try{
-    const r = kv.purchases;
-    purchases = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ purchases = []; }
+    const { list, baseline } = await loadCollectionGeneric('purchases', cacheOnly);
+    purchases = list;
+    _collectionSyncBaseline['purchases'] = baseline;
+  }catch(e){ purchases = []; _collectionSyncBaseline['purchases'] = null; }
   // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
   // سجّلها هو بنفسه.
   // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
   try{
-    const r = kv.manualSalesInvoices;
-    manualSalesInvoices = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ manualSalesInvoices = []; }
+    const { list, baseline } = await loadCollectionGeneric('manualSalesInvoices', cacheOnly);
+    manualSalesInvoices = list;
+    _collectionSyncBaseline['manualSalesInvoices'] = baseline;
+  }catch(e){ manualSalesInvoices = []; _collectionSyncBaseline['manualSalesInvoices'] = null; }
   try{
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
@@ -1187,7 +1205,7 @@ async function saveUsers(){
   try{ await window.storage.set('users', JSON.stringify(users), false); }catch(e){ showToast('تعذر حفظ بيانات المستخدمين'); }
 }
 async function saveAuditLog(){
-  try{ await window.storage.set('auditLog', JSON.stringify(auditLog), false); }catch(e){ /* silent */ }
+  await saveCollectionGeneric('auditLog', auditLog);
 }
 async function logAudit(action, section, description){
   auditLog.push({
@@ -1258,22 +1276,22 @@ async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
 }
 async function saveBagStock(){
-  try{ await window.storage.set('bagStock', JSON.stringify(bagStock), false); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
+  await saveCollectionGeneric('bagStock', bagStock);
 }
 async function saveVaultTx(){
-  try{ await window.storage.set('vaultTx', JSON.stringify(vaultTx), false); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
+  await saveCollectionGeneric('vaultTx', vaultTx);
 }
 async function saveDeletedVaultTx(){
-  try{ await window.storage.set('deletedVaultTx', JSON.stringify(deletedVaultTx), false); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
+  await saveCollectionGeneric('deletedVaultTx', deletedVaultTx);
 }
 async function saveVaultDenomTx(){
-  try{ await window.storage.set('vaultDenomTx', JSON.stringify(vaultDenomTx), false); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
+  await saveCollectionGeneric('vaultDenomTx', vaultDenomTx);
 }
 async function saveBankStatementRows(){
-  try{ await window.storage.set('bankStatementRows', JSON.stringify(bankStatementRows), false); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
+  await saveCollectionGeneric('bankStatementRows', bankStatementRows);
 }
 async function saveDeletedInvoices(){
-  try{ await window.storage.set('deletedInvoices', JSON.stringify(deletedInvoices), false); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
+  await saveCollectionGeneric('deletedInvoices', deletedInvoices);
 }
 
 /* ================= معايير محاسبية: ترقيم تسلسلي رسمي + قفل فترات + حذف منطقي ================= */
@@ -1351,13 +1369,13 @@ function pushVaultTxHistory(tx, beforeSnapshot, afterSnapshot){
   });
 }
 async function saveCourseSessions(){
-  try{ await window.storage.set('courseSessions', JSON.stringify(courseSessions), false); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
+  await saveCollectionGeneric('courseSessions', courseSessions);
 }
 async function saveCompanies(){
-  try{ await window.storage.set('companies', JSON.stringify(companies), false); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
+  await saveCollectionGeneric('companies', companies);
 }
 async function saveCompanyTransfers(){
-  try{ await window.storage.set('companyTransfers', JSON.stringify(companyTransfers), false); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
+  await saveCollectionGeneric('companyTransfers', companyTransfers);
 }
 /* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
    سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).
@@ -1454,19 +1472,19 @@ function cleanupDuplicateCompanyTraineeVaultEntries(){
   return removedCount;
 }
 async function saveJournalEntries(){
-  try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
+  await saveCollectionGeneric('journalEntries', journalEntries);
 }
 async function saveChartOfAccounts(){
-  try{ await window.storage.set('chartOfAccounts', JSON.stringify(chartOfAccounts), false); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
+  await saveCollectionGeneric('chartOfAccounts', chartOfAccounts);
 }
 async function saveJournalDE(){
-  try{ await window.storage.set('journalDE', JSON.stringify(journalDE), false); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
+  await saveCollectionGeneric('journalDE', journalDE);
 }
 async function saveBudgetEntries(){
-  try{ await window.storage.set('budgetEntries', JSON.stringify(budgetEntries), false); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
+  await saveCollectionGeneric('budgetEntries', budgetEntries);
 }
 async function saveSuppliers(){
-  try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
+  await saveCollectionGeneric('suppliers', suppliers);
 }
 /* ---------------- ترحيل مرفقات فواتير المشتريات القديمة (مرة واحدة) ----------------
    قبل هذا التحديث كان مرفق كل فاتورة (dataUrl الصورة كاملة) مخزَّناً داخل نفس عنصر الفاتورة
@@ -1489,10 +1507,10 @@ async function migratePurchaseAttachmentsOut(){
   await savePurchases();
 }
 async function savePurchases(){
-  try{ await window.storage.set('purchases', JSON.stringify(purchases), false); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
+  await saveCollectionGeneric('purchases', purchases);
 }
 async function saveManualSalesInvoices(){
-  try{ await window.storage.set('manualSalesInvoices', JSON.stringify(manualSalesInvoices), false); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
+  await saveCollectionGeneric('manualSalesInvoices', manualSalesInvoices);
 }
 async function saveZakatAdjustments(){
   try{ await window.storage.set('zakatAdjustments', JSON.stringify(zakatAdjustments), false); }catch(e){ showToast('تعذر حفظ تعديلات وعاء الزكاة'); }
