@@ -834,6 +834,28 @@ if($('#btn-save-reception-restrictions')) $('#btn-save-reception-restrictions').
   showToast('تم حفظ قيود الاستقبال');
   renderTable();
 });
+function formatDeviceInfo(ua){
+  if(!ua) return '—';
+  // تحليل مبسّط لسلسلة الـ User-Agent لعرض اسم مفهوم للجهاز/المتصفح بدل السلسلة الخام،
+  // بدون الحاجة لمكتبة خارجية (الواجهة كلها ملفات ثابتة بدون خطوة بناء/npm).
+  let os = 'نظام غير معروف';
+  if(/Windows/i.test(ua)) os = 'Windows';
+  else if(/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+  else if(/Mac OS X/i.test(ua)) os = 'macOS';
+  else if(/Android/i.test(ua)) os = 'Android';
+  else if(/Linux/i.test(ua)) os = 'Linux';
+
+  let browser = 'متصفح غير معروف';
+  if(/Edg\//i.test(ua)) browser = 'Edge';
+  else if(/OPR\/|Opera/i.test(ua)) browser = 'Opera';
+  else if(/Chrome\//i.test(ua)) browser = 'Chrome';
+  else if(/CriOS\//i.test(ua)) browser = 'Chrome';
+  else if(/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if(/Safari\//i.test(ua)) browser = 'Safari';
+
+  const type = /Mobile|iPhone|Android/i.test(ua) ? '📱' : (/iPad|Tablet/i.test(ua) ? '📱' : '💻');
+  return `${type} ${os} · ${browser}`;
+}
 async function renderLoginHistory(){
   const el = $('#login-history-list');
   if(!el) return;
@@ -851,12 +873,13 @@ async function renderLoginHistory(){
       </div>
       <div class="table-scroll table-scroll-compact cards-mobile">
       <table>
-        <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>الوقت</th><th>عنوان IP</th></tr></thead>
+        <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>الوقت</th><th>الجهاز</th><th>عنوان IP</th></tr></thead>
         <tbody>
           ${history.map(h=>`<tr>
             <td data-label="اسم المستخدم">${escapeHtml(h.username)}${h.username===currentUser?' — أنت':''}</td>
             <td data-label="الصلاحية">${escapeHtml(SERVER_ROLE_LABELS[h.role]||h.role||'—')}</td>
             <td class="mono" data-label="الوقت">${new Date(h.logged_in_at).toLocaleString('ar-SA')}</td>
+            <td data-label="الجهاز" title="${escapeHtml(h.device_info||'')}">${escapeHtml(formatDeviceInfo(h.device_info))}</td>
             <td class="mono" data-label="عنوان IP">${escapeHtml(h.ip_address||'—')}</td>
           </tr>`).join('')}
         </tbody>
