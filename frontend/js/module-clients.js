@@ -1018,8 +1018,8 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
     pag.style.display = filteredTotal ? '' : 'none';
     const startN = filteredTotal ? (tableCurrentPage-1)*(Number.isFinite(pageSize)?pageSize:filteredTotal)+1 : 0;
     const endN = Number.isFinite(pageSize) ? Math.min(filteredTotal, tableCurrentPage*pageSize) : filteredTotal;
-    $('#table-page-info').textContent = filteredTotal ? `عرض ${startN} - ${endN} من ${filteredTotal}` : '';
-    $('#table-page-current').textContent = `صفحة ${tableCurrentPage} / ${totalPages}`;
+    $('#table-page-info').textContent = filteredTotal ? `${tr('showingOfTotal')} ${startN} - ${endN} ${tr('ofWord')} ${filteredTotal}` : '';
+    $('#table-page-current').textContent = `${tr('pageWord')} ${tableCurrentPage} / ${totalPages}`;
     $('#table-page-first').disabled = tableCurrentPage<=1;
     $('#table-page-prev').disabled = tableCurrentPage<=1;
     $('#table-page-next').disabled = tableCurrentPage>=totalPages;
@@ -1032,34 +1032,34 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
     const rowStatusClass = (c.cancelled || c.suspended) ? '' : (rem>0 ? 'owe' : 'paid');
     const recMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[c.id] : null;
     const isPendingApproval = !!(recMeta && recMeta.status==='pending');
-    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}${isPendingApproval ? ' <span class="stamp owe" title="سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}`;
+    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ` <span class="stamp owe">${tr('cancelledStamp')}</span>` : ''}${c.absent ? ` <span class="stamp owe">${tr('absentStamp')}</span>` : ''}${c.suspended ? ` <span class="stamp owe">${tr('suspendedStamp')}</span>` : ''}${isPendingApproval ? ` <span class="stamp owe" title="${tr('titlePendingApproval')}">${tr('pendingApprovalStamp')}</span>` : ''}`;
     return `<tr class="${rowStatusClass}"${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
-      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
-      <td data-label="رقم الهاتف">${phoneCellHtml(c.phone)}</td>
-      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
-      <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
-      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
-      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
-      <td class="mono" data-label="رقم الدورة">${escapeHtml(c.courseNumber||'—')}</td>
-      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
-      <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
-      <td class="mono" data-label="الإجمالي">${fmt(total(c))}</td>
-      <td class="mono" data-label="المدفوع">${fmt(paidTotal(c))}</td>
-      <td class="mono" data-label="المتبقي"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
-      <td data-label="الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
-      <td data-label="طريقة الدفع"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
+      <td class="sticky-col sticky-col-2 card-full" data-label="${tr('thName')}">${nameBadges}</td>
+      <td data-label="${tr('thPhone')}">${phoneCellHtml(c.phone)}</td>
+      <td class="mono" data-label="${tr('thId')}">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="${tr('thRef')}">${escapeHtml(c.referNum||'—')}</td>
+      <td data-label="${tr('thNat')}">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="${tr('thCourse')}">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="${tr('thCourseNum')}">${escapeHtml(c.courseNumber||'—')}</td>
+      <td class="mono" data-label="${tr('thInvoice')}">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="${tr('thRegDate')}">${formatDateDisplay(c.date)||'—'}</td>
+      <td class="mono" data-label="${tr('thTotal')}">${fmt(total(c))}</td>
+      <td class="mono" data-label="${tr('thPaid')}">${fmt(paidTotal(c))}</td>
+      <td class="mono" data-label="${tr('thRemaining')}"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
+      <td data-label="${tr('thBag')}"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
+      <td data-label="${tr('thChannel')}"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         <div class="row-menu">
-          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="${tr('rowActions')}" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
-            ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
+            ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">${tr('approveBtn')}</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">${tr('rejectBtn')}</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-            ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
-            ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
+            ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="${tr('titleDeleteInvoice')}">${tr('deleteInvoiceBtn')}</button>` : ''}
+            ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="${tr('titleEditLocked')}">${tr('edit')} 🔒</span>`}
             ${c.suspended
-              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
-              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
+              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="${tr('titleUnsuspend')}">${tr('unsuspendBtn')}</button>`
+              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="${tr('titleSuspend')}">${tr('suspendedStamp')}</button>`}
             ${canDeleteClientRecord(c) ? `<button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>` : ''}
           </div>
         </div>
@@ -1155,7 +1155,7 @@ function phoneCellHtml(phone){
   const numText = `<span class="mono">${escapeHtml(phone)}</span>`;
   const link = whatsappLink(phone);
   if(!link) return numText;
-  return `<a href="${link}" target="_blank" rel="noopener" title="مراسلة العميل عبر واتساب" style="color:#25D366; display:inline-flex; align-items:center;">${WA_ICON}</a> ${numText}`;
+  return `<a href="${link}" target="_blank" rel="noopener" title="${tr('titleWhatsapp')}" style="color:#25D366; display:inline-flex; align-items:center;">${WA_ICON}</a> ${numText}`;
 }
 
 // بديل عن window.open للطباعة: بعض تطبيقات Electron لا تدعم معاينة الطباعة (Print Preview)
