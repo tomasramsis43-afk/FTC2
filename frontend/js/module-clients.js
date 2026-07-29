@@ -1393,11 +1393,6 @@ document.addEventListener('click', async e=>{
     return;
   }
   if(invId){
-    const invMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[invId] : null;
-    if(invMeta && invMeta.status==='pending'){
-      showToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
-      return;
-    }
     await printInvoice(invId); return;
   }
   if(delInvoiceId){
