@@ -35,7 +35,7 @@ async function serverLogin(username, password){
     sessionStorage.setItem('serverAuthToken', data.token);
     sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
     sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
-  }catch(e){}
+  }catch(e){ console.error('[Auth] Failed to store session token:', e); }
   // نحفظ (بشكل غير قابل للعكس) تجزئة لكلمة المرور محلياً على هذا الجهاز فقط، حتى يمكن لاحقاً
   // فتح البرنامج بلا إنترنت إطلاقاً بنفس اسم المستخدم/كلمة المرور — راجع tryOfflineLogin أسفله.
   await cacheOfflineLogin(SERVER_AUTH_USERNAME, password, SERVER_AUTH_ROLE);
@@ -60,7 +60,7 @@ async function cacheOfflineLogin(username, password, role){
     const store = (()=>{ try{ return JSON.parse(localStorage.getItem(OFFLINE_LOGIN_CACHE_KEY)||'{}'); }catch(e){ return {}; } })();
     store[String(username||'').toLowerCase()] = { role, saltB64: bytesToBase64(salt), hashB64: hash, cachedAt: Date.now() };
     localStorage.setItem(OFFLINE_LOGIN_CACHE_KEY, JSON.stringify(store));
-  }catch(e){}
+  }catch(e){ console.error('[Auth] Failed to cache offline login:', e); }
 }
 async function tryOfflineLogin(username, password){
   try{

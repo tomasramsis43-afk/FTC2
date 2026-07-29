@@ -408,7 +408,7 @@ function applyLanguage(lang){
   $all('[data-i18n-placeholder]').forEach(el=>{ const k=el.dataset.i18nPlaceholder; if(I18N[lang] && I18N[lang][k]!==undefined) el.placeholder = I18N[lang][k]; });
   $all('[data-i18n-title]').forEach(el=>{ const k=el.dataset.i18nTitle; if(I18N[lang] && I18N[lang][k]!==undefined) el.title = I18N[lang][k]; });
   $('#btn-lang-toggle').textContent = lang==='ar' ? 'EN' : 'AR';
-  try{ window.storage.set('appLang', lang, false); }catch(e){}
+  try{ window.storage.set('appLang', lang, false); }catch(e){ console.error('[UI] Failed to persist appLang:', e); }
   // إعادة رسم كل الجداول والمحتوى الديناميكي لتحديث النصوص المولّدة من JS
   if(typeof renderTable==='function') renderTable();
   if(typeof renderDashboard==='function') renderDashboard();
@@ -588,11 +588,11 @@ function applyRowDensity(isCompact){
   const btn = $('#btn-density-toggle');
   if(btn) btn.classList.toggle('active', !!isCompact);
 }
-try{ applyRowDensity(localStorage.getItem('ftc2-row-density')==='compact'); }catch(e){}
+try{ applyRowDensity(localStorage.getItem('ftc2-row-density')==='compact'); }catch(e){ console.error('[UI] Failed to apply row density:', e); }
 $('#btn-density-toggle')?.addEventListener('click', ()=>{
   const next = !document.body.classList.contains('density-compact');
   applyRowDensity(next);
-  try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){}
+  try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){ console.error('[UI] Failed to persist row density:', e); }
 });
 /* طي/توسيع القائمة الجانبية (عرض الأيقونات فقط بدون النصوص) — تفضيل شخصي يُحفظ محلياً
    في هذا المتصفح فقط، ويضيف عنوان (title) لكل زر عند الطي حتى يبقى واضحاً عند تمرير الفأرة فوقه. */
@@ -609,18 +609,18 @@ function applySidebarCollapsed(isCollapsed){
     });
   }
 }
-try{ applySidebarCollapsed(localStorage.getItem('ftc2-sidebar-collapsed')==='1'); }catch(e){}
+try{ applySidebarCollapsed(localStorage.getItem('ftc2-sidebar-collapsed')==='1'); }catch(e){ console.error('[UI] Failed to apply sidebar state:', e); }
 $('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
   const next = !$('nav.tabs')?.classList.contains('collapsed');
   applySidebarCollapsed(next);
-  try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){}
+  try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){ console.error('[UI] Failed to persist sidebar state:', e); }
 });
 /* ================= نظام المؤثرات الصوتية ================= */
 const SoundFX = (()=>{
   let ctx = null;
   function getCtx(){
     if(!ctx){
-      try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+      try{ ctx = new (window.AudioContext)(); }catch(e){ return null; }
     }
     if(ctx.state==='suspended') ctx.resume();
     return ctx;

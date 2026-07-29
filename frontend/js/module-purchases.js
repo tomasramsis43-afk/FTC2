@@ -555,7 +555,7 @@ document.addEventListener('click', async e=>{
     }
     purchases = purchases.filter(x=>x.id!==id);
     await savePurchases();
-    if(p.attachment){ try{ await window.storage.delete('purchase-attachment:'+id, false); }catch(err){} }
+    if(p.attachment){ try{ await window.storage.delete('purchase-attachment:'+id, false); }catch(err){ console.error('[Purchases] Failed to delete attachment on purchase delete:', err); } }
     await logAudit('delete','المشتريات', `حذف فاتورة شراء: ${p.invoiceNo||'—'} — ${p.supplierName}`);
     renderPurchases();
     showToast('تم حذف الفاتورة');
@@ -703,7 +703,7 @@ async function ensureServerLoginThenStart(){
         sessionStorage.removeItem('serverAuthToken');
         sessionStorage.removeItem('serverAuthUsername');
         sessionStorage.removeItem('serverAuthRole');
-      }catch(e){}
+      }catch(e){ console.error('[Purchases] Failed to clear session on 401:', e); }
       showServerLoginScreen(null);
       return;
     }catch(e){
@@ -777,7 +777,7 @@ async function activateAndStart(encKeyRaw, expiryDate, clientId){
       clientId: clientId || null,
       cachedAt: new Date().toISOString(),
     }));
-  }catch(e){}
+  }catch(e){ console.error('[Purchases] Failed to cache license:', e); }
   $('#license-screen').style.display = 'none';
   await ensureServerLoginThenStart();
 }

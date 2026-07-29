@@ -247,15 +247,58 @@ async function syncData() {
   }
 }
 
-async function getPendingSync() {
-  // لا يوجد حالياً مخزن بيانات معلقة — Background Sync غير مفعّل بعد.
-  // عند تفعيله مستقبلاً: اقرأ البيانات من IndexedDB هنا وأرجعها.
-  return [];
+const SW_IDB_NAME = 'ftc2-kv-cache-db';
+const SW_IDB_PENDING_STORE = 'pending';
+
+function _swOpenDb(){
+  return new Promise((resolve)=>{
+    try{
+      if(!self.indexedDB){ resolve(null); return; }
+      const req = indexedDB.open(SW_IDB_NAME, 2);
+      req.onupgradeneeded = ()=>{
+        try{
+          const db = req.result;
+          if(!db.objectStoreNames.contains(SW_IDB_PENDING_STORE)){
+            db.createObjectStore(SW_IDB_PENDING_STORE, { keyPath: 'key' });
+          }
+        }catch(e){ console.error('[ServiceWorker] IDB upgrade error:', e); }
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> { console.error('[ServiceWorker] IDB open error:', req.error); resolve(null); };
+    }catch(e){ console.error('[ServiceWorker] IDB open exception:', e); resolve(null); }
+  });
 }
 
-async function clearPendingSync() {
-  // لا يوجد حالياً مخزن بيانات معلقة — Background Sync غير مفعّل بعد.
-  // عند تفعيله مستقبلاً: احذف البيانات المُرسَلة من IndexedDB هنا.
+async function getPendingSync(){
+  try{
+    const db = await _swOpenDb();
+    if(!db) return [];
+    return await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(SW_IDB_PENDING_STORE, 'readonly');
+        const store = tx.objectStore(SW_IDB_PENDING_STORE);
+        const req = store.getAll();
+        req.onsuccess = ()=> resolve(req.result || []);
+        req.onerror = ()=> { console.error('[ServiceWorker] getPendingSync read error:', req.error); resolve([]); };
+      }catch(e){ console.error('[ServiceWorker] getPendingSync exception:', e); resolve([]); }
+    });
+  }catch(e){ console.error('[ServiceWorker] getPendingSync outer exception:', e); return []; }
+}
+
+async function clearPendingSync(){
+  try{
+    const db = await _swOpenDb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(SW_IDB_PENDING_STORE, 'readwrite');
+        const store = tx.objectStore(SW_IDB_PENDING_STORE);
+        store.clear();
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> { console.error('[ServiceWorker] clearPendingSync error:', tx.error); resolve(); };
+      }catch(e){ console.error('[ServiceWorker] clearPendingSync exception:', e); resolve(); }
+    });
+  }catch(e){ console.error('[ServiceWorker] clearPendingSync outer exception:', e); }
 }
 
 /**

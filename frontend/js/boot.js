@@ -42,7 +42,7 @@
               return;
             }
           }
-        }catch(e){}
+        }catch(e){ console.error('[Boot] Failed to activate cached license:', e); }
       }
       showLicenseScreen(result.reason);
       return;
