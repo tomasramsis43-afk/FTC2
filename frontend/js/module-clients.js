@@ -251,9 +251,7 @@ const CFO_ICONS = {
   bank:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 9h20z"/><path d="M5 10v9M9 10v9M15 10v9M19 10v9"/><path d="M2 21h20"/></svg>',
   network:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
   truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16V6a1 1 0 0 1 1-1h9v11"/><path d="M13 9h4l3 3v4h-2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>',
-  invoice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
-  globe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>'
+  invoice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>'
 };
 /* نسبة التغيّر المئوية بين قيمتين، بحماية من القسمة على صفر */
 function cfoPct(cur, prev){
@@ -312,16 +310,6 @@ function remainingByCourseType(){
   clients.filter(c=>!c.suspended && !c.cancelled).forEach(c=>{
     const r = remaining(c);
     if(r>0){ const k = c.courseType || 'غير محدد'; map[k]=(map[k]||0)+r; }
-  });
-  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
-}
-/* صافي دخل المركز مجمّعاً حسب نوع الدورة (لأفضل الدورات من حيث الإيراد) — year اختياري لتضييق
-   النطاق لسنة معيّنة (نفس نطاق "إجمالي المبيعات" فى لوحة تحليل الدخل)، بدونه يشمل كل السنوات. */
-function revenueByCourseType(year){
-  const map = {};
-  clients.filter(c=> !c.cancelled && (!year || String(c.date||'').slice(0,4)===String(year))).forEach(c=>{
-    const k = c.courseType || 'غير محدد';
-    map[k] = (map[k]||0) + centerIncome(c);
   });
   return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
@@ -385,15 +373,6 @@ function renderCfoDashboard(){
   const purchasesTrend = monthlyPurchasesTrend(12);
   const apBars = supplierUnpaidTotals();
 
-  // === لوحة 5: أفضل الدورات من حيث الإيراد ===
-  const courseRevenueBars = revenueByCourseType(thisYear);
-
-  // === لوحة 6: توزيع العملاء حسب الجنسية ===
-  const nationalityBars = groupCount(activeClients.filter(c=>String(c.date||'').slice(0,4)===String(thisYear)), 'nationality');
-
-  // === لوحة 7: مقارنة الإيرادات بين الأشهر (هذا الشهر مقابل اللي قبله) ===
-  const monthCompareBars = [[monthLabelAr(lastMonthKey), netLastMonth], [monthLabelAr(thisMonthKey), netThisMonth]];
-
   el.innerHTML = `
     <div class="cfo-panel">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
@@ -437,28 +416,6 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
-    <div class="cfo-panel">
-      <h3 class="cfo-panel-title">أفضل الدورات من حيث الإيراد</h3>
-      <div class="cfo-caption">صافي دخل المركز حسب نوع الدورة — ${thisYear}</div>
-      <div class="cfo-visual cfo-bars" id="cfo-bars-course-revenue"></div>
-    </div>
-
-    <div class="cfo-panel">
-      <h3 class="cfo-panel-title">توزيع العملاء حسب الجنسية</h3>
-      <div class="cfo-caption">عدد عملاء ${thisYear} حسب الجنسية</div>
-      <div class="cfo-visual" id="cfo-donut-nationality"></div>
-    </div>
-
-    <div class="cfo-panel">
-      <h3 class="cfo-panel-title">مقارنة الإيرادات بين الأشهر</h3>
-      <div class="cfo-kpis">
-        ${cfoKpi('book', monthLabelAr(lastMonthKey), fmt(netLastMonth)+' ﷼')}
-        ${cfoKpi('profit', monthLabelAr(thisMonthKey), fmt(netThisMonth)+' ﷼')}
-      </div>
-      <div class="cfo-caption">صافي دخل المركز: الشهر الحالي مقابل الشهر الماضي</div>
-      <div class="cfo-visual cfo-bars" id="cfo-bars-month-compare"></div>
-    </div>
-
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -466,9 +423,6 @@ function renderCfoDashboard(){
   if(apBars.length){ drawBars('#cfo-bars-ap', apBars, 6, v=>fmt(v)+' ﷼'); }
   else { drawLineChart('#cfo-trend-purchases', purchasesTrend.labels, purchasesTrend.series); }
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
-  drawBars('#cfo-bars-course-revenue', courseRevenueBars, 6, v=>fmt(v)+' ﷼');
-  drawDonut('#cfo-donut-nationality', nationalityBars, 8, v=>String(v));
-  drawBars('#cfo-bars-month-compare', monthCompareBars, 2, v=>fmt(v)+' ﷼');
 }
 function groupCount(list, field){
   const map = {};
@@ -1064,8 +1018,8 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
     pag.style.display = filteredTotal ? '' : 'none';
     const startN = filteredTotal ? (tableCurrentPage-1)*(Number.isFinite(pageSize)?pageSize:filteredTotal)+1 : 0;
     const endN = Number.isFinite(pageSize) ? Math.min(filteredTotal, tableCurrentPage*pageSize) : filteredTotal;
-    $('#table-page-info').textContent = filteredTotal ? `${tr('showingOfTotal')} ${startN} - ${endN} ${tr('ofWord')} ${filteredTotal}` : '';
-    $('#table-page-current').textContent = `${tr('pageWord')} ${tableCurrentPage} / ${totalPages}`;
+    $('#table-page-info').textContent = filteredTotal ? `عرض ${startN} - ${endN} من ${filteredTotal}` : '';
+    $('#table-page-current').textContent = `صفحة ${tableCurrentPage} / ${totalPages}`;
     $('#table-page-first').disabled = tableCurrentPage<=1;
     $('#table-page-prev').disabled = tableCurrentPage<=1;
     $('#table-page-next').disabled = tableCurrentPage>=totalPages;
@@ -1078,34 +1032,34 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
     const rowStatusClass = (c.cancelled || c.suspended) ? '' : (rem>0 ? 'owe' : 'paid');
     const recMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[c.id] : null;
     const isPendingApproval = !!(recMeta && recMeta.status==='pending');
-    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ` <span class="stamp owe">${tr('cancelledStamp')}</span>` : ''}${c.absent ? ` <span class="stamp owe">${tr('absentStamp')}</span>` : ''}${c.suspended ? ` <span class="stamp owe">${tr('suspendedStamp')}</span>` : ''}${isPendingApproval ? ` <span class="stamp owe" title="${tr('titlePendingApproval')}">${tr('pendingApprovalStamp')}</span>` : ''}`;
+    const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}${isPendingApproval ? ' <span class="stamp owe" title="سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}`;
     return `<tr class="${rowStatusClass}"${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
-      <td class="sticky-col sticky-col-2 card-full" data-label="${tr('thName')}">${nameBadges}</td>
-      <td data-label="${tr('thPhone')}">${phoneCellHtml(c.phone)}</td>
-      <td class="mono" data-label="${tr('thId')}">${escapeHtml(c.clientId||'—')}</td>
-      <td class="mono" data-label="${tr('thRef')}">${escapeHtml(c.referNum||'—')}</td>
-      <td data-label="${tr('thNat')}">${escapeHtml(c.nationality||'')}</td>
-      <td data-label="${tr('thCourse')}">${escapeHtml(c.courseType||'')}</td>
-      <td class="mono" data-label="${tr('thCourseNum')}">${escapeHtml(c.courseNumber||'—')}</td>
-      <td class="mono" data-label="${tr('thInvoice')}">${escapeHtml(c.invoice||'—')}</td>
-      <td class="mono" data-label="${tr('thRegDate')}">${formatDateDisplay(c.date)||'—'}</td>
-      <td class="mono" data-label="${tr('thTotal')}">${fmt(total(c))}</td>
-      <td class="mono" data-label="${tr('thPaid')}">${fmt(paidTotal(c))}</td>
-      <td class="mono" data-label="${tr('thRemaining')}"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
-      <td data-label="${tr('thBag')}"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
-      <td data-label="${tr('thChannel')}"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
+      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
+      <td data-label="رقم الهاتف">${phoneCellHtml(c.phone)}</td>
+      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
+      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
+      <td class="mono" data-label="رقم الدورة">${escapeHtml(c.courseNumber||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
+      <td class="mono" data-label="الإجمالي">${fmt(total(c))}</td>
+      <td class="mono" data-label="المدفوع">${fmt(paidTotal(c))}</td>
+      <td class="mono" data-label="المتبقي"><span class="stamp ${rem>0?'owe':'paid'}">${fmt(rem)}</span></td>
+      <td data-label="الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}${bagCancelBtnHtml(c)}</td>
+      <td data-label="طريقة الدفع"><span class="stamp channel">${escapeHtml(paymentChannelsLabel(c))}</span></td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         <div class="row-menu">
-          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="${tr('rowActions')}" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
-            ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">${tr('approveBtn')}</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">${tr('rejectBtn')}</button>` : ''}
+            ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
-            ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="${tr('titleDeleteInvoice')}">${tr('deleteInvoiceBtn')}</button>` : ''}
-            ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="${tr('titleEditLocked')}">${tr('edit')} 🔒</span>`}
+            ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
+            ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
             ${c.suspended
-              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="${tr('titleUnsuspend')}">${tr('unsuspendBtn')}</button>`
-              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="${tr('titleSuspend')}">${tr('suspendedStamp')}</button>`}
+              ? `<button class="btn btn-ghost btn-sm" data-unsuspend="${c.id}" title="إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب">إلغاء الإيقاف</button>`
+              : `<button class="btn btn-ghost btn-sm" data-suspend="${c.id}" title="إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب">موقوف</button>`}
             ${canDeleteClientRecord(c) ? `<button class="btn btn-danger btn-sm" data-del="${c.id}">${tr('delete')}</button>` : ''}
           </div>
         </div>
@@ -1201,7 +1155,7 @@ function phoneCellHtml(phone){
   const numText = `<span class="mono">${escapeHtml(phone)}</span>`;
   const link = whatsappLink(phone);
   if(!link) return numText;
-  return `<a href="${link}" target="_blank" rel="noopener" title="${tr('titleWhatsapp')}" style="color:#25D366; display:inline-flex; align-items:center;">${WA_ICON}</a> ${numText}`;
+  return `<a href="${link}" target="_blank" rel="noopener" title="مراسلة العميل عبر واتساب" style="color:#25D366; display:inline-flex; align-items:center;">${WA_ICON}</a> ${numText}`;
 }
 
 // بديل عن window.open للطباعة: بعض تطبيقات Electron لا تدعم معاينة الطباعة (Print Preview)
@@ -1439,6 +1393,11 @@ document.addEventListener('click', async e=>{
     return;
   }
   if(invId){
+    const invMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[invId] : null;
+    if(invMeta && invMeta.status==='pending'){
+      showToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
+      return;
+    }
     await printInvoice(invId); return;
   }
   if(delInvoiceId){
@@ -1629,7 +1588,7 @@ function openModal(id){
   $('#f-refer').value = c?.referNum || '';
   $('#f-invoice').value = c?.invoice || '';
   $('#f-baginvoice').value = c?.bagInvoice || '';
-  $('#f-date').value = c?.date || todayISO();
+  $('#f-date').value = c?.date || '';
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
   $('#f-bagprice').value = c ? (c.bagPrice ?? '') : settings.bagPrice;
@@ -1848,6 +1807,16 @@ function updateComputed(){
 
 $('#client-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  // منع الحفظ أثناء نافذة المزامنة الأولى: أول ثانية أو اتنين من فتح البرنامج (قبل اكتمال أول
+  // تحميل حقيقي متصل بالسيرفر لبيانات العملاء) بيانات clients فى الذاكرة قد تكون قديمة/غير مكتملة
+  // (عرض سريع من الكاش المحلي فقط). أي إضافة/تعديل فى هذه اللحظة بالذات كان (قبل هذا الإصلاح) قد
+  // يُحفَظ عبر مسار قديم متروك لم يعد أي جزء آخر من البرنامج يقرأ منه — راجع تعليق
+  // _clientsFirstRealSyncDone فى ui-framework.js. الحل: نمنع الحفظ مؤقتاً ونطلب من المستخدم
+  // المحاولة بعد ثانية بدل حفظ صامت فى مكان لا يراه أحد.
+  if(!_clientsFirstRealSyncDone){
+    showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول الحفظ تاني بعد ثانية واحدة');
+    return;
+  }
   if(editingId && !canReceptionEditClient(clients.find(x=>x.id===editingId))){
     showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
     closeModal();
@@ -1911,27 +1880,20 @@ $('#client-form').addEventListener('submit', async e=>{
     }
     clients[idx] = {...clients[idx], ...data};
     if(data.bagSource!=='stock') delete clients[idx].bagPurchaseDate;
+    showToast('تم تحديث السجل');
   }else{
     data.bagStatus = data.bagSource==='stock' ? 'purchased' : (data.bagSource==='buy' ? 'pending' : 'n/a');
     if(data.bagSource==='stock') data.bagPurchaseDate = data.bagPurchaseDate || todayISO();
     clients.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, ...data});
+    showToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
-  // نحفظ بيانات العميل نفسها أولاً ونخليها تكتمل فعلياً على السيرفر قبل أي رسالة نجاح — حتى لا يظن
-  // المستخدم أن الحفظ انتهى (ويعمل ريفرش) بينما الطلب لا يزال في الطريق فيضيع التعديل عند التحديث.
   await saveClients();
-  showToast(wasEdit ? 'تم تحديث السجل' : 'تمت إضافة العميل');
   syncClientLedgerEntry(savedClient);
-  // syncBagStockIssues قد يحفظ settings بنفسه (فقط لو صار ترحيل فعلي) — نخليه متسلسلاً قبل بقية
-  // العمليات المستقلة حتى لا يتعارض مع حفظ settings التالي لو اتنفذوا معاً فى نفس اللحظة.
   await syncBagStockIssues();
-  // بقية عمليات الحفظ (الخزنة/الإعدادات/سجل المراجعة) مستقلة عن بعضها (مفاتيح مختلفة تماماً)،
-  // فنرفعها بالتوازي بدل التتابع لتقليل زمن الانتظار الكلي قبل إغلاق النافذة.
-  await Promise.all([
-    saveVaultTx(),
-    saveSettings(),
-    logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`),
-  ]);
+  await saveVaultTx();
+  await saveSettings();
+  await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
   if(!wasEdit){
     sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
   }
@@ -2078,6 +2040,8 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   });
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!toAdd.length){ showToast('لم تُدخل بيانات أي عميل'); return; }
+  // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي أعلاه
+  if(!_clientsFirstRealSyncDone){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   snapshotState(`إضافة ${toAdd.length} عميل دفعة واحدة`);
   toAdd.forEach(c=>{ clients.push(c); syncClientLedgerEntry(c); });
   await saveClients();
@@ -2357,6 +2321,8 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
   });
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!patches.length){ showToast('لم تُدخل بيانات أي صف'); return; }
+  // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي فى بداية الملف
+  if(!_clientsFirstRealSyncDone){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   snapshotState(`تحديث/استيراد بيانات العملاء دفعة واحدة (${patches.length} صف)`);
   let added=0, updated=0;
   const changedRows = [];
