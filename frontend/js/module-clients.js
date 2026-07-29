@@ -1593,6 +1593,14 @@ function openModal(id){
   $('#f-date').value = c?.date || '';
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
+  // مستخدم الاستقبال ممنوع من شراء/تسليم أي حقيبة: نعطّل خيار "تسليم من المخزون المتوفر"
+  // (وهو ما يُعتبر شراء/صرف فوري لحقيبة من المخزون) ونجبر مصدر الحقيبة على "مطلوب الشراء"
+  // إن كان محدَّداً على "من المخزون" — يبقى بإمكانه فقط اختيار "مطلوب الشراء" أو "حقيبة العميل الخاصة".
+  const bagStockOpt = $('#f-bagsource').querySelector('option[value="stock"]');
+  if(bagStockOpt) bagStockOpt.disabled = (currentUserRole === 'reception');
+  if(currentUserRole === 'reception' && $('#f-bagsource').value === 'stock'){
+    $('#f-bagsource').value = 'buy';
+  }
   $('#f-bagprice').value = c ? (c.bagPrice ?? '') : settings.bagPrice;
   $('#f-discount').value = c?.discount ?? 0;
   $('#f-paid').value = c?.paid ?? 0;
@@ -1853,6 +1861,11 @@ $('#client-form').addEventListener('submit', async e=>{
     cancelled: $('#f-cancelled').checked,
     notes: $('#f-notes').value.trim(),
   };
+  // حماية إضافية: مستخدم الاستقبال ممنوع تماماً من شراء/تسليم أي حقيبة من المخزون،
+  // حتى لو وصل حقل مصدر الحقيبة بقيمة 'stock' بأي طريقة — تُعاد دائماً إلى "مطلوب الشراء".
+  if(currentUserRole === 'reception' && data.bagSource === 'stock'){
+    data.bagSource = 'buy';
+  }
   // إذا تم تعيين رقم دورة جديد يدوياً، يُلغى تلقائياً وسم الغياب السابق
   if(editingId){
     const prev = clients.find(x=>x.id===editingId);
@@ -2015,7 +2028,12 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
     if(clients.find(c=>c.clientId===clientId)){ errors.push(`${rowLabel}: رقم الهوية ${clientId} مستخدم بالفعل لعميل آخر`); return; }
     if(seenIdsThisBatch.has(clientId)){ errors.push(`${rowLabel}: رقم الهوية ${clientId} مكرر داخل هذا الجدول`); return; }
     seenIdsThisBatch.add(clientId);
-    const bagSource = 'stock';
+    // ملحوظة: كان هذا الصف يضع تلقائياً bagSource='stock' + bagStatus='purchased' لكل عميل
+    // يُضاف عبر هذا الجدول، أي أن البرنامج كان "يشتري"/يسلّم حقيبة من المخزون فوراً لكل عميل
+    // دون أي اختيار من المستخدم. تم إلغاء هذا السلوك التلقائي بناءً على طلب صريح: الحقيبة الآن
+    // تُسجَّل بحالة "مطلوب الشراء" (نفس افتراضي نموذج الإضافة الفردية)، ولا تُخصم أي حقيبة من
+    // المخزون ولا يُسجَّل أي شراء إلا يدوياً لاحقاً من شيت العملاء أو مخزون الحقائب.
+    const bagSource = 'buy';
     const rowDate = row.querySelector('.ba-date').value || todayISO();
     toAdd.push({
       id: uid(), createdAt: Date.now(), createdBy: currentUser,
@@ -2031,7 +2049,7 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
       date: rowDate,
       coursePrice: num(row.querySelector('.ba-price').value),
       bagSource, bagPrice: num(settings.bagPrice),
-      bagStatus: 'purchased', bagPurchaseDate: rowDate,
+      bagStatus: 'pending',
       discount: num(row.querySelector('.ba-discount').value),
       paid: num(row.querySelector('.ba-paid').value),
       channel: row.querySelector('.ba-channel').value,
@@ -2071,7 +2089,10 @@ function bulkUpdateRowHtml(rowId){
   const courseOptions = bulkAddOptionsHtml(settings.courses.map(c=>c.name), '');
   const channelOptions = bulkAddOptionsHtml(settings.channels.map(c=>c.name), '');
   const ctypeOptions = buFixedOptionsHtml([['center','عميل مركز'],['company','عميل شركات']], '');
-  const bagSourceOptions = buFixedOptionsHtml([['stock','من المخزون'],['buy','شراء'],['own','خاصته']], '');
+  // مستخدم الاستقبال ممنوع تماماً من شراء/تسليم أي حقيبة من المخزون — لا يُعرَض له خيار "من المخزون" أصلاً
+  const bagSourceOptions = currentUserRole==='reception'
+    ? buFixedOptionsHtml([['buy','شراء'],['own','خاصته']], '')
+    : buFixedOptionsHtml([['stock','من المخزون'],['buy','شراء'],['own','خاصته']], '');
   const cancelledOptions = buFixedOptionsHtml([['no','لا'],['yes','نعم']], '');
   return `<tr data-row="${rowId}">
     <td><input type="text" class="bu-id" data-col="0" maxlength="10" placeholder="10 أرقام" style="min-width:100px;"></td>
@@ -2267,7 +2288,8 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
       if(present(val('bu-cancelled'))) patch.cancelled = val('bu-cancelled')==='yes';
       if(present(val('bu-notes'))) patch.notes = val('bu-notes').trim();
       if(present(val('bu-bagsource'))){
-        const bagSourceNew = val('bu-bagsource');
+        // مستخدم الاستقبال ممنوع تماماً من شراء/تسليم أي حقيبة من المخزون
+        const bagSourceNew = (currentUserRole==='reception' && val('bu-bagsource')==='stock') ? 'buy' : val('bu-bagsource');
         patch.bagSource = bagSourceNew;
         if(bagSourceNew==='own'){ patch.bagPrice = 0; }
         else if(present(val('bu-bagprice'))){ patch.bagPrice = num(val('bu-bagprice')); }
@@ -2285,7 +2307,9 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
       patches.push({mode:'update', idx: existingIdx, patch, oldCourseNumber: existing.courseNumber||''});
     } else {
       if(!name){ errors.push(`${rowLabel}: رقم الهوية ${clientId} غير موجود بالنظام — الاسم مطلوب لإضافته كعميل جديد`); return; }
-      const bagSource = val('bu-bagsource') || 'stock';
+      // مستخدم الاستقبال ممنوع تماماً من شراء/تسليم أي حقيبة من المخزون
+      let bagSource = val('bu-bagsource') || 'stock';
+      if(currentUserRole==='reception' && bagSource==='stock') bagSource = 'buy';
       const clientTypeRaw = val('bu-ctype') || 'center';
       const rowData = {
         clientId, name,
