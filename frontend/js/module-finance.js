@@ -272,13 +272,14 @@ function renderSettlementPanel(){
       <td class="mono" data-label="رقم الهوية">${escapeHtml(t.clientId||'—')}</td>
       <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
       <td data-label="موظف الاستقبال">${escapeHtml(recepUser)}</td>
-      <td data-label=""><button type="button" class="btn btn-gold btn-sm" data-settle-id="${t.id}">تسوية</button></td>
+      <td data-label="">${currentUserRole==='admin' ? `<button type="button" class="btn btn-gold btn-sm" data-settle-id="${t.id}">تسوية</button>` : `<span class="close-status-chip pending">بانتظار التسوية</span>`}</td>
     </tr>`;
   }).join('');
 }
 $('#settlement-table-body')?.addEventListener('click', async e=>{
   const id = e.target.dataset.settleId;
   if(!id) return;
+  if(currentUserRole !== 'admin'){ showToast('التسوية متاحة للمدير فقط'); return; }
   const t = vaultTx.find(x=>x.id===id);
   if(!t) return;
   if(!confirm(`تأكيد استلام مبلغ ${fmt(num(t.amount))} ﷼ نقداً من العميل "${t.clientName||''}" فعلياً في الخزنة؟`)) return;
