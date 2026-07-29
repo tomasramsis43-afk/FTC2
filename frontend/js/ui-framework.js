@@ -48,11 +48,10 @@ const DEFAULT_SETTINGS = {
   themePresetId: 'nocolor',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
-    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
-    accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
-    // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط — ولا شيء غيرها إطلاقاً. شاشة "تسوية
-    // الاستقبال" أُزيلت من صلاحياته بناءً على طلب صريح: التسوية مسؤولية الأدمن (أو من يفوّضه من
-    // الأدوار الأخرى صاحبة صلاحية 'vault'/'settlements' أصلاً) وحدهم، ولا علاقة للاستقبال بها إطلاقاً.
+    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
+    accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
+    // شاشة "تسوية الاستقبال" أُزيلت نهائياً من البرنامج (لم تعد مطلوبة حالياً) — راجع V4
+    // أسفل لترحيل الحسابات المحفوظة مسبقاً وحذف أي أثر لها من صلاحيات كل الأدوار.
     reception: ['clients']
   },
   // مهلة تعديل/حذف قابلة للتغيير من الإعدادات في أي وقت (بالساعات، من وقت تسجيل العميل نفسه)،
@@ -70,7 +69,6 @@ const ALL_VIEWS = [
   {id:'courses', label:'الدورات'},
   {id:'courseinvoices', label:'فواتير الدورات'},
   {id:'vault', label:'الحركات المالية'},
-  {id:'settlements', label:'تسوية الاستقبال'},
   {id:'bags', label:'مخزون الحقائب'},
   {id:'purchases', label:'المشتريات'},
   {id:'zatca', label:'الفوترة الضريبية والزكاة'},
@@ -1004,6 +1002,22 @@ async function loadData(cacheOnly){
       settings.receptionSettlementsRemovedV3 = true;
       await saveSettings();
     }
+    // ترحيل تلقائي لمرة واحدة (V4): شاشة "تسوية الاستقبال" أُزيلت نهائياً من البرنامج (الكود
+    // والتبويب معاً) بناءً على طلب صريح: غير مطلوبة حالياً. نحذف 'settlements' من صلاحيات كل
+    // الأدوار المحفوظة مسبقاً (staff/accountant وأي دور آخر) — بدون هذا كانت الحسابات القديمة
+    // التي نفّذت هذه الصلاحية تحتفظ بها فى settings.rolePermissions المحفوظة (تتجاوز DEFAULT_SETTINGS
+    // تلقائياً)، فيبقى مرجعها فعّالاً فى جدول صلاحيات الإعدادات رغم اختفاء تبويبها وكودها بالكامل.
+    if(!settings.settlementsFeatureRemovedV4){
+      if(settings.rolePermissions){
+        Object.keys(settings.rolePermissions).forEach(role=>{
+          if(Array.isArray(settings.rolePermissions[role])){
+            settings.rolePermissions[role] = settings.rolePermissions[role].filter(v=> v!=='settlements');
+          }
+        });
+      }
+      settings.settlementsFeatureRemovedV4 = true;
+      await saveSettings();
+    }
     if(typeof settings.receptionEditDeleteWindowHours!=='number' || settings.receptionEditDeleteWindowHours<0) settings.receptionEditDeleteWindowHours = DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
     if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
@@ -1021,6 +1035,21 @@ async function loadData(cacheOnly){
     const r = kv.vaultTx;
     vaultTx = r && r.value ? JSON.parse(r.value) : [];
   }catch(e){ vaultTx = []; }
+  // ترحيل تلقائي لمرة واحدة: بعد حذف شاشة "تسوية الاستقبال" نهائياً، لم يعد هناك أي طريقة يدوية
+  // لتأكيد استلام الدفعات النقدية المعلّقة (t.settled===false) التي سجّلها الاستقبال سابقاً — فتبقى
+  // "معلّقة" إلى الأبد بدون هذا الترحيل، مما يمنع نهائياً وبصمت ترحيل فاتورة الدورة المرتبطة بها
+  // للقيد المزدوج (راجع clientHasUnsettledCash/autoPostCourseInvoice فى module-accounting.js).
+  // نعتبرها كلها "مُسوَّاة" تلقائياً الآن (المبلغ نفسه لم يتغيّر ولا يتأثر — هذا الحقل للتتبع فقط،
+  // راجع تعليق pendingSettlementRows القديم)، ونعيد محاولة ترحيل أي فواتير كانت مؤجَّلة بسببها.
+  if(!settings.settlementsAutoSettledV1){
+    const hadUnsettled = vaultTx.some(t=> t.settled===false);
+    vaultTx.forEach(t=>{
+      if(t.settled===false){ t.settled = true; t.settledBy = t.settledBy || 'ترحيل تلقائي (حذف شاشة التسوية)'; t.settledAt = t.settledAt || Date.now(); }
+    });
+    settings.settlementsAutoSettledV1 = true;
+    await saveSettings();
+    if(hadUnsettled) await saveVaultTx();
+  }
   try{
     const r = kv.deletedVaultTx;
     deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
@@ -2505,7 +2534,6 @@ $all('button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='settings') renderSettings();
     if(btn.dataset.view==='bags') renderBags();
     if(btn.dataset.view==='vault') renderVault();
-    if(btn.dataset.view==='settlements' && typeof renderSettlementPanel==='function') renderSettlementPanel();
     if(btn.dataset.view==='courses') renderCourses();
     if(btn.dataset.view==='courseinvoices') renderCourseInvoices();
     if(btn.dataset.view==='audit') renderAuditLog();
