@@ -1583,7 +1583,7 @@ function openModal(id){
   $('#f-refer').value = c?.referNum || '';
   $('#f-invoice').value = c?.invoice || '';
   $('#f-baginvoice').value = c?.bagInvoice || '';
-  $('#f-date').value = c?.date || '';
+  $('#f-date').value = c?.date || todayISO();
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
   $('#f-bagprice').value = c ? (c.bagPrice ?? '') : settings.bagPrice;
