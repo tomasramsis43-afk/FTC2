@@ -50,9 +50,10 @@ const DEFAULT_SETTINGS = {
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
     accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
-    // الاستقبال مقصور على شاشة العملاء (التسجيل) وشاشة "تسوية الاستقبال" فقط (يرى فيها فقط
-    // الدفعات النقدية التي سجّلها هو بنفسه) — ولا شيء غيرهما إطلاقاً، بناءً على طلب صريح.
-    reception: ['clients','settlements']
+    // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط — ولا شيء غيرها إطلاقاً. شاشة "تسوية
+    // الاستقبال" أُزيلت من صلاحياته بناءً على طلب صريح: التسوية مسؤولية الأدمن (أو من يفوّضه من
+    // الأدوار الأخرى صاحبة صلاحية 'vault'/'settlements' أصلاً) وحدهم، ولا علاقة للاستقبال بها إطلاقاً.
+    reception: ['clients']
   },
   // مهلة تعديل/حذف قابلة للتغيير من الإعدادات في أي وقت (بالساعات، من وقت تسجيل العميل نفسه)،
   // خاصة بدور "استقبال" فقط. بعدها يتحول السجل لعرض فقط لهذا الدور حتى يتدخل الأدمن.
@@ -901,6 +902,18 @@ async function loadData(cacheOnly){
         settings.rolePermissions.reception.push('settlements');
       }
       settings.receptionSettlementsAccessV2 = true;
+      await saveSettings();
+    }
+    // ترحيل تلقائي لمرة واحدة (V3): عكس V2 أعلاه — إزالة شاشة "تسوية الاستقبال" من صلاحيات دور
+    // الاستقبال نهائياً، بناءً على طلب صريح لاحق بأن التسوية لا علاقة للاستقبال بها إطلاقاً وتبقى
+    // مسؤولية الأدمن (وباقي الأدوار الأخرى صاحبة الصلاحية أصلاً) فقط. يشمل هذا الحسابات التي
+    // نفّذت V1/V2 القديمين ومحفوظ عندها settings.rolePermissions.reception بالفعل كمصفوفة تتضمن
+    // 'settlements' (فلا يكفي مجرد تعديل DEFAULT_SETTINGS، لأن القيمة المحفوظة تتجاوزه تلقائياً).
+    if(!settings.receptionSettlementsRemovedV3){
+      if(settings.rolePermissions && Array.isArray(settings.rolePermissions.reception)){
+        settings.rolePermissions.reception = settings.rolePermissions.reception.filter(v=> v!=='settlements');
+      }
+      settings.receptionSettlementsRemovedV3 = true;
       await saveSettings();
     }
     if(typeof settings.receptionEditDeleteWindowHours!=='number' || settings.receptionEditDeleteWindowHours<0) settings.receptionEditDeleteWindowHours = DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
