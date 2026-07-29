@@ -13,7 +13,7 @@ async function _pendingWrite(key, encryptedValue){
         tx.onerror = ()=> resolve();
       }catch(e){ resolve(); }
     });
-  }catch(e){}
+  }catch(e){ console.error('[StorageSync] _pendingWrite failed:', e); }
 }
 async function _pendingDelete(key){
   try{
@@ -27,7 +27,7 @@ async function _pendingDelete(key){
         tx.onerror = ()=> resolve();
       }catch(e){ resolve(); }
     });
-  }catch(e){}
+  }catch(e){ console.error('[StorageSync] _pendingDelete failed:', e); }
 }
 async function _pendingReadAll(){
   try{
@@ -56,10 +56,10 @@ let _ftcIsOffline = false;
 // بالسيرفر عمداً من أول خطوة، فتعمل كل قراءة/كتابة عبر نفس مسار "بدون اتصال" الموجود أصلاً
 // (قراءة من الكاش المحلي، وقائمة انتظار للتعديلات) دون أي تكرار للمنطق.
 let manualOfflineMode = false;
-try{ manualOfflineMode = localStorage.getItem('ftcManualOfflineMode') === '1'; }catch(e){}
+try{ manualOfflineMode = localStorage.getItem('ftcManualOfflineMode') === '1'; }catch(e){ console.error('[StorageSync] Failed to read manualOfflineMode:', e); }
 function setManualOfflineMode(on){
   manualOfflineMode = !!on;
-  try{ localStorage.setItem('ftcManualOfflineMode', manualOfflineMode ? '1' : '0'); }catch(e){}
+  try{ localStorage.setItem('ftcManualOfflineMode', manualOfflineMode ? '1' : '0'); }catch(e){ console.error('[StorageSync] Failed to write manualOfflineMode:', e); }
   updateOfflineIndicator();
   if(!manualOfflineMode){
     // إعادة التفعيل: يبدأ فوراً برفع أي تعديلات تراكمت محلياً أثناء إيقاف الاتصال
@@ -99,7 +99,7 @@ async function updateOfflineIndicator(){
     } else {
       el.style.display = 'none';
     }
-  }catch(e){}
+  }catch(e){ console.error('[StorageSync] updateOfflineIndicator error:', e); }
 }
 let _ftcSyncInFlight = false;
 // ---------------- تثبيت البرنامج كتطبيق (PWA) على الجهاز ----------------
@@ -206,7 +206,7 @@ async function serverFetch(path, options = {}) {
   if (res.status === 401) {
     // انتهت الجلسة أو لم يسجَّل الدخول بعد — أعد عرض شاشة الدخول على الخادم
     SERVER_AUTH_TOKEN = null;
-    try { sessionStorage.removeItem('serverAuthToken'); } catch (e) {}
+    try { sessionStorage.removeItem('serverAuthToken'); } catch (e) { console.error('[StorageSync] Failed to clear serverAuthToken:', e); }
     showServerLoginScreen('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
     throw new Error('غير مصرَّح — يرجى تسجيل الدخول');
   }

@@ -845,6 +845,55 @@ app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, async (req
   }
 });
 
+/* ---------------- تصنيف المصروفات بالذكاء الاصطناعي (عبر الخادم) ----------------
+   تستقبل اسم المستلم/الملاحظات/رقم المستند/المبلغ + قائمة التصنيفات المتاحة،
+   وتطلب من Claude اقتراح أنسب تصنيف (موجود أو جديد) مع سبب الاختيار.
+   المفتاح يبقى في process.env.ANTHROPIC_API_KEY فقط ولا يُكشف للواجهة. */
+const AI_CLASSIFY_SYSTEM_PROMPT = 'أنت مساعد تصنيف مصروفات لمركز تدريب سعودي. سيصلك اسم مستلم مبلغ و/أو ملاحظة و/أو رقم مستند و/أو مبلغ مصروف. اختر أنسب تصنيف من قائمة "availableCategories" المُرسلة فقط إن وجد تصنيف مناسباً فعلياً. إن لم توجد أي تصنيف مناسب في القائمة، اقترح اسم تصنيف عربي جديد قصير (كلمة أو كلمتان) يصلح لتكرار هذا النوع من المصروفات مستقبلاً. أجب بصيغة JSON فقط بدون أي نص أو علامات ```json، بالشكل التالي بالضبط: {"category":"...", "isNew": true أو false, "reason":"جملة قصيرة توضح سبب الاختيار"}';
+
+app.post('/api/ai/classify-expense', requireAuth, async (req, res) => {
+  const { recipientName, notes, documentRef, amount, availableCategories } = req.body || {};
+  if (!recipientName && !notes && !documentRef) {
+    return res.status(400).json({ error: 'أدخل اسم مستلم المبلغ أو ملاحظة أو رقم مستند أولاً' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
+  }
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1000,
+        system: AI_CLASSIFY_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: JSON.stringify({ recipientName: recipientName || null, notes: notes || null, documentRef: documentRef || null, amount: amount || null, availableCategories: availableCategories || [] }) }],
+      }),
+    });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      return res.status(502).json({ error: `تعذّر الاتصال بخدمة الذكاء الاصطناعي (HTTP ${r.status})`, detail: errText.slice(0, 200) });
+    }
+    const data = await r.json();
+    const rawText = (data.content || []).map(b => b.text || '').join('').trim();
+    const cleaned = rawText.replace(/```json|```/g, '').trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      return res.status(502).json({ error: 'استجابة الذكاء الاصطناعي غير صالحة (ليست JSON)' });
+    }
+    res.json({ category: String(parsed.category || '').trim(), isNew: !!parsed.isNew, reason: parsed.reason || '' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر الحصول على اقتراح التصنيف' });
+  }
+});
+
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 /* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
@@ -962,7 +1011,7 @@ ensureSchema()
       const existing = await pool.query(`SELECT value FROM kv_store WHERE key = 'clients'`);
       if (existing.rows[0] && existing.rows[0].value) {
         let expectedCount = 0;
-        try { const parsed = JSON.parse(existing.rows[0].value); if (Array.isArray(parsed)) expectedCount = parsed.filter(c => c && c.id).length; } catch (e) {}
+        try { const parsed = JSON.parse(existing.rows[0].value); if (Array.isArray(parsed)) expectedCount = parsed.filter(c => c && c.id).length; } catch (e) { console.error('[Server] Failed to parse expectedCount from settings:', e); }
         const cnt = await pool.query('SELECT COUNT(*) FROM clients_rows');
         if (Number(cnt.rows[0].count) !== expectedCount) {
           await syncClientsRows(existing.rows[0].value);

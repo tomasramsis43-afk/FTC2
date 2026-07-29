@@ -200,8 +200,8 @@ function _openKvIdb(){
       if(!window.indexedDB){ resolve(null); return; }
       const req = indexedDB.open(KV_IDB_NAME, 2);
       req.onupgradeneeded = ()=>{
-        try{ if(!req.result.objectStoreNames.contains(KV_IDB_STORE)) req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){}
-        try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){}
+        try{ if(!req.result.objectStoreNames.contains(KV_IDB_STORE)) req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore kv failed:', e); }
+        try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore pending failed:', e); }
       };
       req.onsuccess = ()=> resolve(req.result);
       req.onerror = ()=> resolve(null); // فشل الفتح — سنستخدم localStorage كخط رجعة
@@ -224,7 +224,7 @@ async function _kvCacheRead(key){
       if(fromIdb) return { version: fromIdb.version, value: fromIdb.value };
       // لا شيء في IndexedDB — تحقّق من وجود نسخة قديمة بـ localStorage وانقلها مرة واحدة
       const legacy = _kvCacheReadLegacyLS(key);
-      if(legacy){ _kvCacheWrite(key, legacy.version, legacy.value).catch(()=>{}); try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){} return legacy; }
+      if(legacy){ _kvCacheWrite(key, legacy.version, legacy.value).catch((e)=>{ console.error('[Core] Failed to migrate legacy cache to IDB:', e); }); try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){ console.error('[Core] Failed to remove legacy LS cache:', e); } return legacy; }
       return null;
     }
     return _kvCacheReadLegacyLS(key);
@@ -251,7 +251,7 @@ async function _kvCacheWrite(key, version, value){
       return;
     }
     localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
-  }catch(e){ /* تجاهل امتلاء المساحة أو أي خطأ تخزين */ }
+  }catch(e){ console.error('[Core] _kvCacheWrite failed:', e); /* تجاهل امتلاء المساحة أو أي خطأ تخزين */ }
 }
 async function _kvCacheDelete(key){
   try{
@@ -266,7 +266,7 @@ async function _kvCacheDelete(key){
         }catch(e){ resolve(); }
       });
     }
-  }catch(e){}
-  try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){}
+  }catch(e){ console.error('[Core] _kvCacheDelete IDB failed:', e); }
+  try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){ console.error('[Core] _kvCacheDelete LS failed:', e); }
 }
 

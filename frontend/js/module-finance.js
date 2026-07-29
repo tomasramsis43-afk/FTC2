@@ -828,38 +828,32 @@ async function aiClassifyExpense(){
       amount: amount || null,
       availableCategories: settings.expenseCategories
     };
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await serverFetch('/api/ai/classify-expense', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: 'أنت مساعد تصنيف مصروفات لمركز تدريب سعودي. سيصلك اسم مستلم مبلغ و/أو ملاحظة و/أو رقم مستند و/أو مبلغ مصروف. اختر أنسب تصنيف من قائمة "availableCategories" المُرسَلة فقط إن وجد تصنيف مناسب فعلاً. إن لم يوجد أي تصنيف مناسب في القائمة، اقترح اسم تصنيف عربي جديد قصير (كلمة أو كلمتين) يصلح لتكرار هذا النوع من المصروفات مستقبلاً. أجب بصيغة JSON فقط بدون أي نص أو علامات ```json، بالشكل التالي بالضبط: {"category":"...", "isNew": true أو false, "reason":"جملة قصيرة توضح سبب الاختيار"}',
-        messages: [{ role: 'user', content: JSON.stringify(payload) }]
-      })
+      body: JSON.stringify(payload)
     });
     if(!response.ok){
-      throw new Error('HTTP ' + response.status);
+      const errData = await response.json().catch(()=>({}));
+      throw new Error(errData.error || `HTTP ${response.status}`);
     }
     const data = await response.json();
-    const rawText = (data.content || []).map(b=>b.text||'').join('').trim();
-    const cleaned = rawText.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(cleaned);
-    const suggestedCategory = String(parsed.category||'').trim();
+    const suggestedCategory = String(data.category||'').trim();
     if(!suggestedCategory) throw new Error('لم يصل تصنيف صالح');
-    if(parsed.isNew && !settings.expenseCategories.includes(suggestedCategory)){
+    const isNew = !!data.isNew;
+    const reason = data.reason || '';
+    if(isNew && !settings.expenseCategories.includes(suggestedCategory)){
       settings.expenseCategories.push(suggestedCategory);
       await saveSettings();
       populateSelect($('#vf-category'), settings.expenseCategories, false);
     }
     if(!settings.expenseCategories.includes(suggestedCategory)){
-      // احتياط: لو رجع تصنيف غير موجود ولم يُعلَّم isNew، أضفه بأمان حتى لا يُفقَد الاقتراح
+      // احتياط: لو رجع تصنيف غير موجود ولم يُعلَّم isNew، أضفه بأمان حتى لا تُفقَد الاقتراح
       settings.expenseCategories.push(suggestedCategory);
       await saveSettings();
       populateSelect($('#vf-category'), settings.expenseCategories, false);
     }
     $('#vf-category').value = suggestedCategory;
-    statusEl.textContent = `✅ التصنيف المقترح: "${suggestedCategory}"${parsed.reason ? ' — ' + parsed.reason : ''} (يمكنك تغييره يدوياً لو غير مناسب)`;
+    statusEl.textContent = `✅ التصنيف المقترح: "${suggestedCategory}"${reason ? ' — ' + reason : ''} (يمكنك تغييره تدوياً لو غير مناسب)`;
     statusEl.style.display = '';
   }catch(err){
     showToast('تعذر الحصول على اقتراح تصنيف — تأكد من اتصالك بالإنترنت، أو أضف تصنيفاً يدوياً');
@@ -1285,7 +1279,7 @@ $('#btn-logout').addEventListener('click', async ()=>{
       sessionStorage.removeItem('serverAuthToken');
       sessionStorage.removeItem('serverAuthUsername');
       sessionStorage.removeItem('serverAuthRole');
-    }catch(e){}
+    }catch(e){ console.error('[Finance] Failed to clear session on logout:', e); }
     $('#app-wrap').style.display = 'none';
     showServerLoginScreen(null);
   }
