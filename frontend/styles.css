@@ -1684,23 +1684,23 @@ td select:hover:not(:focus) {
 }
 
 /* ============= CFO DASHBOARD ============= */
+/* تخطيط Masonry بعمود CSS (بدل Grid ثابت الصفوف): كل لوحة تتدفق لأقصر عمود متاح مباشرة،
+   فلا يبقى فراغ كبير أسفل لوحة قصيرة بجانب لوحة طويلة، ولا تظهر لوحة وحيدة معزولة فى صف منفصل. */
 .cfo-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  column-count: 3;
+  column-gap: 16px;
   margin-bottom: 18px;
-  align-items: start;
 }
 
 @media (max-width: 1100px) {
   .cfo-grid {
-    grid-template-columns: repeat(2, 1fr);
+    column-count: 2;
   }
 }
 
 @media (max-width: 680px) {
   .cfo-grid {
-    grid-template-columns: 1fr;
+    column-count: 1;
   }
 }
 
@@ -1712,6 +1712,8 @@ td select:hover:not(:focus) {
   padding: 16px;
   display: flex;
   flex-direction: column;
+  break-inside: avoid;
+  margin-bottom: 16px;
 }
 
 .cfo-panel-title {
