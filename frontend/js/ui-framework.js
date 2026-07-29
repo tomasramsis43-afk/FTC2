@@ -108,6 +108,15 @@ let clients = [];
 // القديم كخط رجعة آمن)، Map (حتى لو فارغة) = المزامنة السريعة لكل عميل بمفرده مفعَّلة. راجع
 // loadData/saveClients.
 let _clientsSyncBaseline = null;
+// هل اكتملت أول مزامنة حقيقية (متصلة فعلاً بالسيرفر) لبيانات العملاء هذه الجلسة؟ تبقى false طوال
+// فترة العرض السريع الأولى من الكاش المحلي (cacheOnly) عند فتح البرنامج — فى هذه الفترة بالذات
+// (ثانية أو اتنين عادةً) تكون مصفوفة clients فى الذاكرة قديمة/غير مكتملة، و_clientsSyncBaseline=null
+// أيضاً، فأي إضافة/تعديل عميل فى هذه اللحظة بالذات كانت (قبل هذا الإصلاح) تُحفَظ عبر المسار
+// القديم الكامل (مفتاح 'clients' فى kv_store) بدل نظام السجلات المستقلة الحقيقي (client_records)
+// — تعديل قد يبدو "محفوظاً" للمستخدم لكنه فعلياً ذهب لمكان لم يعد أي جزء آخر من البرنامج يقرأ
+// منه. تُستخدم هذه الراية فى module-clients.js لمنع الحفظ (مع رسالة واضحة للمستخدم) لحد ما تكتمل
+// أول مزامنة حقيقية — راجع تعليق "منع الحفظ أثناء نافذة المزامنة الأولى" هناك.
+let _clientsFirstRealSyncDone = false;
 let bagStock = [];
 let vaultTx = [];
 let deletedVaultTx = []; // سجل الحركات المالية الملغاة (حذف منطقي Soft Delete) — لا تُستخدم في أي حسابات، فقط للتدقيق والاسترجاع
@@ -778,6 +787,7 @@ async function loadData(cacheOnly){
   } else {
     try{
       const { list, baseline } = await fetchAllClientRecords();
+      _clientsFirstRealSyncDone = true; // وصلنا فعلاً للسيرفر وحصلنا على إجابة حقيقية (سواء فارغة أو لا)
       if(list.length){
         clients = list;
         _clientsSyncBaseline = baseline;
