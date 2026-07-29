@@ -369,6 +369,13 @@ app.get('/api/clients', requireAuth, async (req, res) => {
 
 app.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res) => {
   try {
+    // meta=1: نحتاج فقط رقم النسخة (version) الحالي بدون نقل القيمة الكاملة — مهم خصوصاً
+    // لمفتاح 'clients' القديم الذي قد يكون عدة ميجابايت لعملاء كثيرين تمت مزامنتهم بالفعل عبر
+    // نظام client_records الأحدث، ولا داعي إطلاقاً لتنزيله فقط لمعرفة رقم نسخته الحالي.
+    if (req.query.meta === '1') {
+      const rMeta = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
+      return res.json({ key: req.params.key, version: rMeta.rows[0] ? rMeta.rows[0].version : 0 });
+    }
     const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
     if (!r.rows[0]) return res.json({ key: req.params.key, value: null, version: 0 });
     const { value, version } = r.rows[0];

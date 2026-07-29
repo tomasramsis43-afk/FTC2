@@ -230,6 +230,21 @@ async function _decryptOrFail(stored){
   }
 }
 window.storage = {
+    // يجلب رقم النسخة الحالي فقط (بدون القيمة) ويحدّث _kvVersions محلياً — يُستخدم تحديداً
+    // لمفتاح 'clients' القديم فى النظام الجديد (عملاء كسجلات مستقلة): بعد نجاح تحميل العملاء
+    // بالكامل عبر client_records، لا يُستدعى window.storage.get('clients',...) إطلاقاً، فيبقى
+    // _kvVersions['clients'] بدون تحديث (يفترض 0 افتراضياً) بينما القيمة الفعلية على السيرفر
+    // (المتبقية من قبل الترحيل، أو من عمليات حفظ احتياطية سابقة عند انقطاع الاتصال) قد تكون
+    // أكبر من صفر فعلاً — فأي حفظ احتياطي لاحق (خط الرجعة عند فشل الشبكة فى saveClients) كان
+    // سيُرفض دائماً بخطأ 409 لأنه يرسل نسخة قديمة/خاطئة (صفر) رغم عدم وجود أي تعارض حقيقي.
+    async primeKeyVersion(key){
+      try{
+        const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}?meta=1`);
+        if(!res.ok) return;
+        const data = await res.json();
+        _kvVersions[key] = data.version || 0;
+      }catch(e){ /* بدون اتصال — لا داعي لأي إجراء، ستُحدَّث لاحقاً عند أول محاولة حفظ فعلية */ }
+    },
     async get(key, shared, cacheOnly){
       const cached = await _kvCacheRead(key);
       if(cacheOnly){
