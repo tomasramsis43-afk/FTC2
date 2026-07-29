@@ -294,6 +294,16 @@ const RESTRICTED_STORAGE_KEYS = {
 };
 function restrictKeyToAdmin(req, res, next) {
   const key = req.params.key;
+  // 'clients' مفتاح قديم (كتلة واحدة لكل عملاء الشركة) قبل ميلاد نظام client_records. لسه مستخدَم
+  // كخط رجعة فقط عند انقطاع الاتصال أو أول تحميل قبل تأكيد المزامنة (راجع saveClients فى
+  // ui-framework.js). بعد عزل كل مستخدم استقبال عن الآخر، مصفوفة "clients" فى ذاكرة أي مستخدم
+  // استقبال بقت تحتوي بياناته الشخصية فقط (مش كل مستخدمي الاستقبال زي الأول) — فلو خط الرجعة ده
+  // اشتغل واستبدل الكتلة المشتركة الكاملة (كل عملاء الشركة) بمصفوفة مستخدم استقبال واحد الصغيرة،
+  // هيمحو بيانات باقي الشركة. نمنع دور 'reception' نهائياً من الكتابة/القراءة على هذا المفتاح
+  // تحديداً (بخلاف كل الأدوار الأخرى التي تبقى كما كانت)، فيعتمد فقط على مسار client_records الآمن.
+  if (key === 'clients' && req.user.role === 'reception') {
+    return res.status(403).json({ error: 'ليست لديك صلاحية الوصول لهذا المفتاح' });
+  }
   if (!(key in RESTRICTED_STORAGE_KEYS)) return next();
   const view = RESTRICTED_STORAGE_KEYS[key];
   const allowed = view === null ? req.user.role === 'admin' : roleCanAccessView(req.user.role, view);
