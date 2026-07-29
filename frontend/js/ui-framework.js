@@ -265,6 +265,47 @@ const I18N = {
     closeEntitiesTitle:'الدورات النشطة حسب حالة الاكتمال',
     closeEntityEarly:'مبكرة', closeEntityOnTrack:'على الموعد', closeEntityNearFull:'قاربت الاكتمال', closeEntityComplete:'مكتملة العدد',
     closeEntityOf:'من', closeEntityCourses:'دورة',
+    filterSuspended:'الموقوفين', titleFilterSuspended:'عرض العملاء الموقوفين فقط',
+    filterUnpBags:'الحقائب غير المشتراة', titleFilterUnpBags:'عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد',
+    advancedFilters:'فلاتر متقدمة',
+    bulkUpdateImport:'📋 تحديث/استيراد بيانات العملاء (جدول)',
+    refNumBulkImport:'📋 استيراد الرقم المرجعي (جدول)',
+    compWorkersBulkImport:'📋 استيراد عمال الشركات (جدول)',
+    bulkDeleteTable:'🗑 حذف عملاء (جدول)',
+    refreshSheet:'تحديث الشيت',
+    bulkAddClients:'+ إضافة عدة عملاء',
+    unknownCourseType:'⚠ الدورات غير المعلومة (بدون نوع دورة)',
+    allCompanies:'كل الشركات',
+    allClientsInvoice:'كل العملاء (رقم الفاتورة)', noInvoiceNum:'بدون رقم فاتورة', hasInvoiceNum:'لديه رقم فاتورة',
+    allClientsCourseNum:'كل العملاء (رقم الدورة)', noCourseNumOpt:'بدون رقم دورة', hasCourseNumOpt:'لديه رقم دورة',
+    allClientsRefNum:'كل العملاء (الرقم المرجعي)', noRefNumOpt:'بدون رقم مرجعي', hasRefNumOpt:'لديه رقم مرجعي',
+    titleFilterReception:'عرض عملاء موظف استقبال بعينه فقط', allReception:'كل موظفي الاستقبال',
+    dateFrom:'تاريخ التسجيل من', dateTo:'تاريخ التسجيل إلى',
+    paidMin:'المبلغ المدفوع من', paidMax:'المبلغ المدفوع إلى',
+    clearAdvFilters:'مسح الفلاتر المتقدمة',
+    matchingFilter:'مطابق للفلتر الحالي', totalClientsCount:'إجمالي العملاء',
+    selectedNowPrefix:'محدد حالياً:', clientWord:'عميل',
+    selectAllFilteredPrefix:'تحديد كل النتائج المطابقة للفلتر',
+    clearSelection:'إلغاء التحديد',
+    sendWhatsappSelected:'📨 إرسال رسالة واتساب للمحدد',
+    deleteSelected:'🗑 حذف المحدد',
+    titleSelectAllPage:'تحديد/إلغاء تحديد كل الصفحة الحالية',
+    showingOfTotal:'عرض', ofWord:'من', pageWord:'صفحة',
+    firstPage:'« الأولى', prevPage:'‹ السابقة', nextPage:'التالية ›', lastPage:'الأخيرة »',
+    perPage:'/ صفحة', showAllOpt:'عرض الكل',
+    perPage50:'50 / صفحة', perPage100:'100 / صفحة', perPage200:'200 / صفحة', perPage500:'500 / صفحة',
+    rowActions:'إجراءات',
+    cancelledStamp:'ملغى', absentStamp:'غياب', suspendedStamp:'موقوف',
+    pendingApprovalStamp:'⏳ قيد الاعتماد', titlePendingApproval:'سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد',
+    approveBtn:'✅ اعتماد', rejectBtn:'✖ رفض',
+    deleteInvoiceBtn:'حذف الفاتورة', titleDeleteInvoice:'حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)',
+    titleEditLocked:'انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن',
+    unsuspendBtn:'إلغاء الإيقاف', titleUnsuspend:'إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب',
+    titleSuspend:'إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب',
+    titleWhatsapp:'مراسلة العميل عبر واتساب',
+    bagOwn:'خاصته', bagFromStock:'من المخزون', bagPurchased:'تم الشراء', bagNeedPurchase:'مطلوب شراء',
+    titleCancelBag:'إلغاء الحقيبة المسجّلة لهذا العميل وإعادته لحالة مطلوب شراء', cancelBagBtn:'إلغاء الحقيبة',
+    titleBuyBagNow:'اضغط لتسليم الحقيبة الآن من المخزون', buyWord:'شراء',
   },
   en: {
     appTitle:'Client & Course Management System', appSubtitle:'A digital alternative to Excel — clients, courses, bags, and payments',
@@ -315,6 +356,47 @@ const I18N = {
     closeEntitiesTitle:'Active courses by completion status',
     closeEntityEarly:'Early', closeEntityOnTrack:'On track', closeEntityNearFull:'Nearly full', closeEntityComplete:'Complete',
     closeEntityOf:'of', closeEntityCourses:'course(s)',
+    filterSuspended:'Suspended', titleFilterSuspended:'Show only suspended clients',
+    filterUnpBags:'Bags not purchased', titleFilterUnpBags:"Show clients whose bag needs to be purchased and hasn't been yet",
+    advancedFilters:'Advanced filters',
+    bulkUpdateImport:'📋 Update/Import Client Data (table)',
+    refNumBulkImport:'📋 Import Reference Number (table)',
+    compWorkersBulkImport:'📋 Import Company Workers (table)',
+    bulkDeleteTable:'🗑 Delete Clients (table)',
+    refreshSheet:'Refresh Sheet',
+    bulkAddClients:'+ Add Multiple Clients',
+    unknownCourseType:'⚠ Unknown course type (no course type)',
+    allCompanies:'All companies',
+    allClientsInvoice:'All clients (invoice number)', noInvoiceNum:'No invoice number', hasInvoiceNum:'Has invoice number',
+    allClientsCourseNum:'All clients (course number)', noCourseNumOpt:'No course number', hasCourseNumOpt:'Has course number',
+    allClientsRefNum:'All clients (reference number)', noRefNumOpt:'No reference number', hasRefNumOpt:'Has reference number',
+    titleFilterReception:'Show clients of a specific reception staff only', allReception:'All reception staff',
+    dateFrom:'Registration date from', dateTo:'Registration date to',
+    paidMin:'Paid amount from', paidMax:'Paid amount to',
+    clearAdvFilters:'Clear advanced filters',
+    matchingFilter:'Matching current filter', totalClientsCount:'Total clients',
+    selectedNowPrefix:'Currently selected:', clientWord:'client(s)',
+    selectAllFilteredPrefix:'Select all matching results',
+    clearSelection:'Clear selection',
+    sendWhatsappSelected:'📨 Send WhatsApp message to selected',
+    deleteSelected:'🗑 Delete selected',
+    titleSelectAllPage:'Select/deselect all of current page',
+    showingOfTotal:'Showing', ofWord:'of', pageWord:'Page',
+    firstPage:'« First', prevPage:'‹ Prev', nextPage:'Next ›', lastPage:'Last »',
+    perPage:'/ page', showAllOpt:'Show all',
+    perPage50:'50 / page', perPage100:'100 / page', perPage200:'200 / page', perPage500:'500 / page',
+    rowActions:'Actions',
+    cancelledStamp:'Cancelled', absentStamp:'Absent', suspendedStamp:'Suspended',
+    pendingApprovalStamp:'⏳ Pending approval', titlePendingApproval:'Registered by reception — awaiting admin approval, excluded from accounts/reports until approved',
+    approveBtn:'✅ Approve', rejectBtn:'✖ Reject',
+    deleteInvoiceBtn:'Delete invoice', titleDeleteInvoice:'Delete the tax invoice issued to this client (soft delete, keeps the serial number)',
+    titleEditLocked:'Edit window expired (5 hours after registration) — admin only now',
+    unsuspendBtn:'Unsuspend', titleUnsuspend:'Restore client to appear again in Courses and Bag Inventory sheets',
+    titleSuspend:'Temporarily suspend client — stays in Clients sheet but disappears from Courses and Bag Inventory',
+    titleWhatsapp:'Message client via WhatsApp',
+    bagOwn:'Own bag', bagFromStock:'From stock', bagPurchased:'Purchased', bagNeedPurchase:'Purchase needed',
+    titleCancelBag:"Cancel this client's registered bag and reset to purchase-needed status", cancelBagBtn:'Cancel bag',
+    titleBuyBagNow:'Click to hand over the bag now from stock', buyWord:'Buy',
   }
 };
 function tr(key){ return (I18N[currentLang] && I18N[currentLang][key]) || I18N.ar[key] || key; }
@@ -324,6 +406,7 @@ function applyLanguage(lang){
   document.documentElement.dir = lang==='ar' ? 'rtl' : 'ltr';
   $all('[data-i18n]').forEach(el=>{ const k=el.dataset.i18n; if(I18N[lang] && I18N[lang][k]!==undefined) el.textContent = I18N[lang][k]; });
   $all('[data-i18n-placeholder]').forEach(el=>{ const k=el.dataset.i18nPlaceholder; if(I18N[lang] && I18N[lang][k]!==undefined) el.placeholder = I18N[lang][k]; });
+  $all('[data-i18n-title]').forEach(el=>{ const k=el.dataset.i18nTitle; if(I18N[lang] && I18N[lang][k]!==undefined) el.title = I18N[lang][k]; });
   $('#btn-lang-toggle').textContent = lang==='ar' ? 'EN' : 'AR';
   try{ window.storage.set('appLang', lang, false); }catch(e){}
   // إعادة رسم كل الجداول والمحتوى الديناميكي لتحديث النصوص المولّدة من JS
@@ -1981,9 +2064,9 @@ function paymentChannelsLabel(c){
   return parts.length ? parts.join(' + ') : (c.channel || '—');
 }
 function bagSourceLabel(c){
-  if(c.bagSource==='own') return 'خاصته';
-  if(c.bagSource==='stock') return 'من المخزون';
-  return c.bagStatus==='purchased' ? 'تم الشراء' : 'مطلوب شراء';
+  if(c.bagSource==='own') return tr('bagOwn');
+  if(c.bagSource==='stock') return tr('bagFromStock');
+  return c.bagStatus==='purchased' ? tr('bagPurchased') : tr('bagNeedPurchase');
 }
 /* هل حقيبة هذا العميل بحالة "مطلوب شراء" نظيفة أصلاً (بدون فاتورة أو تاريخ شراء)؟ أي لا يوجد شيء لإلغائه */
 function clientBagIsClean(c){
@@ -2019,13 +2102,13 @@ function markClientBagOwn(c){
 /* زر سريع لإلغاء الحقيبة يظهر بجانب حالة الحقيبة في شيت العملاء — يظهر فقط إن كان هناك فعلاً حقيبة/بيانات لإلغائها */
 function bagCancelBtnHtml(c){
   if(clientBagIsClean(c)) return '';
-  return ` <button class="btn btn-ghost btn-sm" data-cancelbag="${c.id}" title="إلغاء الحقيبة المسجّلة لهذا العميل وإعادته لحالة مطلوب شراء" style="padding:2px 6px; font-size:11px; margin-inline-start:4px;">إلغاء الحقيبة</button>`;
+  return ` <button class="btn btn-ghost btn-sm" data-cancelbag="${c.id}" title="${tr('titleCancelBag')}" style="padding:2px 6px; font-size:11px; margin-inline-start:4px;">${tr('cancelBagBtn')}</button>`;
 }
 /* خانة سريعة لشراء الحقيبة تظهر بجانب حالة "مطلوب شراء" — تُتيح الشراء مباشرة من مكانها */
 function bagBuyCheckboxHtml(c){
   if(c.bagSource!=='buy' || c.bagStatus==='purchased') return '';
-  return ` <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="${c.id}"> شراء
+  return ` <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="${tr('titleBuyBagNow')}">
+    <input type="checkbox" data-bagbuy="${c.id}"> ${tr('buyWord')}
   </label>`;
 }
 function courseDurationDays(courseType){
