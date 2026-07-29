@@ -180,7 +180,9 @@ CREATE TABLE IF NOT EXISTS login_history (
   username     TEXT NOT NULL,
   role         TEXT,
   ip_address   TEXT,
+  device_info  TEXT,
   logged_in_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE login_history ADD COLUMN IF NOT EXISTS device_info TEXT;
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
