@@ -149,6 +149,24 @@ CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(or
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS created_by TEXT;
 UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
 
+-- ============================================================
+-- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (سجل واحد = صف واحد)
+-- ============================================================
+-- نفس فكرة client_records بالضبط لكن قابلة لإعادة الاستخدام لأي شيت آخر (الخزنة، المخزون،
+-- المحاسبة، الشركات، المشتريات...) بدل تكرار جدول مستقل لكل شيت. عمود collection يفصل بيانات
+-- كل شيت عن الآخر (مثال: 'vaultTx', 'bagStock', 'companies'...). enc مشفّر بالكامل من المتصفح
+-- تماماً كباقي أنظمة التخزين — السيرفر لا يفك أي تشفير ولا يفهم المحتوى، فقط يخزّنه.
+CREATE TABLE IF NOT EXISTS collection_records (
+  collection    TEXT NOT NULL,
+  id            TEXT NOT NULL,
+  enc           TEXT NOT NULL,
+  version       INTEGER NOT NULL DEFAULT 1,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by    TEXT,
+  PRIMARY KEY (collection, id)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_records_collection ON collection_records(collection);
+
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
 CREATE TABLE IF NOT EXISTS login_history (

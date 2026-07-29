@@ -703,6 +703,17 @@ app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
   }
 });
 
+// حذف كل سجلات العملاء دفعة واحدة — يُستخدم فقط فى "إعادة ضبط المصنع" (حذف كل بيانات البرنامج)، أدمن فقط.
+app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM client_records');
+    res.json({ deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف سجلات العملاء' });
+  }
+});
+
 // نقطة رفع مُجمَّع تُستخدم فقط فى: (أ) الترحيل لمرة واحدة من التخزين القديم (كل العملاء ككتلة
 // واحدة) إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 500 سجل
 // فى الطلب الواحد بدل طلب منفصل لكل عميل (5888 عميل مثلاً كانت ستعني 5888 طلباً منفصلاً تصطدم
@@ -763,6 +774,131 @@ app.get('/api/storage-versions', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب نسخ البيانات' });
+  }
+});
+
+/* ---------------- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (Generic Collection Records) ----------------
+   نفس فكرة /api/client-records بالضبط لكن قابلة لإعادة الاستخدام لأي شيت آخر — سجل واحد يتغيّر
+   = صف واحد يُرفع، بدل رفع كل مصفوفة الشيت كاملة عند أي تعديل بسيط. */
+const ALLOWED_COLLECTIONS = [
+  'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
+  'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
+  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices',
+];
+function collectionRoleAllowed(role, collection) {
+  if (collection in RESTRICTED_STORAGE_KEYS) {
+    const view = RESTRICTED_STORAGE_KEYS[collection];
+    return view === null ? role === 'admin' : roleCanAccessView(role, view);
+  }
+  return true; // غير مقيَّد: نفس سلوك المفاتيح غير المقيَّدة حالياً فى restrictKeyToAdmin
+}
+function requireValidCollection(req, res, next) {
+  const { collection } = req.params;
+  if (!ALLOWED_COLLECTIONS.includes(collection)) return res.status(400).json({ error: 'اسم تصنيف بيانات غير صحيح' });
+  if (!collectionRoleAllowed(req.user.role, collection)) return res.status(403).json({ error: 'ليست لديك صلاحية كافية للوصول لهذه البيانات' });
+  next();
+}
+
+app.get('/api/records/:collection', requireAuth, requireValidCollection, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, enc, version FROM collection_records WHERE collection = $1', [req.params.collection]);
+    res.json({ records: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب البيانات' });
+  }
+});
+
+// رقم إصدار مجمّع لكل التصنيفات دفعة واحدة (طلب واحد خفيف بدون نقل بيانات فعلية) — لنفس فكرة
+// /api/storage-versions، تستخدمه المزامنة الدورية الخلفية للتحقق السريع من وجود تعديلات جديدة.
+app.get('/api/records-versions', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT collection, COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM collection_records GROUP BY collection');
+    const out = {};
+    r.rows.forEach(row => {
+      if (!collectionRoleAllowed(req.user.role, row.collection)) return;
+      out[row.collection] = { version: Number(row.v), count: row.c };
+    });
+    res.json({ versions: out });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب أرقام الإصدارات' });
+  }
+});
+
+app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
+  const { enc } = req.body || {};
+  if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات غير صحيحة' });
+  const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
+  try {
+    const upsert = await pool.query(
+      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
+       VALUES ($1, $2, $3, 1, $4)
+       ON CONFLICT (collection, id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = collection_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by
+       WHERE collection_records.version = $5
+       RETURNING version`,
+      [req.params.collection, req.params.id, enc, req.user.username, knownVersion]
+    );
+    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version });
+    const current = await pool.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+    return res.status(409).json({
+      error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
+      currentVersion: current.rows[0] ? current.rows[0].version : 0,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر الحفظ' });
+  }
+});
+
+app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+    res.json({ id: req.params.id, deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر الحذف' });
+  }
+});
+
+// نقطة رفع مُجمَّع: تُستخدم فقط للترحيل لمرة واحدة من التخزين القديم (كتلة واحدة) إلى النظام الجديد،
+// وللعمليات الضخمة دفعة واحدة (استيراد شامل) — حتى 500 سجل فى الطلب الواحد. بدون فحص تعارض عمداً
+// (نفس منطق العمليات الجماعية الكبيرة فى /api/client-records/bulk-migrate).
+app.post('/api/records/:collection/bulk-migrate', requireAuth, requireValidCollection, async (req, res) => {
+  const records = Array.isArray(req.body?.records) ? req.body.records : [];
+  if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  try {
+    const values = [];
+    const placeholders = records.map((r, idx) => {
+      const base = idx * 4;
+      values.push(req.params.collection, String(r.id), String(r.enc), req.user.username);
+      return `($${base + 1},$${base + 2},$${base + 3},1,$${base + 4})`;
+    }).join(',');
+    await pool.query(
+      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
+       VALUES ${placeholders}
+       ON CONFLICT (collection, id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = collection_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by`,
+      values
+    );
+    res.json({ migrated: records.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
+  }
+});
+
+// حذف كل سجلات تصنيف معيّن دفعة واحدة — يُستخدم فقط فى "إعادة ضبط المصنع" (حذف كل بيانات البرنامج)، أدمن فقط.
+app.delete('/api/records/:collection', requireAuth, requireRole('admin'), requireValidCollection, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM collection_records WHERE collection = $1', [req.params.collection]);
+    res.json({ deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف البيانات' });
   }
 });
 

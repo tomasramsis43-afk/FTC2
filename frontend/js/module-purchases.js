@@ -614,11 +614,13 @@ async function backgroundSyncCheck(){
   try{
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
     // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
-    // السجلات المستقلة الجديد (checkClientRecordsChanged) — طلب صغير جداً بدون نقل بيانات فعلية
+    // السجلات المستقلة الجديد (checkClientRecordsChanged)، و(ج) نفس الشيء لبقية الشيتات المحوَّلة
+    // للسجلات المستقلة (checkAllRecordsChanged) — كل ذلك بطلبات صغيرة جداً بدون نقل بيانات فعلية
     // إلا لو تغيّر شيء فعلاً، بنفس فكرة storage-versions تماماً.
-    const [res, clientsChanged] = await Promise.all([
+    const [res, clientsChanged, recordsChanged] = await Promise.all([
       serverFetch('/api/storage-versions'),
       checkClientRecordsChanged(),
+      checkAllRecordsChanged(),
     ]);
     if(!res.ok){ markOffline(); return; }
     const data = await res.json();
@@ -626,8 +628,8 @@ async function backgroundSyncCheck(){
     const serverVersions = data.versions || {};
     // نتجاهل مفتاح 'clients' القديم هنا عمداً: أصبح غير مُحدَّث (لم يعد يُكتَب إليه فى المسار
     // السريع الجديد)، والمصدر الصحيح لمعرفة تغيّر العملاء الآن هو checkClientRecordsChanged أعلاه.
-    const changedKeys = Object.keys(serverVersions).filter(k => k !== 'clients' && (_kvVersions[k] || 0) !== serverVersions[k]);
-    if(changedKeys.length || clientsChanged){
+    const changedKeys = Object.keys(serverVersions).filter(k => k !== 'clients' && !ALLOWED_COLLECTIONS_LOCAL.includes(k) && (_kvVersions[k] || 0) !== serverVersions[k]);
+    if(changedKeys.length || clientsChanged || recordsChanged){
       // تحميل عادي عبر الشبكة: المفاتيح غير المتغيّرة ترجع 304 فوراً (بدون نقل بيانات)،
       // والمفاتيح المتغيّرة فقط هي التي تُنقل فعلياً من السحابة — ثم نعيد رسم كل الشاشات
       // لأننا لا نعرف مسبقاً أي شاشات تعتمد على المفاتيح التي تغيّرت تحديداً.

@@ -371,6 +371,200 @@ let _clientRecordsAggVersion = null; // آخر "مجموع نسخ" معروف �
 // وتُستخدم حصراً لعرض شارة "قيد اعتماد الأدمن" وزر الاعتماد فى شاشة العملاء.
 let clientRecordMeta = {}; // id -> { origin: 'general'|'reception', status: 'confirmed'|'pending' }
 
+// ============================================================
+// نظام تخزين عام للسجلات المستقلة (Generic Collection Records) — نفس فكرة نظام العملاء
+// (client_records) أعلاه لكن قابلة لإعادة الاستخدام لأي شيت آخر (الخزنة، المخزون، المحاسبة،
+// الشركات، المشتريات...). كل مجموعة (collection) لها Map مستقلة لأرقام النسخ ولـ "baseline"
+// المزامنة (آخر نسخة معروفة مؤكدة من كل سجل)، بحيث لا يختلط تتبع تغييرات شيت عن آخر.
+// ============================================================
+// قائمة كل التصنيفات المحوَّلة لنظام "السجلات المستقلة" (سجل واحد لكل عنصر) — مطابقة تماماً
+// لنفس القائمة ALLOWED_COLLECTIONS فى server.js. تُستخدم هنا للمرور على كل تصنيف دفعة واحدة
+// (مثال: إعادة ضبط المصنع).
+const ALLOWED_COLLECTIONS_LOCAL = [
+  'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
+  'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
+  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices',
+];
+const _recordVersions = {}; // collection -> Map(id -> version)
+const _collectionSyncBaseline = {}; // collection -> Map(id -> json) | null (لسه غير مؤكدة هذه الجلسة)
+
+async function fetchAllRecordsGeneric(collection){
+  const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}`);
+  if(!res.ok) throw new Error('تعذّر جلب بيانات ' + collection);
+  const data = await res.json();
+  const list = [];
+  const baseline = new Map();
+  const versions = new Map();
+  for(const r of (data.records||[])){
+    versions.set(r.id, r.version);
+    let plain;
+    try{ plain = await _decryptOrFail(r.enc); }
+    catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل، وليس تجاهلاً صامتاً
+    try{
+      const obj = JSON.parse(plain);
+      list.push(obj);
+      baseline.set(r.id, plain);
+    }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل التصنيف */ }
+  }
+  _recordVersions[collection] = versions;
+  return { list, baseline };
+}
+
+async function saveOneRecordGeneric(collection, id, plainJson){
+  try{
+    const enc = await encryptValue(plainJson);
+    if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+    const knownVersion = _recordVersions[collection].get(id) || 0;
+    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enc, version: knownVersion }),
+    });
+    if(res.status === 409){
+      const conflict = await res.json().catch(()=>({}));
+      _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
+      showToast('⚠️ ' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة'));
+      return false;
+    }
+    if(!res.ok) return null;
+    const data = await res.json();
+    _recordVersions[collection].set(id, data.version || 0);
+    return true;
+  }catch(e){ return null; }
+}
+
+async function deleteOneRecordGeneric(collection, id){
+  try{
+    await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+    return true;
+  }catch(e){ return null; }
+}
+
+async function bulkUploadRecordsGeneric(collection, list){
+  const CHUNK = 300;
+  for(let i=0;i<list.length;i+=CHUNK){
+    const chunk = list.slice(i, i+CHUNK);
+    const records = [];
+    for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)) });
+    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
+      method: 'POST',
+      body: JSON.stringify({ records }),
+    });
+    if(!res.ok) throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
+  }
+}
+
+// تحميل تصنيف واحد كامل: يحاول النظام الجديد (سجل فردي لكل عنصر) أولاً؛ لو رجع فارغاً فعلياً
+// يتحقق من وجود بيانات قديمة (كتلة واحدة تحت نفس الاسم فى kv_store) ويرحّلها لمرة واحدة فقط —
+// تماماً بنفس منطق تحميل/ترحيل العملاء أعلاه (fetchAllClientRecords). فى وضع cacheOnly (فتح فورى
+// من الجهاز بدون انتظار الشبكة) نستخدم آخر نسخة قديمة محفوظة محلياً إن وُجدت، والمزامنة الحقيقية
+// تتم لاحقاً فى الخلفية (نفس فكرة تحميل العملاء بالضبط).
+async function loadCollectionGeneric(collection, cacheOnly){
+  if(cacheOnly){
+    try{
+      const r = await window.storage.get(collection, false, true);
+      const list = (r && r.value) ? JSON.parse(r.value) : [];
+      return { list: Array.isArray(list) ? list : [], baseline: null };
+    }catch(e){ return { list: [], baseline: null }; }
+  }
+  try{
+    const { list, baseline } = await fetchAllRecordsGeneric(collection);
+    if(list.length) return { list, baseline };
+    // فارغ فعلاً فى النظام الجديد — نتحقق من وجود بيانات قديمة (كتلة واحدة) تحتاج ترحيل لمرة واحدة
+    let legacyList = [];
+    try{
+      const r = await window.storage.get(collection, false, false);
+      legacyList = (r && r.value) ? JSON.parse(r.value) : [];
+      if(!Array.isArray(legacyList)) legacyList = [];
+    }catch(e){ legacyList = []; }
+    if(legacyList.length){
+      try{
+        await bulkUploadRecordsGeneric(collection, legacyList);
+        return { list: legacyList, baseline: new Map(legacyList.map(x=>[x.id, JSON.stringify(x)])) };
+      }catch(e){
+        // فشل الترحيل (انقطع الاتصال أثناءه) — نكمل بالبيانات القديمة فى الذاكرة، وتُعاد المحاولة
+        // تلقائياً فى المرة القادمة online (نفس البيانات فقط تُرفع تاني، آمن للتكرار).
+        return { list: legacyList, baseline: null };
+      }
+    }
+    return { list: [], baseline: new Map() };
+  }catch(e){
+    // تعذّر الوصول لنظام السجلات الجديد فعلياً (انقطاع اتصال) — نرجع لآخر نسخة محفوظة محلياً.
+    try{
+      const r = await window.storage.get(collection, false, true);
+      const list = (r && r.value) ? JSON.parse(r.value) : [];
+      return { list: Array.isArray(list) ? list : [], baseline: null };
+    }catch(e2){ return { list: [], baseline: null }; }
+  }
+}
+
+// حفظ تصنيف كامل (مصفوفة فى الذاكرة) بنفس منطق saveClients بالضبط: لو المزامنة مع النظام الجديد
+// مؤكدة هذه الجلسة (baseline موجودة)، نرفع فقط العناصر التي تغيّرت فعلياً (سجل واحد لكل عنصر تغيّر،
+// أو رفع مُجمَّع لو أكثر من 20 عنصر دفعة واحدة)، بدل رفع المصفوفة الكاملة فى كل مرة. أي عنصر بلا
+// `id` يُتجاهَل من هذا المسار السريع (لا يمكن تتبعه فردياً) ويعتمد فقط على خط الرجعة الكامل أدناه.
+async function saveCollectionGeneric(collection, arr){
+  try{
+    const baseline = _collectionSyncBaseline[collection];
+    if(baseline){
+      const currentIds = new Set();
+      const changed = [];
+      for(const item of arr){
+        if(!item || !item.id) continue;
+        currentIds.add(item.id);
+        const json = JSON.stringify(item);
+        if(baseline.get(item.id) !== json) changed.push({ item, json });
+      }
+      const removedIds = [];
+      for(const id of baseline.keys()) if(!currentIds.has(id)) removedIds.push(id);
+
+      let anyNetworkFailure = false;
+      if(changed.length > 20){
+        try{
+          await bulkUploadRecordsGeneric(collection, changed.map(x=>x.item));
+          changed.forEach(x=> baseline.set(x.item.id, x.json));
+        }catch(e){ anyNetworkFailure = true; }
+      }else{
+        for(const {item, json} of changed){
+          const ok = await saveOneRecordGeneric(collection, item.id, json);
+          if(ok) baseline.set(item.id, json);
+          else if(ok === null) anyNetworkFailure = true;
+        }
+      }
+      for(const id of removedIds){
+        const ok = await deleteOneRecordGeneric(collection, id);
+        if(ok) baseline.delete(id);
+        else anyNetworkFailure = true;
+      }
+      if(anyNetworkFailure){
+        _collectionSyncBaseline[collection] = null;
+        await window.storage.set(collection, JSON.stringify(arr), false);
+      }
+      return;
+    }
+    // خط الرجعة: المزامنة مع النظام الجديد لم تتأكد بعد هذه الجلسة — نحفظ بالطريقة القديمة الكاملة.
+    await window.storage.set(collection, JSON.stringify(arr), false);
+  }catch(e){ showToast('تعذر حفظ البيانات'); }
+}
+
+async function checkAllRecordsChanged(){
+  try{
+    const res = await serverFetch('/api/records-versions');
+    if(!res.ok) return false;
+    const data = await res.json();
+    const serverVersions = data.versions || {};
+    let changed = false;
+    Object.keys(serverVersions).forEach(col=>{
+      const baseline = _collectionSyncBaseline[col];
+      if(!baseline) return; // لسه غير مُزامَنة هذه الجلسة — تُعالَج فى loadData العادي
+      const localVersions = _recordVersions[col];
+      const localSum = localVersions ? Array.from(localVersions.values()).reduce((a,b)=>a+b,0) : 0;
+      const localCount = localVersions ? localVersions.size : 0;
+      if(localSum !== serverVersions[col].version || localCount !== serverVersions[col].count) changed = true;
+    });
+    return changed;
+  }catch(e){ return false; }
+}
+
 async function fetchAllClientRecords(){
   const res = await serverFetch('/api/client-records');
   if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');

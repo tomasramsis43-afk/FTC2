@@ -893,34 +893,43 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
   statusEl.style.display = 'block';
   statusEl.textContent = 'جارٍ إعادة ضبط المصنع...';
   try{
-    // 1) حذف كل مفاتيح البيانات المحفوظة
-    const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers','bankStatementRows','vaultDenomTx'];
+    // 1) حذف كل مفاتيح البيانات المحفوظة (الطريقة القديمة، لا تزال تُستخدم كخط رجعة احتياطي)
+    //    + حذف كل بيانات نظام "السجلات المستقلة" الجديد (سجل واحد لكل عنصر) للعملاء وكل
+    //    التصنيفات المحوَّلة إليه — وإلا تبقى بياناتها الفعلية فى الخادم رغم مسح المفتاح القديم
+    //    غير المستخدَم فعلياً للحفظ بعد التحويل، فتظهر البيانات القديمة مجدداً عند أول تحميل تالٍ.
+    const legacyKeys = ['clients','settings','users'];
     const deleteErrors = [];
-    for(const k of keys){
+    for(const k of legacyKeys){
       try{ await window.storage.delete(k, false); }catch(e){ deleteErrors.push(`${k}: ${e.message||e}`); }
+    }
+    try{ await serverFetch('/api/client-records', { method:'DELETE' }); }catch(e){ deleteErrors.push('client-records: ' + (e.message||e)); }
+    for(const col of ALLOWED_COLLECTIONS_LOCAL){
+      try{ await serverFetch(`/api/records/${encodeURIComponent(col)}`, { method:'DELETE' }); }catch(e){ deleteErrors.push(`${col}: ${e.message||e}`); }
     }
 
     // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)
     clients = [];
-    bagStock = [];
-    vaultTx = [];
-    courseSessions = [];
-    companies = [];
-    companyTransfers = [];
-    auditLog = [];
-    bankStatementRows = [];
-    vaultDenomTx = [];
+    bagStock = []; vaultTx = []; deletedVaultTx = []; vaultDenomTx = []; bankStatementRows = [];
+    deletedInvoices = []; courseSessions = []; auditLog = []; companies = []; companyTransfers = [];
+    journalEntries = []; chartOfAccounts = []; journalDE = []; budgetEntries = []; suppliers = [];
+    purchases = []; manualSalesInvoices = []; zakatAdjustments = {};
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
     undoStack = [];
     redoStack = [];
+    // تصفير الـ baseline المحلية لكل التصنيفات حتى يبدأ الحفظ التالي من صفر نظيف (بدون محاولة
+    // حذف/مقارنة سجلات قديمة صارت غير موجودة أصلاً على الخادم بعد إعادة الضبط)
+    _clientsSyncBaseline = new Map();
+    ALLOWED_COLLECTIONS_LOCAL.forEach(col=>{ _collectionSyncBaseline[col] = new Map(); if(_recordVersions[col]) _recordVersions[col] = new Map(); });
 
     const saveErrors = [];
     const saveResults = await Promise.allSettled([
-      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
+      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(), saveDeletedVaultTx(),
       saveCourseSessions(), saveCompanies(), saveCompanyTransfers(),
-      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveVaultDenomTx()
+      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveVaultDenomTx(),
+      saveDeletedInvoices(), saveJournalEntries(), saveChartOfAccounts(), saveJournalDE(),
+      saveBudgetEntries(), saveSuppliers(), savePurchases(), saveManualSalesInvoices(), saveZakatAdjustments(),
     ]);
     saveResults.forEach((r,i)=>{ if(r.status==='rejected') saveErrors.push(String(r.reason)); });
 
