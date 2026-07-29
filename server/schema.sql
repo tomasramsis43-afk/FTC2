@@ -24,6 +24,12 @@ ALTER TABLE server_users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'st
 -- وأي زيادة في هذا العمود تُبطل فوراً كل التوكنات الأقدم لنفس المستخدم.
 ALTER TABLE server_users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
+-- تعطيل/تفعيل حساب المستخدم من طرف المدير (بدون حذفه نهائياً). الحساب المعطّل
+-- يُرفض فوراً عند تسجيل الدخول، وأي جلسة مفتوحة له تُقطع فوراً أيضاً (راجع
+-- requireAuth في auth.js) دون انتظار انتهاء صلاحية التوكن. الافتراضي "مفعّل"
+-- حتى لا يتأثر أي حساب موجود مسبقاً بمجرد إضافة العمود.
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+
 -- مخزن مفاتيح/قيم يطابق تماماً واجهة window.storage الحالية في البرنامج
 -- (كل مفتاح = مصفوفة/كائن JSON واحد مشفّر بالكامل من طرف المتصفح،
 -- الخادم لا يفكّ أي تشفير ولا يفهم محتوى القيمة، فقط يخزّنها).

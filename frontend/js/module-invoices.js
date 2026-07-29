@@ -764,13 +764,20 @@ async function renderUsersList(){
     const res = await fetch(API_BASE + '/api/users', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'تعذّر جلب المستخدمين');
-    el.innerHTML = (data.users||[]).map(u=>`
-      <div class="tag" style="border-radius:8px; justify-content:space-between; width:100%; margin-bottom:6px;">
+    el.innerHTML = (data.users||[]).map(u=>{
+      const disabled = u.is_active === false;
+      return `
+      <div class="tag" style="border-radius:8px; justify-content:space-between; width:100%; margin-bottom:6px; ${disabled ? 'opacity:0.6;' : ''}">
         <span>👤 ${escapeHtml(u.display_name||u.username)} (${escapeHtml(u.username)})${u.username===currentUser ? ' — أنت' : ''}
           <span class="mono" style="font-size:10.5px; color:${u.role==='admin'?'var(--gold-dark)':'var(--text-muted)'}; margin-right:6px;">${SERVER_ROLE_LABELS[u.role]||u.role}</span>
+          ${disabled ? '<span class="mono" style="font-size:10.5px; color:var(--red); margin-right:6px;">⛔ معطّل</span>' : ''}
         </span>
-        <button data-ru="${escapeHtml(u.username)}" ${u.username===currentUser ? 'disabled title="لا يمكنك حذف حسابك الحالي"' : ''}>✕</button>
-      </div>`).join('') || `<div class="hint">لا يوجد مستخدمون بعد</div>`;
+        <span style="display:flex; gap:6px;">
+          <button data-rt="${escapeHtml(u.username)}" data-rt-active="${disabled ? '0' : '1'}" class="btn btn-sm ${disabled ? '' : 'btn-danger'}" ${u.username===currentUser ? 'disabled title="لا يمكنك تعطيل حسابك الحالي"' : ''}>${disabled ? '✅ تفعيل' : '⛔ تعطيل'}</button>
+          <button data-ru="${escapeHtml(u.username)}" ${u.username===currentUser ? 'disabled title="لا يمكنك حذف حسابك الحالي"' : ''}>✕</button>
+        </span>
+      </div>`;
+    }).join('') || `<div class="hint">لا يوجد مستخدمون بعد</div>`;
   }catch(e){
     el.innerHTML = `<div class="hint" style="color:var(--red);">تعذّر تحميل قائمة المستخدمين: ${escapeHtml(e.message||'')}</div>`;
   }
@@ -1124,6 +1131,29 @@ $('#btn-add-user').addEventListener('click', async ()=>{
   }
 });
 document.addEventListener('click', async e=>{
+  if(e.target.dataset.rt!==undefined){
+    const username = e.target.dataset.rt;
+    const willActivate = e.target.dataset.rtActive === '0';
+    const msg = willActivate
+      ? `تأكيد تفعيل حساب "${username}" مجدداً؟ سيتمكن من تسجيل الدخول من جديد.`
+      : `تأكيد تعطيل حساب "${username}"؟ لن يستطيع تسجيل الدخول بعد الآن، وسيُنهى أي جلسة مفتوحة له فوراً.`;
+    if(await customConfirm(msg)){
+      try{
+        const res = await fetch(API_BASE + '/api/users/' + encodeURIComponent(username) + '/toggle-active', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN }
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error || 'تعذّر تغيير حالة المستخدم');
+        await logAudit('edit','المستخدمون', `تم ${data.isActive ? 'تفعيل' : 'تعطيل'} حساب المستخدم "${username}"`);
+        await renderUsersList();
+        showToast(data.isActive ? `تم تفعيل حساب "${username}"` : `تم تعطيل حساب "${username}"`);
+      }catch(err){
+        showToast(err.message || 'تعذّر تغيير حالة المستخدم');
+      }
+    }
+    return;
+  }
   if(e.target.dataset.ru!==undefined){
     const username = e.target.dataset.ru;
     if(await customConfirm(`تأكيد حذف المستخدم "${username}"؟ لن يستطيع تسجيل الدخول بعد ذلك.`)){
