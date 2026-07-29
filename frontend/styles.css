@@ -1470,6 +1470,59 @@ tbody tr:hover {
   max-width: 360px;
 }
 
+.login-container {
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  width: 100%;
+  max-width: 560px;
+}
+
+.login-container .login-box {
+  box-shadow: none;
+  border-radius: 0;
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.login-logo-panel {
+  flex: 0 0 190px;
+  background: #fff;
+  border-inline-end: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 18px;
+}
+
+.login-logo-panel img {
+  max-width: 130px;
+  max-height: 130px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (max-width: 560px) {
+  .login-container {
+    flex-direction: column;
+    max-width: 360px;
+  }
+  .login-logo-panel {
+    flex: none;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--border);
+    padding: 18px;
+  }
+  .login-logo-panel img {
+    max-width: 80px;
+    max-height: 80px;
+  }
+}
+
 .login-box .seal {
   width: 64px;
   height: 64px;
