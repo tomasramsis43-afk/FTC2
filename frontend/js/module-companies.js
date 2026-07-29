@@ -205,12 +205,12 @@ function companiesTakenSummaryHtml(){
     });
   });
   const names = Object.keys(map).sort((a,b)=>a.localeCompare(b,'ar'));
-  if(!names.length) return `<div class="hint">لا توجد بيانات متدربين مضافة بعد.</div>`;
+  if(!names.length) return `<div class="hint">${tr('noTraineeDataYet')}</div>`;
   const grand = names.reduce((s,n)=>({total:s.total+map[n].total, taken:s.taken+map[n].taken, notTaken:s.notTaken+map[n].notTaken}), {total:0,taken:0,notTaken:0});
   return `
     <div class="table-scroll table-scroll-compact">
       <table>
-        <thead><tr><th>اسم الشركة</th><th>إجمالي المتدربين (كل الحوالات)</th><th>أخذ الدورة</th><th>لم يأخذ الدورة بعد</th></tr></thead>
+        <thead><tr><th>${tr('compFieldName')}</th><th>${tr('totalTraineesAllTransfersCol')}</th><th>${tr('tookCourseCol')}</th><th>${tr('notTookCourseYetCol')}</th></tr></thead>
         <tbody>
           ${names.map(n=>`<tr>
             <td>${escapeHtml(n)}</td>
@@ -221,7 +221,7 @@ function companiesTakenSummaryHtml(){
         </tbody>
         <tfoot>
           <tr style="font-weight:bold;">
-            <td>الإجمالي الكلي</td>
+            <td>${tr('grandTotalLabel')}</td>
             <td class="mono">${grand.total}</td>
             <td class="mono" style="color:var(--teal);">${grand.taken}</td>
             <td class="mono" style="color:var(--red);">${grand.notTaken}</td>
@@ -283,13 +283,13 @@ function renderCompanyPersons(){
   if($('#cpp-company')){
     const cppVal = $('#cpp-company').value;
     populateSelect($('#cpp-company'), companies.map(c=>c.name), false);
-    $('#cpp-company').insertAdjacentHTML('afterbegin','<option value="">كل الشركات</option>');
+    $('#cpp-company').insertAdjacentHTML('afterbegin',`<option value="">${tr('allCompanies')}</option>`);
     $('#cpp-company').value = companies.some(c=>c.name===cppVal) ? cppVal : '';
   }
   if($('#cpp-channel')){
     const cppChannelVal = $('#cpp-channel').value;
     populateSelect($('#cpp-channel'), settings.channels.map(c=>c.name), false);
-    $('#cpp-channel').insertAdjacentHTML('afterbegin','<option value="">كل طرق الدفع</option>');
+    $('#cpp-channel').insertAdjacentHTML('afterbegin',`<option value="">${tr('allChannels')}</option>`);
     $('#cpp-channel').value = settings.channels.some(c=>c.name===cppChannelVal) ? cppChannelVal : '';
   }
   const rows = companiesFilteredPersons();
@@ -300,11 +300,11 @@ function renderCompanyPersons(){
   $('#company-persons-list').innerHTML = rows.length ? `
     <div class="table-scroll table-scroll-compact">
     <table>
-      <thead><tr><th class="sticky-col sticky-col-1">رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>تاريخ الحوالة</th><th>طريقة الدفع</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+      <thead><tr><th class="sticky-col sticky-col-1">${tr('thId')}</th><th>${tr('thName')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('transferDateCol')}</th><th>${tr('thChannel')}</th><th>${tr('thCourse')}</th><th>${tr('thCourseNum')}</th><th>${tr('courseValueCol')}</th><th>${tr('bagValueCol')}</th><th>${tr('thTotal')}</th><th>${tr('statusCol')}</th></tr></thead>
       <tbody>
-        ${pageRows.map(({t,tr,c})=>`<tr>
-          <td class="mono sticky-col sticky-col-1">${escapeHtml(tr.clientId)}</td>
-          <td>${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
+        ${pageRows.map(({t,tr:trn,c})=>`<tr>
+          <td class="mono sticky-col sticky-col-1">${escapeHtml(trn.clientId)}</td>
+          <td>${escapeHtml(c?c.name:'—')}${!c?` <span class="hint" style="display:inline;">${tr('notInClientsSheetYet')}</span>`:''}</td>
           <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
           <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
           <td>${escapeHtml(t.companyName||'—')}</td>
@@ -312,14 +312,14 @@ function renderCompanyPersons(){
           <td>${escapeHtml(t.channel||'—')}</td>
           <td>${escapeHtml(c?(c.courseType||'—'):'—')}</td>
           <td class="mono">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
-          <td class="mono">${fmt(num(tr.courseValue))}</td>
-          <td class="mono">${fmt(num(tr.bagValue))}</td>
-          <td class="mono">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-          <td>${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بشيت العملاء بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
+          <td class="mono">${fmt(num(trn.courseValue))}</td>
+          <td class="mono">${fmt(num(trn.bagValue))}</td>
+          <td class="mono">${fmt(num(trn.courseValue)+num(trn.bagValue))}</td>
+          <td>${c ? `<span class="stamp paid">${tr('linkedToClientsSheet')}</span>` : `<span class="stamp owe">${tr('notLinkedYet')}</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${trn.id}">${tr('linkBtn')}</button>`}</td>
         </tr>`).join('')}
       </tbody>
     </table>
-    </div>` : `<div class="empty-state" style="padding:20px;">لا يوجد أشخاص مطابقون لهذا الفلتر/البحث</div>`;
+    </div>` : `<div class="empty-state" style="padding:20px;">${tr('noPersonsMatch')}</div>`;
 }
 /* عند تفعيل فلتر البحث برقم الهوية أو الاسم، تُقصَر قائمة المتدربين المعروضة داخل كل حوالة على المتدربين المطابقين فقط */
 function transferMatchingTrainees(t){
@@ -335,28 +335,28 @@ function transferMatchingTrainees(t){
 }
 /* يبني جدول توزيع المتدربين لحوالة معيّنة (قابل لإعادة الاستخدام) — نفس أزرار تعديل/حذف المتدرب المستخدَمة في شاشة تحويلات الشركات */
 function renderTraineesTableHtml(t, trainees){
-  if(!trainees.length) return `<div class="empty-state" style="padding:16px;">لا يوجد متدربون مسجّلون بعد تحت هذه الحوالة</div>`;
+  if(!trainees.length) return `<div class="empty-state" style="padding:16px;">${tr('noTraineesYet')}</div>`;
   return `
     <div class="table-scroll table-scroll-compact cards-mobile">
     <table style="margin-top:8px;">
-      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
+      <thead><tr><th>${tr('thId')}</th><th>${tr('thName')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('thCourse')}</th><th>${tr('thCourseNum')}</th><th>${tr('courseValueCol')}</th><th>${tr('bagValueCol')}</th><th>${tr('thTotal')}</th><th>${tr('statusCol')}</th><th></th></tr></thead>
       <tbody>
-        ${trainees.map(tr=>{
-          const c = clients.find(x=>x.clientId===tr.clientId);
+        ${trainees.map(trn=>{
+          const c = clients.find(x=>x.clientId===trn.clientId);
           return `<tr>
-            <td class="mono" data-label="رقم الهوية">${escapeHtml(tr.clientId)}</td>
-            <td data-label="الاسم">${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
-            <td class="mono" data-label="الجوال">${escapeHtml(c?(c.phone||'—'):'—')}</td>
-            <td data-label="الجنسية">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
-            <td data-label="نوع الدورة">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
-            <td class="mono" data-label="رقم الدورة">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
-            <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
-            <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
-            <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-            <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
+            <td class="mono" data-label="${tr('thId')}">${escapeHtml(trn.clientId)}</td>
+            <td data-label="${tr('thName')}">${escapeHtml(c?c.name:'—')}${!c?` <span class="hint" style="display:inline;">${tr('notInClientsSheetYet')}</span>`:''}</td>
+            <td class="mono" data-label="${tr('thPhone')}">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+            <td data-label="${tr('thNat')}">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+            <td data-label="${tr('thCourse')}">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+            <td class="mono" data-label="${tr('thCourseNum')}">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+            <td class="mono" data-label="${tr('courseValueCol')}">${fmt(num(trn.courseValue))}</td>
+            <td class="mono" data-label="${tr('bagValueCol')}">${fmt(num(trn.bagValue))}</td>
+            <td class="mono" data-label="${tr('thTotal')}">${fmt(num(trn.courseValue)+num(trn.bagValue))}</td>
+            <td data-label="${tr('statusCol')}">${c ? `<span class="stamp paid">${tr('linkedToClientsSheet')}</span>` : `<span class="stamp owe">${tr('notFoundYet')}</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${trn.id}">${tr('linkBtn')}</button>`}</td>
             <td class="card-full" data-label="">
-              <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
-              <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
+              <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${trn.id}">${tr('edit')}</button>
+              <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${trn.id}">${tr('delete')}</button>
             </td>
           </tr>`;
         }).join('')}
@@ -370,8 +370,8 @@ function openVaultCompanyTransferDetail(transferId){
   if(!t){ showToast('تعذّر إيجاد بيانات هذه الحوالة'); return; }
   const allocated = transferAllocatedTotal(t);
   const remaining = num(t.amount) - allocated;
-  $('#vct-title').textContent = `حوالة الشركة "${t.companyName}" — بتاريخ ${t.date||'—'}`;
-  $('#vct-summary').innerHTML = `القيمة الإجمالية: <b>${fmt(num(t.amount))}</b> ﷼ — المخصَّص للمتدربين حالياً: <b>${fmt(allocated)}</b> ﷼ — المتبقي: <b>${fmt(remaining)}</b> ﷼ — عدد المتدربين المسجَّلين: <b>${(t.trainees||[]).length}</b> من أصل ${num(t.traineeCount)} مستهدف`;
+  $('#vct-title').textContent = `${tr('companyTransferTitlePrefix')} "${t.companyName}" — ${tr('onDateLabel')} ${t.date||'—'}`;
+  $('#vct-summary').innerHTML = `${tr('transferValueLabel')}: <b>${fmt(num(t.amount))}</b> ﷼ — ${tr('allocatedLabel')}: <b>${fmt(allocated)}</b> ﷼ — ${tr('remainingLabel')}: <b>${fmt(remaining)}</b> ﷼ — ${tr('registeredTraineesLabel')}: <b>${(t.trainees||[]).length}</b> ${tr('ofTargetLabel')} ${num(t.traineeCount)} ${tr('targetWord')}`;
   $('#vct-table-wrap').innerHTML = renderTraineesTableHtml(t, t.trainees||[]);
   $('#vault-company-transfer-overlay').classList.add('show');
 }
@@ -394,11 +394,11 @@ function renderCompaniesStatsCards(){
   if(!wrap) return;
   const s = companiesStats();
   wrap.innerHTML = `
-    <div class="card"><div class="k">عدد الشركات</div><div class="v">${s.totalCompanies}</div></div>
-    <div class="card"><div class="k">عدد الحوالات</div><div class="v">${s.totalTransfers}</div></div>
-    <div class="card"><div class="k">إجمالي قيمة الحوالات</div><div class="v gold">${fmt(s.totalAmount)}</div></div>
-    <div class="card"><div class="k">إجمالي المتدربين المسجَّلين</div><div class="v">${s.totalTrainees}</div></div>
-    <div class="card"><div class="k">حوالات غير مكتملة التسوية</div><div class="v ${s.unsettledCount?'red':''}">${s.unsettledCount}</div></div>
+    <div class="card"><div class="k">${tr('totalCompaniesLabel')}</div><div class="v">${s.totalCompanies}</div></div>
+    <div class="card"><div class="k">${tr('totalTransfersLabel')}</div><div class="v">${s.totalTransfers}</div></div>
+    <div class="card"><div class="k">${tr('totalTransfersAmountLabel')}</div><div class="v gold">${fmt(s.totalAmount)}</div></div>
+    <div class="card"><div class="k">${tr('totalRegisteredTraineesLabel')}</div><div class="v">${s.totalTrainees}</div></div>
+    <div class="card"><div class="k">${tr('unsettledTransfersLabel')}</div><div class="v ${s.unsettledCount?'red':''}">${s.unsettledCount}</div></div>
   `;
 }
 function companiesUnsettledRows(){
@@ -419,15 +419,15 @@ function renderCompaniesUnsettledPanel(){
   list.innerHTML = `
     <div class="table-scroll table-scroll-compact">
       <table>
-        <thead><tr><th>الشركة</th><th>تاريخ الحوالة</th><th>قيمة الحوالة</th><th>المخصَّص فعلياً</th><th>الفرق</th><th></th></tr></thead>
+        <thead><tr><th>${tr('companyCol')}</th><th>${tr('transferDateCol')}</th><th>${tr('thTotal')}</th><th>${tr('allocatedActualCol')}</th><th>${tr('diffCol')}</th><th></th></tr></thead>
         <tbody>
           ${rows.map(r=>`<tr>
             <td>${escapeHtml(r.t.companyName)}</td>
             <td class="mono">${r.t.date||'—'}</td>
             <td class="mono">${fmt(num(r.t.amount))}</td>
             <td class="mono">${fmt(r.allocated)}</td>
-            <td class="mono" style="${r.diff!==0?'color:var(--red);':''}">${r.diff>0?'ناقص ':'زائد '}${fmt(Math.abs(r.diff))}</td>
-            <td><button type="button" class="btn btn-ghost btn-sm" data-jumptransfer="${r.t.id}">فتح الحوالة</button></td>
+            <td class="mono" style="${r.diff!==0?'color:var(--red);':''}">${r.diff>0?tr('shortageWord')+' ':tr('excessWord')+' '}${fmt(Math.abs(r.diff))}</td>
+            <td><button type="button" class="btn btn-ghost btn-sm" data-jumptransfer="${r.t.id}">${tr('openTransferBtn')}</button></td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -566,7 +566,7 @@ function renderCompanies(){
   // قائمة الشركات لاختيارها عند إضافة حوالة جديدة
   $('#ct-company').innerHTML = companies.length
     ? companies.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
-    : `<option value="">— أضف شركة أولاً من الأعلى —</option>`;
+    : `<option value="">— ${tr('addCompanyFirstShort')} —</option>`;
 
   // datalist أرقام هويات العملاء (لو زار المستخدم هذا التبويب قبل تبويب الحركات المالية)
   const dlc = $('#dl-clients');
@@ -587,34 +587,34 @@ function renderCompanies(){
     const transfers = transfersByCompanyId.get(c.id) || [];
     const totalAmount = transfers.reduce((s,t)=>s+num(t.amount),0);
     return `<tr>
-      <td data-label="اسم الشركة">${escapeHtml(c.name)}</td>
-      <td class="mono" data-label="الرقم الضريبي">${escapeHtml(c.taxNumber||'—')}</td>
-      <td class="mono" data-label="المبلغ المتفق">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
-      <td class="mono" data-label="عدد الحوالات">${transfers.length}</td>
-      <td class="mono" data-label="إجمالي الحوالات">${fmt(totalAmount)}</td>
+      <td data-label="${tr('compFieldName')}">${escapeHtml(c.name)}</td>
+      <td class="mono" data-label="${tr('thTaxNo')}">${escapeHtml(c.taxNumber||'—')}</td>
+      <td class="mono" data-label="${tr('thAgreedAmount')}">${(c.categories&&c.categories.length) ? escapeHtml(companyCategoriesSummaryText(c.categories)) : fmt(num(c.agreedAmount))}</td>
+      <td class="mono" data-label="${tr('thTransferCount')}">${transfers.length}</td>
+      <td class="mono" data-label="${tr('thTransferTotal')}">${fmt(totalAmount)}</td>
       <td class="card-full" data-label="">
-        <button class="btn btn-gold btn-sm" data-printcompany="${c.id}">🖨️ كشف حساب PDF</button>
-        <button class="btn btn-ghost btn-sm" data-importcompanytrainees="${c.id}">📥 استيراد متدربين (كل الحوالات)</button>
-        <button class="btn btn-ghost btn-sm" data-editcompany="${c.id}">تعديل</button>
-        <button class="btn btn-ghost btn-sm" data-mergecompany="${c.id}">دمج مع شركة أخرى</button>
-        <button class="btn btn-ghost btn-sm" data-delcompany="${c.id}">حذف</button>
+        <button class="btn btn-gold btn-sm" data-printcompany="${c.id}">${tr('printStatementBtn')}</button>
+        <button class="btn btn-ghost btn-sm" data-importcompanytrainees="${c.id}">${tr('importCompanyTraineesBtn')}</button>
+        <button class="btn btn-ghost btn-sm" data-editcompany="${c.id}">${tr('edit')}</button>
+        <button class="btn btn-ghost btn-sm" data-mergecompany="${c.id}">${tr('mergeCompanyBtn')}</button>
+        <button class="btn btn-ghost btn-sm" data-delcompany="${c.id}">${tr('delete')}</button>
       </td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد شركات مضافة بعد</td></tr>`;
+  }).join('') : `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">${tr('noCompaniesYet')}</td></tr>`;
 
   updateComputedShare();
 
   // خيارات فلتر الشركة لسجل الحوالات
   const ctfVal = $('#ctf-company').value;
   populateSelect($('#ctf-company'), companies.map(c=>c.name), false);
-  $('#ctf-company').insertAdjacentHTML('afterbegin','<option value="">كل الشركات</option>');
+  $('#ctf-company').insertAdjacentHTML('afterbegin',`<option value="">${tr('allCompanies')}</option>`);
   $('#ctf-company').value = companies.some(c=>c.name===ctfVal) ? ctfVal : '';
 
   // خيارات فلتر طريقة الدفع لسجل الحوالات
   const ctfChannelVal = $('#ctf-channel')?.value;
   if($('#ctf-channel')){
     populateSelect($('#ctf-channel'), settings.channels.map(c=>c.name), false);
-    $('#ctf-channel').insertAdjacentHTML('afterbegin','<option value="">كل طرق الدفع</option>');
+    $('#ctf-channel').insertAdjacentHTML('afterbegin',`<option value="">${tr('allChannels')}</option>`);
     $('#ctf-channel').value = settings.channels.some(c=>c.name===ctfChannelVal) ? ctfChannelVal : '';
   }
 
@@ -632,36 +632,36 @@ function renderCompanies(){
     const traineesHtml = matchedTrainees.length ? `
       <div class="table-scroll table-scroll-compact cards-mobile">
       <table style="margin-top:8px;">
-        <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>رقم الفاتورة</th><th>حالة الحقيبة</th><th>تاريخ الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
+        <thead><tr><th>${tr('thId')}</th><th>${tr('thName')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('thCourse')}</th><th>${tr('thCourseNum')}</th><th>${tr('invoiceNumCol')}</th><th>${tr('bagStatusCol')}</th><th>${tr('courseDateCol')}</th><th>${tr('courseValueCol')}</th><th>${tr('bagValueCol')}</th><th>${tr('thTotal')}</th><th>${tr('statusCol')}</th><th></th></tr></thead>
         <tbody>
-          ${matchedTrainees.map(tr=>{
-            const c = clients.find(x=>x.clientId===tr.clientId);
+          ${matchedTrainees.map(trn=>{
+            const c = clients.find(x=>x.clientId===trn.clientId);
             return `<tr>
-              <td class="mono" data-label="رقم الهوية">${escapeHtml(tr.clientId)}</td>
-              <td data-label="الاسم">${escapeHtml(c?c.name:'—')}${!c?' <span class="hint" style="display:inline;">(غير موجود بشيت العملاء بعد)</span>':''}</td>
-              <td class="mono" data-label="الجوال">${escapeHtml(c?(c.phone||'—'):'—')}</td>
-              <td data-label="الجنسية">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
-              <td data-label="نوع الدورة">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
-              <td class="mono" data-label="رقم الدورة">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
-              <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
-              <td data-label="حالة الحقيبة">${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
-              <td class="mono" data-label="تاريخ الدورة">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
-              <td class="mono" data-label="قيمة الدورة">${fmt(num(tr.courseValue))}</td>
-              <td class="mono" data-label="قيمة الحقيبة">${fmt(num(tr.bagValue))}</td>
-              <td class="mono" data-label="الإجمالي">${fmt(num(tr.courseValue)+num(tr.bagValue))}</td>
-              <td data-label="الحالة">${c ? '<span class="stamp paid">مرتبط بشيت العملاء</span>' : `<span class="stamp owe">غير موجود بعد</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${tr.id}">ربط</button>`}</td>
+              <td class="mono" data-label="${tr('thId')}">${escapeHtml(trn.clientId)}</td>
+              <td data-label="${tr('thName')}">${escapeHtml(c?c.name:'—')}${!c?` <span class="hint" style="display:inline;">${tr('notInClientsSheetYet')}</span>`:''}</td>
+              <td class="mono" data-label="${tr('thPhone')}">${escapeHtml(c?(c.phone||'—'):'—')}</td>
+              <td data-label="${tr('thNat')}">${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+              <td data-label="${tr('thCourse')}">${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+              <td class="mono" data-label="${tr('thCourseNum')}">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+              <td class="mono" data-label="${tr('invoiceNumCol')}">${escapeHtml(c&&c.invoice?c.invoice:'—')}</td>
+              <td data-label="${tr('bagStatusCol')}">${c?escapeHtml(bagSourceLabel(c)):'—'}</td>
+              <td class="mono" data-label="${tr('courseDateCol')}">${escapeHtml(c?(formatDateDisplay(actualCourseDateOf(c))||'—'):'—')}</td>
+              <td class="mono" data-label="${tr('courseValueCol')}">${fmt(num(trn.courseValue))}</td>
+              <td class="mono" data-label="${tr('bagValueCol')}">${fmt(num(trn.bagValue))}</td>
+              <td class="mono" data-label="${tr('thTotal')}">${fmt(num(trn.courseValue)+num(trn.bagValue))}</td>
+              <td data-label="${tr('statusCol')}">${c ? `<span class="stamp paid">${tr('linkedToClientsSheet')}</span>` : `<span class="stamp owe">${tr('notFoundYet')}</span> <button class="btn btn-gold btn-sm" data-linktrainee="${t.id}|${trn.id}">${tr('linkBtn')}</button>`}</td>
               <td class="card-full" data-label="">
-                <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${tr.id}">تعديل</button>
-                <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${tr.id}">حذف</button>
+                <button class="btn btn-ghost btn-sm" data-edittrainee="${t.id}|${trn.id}">${tr('edit')}</button>
+                <button class="btn btn-ghost btn-sm" data-deltrainee="${t.id}|${trn.id}">${tr('delete')}</button>
               </td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
-      </div>${matchedTrainees.length<(t.trainees||[]).length ? `<div class="hint" style="margin:6px 0 0;">تم إخفاء ${(t.trainees||[]).length-matchedTrainees.length} متدرب لا يطابق فلتر البحث برقم الهوية — من إجمالي ${(t.trainees||[]).length} في هذه الحوالة</div>` : ''}` : ((t.trainees||[]).length ? `<div class="hint" style="margin:8px 0;">لا يوجد متدرب في هذه الحوالة يطابق فلتر البحث برقم الهوية.</div>` : `<div class="hint" style="margin:8px 0;">لا يوجد متدربون مضافون لهذه الحوالة بعد.</div>`);
+      </div>${matchedTrainees.length<(t.trainees||[]).length ? `<div class="hint" style="margin:6px 0 0;">${tr('hiddenTraineesPrefix')} ${(t.trainees||[]).length-matchedTrainees.length} ${tr('hiddenTraineesMid')} ${(t.trainees||[]).length} ${tr('hiddenTraineesSuffix')}</div>` : ''}` : ((t.trainees||[]).length ? `<div class="hint" style="margin:8px 0;">${tr('noTraineeMatchesSearch')}</div>` : `<div class="hint" style="margin:8px 0;">${tr('noTraineesAddedYet')}</div>`);
     const todayStr = todayISO();
-    const takenCount = matchedTrainees.filter(tr=>{
-      const cc = clients.find(x=>x.clientId===tr.clientId);
+    const takenCount = matchedTrainees.filter(trn=>{
+      const cc = clients.find(x=>x.clientId===trn.clientId);
       const d = cc ? actualCourseDateOf(cc) : '';
       return d && d<=todayStr;
     }).length;
@@ -671,29 +671,29 @@ function renderCompanies(){
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
           <div>
             <b>${escapeHtml(t.companyName)}</b> — <span class="mono">${t.date||'—'}</span>
-            ${Math.abs(remaining)>0.01 ? '<span class="stamp owe" style="margin-right:6px;">غير مكتملة التسوية</span>' : '<span class="stamp paid" style="margin-right:6px;">مكتملة التسوية</span>'}
-            <div class="hint" style="margin:4px 0 0;">قيمة الحوالة: <b class="mono">${fmt(num(t.amount))}</b> ﷼ · عدد المتدربين المستهدف: <b class="mono">${num(t.traineeCount)}</b> · ${(t.groups&&t.groups.length) ? `تقسيم الفئات: <b>${escapeHtml(ctGroupsSummaryText(t.groups))}</b>` : `نصيب الفرد المحتسب: <b class="mono">${fmt(share)}</b> ﷼`} · طريقة الدفع: <b>${escapeHtml(t.channel||'تحويل بنكي')}</b>${t.refNum?` · رقم المرجع: <b class="mono">${escapeHtml(t.refNum)}</b>`:''}${t.notes?` · ${escapeHtml(t.notes)}`:''}</div>
-            <div class="hint" style="margin:4px 0 0;">عدد من أخذ الدورة: <b class="mono" style="color:var(--teal);">${takenCount}</b> · عدد من لم يأخذ الدورة بعد: <b class="mono" style="color:var(--red);">${notTakenCount}</b></div>
+            ${Math.abs(remaining)>0.01 ? `<span class="stamp owe" style="margin-right:6px;">${tr('unsettledStamp')}</span>` : `<span class="stamp paid" style="margin-right:6px;">${tr('settledStamp')}</span>`}
+            <div class="hint" style="margin:4px 0 0;">${tr('transferAmountLabel')}: <b class="mono">${fmt(num(t.amount))}</b> ﷼ · ${tr('targetTraineeCountLabel')}: <b class="mono">${num(t.traineeCount)}</b> · ${(t.groups&&t.groups.length) ? `${tr('categorySplitLabel')}: <b>${escapeHtml(ctGroupsSummaryText(t.groups))}</b>` : `${tr('individualShareLabel')}: <b class="mono">${fmt(share)}</b> ﷼`} · ${tr('thChannel')}: <b>${escapeHtml(t.channel||'تحويل بنكي')}</b>${t.refNum?` · ${tr('refNumLabel')}: <b class="mono">${escapeHtml(t.refNum)}</b>`:''}${t.notes?` · ${escapeHtml(t.notes)}`:''}</div>
+            <div class="hint" style="margin:4px 0 0;">${tr('takenCourseCountLabel')}: <b class="mono" style="color:var(--teal);">${takenCount}</b> · ${tr('notTakenCourseCountLabel')}: <b class="mono" style="color:var(--red);">${notTakenCount}</b></div>
             <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-top:6px; font-size:13px;">
               <input type="checkbox" data-transferbagall="${t.id}" ${t.bagForAll?'checked':''} style="width:auto; margin:0;">
-              شراء حقيبة لكل متدربي هذه الحوالة (يُقسَّم نصيب كل متدرب تلقائياً إلى قيمة دورة + قيمة حقيبة حسب السعر الافتراضي)
+              ${tr('buyBagForAllLabel')}
             </label>
           </div>
           <div style="text-align:left;">
-            <div>المخصَّص فعلياً: <b class="mono">${fmt(allocated)}</b> ﷼</div>
-            <div class="${remaining<0?'red':''}">المتبقي من الحوالة: <b class="mono">${fmt(remaining)}</b> ﷼</div>
+            <div>${tr('allocatedActualCol')}: <b class="mono">${fmt(allocated)}</b> ﷼</div>
+            <div class="${remaining<0?'red':''}">${tr('remainingFromTransferLabel')}: <b class="mono">${fmt(remaining)}</b> ﷼</div>
           </div>
         </div>
         ${traineesHtml}
         <div style="margin-top:10px;">
-          <button class="btn btn-gold btn-sm" data-addtrainee="${t.id}">+ إضافة متدرب</button>
-          <button class="btn btn-ghost btn-sm" data-importtrainees="${t.id}">+ استيراد متدربين (Excel)</button>
-          <button class="btn btn-ghost btn-sm" data-importtraineestext="${t.id}">+ استيراد متدربين (لصق نص)</button>
-          <button class="btn btn-ghost btn-sm" data-edittransfer="${t.id}">تعديل الحوالة</button>
-          <button class="btn btn-danger btn-sm" data-deltransfer="${t.id}">حذف الحوالة كاملة</button>
+          <button class="btn btn-gold btn-sm" data-addtrainee="${t.id}">${tr('addTraineeBtn')}</button>
+          <button class="btn btn-ghost btn-sm" data-importtrainees="${t.id}">${tr('importTraineesExcelBtn')}</button>
+          <button class="btn btn-ghost btn-sm" data-importtraineestext="${t.id}">${tr('importTraineesTextBtn')}</button>
+          <button class="btn btn-ghost btn-sm" data-edittransfer="${t.id}">${tr('editTransferBtn')}</button>
+          <button class="btn btn-danger btn-sm" data-deltransfer="${t.id}">${tr('deleteTransferFullBtn')}</button>
         </div>
       </div>`;
-  }).join('') : `<div class="empty-state" style="padding:20px;">لا توجد تحويلات شركات مسجّلة بعد</div>`;
+  }).join('') : `<div class="empty-state" style="padding:20px;">${tr('noTransfersYet')}</div>`;
 }
 
 ['#ctf-company','#ctf-date-from','#ctf-date-to','#ctf-channel'].forEach(sel=> $(sel).addEventListener('input', renderCompanies));
@@ -751,7 +751,7 @@ function resetCompanyForm(){
   editingCompanyId = null;
   $('#cm-name').value=''; $('#cm-amount').value=''; $('#cm-tax').value='';
   resetCmCats();
-  $('#btn-add-company').textContent = '+ إضافة شركة';
+  $('#btn-add-company').textContent = tr('btnAddCompany');
   $('#btn-cancel-edit-company').style.display = 'none';
 }
 
@@ -805,7 +805,7 @@ $('#btn-add-company').addEventListener('click', async ()=>{
 
 $('#btn-cancel-edit-company').addEventListener('click', ()=>{
   resetCompanyForm();
-  showToast('تم إلغاء التعديل');
+  showToast(tr('cancelledEditToast'));
 });
 
 $('#btn-add-transfer').addEventListener('click', async ()=>{
@@ -892,7 +892,7 @@ function openTransferEdit(id){
   if(settings.channels.some(c=>c.name===t.channel)) $('#ct-channel').value = t.channel;
   else { const fixed = canonicalizeChannelName(t.channel); if(settings.channels.some(c=>c.name===fixed)) $('#ct-channel').value = fixed; }
   updateComputedShare();
-  $('#btn-add-transfer').textContent = 'حفظ التعديل';
+  $('#btn-add-transfer').textContent = tr('btnSaveTransferEdit');
   $('#btn-cancel-edit-transfer').style.display = '';
   $('#ct-company').closest('.panel').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -900,21 +900,21 @@ function cancelTransferEdit(){
   editingTransferId = null;
   $('#ct-amount').value=''; $('#ct-count').value=''; $('#ct-notes').value=''; $('#ct-date').value=''; $('#ct-refnum').value='';
   resetCtGroups();
-  $('#btn-add-transfer').textContent = 'حفظ الحوالة';
+  $('#btn-add-transfer').textContent = tr('btnSaveTransfer');
   $('#btn-cancel-edit-transfer').style.display = 'none';
 }
-$('#btn-cancel-edit-transfer').addEventListener('click', ()=>{ cancelTransferEdit(); showToast('تم إلغاء التعديل'); });
+$('#btn-cancel-edit-transfer').addEventListener('click', ()=>{ cancelTransferEdit(); showToast(tr('cancelledEditToast')); });
 
 $('#ctr-id').addEventListener('input', ()=>{
   const c = clients.find(x=>x.clientId===$('#ctr-id').value.trim());
   if(c){
     const alreadyPaid = num(c.paid)>0;
-    $('#ctr-client-info').innerHTML = `العميل: <b>${escapeHtml(c.name)}</b> — ${escapeHtml(c.phone||'—')} — ${escapeHtml(c.nationality||'—')}` +
-      (alreadyPaid ? `<br><span style="color:var(--red);">⚠️ هذا العميل مسجَّل بالفعل ومدفوع عنه في شيت العملاء (${fmt(num(c.paid))} ﷼) — لن يُرحَّل مبلغ جديد للبنك تلقائياً لتجنّب تكرار الأرقام؛ الإضافة هنا للتوثيق فقط.</span>` : '');
+    $('#ctr-client-info').innerHTML = `${tr('clientInfoLabel')}: <b>${escapeHtml(c.name)}</b> — ${escapeHtml(c.phone||'—')} — ${escapeHtml(c.nationality||'—')}` +
+      (alreadyPaid ? `<br><span style="color:var(--red);">${tr('alreadyPaidWarningPrefix')}${fmt(num(c.paid))}${tr('alreadyPaidWarningSuffix')}</span>` : '');
     $('#wrap-ctr-newclient').style.display = 'none';
     $('#wrap-ctr-newclient2').style.display = 'none';
   }else{
-    $('#ctr-client-info').textContent = 'لم يتم العثور على العميل بعد — إن أكملت الاسم والجنسية أدناه سيُضاف تلقائياً كعميل شركات جديد في شيت العملاء.';
+    $('#ctr-client-info').textContent = tr('clientNotFoundHint');
     $('#wrap-ctr-newclient').style.display = '';
     $('#wrap-ctr-newclient2').style.display = '';
   }
@@ -1113,7 +1113,7 @@ document.addEventListener('click', async e=>{
   if(e.target.dataset.addtrainee){
     ctraineeTargetTransferId = e.target.dataset.addtrainee;
     ctEditingTraineeId = null;
-    $('#ctrainee-modal-title').textContent = 'إضافة متدرب للحوالة';
+    $('#ctrainee-modal-title').textContent = tr('addTraineeModalTitle');
     $('#ctr-id').readOnly = false;
     const t = companyTransfers.find(x=>x.id===ctraineeTargetTransferId);
     const share = (t && num(t.traineeCount)>0) ? num(t.amount)/num(t.traineeCount) : 0;
@@ -1126,7 +1126,7 @@ document.addEventListener('click', async e=>{
     $('#ctr-total').value = share ? Math.round(share*100)/100 : '';
     $('#ctr-bag-purchased').checked = !!(t && t.bagForAll);
     recalcCtrSplit();
-    $('#ctr-client-info').textContent = 'لم يتم العثور على العميل بعد — إن أكملت الاسم والجنسية أدناه سيُضاف تلقائياً كعميل شركات جديد في شيت العملاء.';
+    $('#ctr-client-info').textContent = tr('clientNotFoundHint');
     $('#ctrainee-overlay').classList.add('show'); SoundFX.open();
   }
   if(e.target.dataset.viewcompanytransfer){
@@ -1135,14 +1135,14 @@ document.addEventListener('click', async e=>{
   if(e.target.dataset.edittrainee){
     const [transferId, traineeId] = e.target.dataset.edittrainee.split('|');
     const t = companyTransfers.find(x=>x.id===transferId);
-    const tr = t && (t.trainees||[]).find(x=>x.id===traineeId);
-    if(!t || !tr){ showToast('تعذّر تحديد المتدرب'); return; }
+    const trn = t && (t.trainees||[]).find(x=>x.id===traineeId);
+    if(!t || !trn){ showToast(tr('cantFindTraineeToast')); return; }
     ctraineeTargetTransferId = transferId;
     ctEditingTraineeId = traineeId;
-    $('#ctrainee-modal-title').textContent = 'تعديل بيانات متدرب';
-    $('#ctr-id').value = tr.clientId;
+    $('#ctrainee-modal-title').textContent = tr('editTraineeModalTitle');
+    $('#ctr-id').value = trn.clientId;
     $('#ctr-id').readOnly = true; // لا يُسمح بتغيير رقم الهوية أثناء التعديل لتفادي فقدان الربط بالمتدرب
-    const c = clients.find(x=>x.clientId===tr.clientId);
+    const c = clients.find(x=>x.clientId===trn.clientId);
     $('#ctr-name').value = c ? c.name : '';
     populateSelect($('#ctr-nat'), settings.nationalities, true);
     $('#ctr-nat').value = c ? (c.nationality||'') : '';
@@ -1150,13 +1150,13 @@ document.addEventListener('click', async e=>{
     $('#wrap-ctr-newclient').style.display = '';
     $('#wrap-ctr-newclient2').style.display = '';
     $('#ctr-client-info').textContent = c
-      ? `العميل: ${escapeHtml(c.name)} — ${escapeHtml(c.phone||'—')} — ${escapeHtml(c.nationality||'—')}`
-      : 'لا يوجد سجل عميل لهذا المتدرب بعد — يمكنك تعبئة الاسم والجنسية لإنشائه الآن.';
-    const total = num(tr.courseValue) + num(tr.bagValue);
+      ? `${tr('clientInfoLabel')}: ${escapeHtml(c.name)} — ${escapeHtml(c.phone||'—')} — ${escapeHtml(c.nationality||'—')}`
+      : tr('noClientRecordYet');
+    const total = num(trn.courseValue) + num(trn.bagValue);
     $('#ctr-total').value = total ? Math.round(total*100)/100 : '';
-    $('#ctr-bag-purchased').checked = num(tr.bagValue)>0;
-    $('#ctr-course').value = num(tr.courseValue);
-    $('#ctr-bag').value = num(tr.bagValue);
+    $('#ctr-bag-purchased').checked = num(trn.bagValue)>0;
+    $('#ctr-course').value = num(trn.courseValue);
+    $('#ctr-bag').value = num(trn.bagValue);
     $('#ctrainee-overlay').classList.add('show'); SoundFX.open();
   }
   if(e.target.dataset.importtrainees){
@@ -1288,7 +1288,7 @@ document.addEventListener('click', async e=>{
     $('#cm-amount').value = c.agreedAmount || '';
     cmCats = (c.categories||[]).map(cc=>({id:uid(), label:cc.label, amount:cc.amount}));
     renderCmCats();
-    $('#btn-add-company').textContent = 'تحديث بيانات الشركة';
+    $('#btn-add-company').textContent = tr('btnUpdateCompany');
     $('#btn-cancel-edit-company').style.display = '';
     $('#cm-name').scrollIntoView({behavior:'smooth', block:'center'});
     showToast('عدّل البيانات ثم اضغط "تحديث بيانات الشركة"');
@@ -1386,14 +1386,14 @@ function createClientForUnlinkedTrainee(t, tr){
 }
 async function linkSingleTraineeToClient(transferId, traineeId){
   const t = companyTransfers.find(x=>x.id===transferId);
-  const tr = t && (t.trainees||[]).find(x=>x.id===traineeId);
-  if(!t || !tr){ showToast('تعذّر تحديد المتدرب'); return; }
-  if(clients.some(c=>c.clientId===tr.clientId)){ showToast('هذا المتدرب مرتبط بالفعل بشيت العملاء'); return; }
-  snapshotState(`ربط متدرب بشيت العملاء: ${tr.clientId}`);
-  const client = createClientForUnlinkedTrainee(t, tr);
-  if(num(tr.bagValue)>0){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
+  const trn = t && (t.trainees||[]).find(x=>x.id===traineeId);
+  if(!t || !trn){ showToast(tr('cantFindTraineeToast')); return; }
+  if(clients.some(c=>c.clientId===trn.clientId)){ showToast('هذا المتدرب مرتبط بالفعل بشيت العملاء'); return; }
+  snapshotState(`ربط متدرب بشيت العملاء: ${trn.clientId}`);
+  const client = createClientForUnlinkedTrainee(t, trn);
+  if(num(trn.bagValue)>0){ recalcBagFundLedger(); await saveBagStock(); await saveSettings(); }
   await saveClients();
-  await logAudit('add','تحويلات الشركات', `تم ربط المتدرب (${tr.clientId}) بشيت العملاء يدوياً من حوالة الشركة "${t.companyName}" — تم إنشاء سجل عميل باسم مؤقت (${client.name}) يمكن تعديله من شيت العملاء`);
+  await logAudit('add','تحويلات الشركات', `تم ربط المتدرب (${trn.clientId}) بشيت العملاء يدوياً من حوالة الشركة "${t.companyName}" — تم إنشاء سجل عميل باسم مؤقت (${client.name}) يمكن تعديله من شيت العملاء`);
   renderCompanies(); renderTable();
   if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
   showToast('تم الربط بشيت العملاء');

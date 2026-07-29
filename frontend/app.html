@@ -230,39 +230,39 @@
     <div class="grid-cards" id="companies-stats-cards"></div>
 
     <div class="panel" id="companies-unsettled-panel" style="display:none; border-right:4px solid var(--red);">
-      <h3 style="margin:0 0 4px;">⚠️ حوالات غير مكتملة التسوية</h3>
-      <div class="hint hint-info" style="margin:0 0 10px;">حوالات قيمة ما خُصِّص فيها فعلياً للمتدربين (قيمة الدورة + قيمة الحقيبة) لا تساوي قيمة الحوالة المستلمة من الشركة — إما نقص لم يُكمَّل بعد، أو تخصيص زائد عن قيمة الحوالة بالخطأ.</div>
+      <h3 style="margin:0 0 4px;" data-i18n="compUnsettledTitle">⚠️ حوالات غير مكتملة التسوية</h3>
+      <div class="hint hint-info" style="margin:0 0 10px;" data-i18n="compUnsettledHint">حوالات قيمة ما خُصِّص فيها فعلياً للمتدربين (قيمة الدورة + قيمة الحقيبة) لا تساوي قيمة الحوالة المستلمة من الشركة — إما نقص لم يُكمَّل بعد، أو تخصيص زائد عن قيمة الحوالة بالخطأ.</div>
       <div id="companies-unsettled-list"></div>
     </div>
 
     <div class="panel" style="padding:0; overflow-x:auto;">
-      <h3 style="padding:18px 20px 0;">كل الأشخاص التابعين للشركات</h3>
-      <div class="hint hint-info" style="padding:0 20px 10px;">قائمة موحّدة تجمع كل الأشخاص/المتدربين التابعين لجميع الشركات في كل حوالاتها، مع الفلاتر اللازمة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد (رقم الهوية / الاسم / اسم الشركة).</div>
+      <h3 style="padding:18px 20px 0;" data-i18n="compPersonsTitle">كل الأشخاص التابعين للشركات</h3>
+      <div class="hint hint-info" style="padding:0 20px 10px;" data-i18n="compPersonsHint">قائمة موحّدة تجمع كل الأشخاص/المتدربين التابعين لجميع الشركات في كل حوالاتها، مع الفلاتر اللازمة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد (رقم الهوية / الاسم / اسم الشركة).</div>
       <div class="toolbar" style="padding:0 20px 12px;">
-        <select id="cpp-company"><option value="">كل الشركات</option></select>
-        <input type="date" id="cpp-date-from" title="تاريخ الحوالة من">
-        <input type="date" id="cpp-date-to" title="تاريخ الحوالة إلى">
-        <select id="cpp-channel"><option value="">كل طرق الدفع</option></select>
-        <input type="text" id="cpp-search" placeholder="بحث موحد: رقم الهوية / الاسم / اسم الشركة" style="min-width:240px;">
+        <select id="cpp-company"><option value="" data-i18n="allCompanies">كل الشركات</option></select>
+        <input type="date" id="cpp-date-from" title="تاريخ الحوالة من" data-i18n-title="transferDateFrom">
+        <input type="date" id="cpp-date-to" title="تاريخ الحوالة إلى" data-i18n-title="transferDateTo">
+        <select id="cpp-channel"><option value="" data-i18n="allChannels">كل طرق الدفع</option></select>
+        <input type="text" id="cpp-search" placeholder="بحث موحد: رقم الهوية / الاسم / اسم الشركة" style="min-width:240px;" data-i18n-placeholder="unifiedSearchPlaceholder">
         <span class="spacer"></span>
-        <button class="btn btn-gold btn-sm" id="btn-link-unlinked-persons">ربط غير المرتبطين بشيت العملاء</button>
-        <span class="hint hint-info">العدد: <b class="mono" id="cpp-count">0</b></span>
+        <button class="btn btn-gold btn-sm" id="btn-link-unlinked-persons" data-i18n="linkUnlinkedBtn">ربط غير المرتبطين بشيت العملاء</button>
+        <span class="hint hint-info"><span data-i18n="countLabel">العدد:</span> <b class="mono" id="cpp-count">0</b></span>
       </div>
       <div id="company-persons-list" style="padding:10px 20px 20px;"></div>
       <div class="toolbar" id="cpersons-pagination" style="padding: 0px 20px 16px;">
         <span class="mono" id="cpersons-page-info" style="font-size:12.5px; color:var(--text-muted);"></span>
         <span class="spacer"></span>
         <select id="cpersons-page-size" style="max-width:110px;">
-          <option value="20">20 / صفحة</option>
-          <option value="50" selected>50 / صفحة</option>
-          <option value="100">100 / صفحة</option>
-          <option value="all">عرض الكل</option>
+          <option value="20" data-i18n="perPage20">20 / صفحة</option>
+          <option value="50" selected data-i18n="perPage50">50 / صفحة</option>
+          <option value="100" data-i18n="perPage100">100 / صفحة</option>
+          <option value="all" data-i18n="showAllOpt">عرض الكل</option>
         </select>
-        <button class="btn btn-ghost btn-sm" id="cpersons-page-first">« الأولى</button>
-        <button class="btn btn-ghost btn-sm" id="cpersons-page-prev">‹ السابقة</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-first" data-i18n="firstPage">« الأولى</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-prev" data-i18n="prevPage">‹ السابقة</button>
         <span class="mono" id="cpersons-page-current" style="font-size:12.5px; padding:0 6px;"></span>
-        <button class="btn btn-ghost btn-sm" id="cpersons-page-next">التالية ›</button>
-        <button class="btn btn-ghost btn-sm" id="cpersons-page-last">الأخيرة »</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-next" data-i18n="nextPage">التالية ›</button>
+        <button class="btn btn-ghost btn-sm" id="cpersons-page-last" data-i18n="lastPage">الأخيرة »</button>
       </div>
     </div>
 
@@ -274,7 +274,7 @@
         <div class="field"><label data-i18n="compFieldValue">قيمة الحوالة</label><input type="number" step="0.01" min="0" id="ct-amount"></div>
         <div class="field"><label data-i18n="compFieldTraineeCount">عدد المتدربين المراد تدريبهم</label><input type="number" step="1" min="1" id="ct-count"></div>
         <div class="field"><label data-i18n="thChannel">طريقة الدفع</label><select id="ct-channel"><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select></div>
-        <div class="field"><label>رقم مرجع/فاتورة الحوالة</label><input type="text" id="ct-refnum" placeholder="اختياري — لمطابقة كشف حساب البنك"></div>
+        <div class="field"><label data-i18n="refNumTransferLabel">رقم مرجع/فاتورة الحوالة</label><input type="text" id="ct-refnum" placeholder="اختياري — لمطابقة كشف حساب البنك" data-i18n-placeholder="optionalBankMatchPlaceholder"></div>
         <div class="field full"><label data-i18n="fieldNotes">ملاحظات</label><input type="text" id="ct-notes"></div>
       </div>
       <div class="hint hint-info" style="margin-bottom:6px;" data-i18n="compChannelHint">حسب طريقة الدفع المختارة (حسب طرق الدفع المُعرَّفه في الإعدادات) — سيُرحَّل مبلغ متدربيها تلقائياً لشيت "الحركات المالية" إلى الحساب المرتبط بهذه الطريقة (الخزنة (كاش) / البنك / الشبكة) بدلاً من افتراض أنها دائماً حوالة بنكية.</div>
@@ -296,15 +296,15 @@
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;" data-i18n="compLogTitle">سجل تحويلات الشركات والمتدربين التابعين لها</h3>
       <div class="toolbar" style="padding:0 20px 12px;">
-        <select id="ctf-company"><option value="">كل الشركات</option><option value="شركة الغربي">شركة الغربي</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="محمد محمد">محمد محمد</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="Beauty Word">Beauty Word</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="المراعي">المراعي</option><option value="ON OFF CO">ON OFF CO</option><option value="CARMEY EST">CARMEY EST</option><option value="محمد القحطاني">محمد القحطاني</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option></select>
-        <input type="date" id="ctf-date-from" title="تاريخ الحوالة من">
-        <input type="date" id="ctf-date-to" title="تاريخ الحوالة إلى">
-        <select id="ctf-channel"><option value="">كل طرق الدفع</option><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select>
-        <input type="text" id="ctf-clientid" placeholder="بحث برقم الهوية أو اسم المتدرب (في كل الحوالات)">
+        <select id="ctf-company"><option value="" data-i18n="allCompanies">كل الشركات</option><option value="شركة الغربي">شركة الغربي</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="محمد محمد">محمد محمد</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="Beauty Word">Beauty Word</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="المراعي">المراعي</option><option value="ON OFF CO">ON OFF CO</option><option value="CARMEY EST">CARMEY EST</option><option value="محمد القحطاني">محمد القحطاني</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option></select>
+        <input type="date" id="ctf-date-from" title="تاريخ الحوالة من" data-i18n-title="transferDateFrom">
+        <input type="date" id="ctf-date-to" title="تاريخ الحوالة إلى" data-i18n-title="transferDateTo">
+        <select id="ctf-channel"><option value="" data-i18n="allChannels">كل طرق الدفع</option><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select>
+        <input type="text" id="ctf-clientid" placeholder="بحث برقم الهوية أو اسم المتدرب (في كل الحوالات)" data-i18n-placeholder="searchByIdOrTraineeName">
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-template-trainees" data-i18n="btnDownloadTemplate">تحميل نموذج استيراد المتدربين</button>
         <button class="btn btn-ghost btn-sm" id="btn-export-companies" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
-        <button class="btn btn-ghost btn-sm" id="btn-export-companies-xlsx">تصدير Excel (حسب الفلتر الحالي)</button>
+        <button class="btn btn-ghost btn-sm" id="btn-export-companies-xlsx" data-i18n="exportExcelFiltered">تصدير Excel (حسب الفلتر الحالي)</button>
       </div>
       <input type="file" id="import-trainees-input" accept=".xlsx,.xls,.csv" style="display:none;">
       <input type="file" id="import-company-trainees-input" accept=".xlsx,.xls,.csv" style="display:none;">
@@ -313,16 +313,16 @@
         <span class="mono" id="ctransfers-page-info" style="font-size:12.5px; color:var(--text-muted);">عرض 1 - 10 من 28</span>
         <span class="spacer"></span>
         <select id="ctransfers-page-size" style="max-width:110px;">
-          <option value="10" selected="">10 / صفحة</option>
-          <option value="20">20 / صفحة</option>
-          <option value="50">50 / صفحة</option>
-          <option value="all">عرض الكل</option>
+          <option value="10" selected="" data-i18n="perPage10">10 / صفحة</option>
+          <option value="20" data-i18n="perPage20">20 / صفحة</option>
+          <option value="50" data-i18n="perPage50">50 / صفحة</option>
+          <option value="all" data-i18n="showAllOpt">عرض الكل</option>
         </select>
-        <button class="btn btn-ghost btn-sm" id="ctransfers-page-first" disabled="">« الأولى</button>
-        <button class="btn btn-ghost btn-sm" id="ctransfers-page-prev" disabled="">‹ السابقة</button>
+        <button class="btn btn-ghost btn-sm" id="ctransfers-page-first" disabled="" data-i18n="firstPage">« الأولى</button>
+        <button class="btn btn-ghost btn-sm" id="ctransfers-page-prev" disabled="" data-i18n="prevPage">‹ السابقة</button>
         <span class="mono" id="ctransfers-page-current" style="font-size:12.5px; padding:0 6px;">صفحة 1 / 3</span>
-        <button class="btn btn-ghost btn-sm" id="ctransfers-page-next">التالية ›</button>
-        <button class="btn btn-ghost btn-sm" id="ctransfers-page-last">الأخيرة »</button>
+        <button class="btn btn-ghost btn-sm" id="ctransfers-page-next" data-i18n="nextPage">التالية ›</button>
+        <button class="btn btn-ghost btn-sm" id="ctransfers-page-last" data-i18n="lastPage">الأخيرة »</button>
       </div>
     </div>
 
