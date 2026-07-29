@@ -448,14 +448,11 @@ async function printInvoice(id){
   const grand = totalInclVat - vat; // القيمة الفعلية بدون الضريبة
   const today = new Date().toLocaleDateString('ar-SA');
 
-  const zatcaResult = await zatcaSubmit('/api/zatca/invoice', {
-    environment: 'sandbox',
-    clientType: c.clientType==='company' ? 'company' : 'individual',
-    sourceRef: String(c.id),
-    lineItems: [ zatcaLineItem(`رسوم الدورة التدريبية${c.courseType ? ' — '+c.courseType : ''}${bagShown ? ' + الحقيبة التدريبية' : ''}`, grand) ],
-    issueDate: (typeof todayISO==='function' ? todayISO() : new Date().toISOString().slice(0,10)),
-    issueTime: new Date().toTimeString().slice(0,8),
-  });
+  // قرار عمل صريح: هذه الفاتورة (تُطبَع من شيت العملاء) لم تعد تُرسَل لهيئة الزكاة والضريبة إطلاقاً —
+  // أصبحت "فاتورة مبسطة" داخلية فقط (رمز QR مُولَّد محلياً كما كان دائماً فى الحالة العادية أدناه،
+  // بدون أي اتصال بالسيرفر/الهيئة). هذا هو ما سمح أيضاً بالسماح للاستقبال بطباعتها قبل اعتماد الأدمن
+  // (راجع طلب المستخدم) بأمان — لم يعد هناك رقم رسمي يُستهلك فعلياً لدى الهيئة يصعب التراجع عنه.
+  const zatcaResult = null;
 
   const rowsHtml = `
     <tr><td>رسوم الدورة التدريبية${c.courseType ? ' — '+escapeHtml(c.courseType) : ''}</td><td class="num">${fmt(num(c.coursePrice))}</td></tr>
@@ -480,7 +477,7 @@ async function printInvoice(id){
       </div>
       ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, totalInclVat, vat, c.taxInvoiceDate || today)}
       <div class="inv-title">
-        <h2>فاتورة ضريبية</h2>
+        <h2>فاتورة مبسطة</h2>
         <div class="no">${invNoLabel}</div>
         <div style="font-size:12px; color:#66707E; margin-top:4px;">تاريخ الإصدار: ${escapeHtml(c.taxInvoiceDate || today)}</div>
       </div>
@@ -893,43 +890,34 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
   statusEl.style.display = 'block';
   statusEl.textContent = 'جارٍ إعادة ضبط المصنع...';
   try{
-    // 1) حذف كل مفاتيح البيانات المحفوظة (الطريقة القديمة، لا تزال تُستخدم كخط رجعة احتياطي)
-    //    + حذف كل بيانات نظام "السجلات المستقلة" الجديد (سجل واحد لكل عنصر) للعملاء وكل
-    //    التصنيفات المحوَّلة إليه — وإلا تبقى بياناتها الفعلية فى الخادم رغم مسح المفتاح القديم
-    //    غير المستخدَم فعلياً للحفظ بعد التحويل، فتظهر البيانات القديمة مجدداً عند أول تحميل تالٍ.
-    const legacyKeys = ['clients','settings','users'];
+    // 1) حذف كل مفاتيح البيانات المحفوظة
+    const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers','bankStatementRows','vaultDenomTx'];
     const deleteErrors = [];
-    for(const k of legacyKeys){
+    for(const k of keys){
       try{ await window.storage.delete(k, false); }catch(e){ deleteErrors.push(`${k}: ${e.message||e}`); }
-    }
-    try{ await serverFetch('/api/client-records', { method:'DELETE' }); }catch(e){ deleteErrors.push('client-records: ' + (e.message||e)); }
-    for(const col of ALLOWED_COLLECTIONS_LOCAL){
-      try{ await serverFetch(`/api/records/${encodeURIComponent(col)}`, { method:'DELETE' }); }catch(e){ deleteErrors.push(`${col}: ${e.message||e}`); }
     }
 
     // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)
     clients = [];
-    bagStock = []; vaultTx = []; deletedVaultTx = []; vaultDenomTx = []; bankStatementRows = [];
-    deletedInvoices = []; courseSessions = []; auditLog = []; companies = []; companyTransfers = [];
-    journalEntries = []; chartOfAccounts = []; journalDE = []; budgetEntries = []; suppliers = [];
-    purchases = []; manualSalesInvoices = []; zakatAdjustments = {};
+    bagStock = [];
+    vaultTx = [];
+    courseSessions = [];
+    companies = [];
+    companyTransfers = [];
+    auditLog = [];
+    bankStatementRows = [];
+    vaultDenomTx = [];
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
     undoStack = [];
     redoStack = [];
-    // تصفير الـ baseline المحلية لكل التصنيفات حتى يبدأ الحفظ التالي من صفر نظيف (بدون محاولة
-    // حذف/مقارنة سجلات قديمة صارت غير موجودة أصلاً على الخادم بعد إعادة الضبط)
-    _clientsSyncBaseline = new Map();
-    ALLOWED_COLLECTIONS_LOCAL.forEach(col=>{ _collectionSyncBaseline[col] = new Map(); if(_recordVersions[col]) _recordVersions[col] = new Map(); });
 
     const saveErrors = [];
     const saveResults = await Promise.allSettled([
-      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(), saveDeletedVaultTx(),
+      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
       saveCourseSessions(), saveCompanies(), saveCompanyTransfers(),
-      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveVaultDenomTx(),
-      saveDeletedInvoices(), saveJournalEntries(), saveChartOfAccounts(), saveJournalDE(),
-      saveBudgetEntries(), saveSuppliers(), savePurchases(), saveManualSalesInvoices(), saveZakatAdjustments(),
+      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveVaultDenomTx()
     ]);
     saveResults.forEach((r,i)=>{ if(r.status==='rejected') saveErrors.push(String(r.reason)); });
 
