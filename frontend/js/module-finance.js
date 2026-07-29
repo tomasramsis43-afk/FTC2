@@ -203,7 +203,7 @@ function syncClientLedgerEntry(client){
       notes: dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : ''),
       autoClientId: client.id,
       createdAt: Date.now(),
-      settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : !isReceptionUsername(client.createdBy)) : true,
+      settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : true) : true,
       settledBy: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledBy : '') : '',
       settledAt: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settledAt : null) : null,
     });
@@ -230,74 +230,17 @@ function syncClientLedgerEntry(client){
       notes: dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين',
       autoClientId: client.id,
       createdAt: Date.now(),
-      settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : !isReceptionUsername(client.createdBy)) : true,
+      settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : true) : true,
       settledBy: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledBy : '') : '',
       settledAt: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settledAt : null) : null,
     });
   }
 }
 
-/* ---------------- صندوق تسويات الاستقبال ----------------
-   الدفعات النقدية التي يسجّلها موظفو الاستقبال تُرحَّل تلقائياً كحركة "خزنة" (دون تدخل
-   يدوي) بمجرد إضافة العميل — لكنها تبقى "معلّقة" حتى يؤكد المسؤول عن الخزنة استلامه
-   الفعلي (اليدوي) للنقدية بالضغط على "تسوية". هذا لا يغيّر أي مبلغ أو رصيد؛ المبلغ محسوب
-   بالفعل ضمن أرصدة الخزنة من لحظة إنشائه — الغرض فقط تتبّع تسليم/استلام النقدية فعلياً. */
-function pendingSettlementRows(){
-  let rows = vaultTx.filter(t=> (t.destination||'vault')==='vault' && t.autoClientId && !t.deletedAt && !t.settled);
-  // دور "الاستقبال" لا يرى في هذه الشاشة إلا الدفعات النقدية التي سجّلها هو بنفسه (بناءً على
-  // اسم مستخدم صاحب سجل العميل createdBy) — وليس دفعات باقي موظفي الاستقبال. المدير/المحاسب/
-  // الموظف العام (الذين يصلون لهذه الشاشة عبر تبويب "الحركات المالية" أيضاً) يرون الكل كالمعتاد.
-  if(currentUserRole==='reception'){
-    rows = rows.filter(t=>{
-      const c = clients.find(cl=>cl.id===t.autoClientId);
-      return c && c.createdBy===currentUser;
-    });
-  }
-  return rows.sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
-}
-function renderSettlementPanel(){
-  const body = $('#settlement-table-body');
-  if(!body) return;
-  const rows = pendingSettlementRows();
-  $('#settlement-pending-count').textContent = rows.length;
-  $('#settlement-pending-total').textContent = fmt(rows.reduce((s,t)=>s+num(t.amount),0));
-  $('#settlement-empty').style.display = rows.length ? 'none' : 'block';
-  body.innerHTML = rows.map(t=>{
-    const client = clients.find(c=>c.id===t.autoClientId);
-    const recepUser = client ? (client.createdBy || '—') : '—';
-    return `
-    <tr>
-      <td class="mono" data-label="التاريخ">${escapeHtml(t.date||'')}</td>
-      <td data-label="العميل">${escapeHtml(t.clientName||'')}</td>
-      <td class="mono" data-label="رقم الهوية">${escapeHtml(t.clientId||'—')}</td>
-      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}</td>
-      <td data-label="موظف الاستقبال">${escapeHtml(recepUser)}</td>
-      <td data-label="">${currentUserRole==='admin' ? `<button type="button" class="btn btn-gold btn-sm" data-settle-id="${t.id}">تسوية</button>` : `<span class="close-status-chip pending">بانتظار التسوية</span>`}</td>
-    </tr>`;
-  }).join('');
-}
-$('#settlement-table-body')?.addEventListener('click', async e=>{
-  const id = e.target.dataset.settleId;
-  if(!id) return;
-  if(currentUserRole !== 'admin'){ showToast('التسوية متاحة للمدير فقط'); return; }
-  const t = vaultTx.find(x=>x.id===id);
-  if(!t) return;
-  if(!confirm(`تأكيد استلام مبلغ ${fmt(num(t.amount))} ﷼ نقداً من العميل "${t.clientName||''}" فعلياً في الخزنة؟`)) return;
-  snapshotState(`تسوية دفعة استقبال: ${t.clientName||''} (${fmt(num(t.amount))})`);
-  t.settled = true;
-  t.settledBy = currentUser;
-  t.settledAt = Date.now();
-  await saveVaultTx();
-  await logAudit('edit','الحركات المالية', `تمت تسوية دفعة نقدية معلّقة للعميل: ${t.clientName||''} بمبلغ ${fmt(num(t.amount))} ﷼`);
-  // بعد التسوية، لو فاتورة دورة هذا العميل كانت مؤجَّلة عن القيد المزدوج بسبب التعليق، نحاول ترحيلها الآن تلقائياً
-  const client = clients.find(c=>c.id===t.autoClientId);
-  if(client && typeof autoPostCourseInvoice==='function' && autoPostCourseInvoice(client)){
-    await Promise.all([saveJournalDE(), saveClients()]);
-    await logAudit('add','المحاسبة', `تم ترحيل فاتورة الدورة تلقائياً للقيد المزدوج بعد التسوية: ${client.name||''}`);
-  }
-  renderSettlementPanel();
-  showToast('تمت التسوية بنجاح');
-});
+/* شاشة "صندوق تسويات الاستقبال" أُزيلت نهائياً من البرنامج بناءً على طلب صريح (غير مطلوبة
+   حالياً). الدفعات النقدية التي يسجّلها الاستقبال تُعتبر الآن مُسوّاة فوراً مثل باقي الأدوار —
+   راجع تعديل "settled" أعلى فى pushAutoVaultEntriesForClient، وراجع الترحيل التلقائي
+   settlementsAutoSettledV1 فى loadData (ui-framework.js) الذي يُسوّي أي سجلات قديمة معلّقة. */
 
 function vaultFilteredDailyTrend(rows){
   const map = {};
@@ -426,7 +369,6 @@ function currentVaultPageSize(){
 function renderVault(){
   renderVaultLockStatus();
   if(typeof renderBankRecon==='function') renderBankRecon();
-  if(typeof renderSettlementPanel==='function') renderSettlementPanel();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   const dl = $('#dl-clients');
