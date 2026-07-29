@@ -1865,20 +1865,27 @@ $('#client-form').addEventListener('submit', async e=>{
     }
     clients[idx] = {...clients[idx], ...data};
     if(data.bagSource!=='stock') delete clients[idx].bagPurchaseDate;
-    showToast('تم تحديث السجل');
   }else{
     data.bagStatus = data.bagSource==='stock' ? 'purchased' : (data.bagSource==='buy' ? 'pending' : 'n/a');
     if(data.bagSource==='stock') data.bagPurchaseDate = data.bagPurchaseDate || todayISO();
     clients.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, ...data});
-    showToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
+  // نحفظ بيانات العميل نفسها أولاً ونخليها تكتمل فعلياً على السيرفر قبل أي رسالة نجاح — حتى لا يظن
+  // المستخدم أن الحفظ انتهى (ويعمل ريفرش) بينما الطلب لا يزال في الطريق فيضيع التعديل عند التحديث.
   await saveClients();
+  showToast(wasEdit ? 'تم تحديث السجل' : 'تمت إضافة العميل');
   syncClientLedgerEntry(savedClient);
+  // syncBagStockIssues قد يحفظ settings بنفسه (فقط لو صار ترحيل فعلي) — نخليه متسلسلاً قبل بقية
+  // العمليات المستقلة حتى لا يتعارض مع حفظ settings التالي لو اتنفذوا معاً فى نفس اللحظة.
   await syncBagStockIssues();
-  await saveVaultTx();
-  await saveSettings();
-  await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
+  // بقية عمليات الحفظ (الخزنة/الإعدادات/سجل المراجعة) مستقلة عن بعضها (مفاتيح مختلفة تماماً)،
+  // فنرفعها بالتوازي بدل التتابع لتقليل زمن الانتظار الكلي قبل إغلاق النافذة.
+  await Promise.all([
+    saveVaultTx(),
+    saveSettings(),
+    logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`),
+  ]);
   if(!wasEdit){
     sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
   }
