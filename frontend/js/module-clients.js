@@ -251,7 +251,9 @@ const CFO_ICONS = {
   bank:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 9h20z"/><path d="M5 10v9M9 10v9M15 10v9M19 10v9"/><path d="M2 21h20"/></svg>',
   network:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
   truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16V6a1 1 0 0 1 1-1h9v11"/><path d="M13 9h4l3 3v4h-2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>',
-  invoice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>'
+  invoice:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  globe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>'
 };
 /* نسبة التغيّر المئوية بين قيمتين، بحماية من القسمة على صفر */
 function cfoPct(cur, prev){
@@ -310,6 +312,16 @@ function remainingByCourseType(){
   clients.filter(c=>!c.suspended && !c.cancelled).forEach(c=>{
     const r = remaining(c);
     if(r>0){ const k = c.courseType || 'غير محدد'; map[k]=(map[k]||0)+r; }
+  });
+  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+}
+/* صافي دخل المركز مجمّعاً حسب نوع الدورة (لأفضل الدورات من حيث الإيراد) — year اختياري لتضييق
+   النطاق لسنة معيّنة (نفس نطاق "إجمالي المبيعات" فى لوحة تحليل الدخل)، بدونه يشمل كل السنوات. */
+function revenueByCourseType(year){
+  const map = {};
+  clients.filter(c=> !c.cancelled && (!year || String(c.date||'').slice(0,4)===String(year))).forEach(c=>{
+    const k = c.courseType || 'غير محدد';
+    map[k] = (map[k]||0) + centerIncome(c);
   });
   return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
@@ -373,6 +385,15 @@ function renderCfoDashboard(){
   const purchasesTrend = monthlyPurchasesTrend(12);
   const apBars = supplierUnpaidTotals();
 
+  // === لوحة 5: أفضل الدورات من حيث الإيراد ===
+  const courseRevenueBars = revenueByCourseType(thisYear);
+
+  // === لوحة 6: توزيع العملاء حسب الجنسية ===
+  const nationalityBars = groupCount(activeClients.filter(c=>String(c.date||'').slice(0,4)===String(thisYear)), 'nationality');
+
+  // === لوحة 7: مقارنة الإيرادات بين الأشهر (هذا الشهر مقابل اللي قبله) ===
+  const monthCompareBars = [[monthLabelAr(lastMonthKey), netLastMonth], [monthLabelAr(thisMonthKey), netThisMonth]];
+
   el.innerHTML = `
     <div class="cfo-panel">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
@@ -416,6 +437,28 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">أفضل الدورات من حيث الإيراد</h3>
+      <div class="cfo-caption">صافي دخل المركز حسب نوع الدورة — ${thisYear}</div>
+      <div class="cfo-visual cfo-bars" id="cfo-bars-course-revenue"></div>
+    </div>
+
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">توزيع العملاء حسب الجنسية</h3>
+      <div class="cfo-caption">عدد عملاء ${thisYear} حسب الجنسية</div>
+      <div class="cfo-visual" id="cfo-donut-nationality"></div>
+    </div>
+
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">مقارنة الإيرادات بين الأشهر</h3>
+      <div class="cfo-kpis">
+        ${cfoKpi('book', monthLabelAr(lastMonthKey), fmt(netLastMonth)+' ﷼')}
+        ${cfoKpi('profit', monthLabelAr(thisMonthKey), fmt(netThisMonth)+' ﷼')}
+      </div>
+      <div class="cfo-caption">صافي دخل المركز: الشهر الحالي مقابل الشهر الماضي</div>
+      <div class="cfo-visual cfo-bars" id="cfo-bars-month-compare"></div>
+    </div>
+
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -423,6 +466,9 @@ function renderCfoDashboard(){
   if(apBars.length){ drawBars('#cfo-bars-ap', apBars, 6, v=>fmt(v)+' ﷼'); }
   else { drawLineChart('#cfo-trend-purchases', purchasesTrend.labels, purchasesTrend.series); }
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
+  drawBars('#cfo-bars-course-revenue', courseRevenueBars, 6, v=>fmt(v)+' ﷼');
+  drawDonut('#cfo-donut-nationality', nationalityBars, 8, v=>String(v));
+  drawBars('#cfo-bars-month-compare', monthCompareBars, 2, v=>fmt(v)+' ﷼');
 }
 function groupCount(list, field){
   const map = {};
