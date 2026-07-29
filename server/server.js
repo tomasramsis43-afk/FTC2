@@ -29,8 +29,13 @@ app.use(helmet({
       styleSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
       fontSrc:       ["'self'", "fonts.gstatic.com"],
       imgSrc:        ["'self'", "data:", "blob:"],
-      // api.anthropic.com مطلوب لميزة قراءة الفواتير بالذكاء الاصطناعي
-      connectSrc:    ["'self'", "https://api.anthropic.com"],
+      // api.anthropic.com مطلوب لميزة قراءة الفواتير بالذكاء الاصطناعي.
+      // fonts.googleapis.com و cdnjs.cloudflare.com مطلوبان لأن Service Worker
+      // (sw.js) يعترض طلبات هذه الموارد ويعيد تنفيذ fetch() لها من داخله، وهذا
+      // الـ fetch الداخلي يخضع لـ connect-src (وليس فقط style-src/script-src)،
+      // فبدون إضافتهما هنا كانت هذه الموارد (الخطوط، xlsx، qrious، html2canvas،
+      // jspdf) تفشل بصمت ويُعيد الـ Service Worker استجابة 503 بدلاً منها.
+      connectSrc:    ["'self'", "https://api.anthropic.com", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
       workerSrc:     ["'self'"],
       frameAncestors:["'none'"],   // حماية من Clickjacking
       objectSrc:     ["'none'"],
