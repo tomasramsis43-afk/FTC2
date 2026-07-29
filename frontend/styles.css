@@ -1455,7 +1455,7 @@ tbody tr:hover {
 /* ============= LOGIN ============= */
 #license-screen,
 #server-login-screen {
-  background-image: linear-gradient(180deg, rgba(10, 30, 70, 0.72), rgba(10, 30, 70, 0.82)), url('assets/img/login-bg.webp');
+  background-image: url('assets/img/login-bg.webp');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
