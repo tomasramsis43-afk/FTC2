@@ -71,12 +71,17 @@ async function requireAuth(req, res, next) {
     return next();
   }
   try {
-    const r = await pool.query('SELECT role, token_version FROM server_users WHERE id = $1', [payload.sub]);
+    const r = await pool.query('SELECT role, token_version, is_active FROM server_users WHERE id = $1', [payload.sub]);
     const dbUser = r.rows[0];
     // dbUser غير موجود = تم حذف الحساب. token_version مختلف = تم تسجيل خروج/تغيير كلمة
     // مرور أو صلاحية بعد إصدار هذا التوكن. في الحالتين نرفض التوكن فوراً بدل انتظار انتهائه.
     if (!dbUser || (payload.tv || 0) !== dbUser.token_version) {
       return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
+    }
+    // الحساب معطّل من طرف المدير: نقطع الجلسة فوراً حتى لو كان التوكن لا يزال صالحاً،
+    // بدل انتظار انتهاء صلاحيته (30 يوماً).
+    if (dbUser.is_active === false) {
+      return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
     }
     // نأخذ role من القاعدة الآن وليس من داخل التوكن القديم، حتى يُطبَّق أي تغيير
     // صلاحية فوراً على أي جلسة مفتوحة لنفس المستخدم دون انتظار تسجيل دخول جديد.

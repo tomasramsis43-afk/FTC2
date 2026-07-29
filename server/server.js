@@ -110,6 +110,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     if (!user) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    // حساب معطّل من طرف المدير: نرفض الدخول برسالة واضحة قبل إصدار أي توكن،
+    // حتى لو كانت كلمة المرور صحيحة.
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
+    }
     const token = signToken(user);
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
     // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
@@ -152,7 +157,7 @@ const VALID_SERVER_ROLES = ['admin', 'accountant', 'reception', 'staff'];
 app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, username, display_name, role, created_at FROM server_users ORDER BY created_at ASC'
+      'SELECT id, username, display_name, role, is_active, created_at FROM server_users ORDER BY created_at ASC'
     );
     res.json({ users: r.rows });
   } catch (e) {
@@ -240,6 +245,31 @@ app.post('/api/users/:username/force-logout', requireAuth, requireRole('admin'),
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر إنهاء جلسات هذا المستخدم' });
+  }
+});
+
+// POST /api/users/:username/toggle-active -> تعطيل/تفعيل حساب مستخدم (بدون حذفه).
+// عند التعطيل: يُرفض دخوله فوراً من الآن فصاعداً، وأي جلسة مفتوحة له حالياً تُقطع
+// فوراً أيضاً (نزيد token_version بنفس آلية force-logout، بالإضافة لتحقق is_active
+// في requireAuth). لا يمكن للمدير تعطيل حسابه الحالي بنفسه لتفادي فقدان الوصول بالخطأ.
+app.post('/api/users/:username/toggle-active', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  if (target === req.user.username) {
+    return res.status(400).json({ error: 'لا يمكنك تعطيل حسابك الحالي وأنت مسجّل دخول به' });
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE server_users
+       SET is_active = NOT is_active, token_version = token_version + 1
+       WHERE username = $1
+       RETURNING username, is_active`,
+      [target]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    res.json({ username: r.rows[0].username, isActive: r.rows[0].is_active });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تغيير حالة المستخدم' });
   }
 });
 
