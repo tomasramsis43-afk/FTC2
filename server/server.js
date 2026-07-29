@@ -88,6 +88,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
   try {
     const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
     // تحقق أولاً من حساب الطوارئ (مخزّن بالكامل في متغيرات البيئة، مستقل عن قاعدة
     // البيانات) — يسمح بالدخول للنظام حتى لو قاعدة البيانات اتغيرت أو كانت فاضية
     // تماماً أو معطّلة. لا يؤثر على حسابات جدول server_users العادية بأي شكل.
@@ -95,8 +96,8 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     if (isEmergencyLogin) {
       const token = signEmergencyToken(username.trim());
       pool.query(
-        'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
-        [username.trim(), 'admin', loginIp]
+        'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
+        [username.trim(), 'admin', loginIp, loginDevice]
       ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
       return res.json({
         token,
@@ -119,8 +120,8 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
     // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
     pool.query(
-      'INSERT INTO login_history (username, role, ip_address) VALUES ($1, $2, $3)',
-      [user.username, user.role || 'staff', loginIp]
+      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
+      [user.username, user.role || 'staff', loginIp, loginDevice]
     ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
     // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
     // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
@@ -225,7 +226,7 @@ app.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req
 app.get('/api/login-history', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT username, role, ip_address, logged_in_at FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
+      'SELECT username, role, ip_address, device_info, logged_in_at FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
     );
     res.json({ history: r.rows });
   } catch (e) {
