@@ -3,8 +3,8 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v5';
-const RUNTIME_CACHE = 'ftc-runtime-v5';
+const CACHE_VERSION = 'ftc-cache-v6';
+const RUNTIME_CACHE = 'ftc-runtime-v6';
 // ملفات JS لا تُضاف هنا — يتم تحديثها تلقائياً عبر networkFirstStrategy
 // (شبكة أولاً) في كل تشغيل، وتُحفظ في RUNTIME_CACHE للاستخدام أوفلاين.
 // إضافتها للـ pre-cache تجعل المتصفح يستخدم النسخ القديمة حتى يتغير
@@ -61,6 +61,17 @@ self.addEventListener('fetch', event => {
 
   // تجاهل الطلبات غير HTTP/HTTPS
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // تجاهل أي طلب لموقع خارجي (خطوط Google، مكتبات cdnjs، إلخ) ودَع المتصفح
+  // يتعامل معه بشكل طبيعي. سبب مهم: أي fetch() يُنفَّذ من داخل الـ Service
+  // Worker نفسه يخضع لـ connect-src في الـ CSP الخاص بالصفحة (وليس فقط
+  // script-src/style-src)، فاعتراض هذه الطلبات هنا وإعادة تنفيذها بـ fetch()
+  // كان يجعلها تفشل بصمت (CSP) حتى لو كانت مسموحة أصلاً بتحميلها عبر
+  // <script>/<link> مباشرة، ويُرجع الـ SW استجابة 503 اصطناعية بدلاً منها —
+  // وهو ما كان يمنع تحميل الخطوط ومكتبات xlsx/qrious/html2canvas/jspdf.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
