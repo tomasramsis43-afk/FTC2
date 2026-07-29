@@ -838,6 +838,11 @@ async function loadData(cacheOnly){
       if(list.length){
         clients = list;
         _clientsSyncBaseline = baseline;
+        // لا نستدعي window.storage.get('clients',...) هنا (تفادياً لتنزيل كتلة العملاء الضخمة
+        // القديمة بلا داعٍ)، لكن لازم نعرف رقم نسختها الحالي على السيرفر بأي حال، حتى لو احتجنا
+        // لاحقاً لخط الرجعة الاحتياطي (saveClients عند فشل الشبكة فى النظام الجديد) لا يُرفض
+        // بخطأ 409 زائف بسبب افتراض النسخة صفراً. راجع window.storage.primeKeyVersion أعلاه.
+        window.storage.primeKeyVersion('clients');
       }else{
         // مفيش بيانات فى النظام الجديد بعد (وصلنا فعلاً للسيرفر وقائمة فارغة حقيقية) — نتحقق من
         // وجود بيانات قديمة (كتلة واحدة) تحتاج ترحيل لمرة واحدة فقط.
