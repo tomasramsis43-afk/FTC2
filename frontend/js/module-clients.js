@@ -1394,7 +1394,9 @@ document.addEventListener('click', async e=>{
   }
   if(invId){
     const invMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[invId] : null;
-    if(invMeta && invMeta.status==='pending'){
+    // الاستقبال مسموح له تحديداً بطباعة الفاتورة حتى قبل اعتماد الأدمن لتسجيل العميل (بناءً على طلب
+    // صريح) — باقي الأدوار (أدمن/محاسب/موظف عام) تبقى ممنوعة حتى الاعتماد كما كانت دائماً.
+    if(invMeta && invMeta.status==='pending' && currentUserRole!=='reception'){
       showToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
       return;
     }
