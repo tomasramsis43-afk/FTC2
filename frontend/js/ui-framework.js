@@ -48,10 +48,11 @@ const DEFAULT_SETTINGS = {
   themePresetId: 'nocolor',
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   rolePermissions: {
-    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','bags','purchases','reports'],
-    accountant: ['dashboard','clients','vault','accounting','budget','reports','purchases','companies'],
-    // شاشة "تسوية الاستقبال" أُزيلت نهائياً من البرنامج (لم تعد مطلوبة حالياً) — راجع V4
-    // أسفل لترحيل الحسابات المحفوظة مسبقاً وحذف أي أثر لها من صلاحيات كل الأدوار.
+    staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
+    accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
+    // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط — ولا شيء غيرها إطلاقاً. شاشة "تسوية
+    // الاستقبال" أُزيلت من صلاحياته بناءً على طلب صريح: التسوية مسؤولية الأدمن (أو من يفوّضه من
+    // الأدوار الأخرى صاحبة صلاحية 'vault'/'settlements' أصلاً) وحدهم، ولا علاقة للاستقبال بها إطلاقاً.
     reception: ['clients']
   },
   // مهلة تعديل/حذف قابلة للتغيير من الإعدادات في أي وقت (بالساعات، من وقت تسجيل العميل نفسه)،
@@ -69,6 +70,7 @@ const ALL_VIEWS = [
   {id:'courses', label:'الدورات'},
   {id:'courseinvoices', label:'فواتير الدورات'},
   {id:'vault', label:'الحركات المالية'},
+  {id:'settlements', label:'تسوية الاستقبال'},
   {id:'bags', label:'مخزون الحقائب'},
   {id:'purchases', label:'المشتريات'},
   {id:'zatca', label:'الفوترة الضريبية والزكاة'},
@@ -263,47 +265,6 @@ const I18N = {
     closeEntitiesTitle:'الدورات النشطة حسب حالة الاكتمال',
     closeEntityEarly:'مبكرة', closeEntityOnTrack:'على الموعد', closeEntityNearFull:'قاربت الاكتمال', closeEntityComplete:'مكتملة العدد',
     closeEntityOf:'من', closeEntityCourses:'دورة',
-    filterSuspended:'الموقوفين', titleFilterSuspended:'عرض العملاء الموقوفين فقط',
-    filterUnpBags:'الحقائب غير المشتراة', titleFilterUnpBags:'عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد',
-    advancedFilters:'فلاتر متقدمة',
-    bulkUpdateImport:'📋 تحديث/استيراد بيانات العملاء (جدول)',
-    refNumBulkImport:'📋 استيراد الرقم المرجعي (جدول)',
-    compWorkersBulkImport:'📋 استيراد عمال الشركات (جدول)',
-    bulkDeleteTable:'🗑 حذف عملاء (جدول)',
-    refreshSheet:'تحديث الشيت',
-    bulkAddClients:'+ إضافة عدة عملاء',
-    unknownCourseType:'⚠ الدورات غير المعلومة (بدون نوع دورة)',
-    allCompanies:'كل الشركات',
-    allClientsInvoice:'كل العملاء (رقم الفاتورة)', noInvoiceNum:'بدون رقم فاتورة', hasInvoiceNum:'لديه رقم فاتورة',
-    allClientsCourseNum:'كل العملاء (رقم الدورة)', noCourseNumOpt:'بدون رقم دورة', hasCourseNumOpt:'لديه رقم دورة',
-    allClientsRefNum:'كل العملاء (الرقم المرجعي)', noRefNumOpt:'بدون رقم مرجعي', hasRefNumOpt:'لديه رقم مرجعي',
-    titleFilterReception:'عرض عملاء موظف استقبال بعينه فقط', allReception:'كل موظفي الاستقبال',
-    dateFrom:'تاريخ التسجيل من', dateTo:'تاريخ التسجيل إلى',
-    paidMin:'المبلغ المدفوع من', paidMax:'المبلغ المدفوع إلى',
-    clearAdvFilters:'مسح الفلاتر المتقدمة',
-    matchingFilter:'مطابق للفلتر الحالي', totalClientsCount:'إجمالي العملاء',
-    selectedNowPrefix:'محدد حالياً:', clientWord:'عميل',
-    selectAllFilteredPrefix:'تحديد كل النتائج المطابقة للفلتر',
-    clearSelection:'إلغاء التحديد',
-    sendWhatsappSelected:'📨 إرسال رسالة واتساب للمحدد',
-    deleteSelected:'🗑 حذف المحدد',
-    titleSelectAllPage:'تحديد/إلغاء تحديد كل الصفحة الحالية',
-    showingOfTotal:'عرض', ofWord:'من', pageWord:'صفحة',
-    firstPage:'« الأولى', prevPage:'‹ السابقة', nextPage:'التالية ›', lastPage:'الأخيرة »',
-    perPage:'/ صفحة', showAllOpt:'عرض الكل',
-    perPage50:'50 / صفحة', perPage100:'100 / صفحة', perPage200:'200 / صفحة', perPage500:'500 / صفحة',
-    rowActions:'إجراءات',
-    cancelledStamp:'ملغى', absentStamp:'غياب', suspendedStamp:'موقوف',
-    pendingApprovalStamp:'⏳ قيد الاعتماد', titlePendingApproval:'سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد',
-    approveBtn:'✅ اعتماد', rejectBtn:'✖ رفض',
-    deleteInvoiceBtn:'حذف الفاتورة', titleDeleteInvoice:'حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)',
-    titleEditLocked:'انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن',
-    unsuspendBtn:'إلغاء الإيقاف', titleUnsuspend:'إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب',
-    titleSuspend:'إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب',
-    titleWhatsapp:'مراسلة العميل عبر واتساب',
-    bagOwn:'خاصته', bagFromStock:'من المخزون', bagPurchased:'تم الشراء', bagNeedPurchase:'مطلوب شراء',
-    titleCancelBag:'إلغاء الحقيبة المسجّلة لهذا العميل وإعادته لحالة مطلوب شراء', cancelBagBtn:'إلغاء الحقيبة',
-    titleBuyBagNow:'اضغط لتسليم الحقيبة الآن من المخزون', buyWord:'شراء',
   },
   en: {
     appTitle:'Client & Course Management System', appSubtitle:'A digital alternative to Excel — clients, courses, bags, and payments',
@@ -354,47 +315,6 @@ const I18N = {
     closeEntitiesTitle:'Active courses by completion status',
     closeEntityEarly:'Early', closeEntityOnTrack:'On track', closeEntityNearFull:'Nearly full', closeEntityComplete:'Complete',
     closeEntityOf:'of', closeEntityCourses:'course(s)',
-    filterSuspended:'Suspended', titleFilterSuspended:'Show only suspended clients',
-    filterUnpBags:'Bags not purchased', titleFilterUnpBags:"Show clients whose bag needs to be purchased and hasn't been yet",
-    advancedFilters:'Advanced filters',
-    bulkUpdateImport:'📋 Update/Import Client Data (table)',
-    refNumBulkImport:'📋 Import Reference Number (table)',
-    compWorkersBulkImport:'📋 Import Company Workers (table)',
-    bulkDeleteTable:'🗑 Delete Clients (table)',
-    refreshSheet:'Refresh Sheet',
-    bulkAddClients:'+ Add Multiple Clients',
-    unknownCourseType:'⚠ Unknown course type (no course type)',
-    allCompanies:'All companies',
-    allClientsInvoice:'All clients (invoice number)', noInvoiceNum:'No invoice number', hasInvoiceNum:'Has invoice number',
-    allClientsCourseNum:'All clients (course number)', noCourseNumOpt:'No course number', hasCourseNumOpt:'Has course number',
-    allClientsRefNum:'All clients (reference number)', noRefNumOpt:'No reference number', hasRefNumOpt:'Has reference number',
-    titleFilterReception:'Show clients of a specific reception staff only', allReception:'All reception staff',
-    dateFrom:'Registration date from', dateTo:'Registration date to',
-    paidMin:'Paid amount from', paidMax:'Paid amount to',
-    clearAdvFilters:'Clear advanced filters',
-    matchingFilter:'Matching current filter', totalClientsCount:'Total clients',
-    selectedNowPrefix:'Currently selected:', clientWord:'client(s)',
-    selectAllFilteredPrefix:'Select all matching results',
-    clearSelection:'Clear selection',
-    sendWhatsappSelected:'📨 Send WhatsApp message to selected',
-    deleteSelected:'🗑 Delete selected',
-    titleSelectAllPage:'Select/deselect all of current page',
-    showingOfTotal:'Showing', ofWord:'of', pageWord:'Page',
-    firstPage:'« First', prevPage:'‹ Prev', nextPage:'Next ›', lastPage:'Last »',
-    perPage:'/ page', showAllOpt:'Show all',
-    perPage50:'50 / page', perPage100:'100 / page', perPage200:'200 / page', perPage500:'500 / page',
-    rowActions:'Actions',
-    cancelledStamp:'Cancelled', absentStamp:'Absent', suspendedStamp:'Suspended',
-    pendingApprovalStamp:'⏳ Pending approval', titlePendingApproval:'Registered by reception — awaiting admin approval, excluded from accounts/reports until approved',
-    approveBtn:'✅ Approve', rejectBtn:'✖ Reject',
-    deleteInvoiceBtn:'Delete invoice', titleDeleteInvoice:'Delete the tax invoice issued to this client (soft delete, keeps the serial number)',
-    titleEditLocked:'Edit window expired (5 hours after registration) — admin only now',
-    unsuspendBtn:'Unsuspend', titleUnsuspend:'Restore client to appear again in Courses and Bag Inventory sheets',
-    titleSuspend:'Temporarily suspend client — stays in Clients sheet but disappears from Courses and Bag Inventory',
-    titleWhatsapp:'Message client via WhatsApp',
-    bagOwn:'Own bag', bagFromStock:'From stock', bagPurchased:'Purchased', bagNeedPurchase:'Purchase needed',
-    titleCancelBag:"Cancel this client's registered bag and reset to purchase-needed status", cancelBagBtn:'Cancel bag',
-    titleBuyBagNow:'Click to hand over the bag now from stock', buyWord:'Buy',
   }
 };
 function tr(key){ return (I18N[currentLang] && I18N[currentLang][key]) || I18N.ar[key] || key; }
@@ -404,9 +324,8 @@ function applyLanguage(lang){
   document.documentElement.dir = lang==='ar' ? 'rtl' : 'ltr';
   $all('[data-i18n]').forEach(el=>{ const k=el.dataset.i18n; if(I18N[lang] && I18N[lang][k]!==undefined) el.textContent = I18N[lang][k]; });
   $all('[data-i18n-placeholder]').forEach(el=>{ const k=el.dataset.i18nPlaceholder; if(I18N[lang] && I18N[lang][k]!==undefined) el.placeholder = I18N[lang][k]; });
-  $all('[data-i18n-title]').forEach(el=>{ const k=el.dataset.i18nTitle; if(I18N[lang] && I18N[lang][k]!==undefined) el.title = I18N[lang][k]; });
   $('#btn-lang-toggle').textContent = lang==='ar' ? 'EN' : 'AR';
-  try{ window.storage.set('appLang', lang, false); }catch(e){ console.error('[UI] Failed to persist appLang:', e); }
+  try{ window.storage.set('appLang', lang, false); }catch(e){}
   // إعادة رسم كل الجداول والمحتوى الديناميكي لتحديث النصوص المولّدة من JS
   if(typeof renderTable==='function') renderTable();
   if(typeof renderDashboard==='function') renderDashboard();
@@ -586,11 +505,11 @@ function applyRowDensity(isCompact){
   const btn = $('#btn-density-toggle');
   if(btn) btn.classList.toggle('active', !!isCompact);
 }
-try{ applyRowDensity(localStorage.getItem('ftc2-row-density')==='compact'); }catch(e){ console.error('[UI] Failed to apply row density:', e); }
+try{ applyRowDensity(localStorage.getItem('ftc2-row-density')==='compact'); }catch(e){}
 $('#btn-density-toggle')?.addEventListener('click', ()=>{
   const next = !document.body.classList.contains('density-compact');
   applyRowDensity(next);
-  try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){ console.error('[UI] Failed to persist row density:', e); }
+  try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){}
 });
 /* طي/توسيع القائمة الجانبية (عرض الأيقونات فقط بدون النصوص) — تفضيل شخصي يُحفظ محلياً
    في هذا المتصفح فقط، ويضيف عنوان (title) لكل زر عند الطي حتى يبقى واضحاً عند تمرير الفأرة فوقه. */
@@ -607,18 +526,18 @@ function applySidebarCollapsed(isCollapsed){
     });
   }
 }
-try{ applySidebarCollapsed(localStorage.getItem('ftc2-sidebar-collapsed')==='1'); }catch(e){ console.error('[UI] Failed to apply sidebar state:', e); }
+try{ applySidebarCollapsed(localStorage.getItem('ftc2-sidebar-collapsed')==='1'); }catch(e){}
 $('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
   const next = !$('nav.tabs')?.classList.contains('collapsed');
   applySidebarCollapsed(next);
-  try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){ console.error('[UI] Failed to persist sidebar state:', e); }
+  try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){}
 });
 /* ================= نظام المؤثرات الصوتية ================= */
 const SoundFX = (()=>{
   let ctx = null;
   function getCtx(){
     if(!ctx){
-      try{ ctx = new (window.AudioContext)(); }catch(e){ return null; }
+      try{ ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
     }
     if(ctx.state==='suspended') ctx.resume();
     return ctx;
@@ -800,11 +719,10 @@ async function loadData(cacheOnly){
   const wantUsers = normalizeRole(SERVER_AUTH_ROLE) === 'admin';
   // 'clients' أُزيل من هذه القائمة: له مسار تحميل خاص أسفل (عملاء كسجلات مستقلة، أسرع بكثير مع
   // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
-  // 'clients' أُزيل من هذه القائمة: له مسار تحميل خاص أسفل (عملاء كسجلات مستقلة، أسرع بكثير مع
-  // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
-  // كذلك 17 مفتاحاً أخرى (الخزنة، المخزون، المحاسبة، الشركات...) أُزيلت أيضاً — كل منها له الآن
-  // مساره الخاص عبر loadCollectionGeneric (سجل فردي لكل عنصر بدل كتلة واحدة)، راجع الأسفل.
-  const kvKeys = ['settings','appLang','zakatAdjustments'].concat(wantUsers ? ['users'] : []);
+  const kvKeys = ['settings','bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows',
+    'deletedInvoices','courseSessions','appLang','auditLog','companies','companyTransfers','journalEntries',
+    'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
+  ].concat(wantUsers ? ['users'] : []);
   const kv = {};
   const decryptFailedKeys = [];
   await Promise.all(kvKeys.map(async k=>{
@@ -822,13 +740,39 @@ async function loadData(cacheOnly){
   // "لسه ملهاش مزامنة مؤكدة مع النظام الجديد هذه الجلسة"، فيستخدم saveClients() خط الرجعة الآمن
   // (الحفظ الكامل القديم) حتى تتأكد المزامنة الحقيقية عند أول تحميل online.
   let clientsDecryptFailed = false;
-  if(cacheOnly){
+  const isReceptionSession = normalizeRole(currentUserRole || SERVER_AUTH_ROLE) === 'reception';
+  // مفتاح كاش محلي خاص بكل مستخدم استقبال بعينه (بخلاف مفتاح 'clients' القديم أدناه، المشترك بين
+  // كل من يستخدم هذا الجهاز/المتصفح دون أي تمييز بين المستخدمين — التخزين المحلي IndexedDB على هذا
+  // الجهاز غير مقسَّم بحساب المستخدم إطلاقاً، راجع _openKvIdb/_kvCacheRead فى core-utils.js). لو
+  // نفس الجهاز استُخدم يوماً من حساب أدمن/موظف آخر (جهاز مشترك فى الاستقبال مثلاً)، أو حتى من مستخدم
+  // استقبال آخر، قراءة 'clients' القديم مباشرة هنا كانت تُسرّب عملاء لا يملك مستخدم الاستقبال الحالي
+  // حق رؤيتهم إطلاقاً — أثناء التحميل السريع الأول (cacheOnly) أو عند تعذّر الوصول لنظام السجلات
+  // الجديد مؤقتاً — رغم أن السيرفر نفسه يمنعه تماماً من هذا المفتاح (403). لا يُكتب فى هذا الكاش
+  // الخاص إلا نتيجة fetchAllClientRecords المفلترة أصلاً بحساب هذا المستخدم تحديداً (created_by
+  // = اسمه)، ويُخزَّن مشفَّراً بنفس طريقة تشفير باقي بيانات العملاء.
+  const receptionOwnCacheKey = 'clientRecordsCache::' + (currentUser || SERVER_AUTH_USERNAME || '');
+  async function readReceptionOwnCache(){
     try{
-      const r = await window.storage.get('clients', false, true);
-      clients = r && r.value ? JSON.parse(r.value) : [];
-    }catch(e){
-      if(e && e.isDecryptFailure) clientsDecryptFailed = true;
-      clients = [];
+      const cached = await _kvCacheRead(receptionOwnCacheKey);
+      if(!cached || !cached.value) return [];
+      const plain = await _decryptOrFail(cached.value);
+      return JSON.parse(plain);
+    }catch(e){ return []; } // كاش تالف/غير موجود — لا يجوز أبداً أن يتحوّل هذا لفشل قاتل، فقط نبدأ فارغاً وتُصحَّح الشاشة عند أول تحميل حقيقي من السيرفر
+  }
+  async function writeReceptionOwnCache(list){
+    try{ const enc = await encryptValue(JSON.stringify(list)); await _kvCacheWrite(receptionOwnCacheKey, 0, enc); }catch(e){}
+  }
+  if(cacheOnly){
+    if(isReceptionSession){
+      clients = await readReceptionOwnCache();
+    } else {
+      try{
+        const r = await window.storage.get('clients', false, true);
+        clients = r && r.value ? JSON.parse(r.value) : [];
+      }catch(e){
+        if(e && e.isDecryptFailure) clientsDecryptFailed = true;
+        clients = [];
+      }
     }
     _clientsSyncBaseline = null;
   } else {
@@ -837,11 +781,14 @@ async function loadData(cacheOnly){
       if(list.length){
         clients = list;
         _clientsSyncBaseline = baseline;
-        // لا نستدعي window.storage.get('clients',...) هنا (تفادياً لتنزيل كتلة العملاء الضخمة
-        // القديمة بلا داعٍ)، لكن لازم نعرف رقم نسختها الحالي على السيرفر بأي حال، حتى لو احتجنا
-        // لاحقاً لخط الرجعة الاحتياطي (saveClients عند فشل الشبكة فى النظام الجديد) لا يُرفض
-        // بخطأ 409 زائف بسبب افتراض النسخة صفراً. راجع window.storage.primeKeyVersion أعلاه.
-        window.storage.primeKeyVersion('clients');
+        if(isReceptionSession) await writeReceptionOwnCache(list);
+      }else if(isReceptionSession){
+        // قائمة فارغة فعلياً لهذا المستخدم تحديداً (وصلنا للسيرفر فعلاً) — لا يوجد أي "خط رجعة"
+        // قديم يصح الرجوع إليه لهذا الدور: مفتاح 'clients' القديم مشترك بين كل مستخدمي الجهاز
+        // وممنوع أصلاً عن دور الاستقبال على مستوى السيرفر (راجع restrictKeyToAdmin فى server.js).
+        clients = [];
+        _clientsSyncBaseline = new Map();
+        await writeReceptionOwnCache([]);
       }else{
         // مفيش بيانات فى النظام الجديد بعد (وصلنا فعلاً للسيرفر وقائمة فارغة حقيقية) — نتحقق من
         // وجود بيانات قديمة (كتلة واحدة) تحتاج ترحيل لمرة واحدة فقط.
@@ -872,7 +819,11 @@ async function loadData(cacheOnly){
       }
     }catch(e){
       if(e && e.isDecryptFailure){ clientsDecryptFailed = true; clients = []; }
-      else{
+      else if(isReceptionSession){
+        // تعذّر الوصول لنظام السجلات الجديد مؤقتاً (انقطاع اتصال) — نرجع لآخر نسخة خاصة بهذا
+        // المستخدم تحديداً محفوظة محلياً، وليس أبداً لمفتاح 'clients' القديم المشترك.
+        clients = await readReceptionOwnCache();
+      }else{
         // تعذّر الوصول لنظام السجلات الجديد فعلياً (انقطاع اتصال) — نرجع لآخر نسخة محفوظة محلياً
         // من النظام القديم بدل تفريغ الشاشة، تماماً كخط الرجعة المعتاد فى باقي مفاتيح البرنامج.
         try{
@@ -1003,61 +954,27 @@ async function loadData(cacheOnly){
       settings.receptionSettlementsRemovedV3 = true;
       await saveSettings();
     }
-    // ترحيل تلقائي لمرة واحدة (V4): شاشة "تسوية الاستقبال" أُزيلت نهائياً من البرنامج (الكود
-    // والتبويب معاً) بناءً على طلب صريح: غير مطلوبة حالياً. نحذف 'settlements' من صلاحيات كل
-    // الأدوار المحفوظة مسبقاً (staff/accountant وأي دور آخر) — بدون هذا كانت الحسابات القديمة
-    // التي نفّذت هذه الصلاحية تحتفظ بها فى settings.rolePermissions المحفوظة (تتجاوز DEFAULT_SETTINGS
-    // تلقائياً)، فيبقى مرجعها فعّالاً فى جدول صلاحيات الإعدادات رغم اختفاء تبويبها وكودها بالكامل.
-    if(!settings.settlementsFeatureRemovedV4){
-      if(settings.rolePermissions){
-        Object.keys(settings.rolePermissions).forEach(role=>{
-          if(Array.isArray(settings.rolePermissions[role])){
-            settings.rolePermissions[role] = settings.rolePermissions[role].filter(v=> v!=='settlements');
-          }
-        });
-      }
-      settings.settlementsFeatureRemovedV4 = true;
-      await saveSettings();
-    }
     if(typeof settings.receptionEditDeleteWindowHours!=='number' || settings.receptionEditDeleteWindowHours<0) settings.receptionEditDeleteWindowHours = DEFAULT_SETTINGS.receptionEditDeleteWindowHours;
     if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
   try{
-    const { list, baseline } = await loadCollectionGeneric('bagStock', cacheOnly);
-    bagStock = list;
-    _collectionSyncBaseline['bagStock'] = baseline;
-  }catch(e){ bagStock = []; _collectionSyncBaseline['bagStock'] = null; }
+    const r = kv.bagStock;
+    bagStock = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ bagStock = []; }
   // ترحيل/تصحيح تلقائي: أي عميل مصدر حقيبته "من المخزون" (bagSource==='stock') ولم يكن له عملية "تسليم"
   // مقابلة في سجل عمليات مخزون الحقائب — تُضاف له عملية بأثر رجعي، حتى يبقى "المخزون الحالي" مبنياً دائماً
   // على سجل عمليات المخزون نفسه ومتزامناً مع شيت العملاء. الدالة نفسها تُستدعى أيضاً بعد أي استيراد Excel
   // قد يضبط مصدر حقيبة عميل على "من المخزون"، حتى يتحدّث رقم المخزون فوراً دون الحاجة لإعادة تحميل التطبيق.
   await syncBagStockIssues();
   try{
-    const { list, baseline } = await loadCollectionGeneric('vaultTx', cacheOnly);
-    vaultTx = list;
-    _collectionSyncBaseline['vaultTx'] = baseline;
-  }catch(e){ vaultTx = []; _collectionSyncBaseline['vaultTx'] = null; }
-  // ترحيل تلقائي لمرة واحدة: بعد حذف شاشة "تسوية الاستقبال" نهائياً، لم يعد هناك أي طريقة يدوية
-  // لتأكيد استلام الدفعات النقدية المعلّقة (t.settled===false) التي سجّلها الاستقبال سابقاً — فتبقى
-  // "معلّقة" إلى الأبد بدون هذا الترحيل، مما يمنع نهائياً وبصمت ترحيل فاتورة الدورة المرتبطة بها
-  // للقيد المزدوج (راجع clientHasUnsettledCash/autoPostCourseInvoice فى module-accounting.js).
-  // نعتبرها كلها "مُسوَّاة" تلقائياً الآن (المبلغ نفسه لم يتغيّر ولا يتأثر — هذا الحقل للتتبع فقط،
-  // راجع تعليق pendingSettlementRows القديم)، ونعيد محاولة ترحيل أي فواتير كانت مؤجَّلة بسببها.
-  if(!settings.settlementsAutoSettledV1){
-    const hadUnsettled = vaultTx.some(t=> t.settled===false);
-    vaultTx.forEach(t=>{
-      if(t.settled===false){ t.settled = true; t.settledBy = t.settledBy || 'ترحيل تلقائي (حذف شاشة التسوية)'; t.settledAt = t.settledAt || Date.now(); }
-    });
-    settings.settlementsAutoSettledV1 = true;
-    await saveSettings();
-    if(hadUnsettled) await saveVaultTx();
-  }
+    const r = kv.vaultTx;
+    vaultTx = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ vaultTx = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('deletedVaultTx', cacheOnly);
-    deletedVaultTx = list;
-    _collectionSyncBaseline['deletedVaultTx'] = baseline;
-  }catch(e){ deletedVaultTx = []; _collectionSyncBaseline['deletedVaultTx'] = null; }
+    const r = kv.deletedVaultTx;
+    deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ deletedVaultTx = []; }
   {
     const renumberedCount = renumberVaultSeqChronologically();
     if(renumberedCount>0){
@@ -1067,25 +984,21 @@ async function loadData(cacheOnly){
     }
   }
   try{
-    const { list, baseline } = await loadCollectionGeneric('vaultDenomTx', cacheOnly);
-    vaultDenomTx = list;
-    _collectionSyncBaseline['vaultDenomTx'] = baseline;
-  }catch(e){ vaultDenomTx = []; _collectionSyncBaseline['vaultDenomTx'] = null; }
+    const r = kv.vaultDenomTx;
+    vaultDenomTx = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ vaultDenomTx = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('bankStatementRows', cacheOnly);
-    bankStatementRows = list;
-    _collectionSyncBaseline['bankStatementRows'] = baseline;
-  }catch(e){ bankStatementRows = []; _collectionSyncBaseline['bankStatementRows'] = null; }
+    const r = kv.bankStatementRows;
+    bankStatementRows = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ bankStatementRows = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('deletedInvoices', cacheOnly);
-    deletedInvoices = list;
-    _collectionSyncBaseline['deletedInvoices'] = baseline;
-  }catch(e){ deletedInvoices = []; _collectionSyncBaseline['deletedInvoices'] = null; }
+    const r = kv.deletedInvoices;
+    deletedInvoices = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ deletedInvoices = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('courseSessions', cacheOnly);
-    courseSessions = list;
-    _collectionSyncBaseline['courseSessions'] = baseline;
-  }catch(e){ courseSessions = []; _collectionSyncBaseline['courseSessions'] = null; }
+    const r = kv.courseSessions;
+    courseSessions = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ courseSessions = []; }
   try{
     const r = kv.appLang;
     currentLang = (r && r.value) ? r.value : 'ar';
@@ -1110,20 +1023,17 @@ async function loadData(cacheOnly){
     users = [];
   }
   try{
-    const { list, baseline } = await loadCollectionGeneric('auditLog', cacheOnly);
-    auditLog = list;
-    _collectionSyncBaseline['auditLog'] = baseline;
-  }catch(e){ auditLog = []; _collectionSyncBaseline['auditLog'] = null; }
+    const r = kv.auditLog;
+    auditLog = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ auditLog = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('companies', cacheOnly);
-    companies = list;
-    _collectionSyncBaseline['companies'] = baseline;
-  }catch(e){ companies = []; _collectionSyncBaseline['companies'] = null; }
+    const r = kv.companies;
+    companies = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ companies = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('companyTransfers', cacheOnly);
-    companyTransfers = list;
-    _collectionSyncBaseline['companyTransfers'] = baseline;
-  }catch(e){ companyTransfers = []; _collectionSyncBaseline['companyTransfers'] = null; }
+    const r = kv.companyTransfers;
+    companyTransfers = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ companyTransfers = []; }
   {
     const migratedCount = migrateCompanyTransfersToLumpSum();
     if(migratedCount>0){
@@ -1152,45 +1062,38 @@ async function loadData(cacheOnly){
     }
   }
   try{
-    const { list, baseline } = await loadCollectionGeneric('journalEntries', cacheOnly);
-    journalEntries = list;
-    _collectionSyncBaseline['journalEntries'] = baseline;
-  }catch(e){ journalEntries = []; _collectionSyncBaseline['journalEntries'] = null; }
+    const r = kv.journalEntries;
+    journalEntries = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ journalEntries = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('chartOfAccounts', cacheOnly);
-    chartOfAccounts = list;
-    _collectionSyncBaseline['chartOfAccounts'] = baseline;
-  }catch(e){ chartOfAccounts = []; _collectionSyncBaseline['chartOfAccounts'] = null; }
+    const r = kv.chartOfAccounts;
+    chartOfAccounts = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ chartOfAccounts = []; }
   seedChartOfAccountsIfEmpty();
   try{
-    const { list, baseline } = await loadCollectionGeneric('journalDE', cacheOnly);
-    journalDE = list;
-    _collectionSyncBaseline['journalDE'] = baseline;
-  }catch(e){ journalDE = []; _collectionSyncBaseline['journalDE'] = null; }
+    const r = kv.journalDE;
+    journalDE = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ journalDE = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('budgetEntries', cacheOnly);
-    budgetEntries = list;
-    _collectionSyncBaseline['budgetEntries'] = baseline;
-  }catch(e){ budgetEntries = []; _collectionSyncBaseline['budgetEntries'] = null; }
+    const r = kv.budgetEntries;
+    budgetEntries = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ budgetEntries = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('suppliers', cacheOnly);
-    suppliers = list;
-    _collectionSyncBaseline['suppliers'] = baseline;
-  }catch(e){ suppliers = []; _collectionSyncBaseline['suppliers'] = null; }
+    const r = kv.suppliers;
+    suppliers = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ suppliers = []; }
   try{
-    const { list, baseline } = await loadCollectionGeneric('purchases', cacheOnly);
-    purchases = list;
-    _collectionSyncBaseline['purchases'] = baseline;
-  }catch(e){ purchases = []; _collectionSyncBaseline['purchases'] = null; }
+    const r = kv.purchases;
+    purchases = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ purchases = []; }
   // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
   // سجّلها هو بنفسه.
   // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
   try{
-    const { list, baseline } = await loadCollectionGeneric('manualSalesInvoices', cacheOnly);
-    manualSalesInvoices = list;
-    _collectionSyncBaseline['manualSalesInvoices'] = baseline;
-  }catch(e){ manualSalesInvoices = []; _collectionSyncBaseline['manualSalesInvoices'] = null; }
+    const r = kv.manualSalesInvoices;
+    manualSalesInvoices = r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ manualSalesInvoices = []; }
   try{
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
@@ -1205,7 +1108,7 @@ async function saveUsers(){
   try{ await window.storage.set('users', JSON.stringify(users), false); }catch(e){ showToast('تعذر حفظ بيانات المستخدمين'); }
 }
 async function saveAuditLog(){
-  await saveCollectionGeneric('auditLog', auditLog);
+  try{ await window.storage.set('auditLog', JSON.stringify(auditLog), false); }catch(e){ /* silent */ }
 }
 async function logAudit(action, section, description){
   auditLog.push({
@@ -1276,22 +1179,22 @@ async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
 }
 async function saveBagStock(){
-  await saveCollectionGeneric('bagStock', bagStock);
+  try{ await window.storage.set('bagStock', JSON.stringify(bagStock), false); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
 }
 async function saveVaultTx(){
-  await saveCollectionGeneric('vaultTx', vaultTx);
+  try{ await window.storage.set('vaultTx', JSON.stringify(vaultTx), false); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
 }
 async function saveDeletedVaultTx(){
-  await saveCollectionGeneric('deletedVaultTx', deletedVaultTx);
+  try{ await window.storage.set('deletedVaultTx', JSON.stringify(deletedVaultTx), false); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
 }
 async function saveVaultDenomTx(){
-  await saveCollectionGeneric('vaultDenomTx', vaultDenomTx);
+  try{ await window.storage.set('vaultDenomTx', JSON.stringify(vaultDenomTx), false); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
 }
 async function saveBankStatementRows(){
-  await saveCollectionGeneric('bankStatementRows', bankStatementRows);
+  try{ await window.storage.set('bankStatementRows', JSON.stringify(bankStatementRows), false); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
 }
 async function saveDeletedInvoices(){
-  await saveCollectionGeneric('deletedInvoices', deletedInvoices);
+  try{ await window.storage.set('deletedInvoices', JSON.stringify(deletedInvoices), false); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
 }
 
 /* ================= معايير محاسبية: ترقيم تسلسلي رسمي + قفل فترات + حذف منطقي ================= */
@@ -1369,13 +1272,13 @@ function pushVaultTxHistory(tx, beforeSnapshot, afterSnapshot){
   });
 }
 async function saveCourseSessions(){
-  await saveCollectionGeneric('courseSessions', courseSessions);
+  try{ await window.storage.set('courseSessions', JSON.stringify(courseSessions), false); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
 }
 async function saveCompanies(){
-  await saveCollectionGeneric('companies', companies);
+  try{ await window.storage.set('companies', JSON.stringify(companies), false); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
 }
 async function saveCompanyTransfers(){
-  await saveCollectionGeneric('companyTransfers', companyTransfers);
+  try{ await window.storage.set('companyTransfers', JSON.stringify(companyTransfers), false); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
 }
 /* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
    سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).
@@ -1472,19 +1375,19 @@ function cleanupDuplicateCompanyTraineeVaultEntries(){
   return removedCount;
 }
 async function saveJournalEntries(){
-  await saveCollectionGeneric('journalEntries', journalEntries);
+  try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
 }
 async function saveChartOfAccounts(){
-  await saveCollectionGeneric('chartOfAccounts', chartOfAccounts);
+  try{ await window.storage.set('chartOfAccounts', JSON.stringify(chartOfAccounts), false); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
 }
 async function saveJournalDE(){
-  await saveCollectionGeneric('journalDE', journalDE);
+  try{ await window.storage.set('journalDE', JSON.stringify(journalDE), false); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
 }
 async function saveBudgetEntries(){
-  await saveCollectionGeneric('budgetEntries', budgetEntries);
+  try{ await window.storage.set('budgetEntries', JSON.stringify(budgetEntries), false); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
 }
 async function saveSuppliers(){
-  await saveCollectionGeneric('suppliers', suppliers);
+  try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
 }
 /* ---------------- ترحيل مرفقات فواتير المشتريات القديمة (مرة واحدة) ----------------
    قبل هذا التحديث كان مرفق كل فاتورة (dataUrl الصورة كاملة) مخزَّناً داخل نفس عنصر الفاتورة
@@ -1507,10 +1410,10 @@ async function migratePurchaseAttachmentsOut(){
   await savePurchases();
 }
 async function savePurchases(){
-  await saveCollectionGeneric('purchases', purchases);
+  try{ await window.storage.set('purchases', JSON.stringify(purchases), false); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
 }
 async function saveManualSalesInvoices(){
-  await saveCollectionGeneric('manualSalesInvoices', manualSalesInvoices);
+  try{ await window.storage.set('manualSalesInvoices', JSON.stringify(manualSalesInvoices), false); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
 }
 async function saveZakatAdjustments(){
   try{ await window.storage.set('zakatAdjustments', JSON.stringify(zakatAdjustments), false); }catch(e){ showToast('تعذر حفظ تعديلات وعاء الزكاة'); }
@@ -2116,9 +2019,9 @@ function paymentChannelsLabel(c){
   return parts.length ? parts.join(' + ') : (c.channel || '—');
 }
 function bagSourceLabel(c){
-  if(c.bagSource==='own') return tr('bagOwn');
-  if(c.bagSource==='stock') return tr('bagFromStock');
-  return c.bagStatus==='purchased' ? tr('bagPurchased') : tr('bagNeedPurchase');
+  if(c.bagSource==='own') return 'خاصته';
+  if(c.bagSource==='stock') return 'من المخزون';
+  return c.bagStatus==='purchased' ? 'تم الشراء' : 'مطلوب شراء';
 }
 /* هل حقيبة هذا العميل بحالة "مطلوب شراء" نظيفة أصلاً (بدون فاتورة أو تاريخ شراء)؟ أي لا يوجد شيء لإلغائه */
 function clientBagIsClean(c){
@@ -2154,13 +2057,13 @@ function markClientBagOwn(c){
 /* زر سريع لإلغاء الحقيبة يظهر بجانب حالة الحقيبة في شيت العملاء — يظهر فقط إن كان هناك فعلاً حقيبة/بيانات لإلغائها */
 function bagCancelBtnHtml(c){
   if(clientBagIsClean(c)) return '';
-  return ` <button class="btn btn-ghost btn-sm" data-cancelbag="${c.id}" title="${tr('titleCancelBag')}" style="padding:2px 6px; font-size:11px; margin-inline-start:4px;">${tr('cancelBagBtn')}</button>`;
+  return ` <button class="btn btn-ghost btn-sm" data-cancelbag="${c.id}" title="إلغاء الحقيبة المسجّلة لهذا العميل وإعادته لحالة مطلوب شراء" style="padding:2px 6px; font-size:11px; margin-inline-start:4px;">إلغاء الحقيبة</button>`;
 }
 /* خانة سريعة لشراء الحقيبة تظهر بجانب حالة "مطلوب شراء" — تُتيح الشراء مباشرة من مكانها */
 function bagBuyCheckboxHtml(c){
   if(c.bagSource!=='buy' || c.bagStatus==='purchased') return '';
-  return ` <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="${tr('titleBuyBagNow')}">
-    <input type="checkbox" data-bagbuy="${c.id}"> ${tr('buyWord')}
+  return ` <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
+    <input type="checkbox" data-bagbuy="${c.id}"> شراء
   </label>`;
 }
 function courseDurationDays(courseType){
@@ -2353,9 +2256,19 @@ async function cleanupDuplicatePaymentMethods(){
     // تصحيح بأثر رجعي: حركات معلّقة سُجّلت أصلاً من الأدمن/المحاسب/الموظف العام (وليس
     // من الاستقبال) — هذه لا تحتاج "تسوية" أصلاً وتُعتبر مؤكدة تلقائياً، حتى لا تظهر بالخطأ
     // في صندوق تسويات الاستقبال (المخصص فقط لعمليات الاستقبال).
+    // إصلاح مهم: لا نُصحّح إطلاقاً بمجرد عدم العثور على العميل (linkedClient غير موجود) —
+    // هذه الحالة تحدث بشكل طبيعي وغير متعلق بحذف العميل فعلياً فى حالتين شائعتين جداً: (أ) جلسة
+    // محاسب/موظف عام لا ترى أصلاً عملاء الاستقبال المعلّقين (status='pending') قبل اعتماد الأدمن
+    // لهم، و(ب) التحميل السريع الأول من الكاش المحلي (loadData(cacheOnly=true)) الذي يبدأ الشاشة
+    // فوراً بنسخة قديمة/غير مكتملة من العملاء قبل اكتمال المزامنة الحقيقية مع السحابة. الاعتماد على
+    // "لم أجده" كدليل على عدم حاجته للتسوية كان يُسوّي معاملات استقبال حقيقية معلّقة بالخطأ فى أول
+    // ثانية من فتح البرنامج (خصوصاً بجلسة الأدمن نفسها)، ويُحفَظ هذا التصحيح الخاطئ فوراً على
+    // السيرفر (saveVaultTx أسفل) قبل أن تُحمَّل البيانات الصحيحة — فتختفي المعاملة نهائياً من صندوق
+    // تسويات الاستقبال رغم أنها لم تُسوَّ فعلياً. الآن نُصحّح فقط لو وَجدنا العميل فعلاً وتأكّدنا
+    // إيجابياً أنه ليس من تسجيل الاستقبال.
     if(t.settled === false && t.autoClientId){
       const linkedClient = clients.find(c=>c.id===t.autoClientId);
-      if(!linkedClient || !isReceptionUsername(linkedClient.createdBy)){
+      if(linkedClient && !isReceptionUsername(linkedClient.createdBy)){
         t.settled = true;
         vaultChanged = true;
       }
@@ -2552,6 +2465,7 @@ $all('button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='settings') renderSettings();
     if(btn.dataset.view==='bags') renderBags();
     if(btn.dataset.view==='vault') renderVault();
+    if(btn.dataset.view==='settlements' && typeof renderSettlementPanel==='function') renderSettlementPanel();
     if(btn.dataset.view==='courses') renderCourses();
     if(btn.dataset.view==='courseinvoices') renderCourseInvoices();
     if(btn.dataset.view==='audit') renderAuditLog();
