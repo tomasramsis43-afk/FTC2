@@ -1009,6 +1009,11 @@ async function renderTable(){
 function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
   const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
+  // إجمالي المبلغ المدفوع لكل العملاء المطابقين للفلتر الحالي (وليس فقط صفحة الجدول المعروضة حالياً) —
+  // يُحسب دائماً محلياً عبر filteredClients() (بدلاً من مسار السيرفر السريع الذي يُرجع صفحة واحدة فقط
+  // من الصفوف) لضمان دقة الإجمالي بغض النظر عن أي مسار عُرض به الجدول.
+  const cfp = $('#clients-filtered-paid');
+  if(cfp) cfp.textContent = fmt(filteredClients().reduce((s,c)=>s+paidTotal(c),0));
 
   $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
 
