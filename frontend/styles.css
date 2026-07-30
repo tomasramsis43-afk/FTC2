@@ -3,13 +3,16 @@
   --bg: #060e1c;
   --surface: #0c1b32;
   --surface-alt: #10233f;
+  --bg-soft: #10233f;
   --navy: #22d3ee;
   --navy-dark: #0891b2;
   --gold: #8b5cf6;
   --gold-dark: #6d28d9;
   --gold-soft: #a78bfa;
   --teal: #34d399;
+  --success: #34d399;
   --red: #f87171;
+  --danger: #f87171;
   --text: #eaf2ff;
   --text-muted: #8fa3c4;
   --border: rgba(56, 189, 238, 0.16);
@@ -24,13 +27,16 @@ body.dark-theme {
   --bg: #03060d;
   --surface: #0a1628;
   --surface-alt: #0d1c34;
+  --bg-soft: #0d1c34;
   --navy: #22d3ee;
   --navy-dark: #0891b2;
   --gold: #8b5cf6;
   --gold-dark: #6d28d9;
   --gold-soft: #a78bfa;
   --teal: #34d399;
+  --success: #34d399;
   --red: #f87171;
+  --danger: #f87171;
   --text: #eaf2ff;
   --text-muted: #8296b8;
   --border: rgba(56, 189, 238, 0.22);
@@ -43,6 +49,25 @@ body.dark-theme select,
 body.dark-theme input,
 body.dark-theme textarea {
   color-scheme: dark;
+}
+
+/* native <select> popup lists follow OS rendering by default;
+   force theme colors so dropdowns (year filters, etc.) stay on-brand */
+select {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+select option {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+select option:checked,
+select option:hover,
+select option:focus {
+  background-color: var(--navy) !important;
+  color: #04101f !important;
 }
 
 /* ============= GLOBAL STYLES ============= */
