@@ -364,7 +364,73 @@ function renderTraineesTableHtml(t, trainees){
     </table>
     </div>`;
 }
+/* تصدير PDF لتفاصيل متدربي حوالة واحدة فقط (من داخل شاشة "تفاصيل المتدربين" في الحركات المالية) —
+   نفس تصميم كشف حساب الشركة الكامل، لكن مقصور على حوالة واحدة بالذات. */
+function printCompanyTransferTrainees(transferId){
+  const t = companyTransfers.find(x=>x.id===transferId);
+  if(!t){ showToast('تعذّر إيجاد بيانات هذه الحوالة'); return; }
+  const company = companies.find(c=>c.id===t.companyId);
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA');
+  const allocated = transferAllocatedTotal(t);
+  const remaining = num(t.amount) - allocated;
+  const trainees = t.trainees || [];
+
+  const traineesRows = trainees.length ? trainees.map(trn=>{
+    const c = clients.find(x=>x.clientId===trn.clientId);
+    return `<tr>
+      <td class="mono">${escapeHtml(trn.clientId||'—')}</td>
+      <td>${escapeHtml(c?c.name:'—')}</td>
+      <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
+      <td>${escapeHtml(c?(c.courseType||'—'):'—')}</td>
+      <td class="mono">${escapeHtml(c?(c.courseNumber||'—'):'—')}</td>
+      <td class="mono">${fmt(num(trn.courseValue))}</td>
+      <td class="mono">${fmt(num(trn.bagValue))}</td>
+      <td class="mono">${fmt(num(trn.courseValue)+num(trn.bagValue))}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" style="text-align:center; color:${PRINT_PALETTE.muted};">لا يوجد متدربون مضافون بعد</td></tr>`;
+
+  const win = openPrintTarget();
+  win.document.write(`
+  ${printDocHead(`تفاصيل المتدربين — ${company?company.name:t.companyName}`, {variant:'table-center', extraCss:`
+    .summary-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:22px;}
+    .summary-box{border:1px solid ${PRINT_PALETTE.border}; border-radius:8px; padding:10px 12px; text-align:center;}
+    .summary-box .k{font-size:11.5px; color:${PRINT_PALETTE.muted}; margin-bottom:6px;}
+    .summary-box .v{font-family:monospace; font-size:17px; font-weight:bold; color:${PRINT_PALETTE.navy};}
+    tfoot td{background:${PRINT_PALETTE.surfaceAlt}; font-weight:bold;}
+  `})}
+  <body>
+    <div class="head">
+      <div><h2>تفاصيل المتدربين — ${escapeHtml(company?company.name:t.companyName)}</h2><div style="font-size:13px; color:${PRINT_PALETTE.muted};">${escapeHtml(ci.name)}</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">
+      <span>تاريخ الكشف: <b>${today}</b></span>
+      <span>تاريخ الحوالة: <b>${escapeHtml(t.date||'—')}</b></span>
+      ${t.refNum ? `<span>رقم المرجع: <b>${escapeHtml(t.refNum)}</b></span>` : ''}
+    </div>
+    <div class="summary-grid">
+      <div class="summary-box"><div class="k">قيمة الحوالة</div><div class="v">${fmt(num(t.amount))}</div></div>
+      <div class="summary-box"><div class="k">المخصَّص فعلياً</div><div class="v">${fmt(allocated)}</div></div>
+      <div class="summary-box"><div class="k">المتبقي غير المخصَّص</div><div class="v" style="${Math.abs(remaining)>0.01?`color:${PRINT_PALETTE.red};`:''}">${fmt(remaining)}</div></div>
+      <div class="summary-box"><div class="k">عدد المتدربين</div><div class="v">${trainees.length} / ${num(t.traineeCount)}</div></div>
+    </div>
+    <table>
+      <thead><tr><th>رقم الهوية</th><th>الاسم</th><th>الجنسية</th><th>نوع الدورة</th><th>رقم الدورة</th><th>قيمة الدورة</th><th>قيمة الحقيبة</th><th>الإجمالي</th></tr></thead>
+      <tbody>${traineesRows}</tbody>
+      ${trainees.length ? `<tfoot><tr>
+        <td colspan="5" style="text-align:left;">الإجمالي</td>
+        <td class="mono">${fmt(trainees.reduce((s,x)=>s+num(x.courseValue),0))}</td>
+        <td class="mono">${fmt(trainees.reduce((s,x)=>s+num(x.bagValue),0))}</td>
+        <td class="mono">${fmt(trainees.reduce((s,x)=>s+num(x.courseValue)+num(x.bagValue),0))}</td>
+      </tr></tfoot>` : ''}
+    </table>
+    ${printDocFooterButton()}
+  </body></html>`);
+  finishPrintDoc(win);
+}
 /* يفتح نافذة تفصيلية من شيت الحركات المالية تعرض توزيع المتدربين تحت قيد الحوالة الواحد */
+let currentVctTransferId = null;
 function openVaultCompanyTransferDetail(transferId){
   const t = companyTransfers.find(x=>x.id===transferId);
   if(!t){ showToast('تعذّر إيجاد بيانات هذه الحوالة'); return; }
@@ -373,8 +439,12 @@ function openVaultCompanyTransferDetail(transferId){
   $('#vct-title').textContent = `${tr('companyTransferTitlePrefix')} "${t.companyName}" — ${tr('onDateLabel')} ${t.date||'—'}`;
   $('#vct-summary').innerHTML = `${tr('transferValueLabel')}: <b>${fmt(num(t.amount))}</b> ﷼ — ${tr('allocatedLabel')}: <b>${fmt(allocated)}</b> ﷼ — ${tr('remainingLabel')}: <b>${fmt(remaining)}</b> ﷼ — ${tr('registeredTraineesLabel')}: <b>${(t.trainees||[]).length}</b> ${tr('ofTargetLabel')} ${num(t.traineeCount)} ${tr('targetWord')}`;
   $('#vct-table-wrap').innerHTML = renderTraineesTableHtml(t, t.trainees||[]);
+  currentVctTransferId = transferId;
   $('#vault-company-transfer-overlay').classList.add('show');
 }
+$('#vct-export-pdf')?.addEventListener('click', ()=>{
+  if(currentVctTransferId) printCompanyTransferTrainees(currentVctTransferId);
+});
 $('#vct-close')?.addEventListener('click', ()=> $('#vault-company-transfer-overlay').classList.remove('show'));
 /* بطاقات إحصائية + تنبيه الحوالات غير مكتملة التسوية (الفرق بين قيمة الحوالة وما خُصِّص فعلياً للمتدربين) */
 function companiesStats(){
