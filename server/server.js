@@ -764,42 +764,54 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
   }
 });
 
-// نقطة رفع مُجمَّع تُستخدم فقط فى: (أ) الترحيل لمرة واحدة من التخزين القديم (كل العملاء ككتلة
-// واحدة) إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 500 سجل
-// فى الطلب الواحد بدل طلب منفصل لكل عميل (5888 عميل مثلاً كانت ستعني 5888 طلباً منفصلاً تصطدم
-// فوراً بحد معدّل الطلبات). لا يوجد فحص تعارض هنا عمداً (نفس منطق العمليات الجماعية الكبيرة).
+// نقطة رفع مُجمَّع تُستخدم فى: (أ) الترحيل لمرة واحدة من التخزين القديم (كل العملاء ككتلة واحدة)
+// إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 500 سجل فى
+// الطلب الواحد بدل طلب منفصل لكل عميل (5888 عميل مثلاً كانت ستعني 5888 طلباً منفصلاً تصطدم فوراً
+// بحد معدّل الطلبات).
+// فحص تعارض لكل سجل على حدة (بنفس منطق /api/client-records/:id تماماً): كل سجل يحمل version
+// المعروفة لدى المرسل قبل هذا الرفع (0 لسجل جديد لم يُرحَّل بعد). لو تغيّر السجل فعلياً على السيرفر
+// من جهاز/مستخدم آخر فى نفس اللحظة (نادر لكن ممكن أثناء استيراد ضخم)، يُتجاهَل هذا السجل تحديداً
+// بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts ليعيد المستدعي معالجته بمسار الحفظ الفردي المعتاد.
 app.post('/api/client-records/bulk-migrate', requireAuth, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  const client = await pool.connect();
   try {
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
-    const values = [];
-    const placeholders = records.map((r, idx) => {
-      const base = idx * 6;
+    const conflicts = [];
+    let migrated = 0;
+    await client.query('BEGIN');
+    for (const r of records) {
+      const id = String(r.id);
+      const enc = String(r.enc);
+      const knownVersion = Number.isInteger(r.version) ? r.version : 0;
       const plainClientId = (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null;
-      values.push(String(r.id), String(r.enc), req.user.username, newOrigin, newStatus, plainClientId);
-      return `($${base + 1},$${base + 2},1,$${base + 3},$${base + 4},$${base + 5},$${base + 3},$${base + 6})`;
-    }).join(',');
-    const roleParamIndex = values.length + 1; // بارامتر إضافي واحد فى آخر القائمة (بعد كل صفوف السجلات)
-    const usernameParamIndex = values.length + 2;
-    values.push(req.user.role, req.user.username);
-    await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
-       VALUES ${placeholders}
-       ON CONFLICT (id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
-       -- حماية عزل بيانات الاستقبال: لو المرسل بدور 'reception'، يُتجاهَل صامتاً أي تعارض مع
-       -- سجل ليس أصلاً origin='reception' AND created_by له هو (بدل الكتابة فوق بيانات عميل
-       -- عام أو عميل مستخدم استقبال آخر لا يملكه).
-       WHERE ($${roleParamIndex} <> 'reception' OR (client_records.origin = 'reception' AND client_records.created_by = $${usernameParamIndex}))`,
-      values
-    );
-    res.json({ migrated: records.length });
+      const upsert = await client.query(
+        `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
+         VALUES ($1, $2, 1, $3, $4, $5, $3, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           enc = EXCLUDED.enc, version = client_records.version + 1,
+           updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
+         -- حماية عزل بيانات الاستقبال (كالسابق تماماً) + فحص التعارض بالنسخة المعروفة
+         WHERE ($7 <> 'reception' OR (client_records.origin = 'reception' AND client_records.created_by = $3))
+           AND client_records.version = $8
+         RETURNING version`,
+        [id, enc, req.user.username, newOrigin, newStatus, plainClientId, req.user.role, knownVersion]
+      );
+      if (upsert.rows[0]) { migrated++; continue; }
+      // لم يتحدّث الصف: إما تعارض حقيقي فى النسخة، أو رفض عزل الاستقبال — نفرّق بينهما بجلب الحالة الحالية
+      const current = await client.query('SELECT version FROM client_records WHERE id = $1', [id]);
+      conflicts.push({ id, currentVersion: current.rows[0] ? current.rows[0].version : 0 });
+    }
+    await client.query('COMMIT');
+    res.json({ migrated, conflicts });
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
+  } finally {
+    client.release();
   }
 });
 
@@ -914,31 +926,45 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
   }
 });
 
-// نقطة رفع مُجمَّع: تُستخدم فقط للترحيل لمرة واحدة من التخزين القديم (كتلة واحدة) إلى النظام الجديد،
-// وللعمليات الضخمة دفعة واحدة (استيراد شامل) — حتى 500 سجل فى الطلب الواحد. بدون فحص تعارض عمداً
-// (نفس منطق العمليات الجماعية الكبيرة فى /api/client-records/bulk-migrate).
+// نقطة رفع مُجمَّع: تُستخدم للترحيل لمرة واحدة من التخزين القديم (كتلة واحدة) إلى النظام الجديد،
+// وللعمليات الضخمة دفعة واحدة (استيراد شامل) — حتى 500 سجل فى الطلب الواحد.
+// فحص تعارض لكل سجل على حدة (بنفس منطق /api/records/:collection/:id تماماً): كل سجل يحمل version
+// المعروفة لدى المرسل قبل هذا الرفع (0 لسجل جديد). لو تغيّر السجل فعلياً على السيرفر من جهاز/مستخدم
+// آخر أثناء نفس العملية، يُتجاهَل هذا السجل تحديداً بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts.
 app.post('/api/records/:collection/bulk-migrate', requireAuth, requireValidCollection, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  const client = await pool.connect();
   try {
-    const values = [];
-    const placeholders = records.map((r, idx) => {
-      const base = idx * 4;
-      values.push(req.params.collection, String(r.id), String(r.enc), req.user.username);
-      return `($${base + 1},$${base + 2},$${base + 3},1,$${base + 4})`;
-    }).join(',');
-    await pool.query(
-      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
-       VALUES ${placeholders}
-       ON CONFLICT (collection, id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = collection_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by`,
-      values
-    );
-    res.json({ migrated: records.length });
+    const conflicts = [];
+    let migrated = 0;
+    await client.query('BEGIN');
+    for (const r of records) {
+      const id = String(r.id);
+      const enc = String(r.enc);
+      const knownVersion = Number.isInteger(r.version) ? r.version : 0;
+      const upsert = await client.query(
+        `INSERT INTO collection_records (collection, id, enc, version, updated_by)
+         VALUES ($1, $2, $3, 1, $4)
+         ON CONFLICT (collection, id) DO UPDATE SET
+           enc = EXCLUDED.enc, version = collection_records.version + 1,
+           updated_at = now(), updated_by = EXCLUDED.updated_by
+         WHERE collection_records.version = $5
+         RETURNING version`,
+        [req.params.collection, id, enc, req.user.username, knownVersion]
+      );
+      if (upsert.rows[0]) { migrated++; continue; }
+      const current = await client.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, id]);
+      conflicts.push({ id, currentVersion: current.rows[0] ? current.rows[0].version : 0 });
+    }
+    await client.query('COMMIT');
+    res.json({ migrated, conflicts });
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
+  } finally {
+    client.release();
   }
 });
 
