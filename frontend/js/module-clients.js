@@ -897,8 +897,8 @@ function applyGenericPagination(prefix, rows, state, filterSigParts){
     pag.style.display = rows.length ? '' : 'none';
     const startN = rows.length ? (state.page-1)*(Number.isFinite(pageSize)?pageSize:rows.length)+1 : 0;
     const endN = Number.isFinite(pageSize) ? Math.min(rows.length, state.page*pageSize) : rows.length;
-    const infoEl = $(`#${prefix}-page-info`); if(infoEl) infoEl.textContent = rows.length ? `عرض ${startN} - ${endN} من ${rows.length}` : '';
-    const curEl = $(`#${prefix}-page-current`); if(curEl) curEl.textContent = `صفحة ${state.page} / ${totalPages}`;
+    const infoEl = $(`#${prefix}-page-info`); if(infoEl) infoEl.textContent = rows.length ? `${tr('showingOfTotal')} ${startN} - ${endN} ${tr('ofWord')} ${rows.length}` : '';
+    const curEl = $(`#${prefix}-page-current`); if(curEl) curEl.textContent = `${tr('pageWord')} ${state.page} / ${totalPages}`;
     const fb = $(`#${prefix}-page-first`); if(fb) fb.disabled = state.page<=1;
     const pb = $(`#${prefix}-page-prev`); if(pb) pb.disabled = state.page<=1;
     const nb = $(`#${prefix}-page-next`); if(nb) nb.disabled = state.page>=totalPages;

@@ -367,54 +367,54 @@
   <!-- COURSES -->
   <section class="view" id="view-courses">
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
-      <h3 style="margin:0 0 4px;">شيت الدورات</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.</p>
+      <h3 style="margin:0 0 4px;" data-i18n="coursesSheetTitle">شيت الدورات</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;" data-i18n="coursesSheetHint">كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.</p>
     </div>
     <div class="toolbar">
-      <input type="date" id="cs-filter-from" title="من تاريخ">
-      <input type="date" id="cs-filter-to" title="إلى تاريخ">
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-upcoming">الدورات القادمة</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-undefined">⚠️ الدورات غير محددة (رقم/تاريخ/نوع)</button>
-      <input type="text" id="cs-filter-num" placeholder="فلترة برقم الدورة">
-      <input type="text" id="cs-filter-clientid" placeholder="فلترة برقم هوية العميل">
+      <input type="date" id="cs-filter-from" title="من تاريخ" data-i18n-title="fromDateTitle">
+      <input type="date" id="cs-filter-to" title="إلى تاريخ" data-i18n-title="toDateTitle">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-upcoming" data-i18n="upcomingCoursesBtn">الدورات القادمة</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-undefined" data-i18n="undefinedCoursesBtn">⚠️ الدورات غير محددة (رقم/تاريخ/نوع)</button>
+      <input type="text" id="cs-filter-num" placeholder="فلترة برقم الدورة" data-i18n-placeholder="filterByCourseNumPlaceholder">
+      <input type="text" id="cs-filter-clientid" placeholder="فلترة برقم هوية العميل" data-i18n-placeholder="filterByClientIdPlaceholder">
       <span class="spacer"></span>
-      <button class="btn btn-ghost btn-sm" id="btn-export-courses">تصدير CSV (حسب الفلتر الحالي)</button>
-      <button class="btn btn-gold btn-sm" id="btn-print-courses-report">🖨️ طباعة تقرير شامل (كل التفاصيل)</button>
-      <button class="btn btn-ghost btn-sm" id="btn-template-course-numbers">نموذج أرقام الدورات</button>
-      <button class="btn btn-ghost btn-sm" id="btn-import-course-numbers">استيراد أرقام الدورات (Excel)</button>
+      <button class="btn btn-ghost btn-sm" id="btn-export-courses" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
+      <button class="btn btn-gold btn-sm" id="btn-print-courses-report" data-i18n="printFullReportBtn">🖨️ طباعة تقرير شامل (كل التفاصيل)</button>
+      <button class="btn btn-ghost btn-sm" id="btn-template-course-numbers" data-i18n="templateCourseNumbersBtn">نموذج أرقام الدورات</button>
+      <button class="btn btn-ghost btn-sm" id="btn-import-course-numbers" data-i18n="importCourseNumbersBtn">استيراد أرقام الدورات (Excel)</button>
       <input type="file" id="import-coursenum-input" accept=".xlsx,.xls,.csv" style="display:none;">
-      <button class="btn btn-primary btn-sm" id="btn-cs-bulk">📋 تحديث/استيراد أرقام الدورات والفواتير (جدول)</button>
-      <button class="btn btn-gold" id="btn-add-session">+ دورة جديدة</button>
+      <button class="btn btn-primary btn-sm" id="btn-cs-bulk" data-i18n="bulkUpdateCourseInvoiceBtn">📋 تحديث/استيراد أرقام الدورات والفواتير (جدول)</button>
+      <button class="btn btn-gold" id="btn-add-session" data-i18n="newSessionBtn">+ دورة جديدة</button>
     </div>
-    <div class="hint hint-info">استيراد أرقام الدورات يتم بالربط برقم الهوية/الإقامة فقط: ملف Excel بعمودين "رقم الهوية" و"رقم الدورة"، ويتم تحديث شيت العملاء تلقائياً لكل الأرقام المطابقة دفعة واحدة. إن كان رقم الهوية غير موجود إطلاقاً في شيت العملاء (أو في أي مكان آخر بالبرنامج)، يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية ورقم الدورة فقط) بدل تجاهله أو رفضه — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته (كالاسم والجوال) لاحقاً، ولا يُحذف تلقائياً لعدم اكتمالها. يمكن أيضاً إضافة عمود "تاريخ الدورة" (اختياري)، ليتم تحديث تاريخ الدورة في شيت الدورات تلقائياً، أو إنشاء دورة جديدة بهذا التاريخ إذا لم تكن موجودة. أو استخدم زر "تحديث/استيراد أرقام الدورات والفواتير (جدول)" لإدخال/لصق البيانات مباشرة من داخل البرنامج دون الحاجة لملف Excel — يشمل رقم الفاتورة أيضاً، وبنفس سلوك إضافة العميل تلقائياً إن لم يكن موجوداً.</div>
+    <div class="hint hint-info" data-i18n="importCourseNumbersHint">استيراد أرقام الدورات يتم بالربط برقم الهوية/الإقامة فقط: ملف Excel بعمودين "رقم الهوية" و"رقم الدورة"، ويتم تحديث شيت العملاء تلقائياً لكل الأرقام المطابقة دفعة واحدة. إن كان رقم الهوية غير موجود إطلاقاً في شيت العملاء (أو في أي مكان آخر بالبرنامج)، يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية ورقم الدورة فقط) بدل تجاهله أو رفضه — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته (كالاسم والجوال) لاحقاً، ولا يُحذف تلقائياً لعدم اكتمالها. يمكن أيضاً إضافة عمود "تاريخ الدورة" (اختياري)، ليتم تحديث تاريخ الدورة في شيت الدورات تلقائياً، أو إنشاء دورة جديدة بهذا التاريخ إذا لم تكن موجودة. أو استخدم زر "تحديث/استيراد أرقام الدورات والفواتير (جدول)" لإدخال/لصق البيانات مباشرة من داخل البرنامج دون الحاجة لملف Excel — يشمل رقم الفاتورة أيضاً، وبنفس سلوك إضافة العميل تلقائياً إن لم يكن موجوداً.</div>
 
     <div class="grid-cards" id="courses-stats-cards">
-    <div class="card"><div class="k">عدد الدورات</div><div class="v">195</div></div>
-    <div class="card"><div class="k">إجمالي المسجّلين</div><div class="v gold">765</div></div>
-    <div class="card"><div class="k">دورات قادمة</div><div class="v">0</div></div>
-    <div class="card"><div class="k">دورات منتهية</div><div class="v">195</div></div>
-    <div class="card"><div class="k">دورات بلا تاريخ محدَّد</div><div class="v red">0</div></div>
-    <div class="card"><div class="k">دورات مكتملة العدد</div><div class="v red">0</div></div>
-    <div class="card"><div class="k">المقاعد المتبقية (للدورات محددة السعة)</div><div class="v">—</div></div>
-    <div class="card"><div class="k">ملغى / غياب</div><div class="v red">0 / 0</div></div>
-    <div class="card"><div class="k">الأكثر تكراراً</div><div class="v" style="font-size:15px;">Food safety (131)</div></div>
+    <div class="card"><div class="k" data-i18n="coursesCountLabel">عدد الدورات</div><div class="v">195</div></div>
+    <div class="card"><div class="k" data-i18n="totalRegisteredLabel">إجمالي المسجّلين</div><div class="v gold">765</div></div>
+    <div class="card"><div class="k" data-i18n="upcomingCoursesLabel">دورات قادمة</div><div class="v">0</div></div>
+    <div class="card"><div class="k" data-i18n="finishedCoursesLabel">دورات منتهية</div><div class="v">195</div></div>
+    <div class="card"><div class="k" data-i18n="noDateCoursesLabel">دورات بلا تاريخ محدَّد</div><div class="v red">0</div></div>
+    <div class="card"><div class="k" data-i18n="fullCoursesLabel">دورات مكتملة العدد</div><div class="v red">0</div></div>
+    <div class="card"><div class="k" data-i18n="remainingSeatsLabel">المقاعد المتبقية (للدورات محددة السعة)</div><div class="v">—</div></div>
+    <div class="card"><div class="k" data-i18n="cancelledAbsentLabel">ملغى / غياب</div><div class="v red">0 / 0</div></div>
+    <div class="card"><div class="k" data-i18n="mostFrequentLabel">الأكثر تكراراً</div><div class="v" style="font-size:15px;">Food safety (131)</div></div>
   </div>
 
     <div class="panel">
-      <h3 style="margin:0 0 10px;">من سجّل ولم يُحدَّد له رقم دورة بعد</h3>
-      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;">تُعرض القائمة أدناه لكل عملاء الشيت الذين لم يُحدَّد لهم رقم دورة بعد. يمكنك اختيار نوع دورة معيّن لتضييق العرض عليه فقط، وفلاتر الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع تعمل على كامل القائمة بجميع أنواع الدورات.</p>
+      <h3 style="margin:0 0 10px;" data-i18n="missingCourseTitle">من سجّل ولم يُحدَّد له رقم دورة بعد</h3>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;" data-i18n="missingCourseHint">تُعرض القائمة أدناه لكل عملاء الشيت الذين لم يُحدَّد لهم رقم دورة بعد. يمكنك اختيار نوع دورة معيّن لتضييق العرض عليه فقط، وفلاتر الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع تعمل على كامل القائمة بجميع أنواع الدورات.</p>
       <div class="toolbar" style="margin-bottom:10px;">
-        <select id="cs-missing-course"><option value="">كل أنواع الدورات</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
-        <input type="date" id="cs-missing-from" title="تاريخ التسجيل من">
-        <input type="date" id="cs-missing-to" title="تاريخ التسجيل إلى">
-        <input type="date" id="cs-missing-exp-from" title="تاريخ الدورة المتوقع من">
-        <input type="date" id="cs-missing-exp-to" title="تاريخ الدورة المتوقع إلى">
+        <select id="cs-missing-course"><option value="" data-i18n="allCourseTypesOpt">كل أنواع الدورات</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
+        <input type="date" id="cs-missing-from" title="تاريخ التسجيل من" data-i18n-title="dateFrom">
+        <input type="date" id="cs-missing-to" title="تاريخ التسجيل إلى" data-i18n-title="dateTo">
+        <input type="date" id="cs-missing-exp-from" title="تاريخ الدورة المتوقع من" data-i18n-title="expectedCourseDateFromTitle">
+        <input type="date" id="cs-missing-exp-to" title="تاريخ الدورة المتوقع إلى" data-i18n-title="expectedCourseDateToTitle">
         <div class="multi-select" id="cs-missing-nat-wrap" style="position:relative;">
-          <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-btn">الجنسية: الكل ▾</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-btn" data-i18n="nationalityAllLabel">الجنسية: الكل ▾</button>
           <div id="cs-missing-nat-panel" style="display:none; position:absolute; z-index:20; top:calc(100% + 4px); right:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow); padding:10px 12px; max-height:240px; overflow-y:auto; min-width:190px;">
             <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:8px; font-size:11.5px;">
-              <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-clear" style="padding:3px 8px; font-size:11px;">إلغاء التحديد</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-all" style="padding:3px 8px; font-size:11px;">تحديد الكل</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-clear" style="padding:3px 8px; font-size:11px;" data-i18n="clearSelection">إلغاء التحديد</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="cs-missing-nat-all" style="padding:3px 8px; font-size:11px;" data-i18n="selectAllLabel">تحديد الكل</button>
             </div>
             <div id="cs-missing-nat-options">
     <label style="display:flex; align-items:center; gap:6px; padding:4px 2px; font-size:13px; cursor:pointer;">
@@ -512,590 +512,27 @@
           </div>
         </div>
         <span class="spacer"></span>
-        <span class="mono" id="cs-missing-count" style="font-size:12.5px; color:var(--text-muted);">47 عميل في كل الشيت لم يُحدَّد له رقم دورة بعد</span>
-        <button class="btn btn-ghost btn-sm" id="btn-export-missing-course">تصدير CSV (حسب الفلتر الحالي)</button>
+        <span class="mono" id="cs-missing-count" style="font-size:12.5px; color:var(--text-muted);"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-export-missing-course" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
       </div>
-      <div id="cs-missing-list"><div class="table-scroll"><table>
-    <thead><tr><th>الاسم</th><th>تاريخ التسجيل</th><th>نوع الدورة</th><th>رقم الهوية</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>حالة الحقيبة</th><th>تاريخ دورة متوقع</th></tr></thead>
-    <tbody><tr>
-      <td>محمد ساريفال اسلام</td>
-      <td><span class="stamp paid">حديث (16/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2586645455</td>
-      <td class="mono">0547605327</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrn84d0j9gx6o"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrn84d0j9gx6o" value="2026-07-23" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>ابراهيم علي</td>
-      <td><span class="stamp paid">حديث (15/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2493798694</td>
-      <td class="mono">0559679741</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp paid">من المخزون</span></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrlm939vxbwn8" value="2026-07-22" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>راجيب فرهد  علي</td>
-      <td><span class="stamp paid">حديث (15/07/2026)</span></td>
-      <td>barber</td>
-      <td class="mono">2561778636</td>
-      <td class="mono">0572598293</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp paid">من المخزون</span></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrlt8vfuy8uk9" value="2026-07-22" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>منيرة سالم عبدالله الترفان</td>
-      <td><span class="stamp paid">حديث (14/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1078463153</td>
-      <td class="mono">0536424230</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrkl8k1bdh47h"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrkl8k1bdh47h" value="2026-07-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>معروف حسن معروف حسن</td>
-      <td><span class="stamp paid">حديث (13/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2593666718</td>
-      <td class="mono">0507379075</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrj7sv20a3n98"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrj7sv20a3n98" value="2026-07-20" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عبدالرحمن مسلم خروفوش الشملاني</td>
-      <td><span class="stamp paid">حديث (13/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1110292768</td>
-      <td class="mono">0557355358</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrj7yv2cyz7s9"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrj7yv2cyz7s9" value="2026-07-20" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عثمان حمودعلى قاسم</td>
-      <td><span class="stamp paid">حديث (12/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2625059593</td>
-      <td class="mono">0534839616</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrhtfemngtrun"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrhtfemngtrun" value="2026-07-19" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>محمد عبدالله عبده مرشد</td>
-      <td><span class="stamp paid">حديث (12/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2632381295</td>
-      <td class="mono">0508946988</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrhtjmche6tou"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrhtjmche6tou" value="2026-07-19" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عبدالكريم علي علي المساري</td>
-      <td><span class="stamp paid">حديث (11/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2616128357</td>
-      <td class="mono">0537104948</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrit5phshy05y"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrit5phshy05y" value="2026-07-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>موسى عبدالله محمد الغولي</td>
-      <td><span class="stamp paid">حديث (11/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2615549488</td>
-      <td class="mono">0558150383</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrit5phtq5bra"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrit5phtq5bra" value="2026-07-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عصام عبده فخر الدين</td>
-      <td><span class="stamp paid">حديث (11/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2579316330</td>
-      <td class="mono">0057685003</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrit5phtdc54c"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrit5phtdc54c" value="2026-07-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عبدالله محمد محمد قاسم</td>
-      <td><span class="stamp paid">حديث (11/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2452839752</td>
-      <td class="mono">0540058675</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrit5phthcxql"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrit5phthcxql" value="2026-07-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>ايمانويل</td>
-      <td><span class="stamp paid">حديث (11/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2596651030</td>
-      <td class="mono">0560731447</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrit5phu9o2tv"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrit5phu9o2tv" value="2026-07-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>ياسر غازي العنزي</td>
-      <td><span class="stamp paid">حديث (06/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1128611793</td>
-      <td class="mono">550610593</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0mo05qh"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0mo05qh" value="2026-07-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>يزيد محمد القرني</td>
-      <td><span class="stamp paid">حديث (06/07/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1140090240</td>
-      <td class="mono">538117527</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0mk9ohq"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0mk9ohq" value="2026-07-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>جلال عبدالباقي عبدالله</td>
-      <td><span class="stamp owe">قديم (27/06/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2609146010</td>
-      <td class="mono">531978103</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0liwp7w"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0liwp7w" value="2026-07-04" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>عبدة محمد</td>
-      <td><span class="stamp owe">قديم (08/06/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2052712409</td>
-      <td class="mono">530235994</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0k59fq9"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0k59fq9" value="2026-06-15" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>اريج محمد</td>
-      <td><span class="stamp owe">قديم (19/05/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1073465922</td>
-      <td class="mono">500185781</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0jzh1st"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0jzh1st" value="2026-05-26" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>زهور محمد</td>
-      <td><span class="stamp owe">قديم (19/05/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1111284848</td>
-      <td class="mono">500185781</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0jesajn"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0jesajn" value="2026-05-26" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>أسامة محمد عوض</td>
-      <td><span class="stamp owe">قديم (11/05/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2609144957</td>
-      <td class="mono">503761439</td>
-      <td>Yemeni</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0j0wopd"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0j0wopd" value="2026-05-18" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>حصه عمر حمدان الدوسري</td>
-      <td><span class="stamp owe">قديم (05/05/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1071141749</td>
-      <td class="mono">554982053</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0j49t7j"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0j49t7j" value="2026-05-12" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>نوره مبارك حمد العيد</td>
-      <td><span class="stamp owe">قديم (30/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">1097140881</td>
-      <td class="mono">558386330</td>
-      <td>Saudi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0iqd8ph"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0iqd8ph" value="2026-04-06" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>DANIELJR</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2573705544</td>
-      <td class="mono">534379609</td>
-      <td>Filipino</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0hn1p80"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0hn1p80" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>ZAENAL ABIDIN</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2614789564</td>
-      <td class="mono">534379609</td>
-      <td>Indonesia</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0hjqfsa"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0hjqfsa" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>Lee Kagwathi</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2616459919</td>
-      <td class="mono">534379609</td>
-      <td>Kenya</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0hk4avi"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0hk4avi" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>Muhammad Yusup</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2622813950</td>
-      <td class="mono">534379609</td>
-      <td>Indonesia</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0hpyc6e"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0hpyc6e" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>Muhammad Rizki</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2622815831</td>
-      <td class="mono">534379609</td>
-      <td>Indonesia</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0h1be5e"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0h1be5e" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>Joe Mugwanj</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2624938995</td>
-      <td class="mono">534379609</td>
-      <td>Kenya</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0h7vdtj"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0h7vdtj" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>Paul Njoroge</td>
-      <td><span class="stamp owe">قديم (14/03/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2630224901</td>
-      <td class="mono">534379609</td>
-      <td>Kenya</td>
-      <td>مؤسسة نحو الاتجاه لتقديم المشروبات</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0hwkj35"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0hwkj35" value="2026-03-21" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>وحيد الله ازاد</td>
-      <td><span class="stamp owe">قديم (06/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2463749180</td>
-      <td class="mono">551159326</td>
-      <td>Pakistani</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0esl4ia"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0esl4ia" value="2026-01-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>مد زاهد</td>
-      <td><span class="stamp owe">قديم (06/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2555608724</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0fhpa2z"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0fhpa2z" value="2026-01-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>م منير ال اسلام</td>
-      <td><span class="stamp owe">قديم (06/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2597125414</td>
-      <td class="mono">551159326</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0fg8qvo"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0fg8qvo" value="2026-01-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>مينج اوسين</td>
-      <td><span class="stamp owe">قديم (06/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2618452409</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0fnirxh"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0fnirxh" value="2026-01-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>اكاش تشاندر</td>
-      <td><span class="stamp owe">قديم (06/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2623214703</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0f7fwl6"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0f7fwl6" value="2026-01-13" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>وجاهت الله</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2493956946</td>
-      <td class="mono">551159326</td>
-      <td>Pakistani</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0es2tyx"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0es2tyx" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>قنيش بهدور</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2509582868</td>
-      <td class="mono">551159326</td>
-      <td>Nepali</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0ewjgtx"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0ewjgtx" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>محمد شهيد</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2523204480</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0e57tz6"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0e57tz6" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>مد سانورا حسن</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2534460874</td>
-      <td class="mono">551159326</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0evimw2"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0evimw2" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>معصوم رنا</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2542032483</td>
-      <td class="mono">551159326</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0el3sdq"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0el3sdq" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>مد مومن ال سلام</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2548710041</td>
-      <td class="mono">551159326</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0edxo85"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0edxo85" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>محمد دانيا</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2561843117</td>
-      <td class="mono">551159326</td>
-      <td>Pakistani</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0eutuv5"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0eutuv5" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>مد سوري</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2577097245</td>
-      <td class="mono">551159326</td>
-      <td>Bangladesh</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0eyol9n"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0eyol9n" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>ارمان لوكو مالدين</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2618450635</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0e5gxtz"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0e5gxtz" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>انس معصوم الطاف</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2618451070</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0ey2uba"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0ey2uba" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>محمد قاسم انوار</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2618452094</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0ebg5m5"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0ebg5m5" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>روئ سينغ</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2623204043</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>شركة الغربي</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0e3eaew"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0e3eaew" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr><tr>
-      <td>سراج عالم</td>
-      <td><span class="stamp owe">قديم (01/01/2026)</span></td>
-      <td>Food safety</td>
-      <td class="mono">2623204324</td>
-      <td class="mono">551159326</td>
-      <td>Hindi</td>
-      <td>—</td>
-      <td><span class="stamp owe">مطلوب شراء</span> <label style="display:inline-flex; align-items:center; gap:3px; cursor:pointer; margin-inline-start:6px; font-size:11.5px; color:var(--text-muted);" title="اضغط لتسليم الحقيبة الآن من المخزون">
-    <input type="checkbox" data-bagbuy="mrah1f0elba9z"> شراء
-  </label></td>
-      <td><input type="date" class="cs-expected-date" data-client-id="mrah1f0elba9z" value="2026-01-08" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
-    </tr></tbody>
-  </table></div></div>
+      <div id="cs-missing-list"></div>
     </div>
 
     <div id="courses-sessions-list"></div>
     <div class="toolbar" id="courses-pagination" style="padding: 12px 0px;">
-      <span class="mono" id="courses-page-info" style="font-size:12.5px; color:var(--text-muted);">عرض 1 - 10 من 195</span>
+      <span class="mono" id="courses-page-info" style="font-size:12.5px; color:var(--text-muted);"></span>
       <span class="spacer"></span>
       <select id="courses-page-size" style="max-width:110px;">
-        <option value="10" selected="">10 / صفحة</option>
-        <option value="20">20 / صفحة</option>
-        <option value="50">50 / صفحة</option>
-        <option value="all">عرض الكل</option>
+        <option value="10" selected="" data-i18n="perPage10">10 / صفحة</option>
+        <option value="20" data-i18n="perPage20">20 / صفحة</option>
+        <option value="50" data-i18n="perPage50">50 / صفحة</option>
+        <option value="all" data-i18n="showAllOpt">عرض الكل</option>
       </select>
-      <button class="btn btn-ghost btn-sm" id="courses-page-first" disabled="">« الأولى</button>
-      <button class="btn btn-ghost btn-sm" id="courses-page-prev" disabled="">‹ السابقة</button>
-      <span class="mono" id="courses-page-current" style="font-size:12.5px; padding:0 6px;">صفحة 1 / 20</span>
-      <button class="btn btn-ghost btn-sm" id="courses-page-next">التالية ›</button>
-      <button class="btn btn-ghost btn-sm" id="courses-page-last">الأخيرة »</button>
+      <button class="btn btn-ghost btn-sm" id="courses-page-first" disabled="" data-i18n="firstPage">« الأولى</button>
+      <button class="btn btn-ghost btn-sm" id="courses-page-prev" disabled="" data-i18n="prevPage">‹ السابقة</button>
+      <span class="mono" id="courses-page-current" style="font-size:12.5px; padding:0 6px;"></span>
+      <button class="btn btn-ghost btn-sm" id="courses-page-next" data-i18n="nextPage">التالية ›</button>
+      <button class="btn btn-ghost btn-sm" id="courses-page-last" data-i18n="lastPage">الأخيرة »</button>
     </div>
   </section>
 
@@ -4990,19 +4427,19 @@
 
 <div class="overlay" id="session-overlay">
   <div class="modal" style="max-width:480px;">
-    <h2 id="session-modal-title">دورة جديدة</h2>
+    <h2 id="session-modal-title" data-i18n="newSessionModalTitle">دورة جديدة</h2>
     <form id="session-form">
       <div class="formgrid">
-        <div class="field full"><label>رقم الدورة *</label><input required="" id="sf-num" type="text"></div>
-        <div class="field"><label>نوع الدورة</label><select id="sf-type"></select></div>
-        <div class="field"><label>التاريخ</label><input type="date" id="sf-date"></div>
-        <div class="field"><label>اللغة</label><input type="text" id="sf-lang" placeholder="Arabic / English / ..."></div>
-        <div class="field"><label>السعة القصوى</label><input type="number" id="sf-cap" min="1"></div>
+        <div class="field full"><label data-i18n="courseNumberField">رقم الدورة *</label><input required="" id="sf-num" type="text"></div>
+        <div class="field"><label data-i18n="courseTypeField">نوع الدورة</label><select id="sf-type"></select></div>
+        <div class="field"><label data-i18n="dateField">التاريخ</label><input type="date" id="sf-date"></div>
+        <div class="field"><label data-i18n="languageField">اللغة</label><input type="text" id="sf-lang" placeholder="Arabic / English / ..."></div>
+        <div class="field"><label data-i18n="maxCapacityField">السعة القصوى</label><input type="number" id="sf-cap" min="1"></div>
         <div class="field full"><label data-i18n="fieldNotes">ملاحظات</label><textarea id="sf-notes" rows="2"></textarea></div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="sf-cancel">إلغاء</button>
-        <button type="submit" class="btn btn-primary">حفظ</button>
+        <button type="button" class="btn btn-ghost" id="sf-cancel" data-i18n="cancel">إلغاء</button>
+        <button type="submit" class="btn btn-primary" data-i18n="save">حفظ</button>
       </div>
     </form>
   </div>
