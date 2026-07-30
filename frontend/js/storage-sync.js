@@ -442,15 +442,25 @@ async function deleteOneRecordGeneric(collection, id){
 
 async function bulkUploadRecordsGeneric(collection, list){
   const CHUNK = 300;
+  if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+  const versions = _recordVersions[collection];
   for(let i=0;i<list.length;i+=CHUNK){
     const chunk = list.slice(i, i+CHUNK);
     const records = [];
-    for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)) });
+    for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: versions.get(item.id) || 0 });
     const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
       method: 'POST',
       body: JSON.stringify({ records }),
     });
     if(!res.ok) throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
+    const data = await res.json().catch(()=>({}));
+    // تحديث النسخ المعروفة محلياً لكل سجل نجح، والتنبيه لو رُفض سجل بسبب تعارض حقيقي (عدّله جهاز
+    // آخر أثناء نفس عملية الرفع) — يبقى بياناته القديمة على السيرفر كما هي دون كتابة فوقها صامتاً.
+    for(const item of chunk) if(!(data.conflicts||[]).some(c=>c.id===item.id)) versions.set(item.id, (versions.get(item.id)||0) + 1);
+    if(data.conflicts && data.conflicts.length){
+      for(const c of data.conflicts) versions.set(c.id, c.currentVersion || 0);
+      showToast(`⚠️ تعذّر رفع ${data.conflicts.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+    }
   }
 }
 
@@ -656,12 +666,19 @@ async function bulkUploadClientRecords(clientsList){
   for(let i=0;i<clientsList.length;i+=CHUNK){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
-    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '' });
+    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: _clientRecordVersions[c.id] || 0 });
     const res = await serverFetch('/api/client-records/bulk-migrate', {
       method: 'POST',
       body: JSON.stringify({ records }),
     });
     if(!res.ok) throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
+    const data = await res.json().catch(()=>({}));
+    // تحديث النسخ المعروفة محلياً، والتنبيه لو رُفض عميل بسبب تعارض حقيقي أثناء نفس عملية الرفع.
+    for(const c of chunk) if(!(data.conflicts||[]).some(x=>x.id===c.id)) _clientRecordVersions[c.id] = (_clientRecordVersions[c.id]||0) + 1;
+    if(data.conflicts && data.conflicts.length){
+      for(const c of data.conflicts) _clientRecordVersions[c.id] = c.currentVersion || 0;
+      showToast(`⚠️ تعذّر رفع ${data.conflicts.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
+    }
   }
 }
 
