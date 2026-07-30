@@ -2695,6 +2695,14 @@ function applyRolePermissions(){
   if(activeBtn && !canAccessView(activeBtn.dataset.view)){
     $('[data-view="dashboard"]').click();
   }
+  // إخفاء أزرار الاستيراد الجماعي (تحديث/استيراد العملاء، استيراد الرقم المرجعي، استيراد عمال الشركات)
+  // عن يوزر الاستقبال — هذه أدوات جماعية حسّاسة لا تخص عمل موظف الاستقبال اليومي.
+  const receptionHiddenBtnIds = ['btn-bulk-update','btn-refnum-bulk','btn-compworkers-bulk'];
+  const isReception = currentUserRole === 'reception';
+  receptionHiddenBtnIds.forEach(id=>{
+    const btn = document.getElementById(id);
+    if(btn) btn.style.display = isReception ? 'none' : '';
+  });
   pinNavTabsToRightEdge();
 }
 /* يثبّت شريط التبويبات الأفقي (وضع الجوال) على أقصى اليمين افتراضياً، لأن بعض المتصفحات
