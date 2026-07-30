@@ -2696,8 +2696,8 @@ function applyRolePermissions(){
     $('[data-view="dashboard"]').click();
   }
   // إخفاء أزرار الاستيراد الجماعي (تحديث/استيراد العملاء، استيراد الرقم المرجعي، استيراد عمال الشركات)
-  // عن يوزر الاستقبال — هذه أدوات جماعية حسّاسة لا تخص عمل موظف الاستقبال اليومي.
-  const receptionHiddenBtnIds = ['btn-bulk-update','btn-refnum-bulk','btn-compworkers-bulk'];
+  // وزر حذف العملاء الجماعي (جدول) عن يوزر الاستقبال — هذه أدوات جماعية حسّاسة لا تخص عمل موظف الاستقبال اليومي.
+  const receptionHiddenBtnIds = ['btn-bulk-update','btn-refnum-bulk','btn-compworkers-bulk','btn-bulk-delete-table'];
   const isReception = currentUserRole === 'reception';
   receptionHiddenBtnIds.forEach(id=>{
     const btn = document.getElementById(id);
