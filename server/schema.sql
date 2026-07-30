@@ -176,7 +176,10 @@ CREATE TABLE IF NOT EXISTS collection_records (
   updated_by    TEXT,
   PRIMARY KEY (collection, id)
 );
-CREATE INDEX IF NOT EXISTS idx_collection_records_collection ON collection_records(collection);
+-- ملاحظة: لا حاجة لإندكس منفصل على عمود collection وحده — المفتاح الأساسي المركّب
+-- PRIMARY KEY (collection, id) يغطي بالفعل أي استعلام WHERE collection = X (العمود القائد
+-- فى الإندكس المركّب)، فأي إندكس إضافي عليه وحده تكرار بلا فائدة حقيقية.
+DROP INDEX IF EXISTS idx_collection_records_collection;
 
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
