@@ -890,21 +890,21 @@ function renderCoursesStats(sessions, fcid){
       seatsTaken += activeEnrolled.length;
       if(activeEnrolled.length >= s.capacity) fullSessions++;
     }
-    const t = s.courseType || 'غير محدد';
+    const t = s.courseType || tr('notSpecified');
     byType[t] = (byType[t]||0) + 1;
   });
   const topType = Object.entries(byType).sort((a,b)=>b[1]-a[1])[0];
   const seatsRemaining = Math.max(0, seatsDefined - seatsTaken);
   el.innerHTML = `
-    <div class="card"><div class="k">عدد الدورات</div><div class="v">${sessions.length}</div></div>
-    <div class="card"><div class="k">إجمالي المسجّلين</div><div class="v gold">${totalEnrolled}</div></div>
-    <div class="card"><div class="k">دورات قادمة</div><div class="v">${upcoming}</div></div>
-    <div class="card"><div class="k">دورات منتهية</div><div class="v">${past}</div></div>
-    <div class="card"><div class="k">دورات بلا تاريخ محدَّد</div><div class="v red">${undated}</div></div>
-    <div class="card"><div class="k">دورات مكتملة العدد</div><div class="v red">${fullSessions}</div></div>
-    <div class="card"><div class="k">المقاعد المتبقية (للدورات محددة السعة)</div><div class="v">${seatsDefined ? seatsRemaining : '—'}</div></div>
-    <div class="card"><div class="k">ملغى / غياب</div><div class="v red">${totalCancelled} / ${totalAbsent}</div></div>
-    <div class="card"><div class="k">الأكثر تكراراً</div><div class="v" style="font-size:15px;">${topType ? `${escapeHtml(topType[0])} (${topType[1]})` : '—'}</div></div>
+    <div class="card"><div class="k">${tr('coursesCountLabel')}</div><div class="v">${sessions.length}</div></div>
+    <div class="card"><div class="k">${tr('totalRegisteredLabel')}</div><div class="v gold">${totalEnrolled}</div></div>
+    <div class="card"><div class="k">${tr('upcomingCoursesLabel')}</div><div class="v">${upcoming}</div></div>
+    <div class="card"><div class="k">${tr('finishedCoursesLabel')}</div><div class="v">${past}</div></div>
+    <div class="card"><div class="k">${tr('noDateCoursesLabel')}</div><div class="v red">${undated}</div></div>
+    <div class="card"><div class="k">${tr('fullCoursesLabel')}</div><div class="v red">${fullSessions}</div></div>
+    <div class="card"><div class="k">${tr('remainingSeatsLabel')}</div><div class="v">${seatsDefined ? seatsRemaining : '—'}</div></div>
+    <div class="card"><div class="k">${tr('cancelledAbsentLabel')}</div><div class="v red">${totalCancelled} / ${totalAbsent}</div></div>
+    <div class="card"><div class="k">${tr('mostFrequentLabel')}</div><div class="v" style="font-size:15px;">${topType ? `${escapeHtml(topType[0])} (${topType[1]})` : '—'}</div></div>
   `;
 }
 let coursesPageState = {page:1, sig:''};
@@ -917,7 +917,7 @@ function renderCourses(){
   const byCourseNumber = groupClientsByCourseNumber();
 
   if(!sessions.length){
-    $('#courses-sessions-list').innerHTML = `<div class="panel"><div class="empty-state"><div class="big">📚</div>لا توجد دورات مطابقة — أضف دورة جديدة أو عدّل الفلاتر</div></div>`;
+    $('#courses-sessions-list').innerHTML = `<div class="panel"><div class="empty-state"><div class="big">📚</div>${tr('noMatchingCoursesMsg')}</div></div>`;
     const cPag = $('#courses-pagination'); if(cPag) cPag.style.display = 'none';
     return;
   }
@@ -933,10 +933,10 @@ function renderCourses(){
     return `<div class="panel">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
         <div>
-          <h3 style="margin:0 0 4px;">${escapeHtml(s.courseNumber||'—')} — ${escapeHtml(s.courseType||'غير محدد')}</h3>
-          <div style="font-size:12.5px; color:var(--text-muted);">التاريخ: ${escapeHtml(s.date||'—')} · اللغة: ${escapeHtml(s.language||'—')} · المدة: ${days} يوم · العدد: <span class="mono">${capLabel}</span>
-            ${full ? ' <span class="stamp owe">مكتملة العدد</span>' : ''}
-            ${s.isDefined ? '' : ' <span class="stamp owe">غير معرّفة في شيت الدورات</span>'}
+          <h3 style="margin:0 0 4px;">${escapeHtml(s.courseNumber||'—')} — ${escapeHtml(s.courseType||tr('notSpecified'))}</h3>
+          <div style="font-size:12.5px; color:var(--text-muted);">${tr('courseDateLabel')}: ${escapeHtml(s.date||'—')} · ${tr('languageLabel')}: ${escapeHtml(s.language||'—')} · ${tr('durationLabel')}: ${days} ${tr('dayWord')} · ${tr('countLabel')} <span class="mono">${capLabel}</span>
+            ${full ? ` <span class="stamp owe">${tr('fullCoursesLabel')}</span>` : ''}
+            ${s.isDefined ? '' : ` <span class="stamp owe">${tr('undefinedInCourseSheet')}</span>`}
           </div>
         </div>
         <div style="white-space:nowrap;">
@@ -947,20 +947,20 @@ function renderCourses(){
       </div>
       <div class="table-scroll table-scroll-course cards-mobile">
       <table>
-        <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>الجنسية</th><th>الحالة</th><th>حالة الحقيبة</th><th></th></tr></thead>
+        <thead><tr><th>${tr('thName')}</th><th>${tr('thId')}</th><th>${tr('thNat')}</th><th>${tr('statusCol')}</th><th>${tr('bagStatusCol')}</th><th></th></tr></thead>
         <tbody>
           ${enrolled.length ? enrolled.map(c=>`
             <tr${c.cancelled?' style="opacity:.5;"':''}>
-              <td data-label="الاسم">${escapeHtml(c.name)}</td>
-              <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
-              <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
-              <td data-label="الحالة">${c.cancelled ? '<span class="stamp owe">ملغى</span>' : (c.absent ? '<span class="stamp owe">غياب</span>' : '<span class="stamp paid">مسجّل</span>')}</td>
-              <td data-label="حالة الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
+              <td data-label="${tr('thName')}">${escapeHtml(c.name)}</td>
+              <td class="mono" data-label="${tr('thId')}">${escapeHtml(c.clientId||'—')}</td>
+              <td data-label="${tr('thNat')}">${escapeHtml(c.nationality||'')}</td>
+              <td data-label="${tr('statusCol')}">${c.cancelled ? `<span class="stamp owe">${tr('cancelledStamp')}</span>` : (c.absent ? `<span class="stamp owe">${tr('absentStamp')}</span>` : `<span class="stamp paid">${tr('registeredStamp')}</span>`)}</td>
+              <td data-label="${tr('bagStatusCol')}"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
               <td class="card-full" data-label="" style="white-space:nowrap;">
                 ${!c.cancelled && !c.absent ? `<button class="btn btn-danger btn-sm" data-mark-absent="${c.id}">${tr('markAbsent')}</button>` : ''}
                 ${c.absent ? `<button class="btn btn-ghost btn-sm" data-clear-absent="${c.id}">${tr('clearAbsent')}</button>` : ''}
               </td>
-            </tr>`).join('') : `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">لا يوجد عملاء مسجّلين برقم هذه الدورة بعد</td></tr>`}
+            </tr>`).join('') : `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">${tr('noEnrolledYet')}</td></tr>`}
         </tbody>
       </table>
       </div>
@@ -1139,12 +1139,12 @@ function refreshMissingNatOptions(){
     <label style="display:flex; align-items:center; gap:6px; padding:4px 2px; font-size:13px; cursor:pointer;">
       <input type="checkbox" class="cs-missing-nat-cb" value="${escapeHtml(n)}" ${missingNatSelected.has(n)?'checked':''}>
       ${escapeHtml(n)}
-    </label>`).join('') || '<div style="font-size:12px; color:var(--text-muted);">لا توجد جنسيات معرّفة</div>';
+    </label>`).join('') || `<div style="font-size:12px; color:var(--text-muted);">${tr('noNationalitiesDefined')}</div>`;
   updateMissingNatButtonLabel();
 }
 function updateMissingNatButtonLabel(){
   const btn = $('#cs-missing-nat-btn');
-  btn.textContent = missingNatSelected.size ? `الجنسية: (${missingNatSelected.size}) ▾` : 'الجنسية: الكل ▾';
+  btn.textContent = missingNatSelected.size ? `${tr('nationalityLabelPrefix')}${missingNatSelected.size}${tr('nationalityLabelSuffix')}` : tr('nationalityAllLabel');
 }
 $('#cs-missing-nat-btn').addEventListener('click', e=>{
   e.stopPropagation();
@@ -1212,24 +1212,24 @@ function renderMissingCourse(){
   // أما بقية الفلاتر (الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع ورقم الهوية) فتعمل على كامل الشيت بكل أنواع الدورات
   const missing = missingCourseFiltered();
   countEl.textContent = type
-    ? `${missing.length} عميل سجّل في دورة "${type}" ولم يُحدَّد له رقم دورة بعد`
-    : `${missing.length} عميل في كل الشيت لم يُحدَّد له رقم دورة بعد`;
+    ? `${missing.length} ${tr('missingCourseCountTypeMid')} "${type}" ${tr('missingCourseCountTypeSuffix')}`
+    : `${missing.length} ${tr('missingCourseCountAllSuffix')}`;
   if(!missing.length){
-    box.innerHTML = `<div class="empty-state" style="padding:24px 10px;"><div class="big">✅</div>${type ? `لا يوجد — كل من سجّل في دورة "${escapeHtml(type)}" له رقم دورة محدَّد` : 'لا يوجد — كل العملاء لديهم رقم دورة محدَّد'}</div>`;
+    box.innerHTML = `<div class="empty-state" style="padding:24px 10px;"><div class="big">✅</div>${type ? `${tr('allDoneTypePrefix')} "${escapeHtml(type)}" ${tr('allDoneTypeSuffix')}` : tr('allDoneAllMsg')}</div>`;
     return;
   }
   box.innerHTML = `<div class="table-scroll cards-mobile"><table>
-    <thead><tr><th>الاسم</th><th>تاريخ التسجيل</th><th>نوع الدورة</th><th>رقم الهوية</th><th>الجوال</th><th>الجنسية</th><th>اسم الشركة</th><th>حالة الحقيبة</th><th>تاريخ دورة متوقع</th></tr></thead>
+    <thead><tr><th>${tr('thName')}</th><th>${tr('thRegDate')}</th><th>${tr('thCourse')}</th><th>${tr('thId')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('bagStatusCol')}</th><th>${tr('expectedCourseDateCol')}</th></tr></thead>
     <tbody>${missing.map(c=>`<tr>
-      <td data-label="الاسم">${escapeHtml(c.name||'—')}</td>
-      <td data-label="تاريخ التسجيل">${registrationAgeLabel(c.date)}</td>
-      <td data-label="نوع الدورة">${escapeHtml(c.courseType||'—')}</td>
-      <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
-      <td class="mono" data-label="الجوال">${escapeHtml(c.phone||'—')}</td>
-      <td data-label="الجنسية">${escapeHtml(c.nationality||'')}</td>
-      <td data-label="اسم الشركة">${escapeHtml(c.companyName||'—')}</td>
-      <td data-label="حالة الحقيبة"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
-      <td class="card-full" data-label="تاريخ دورة متوقع"><input type="date" class="cs-expected-date" data-client-id="${escapeHtml(c.id)}" value="${escapeHtml(effectiveExpectedDate(c))}" title="تاريخ متوقّع لأخذ العميل الدورة — قيمة افتراضية تلقائية يمكن تعديلها"></td>
+      <td data-label="${tr('thName')}">${escapeHtml(c.name||'—')}</td>
+      <td data-label="${tr('thRegDate')}">${registrationAgeLabel(c.date)}</td>
+      <td data-label="${tr('thCourse')}">${escapeHtml(c.courseType||'—')}</td>
+      <td class="mono" data-label="${tr('thId')}">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="${tr('thPhone')}">${escapeHtml(c.phone||'—')}</td>
+      <td data-label="${tr('thNat')}">${escapeHtml(c.nationality||'')}</td>
+      <td data-label="${tr('compFieldName')}">${escapeHtml(c.companyName||'—')}</td>
+      <td data-label="${tr('bagStatusCol')}"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
+      <td class="card-full" data-label="${tr('expectedCourseDateCol')}"><input type="date" class="cs-expected-date" data-client-id="${escapeHtml(c.id)}" value="${escapeHtml(effectiveExpectedDate(c))}" title="${tr('expectedDateTitle')}"></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -1261,7 +1261,7 @@ $('#cs-missing-list').addEventListener('change', async e=>{
 
 function openSessionModal(id){
   editingSessionId = id || null;
-  $('#session-modal-title').textContent = id ? 'تعديل بيانات الدورة' : 'دورة جديدة';
+  $('#session-modal-title').textContent = id ? tr('editSessionModalTitle') : tr('newSessionModalTitle');
   populateSelect($('#sf-type'), settings.courses.map(c=>c.name), true);
   const s = id ? courseSessions.find(x=>x.id===id) : null;
   $('#sf-num').value = s?.courseNumber || '';
