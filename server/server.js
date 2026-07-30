@@ -979,6 +979,56 @@ app.delete('/api/records/:collection', requireAuth, requireRole('admin'), requir
   }
 });
 
+// ---------------- تنظيف/أرشفة سجلات "طويلة الأجل" لا تُمسح تلقائياً أبداً ----------------
+// auditLog وdeletedVaultTx وdeletedInvoices تتراكم بلا حد أقصى بمرور الوقت (سجل تاريخي، وليس بيانات
+// تشغيلية حالية). لا يوجد حذف تلقائي مجدوَل عمداً — القرار يُترك للأدمن صراحةً فى كل مرة، خصوصاً أن
+// deletedInvoices يخضع لالتزام الاحتفاظ بسجلات الفواتير 6 سنوات على الأقل بموجب لوائح ضريبة القيمة
+// المضافة/ZATCA فى السعودية؛ لا يجوز حذفها تلقائياً بفترة قصيرة دون مراجعة الأدمن لهذا تحديداً.
+const PRUNABLE_COLLECTIONS = ['auditLog', 'deletedVaultTx', 'deletedInvoices'];
+app.post('/api/records/:collection/prune', requireAuth, requireRole('admin'), async (req, res) => {
+  const { collection } = req.params;
+  if (!PRUNABLE_COLLECTIONS.includes(collection)) {
+    return res.status(400).json({ error: 'هذا التصنيف غير مسموح بتنظيفه من هذه النقطة' });
+  }
+  const olderThanDays = Number(req.body?.olderThanDays);
+  if (!Number.isFinite(olderThanDays) || olderThanDays < 90) {
+    return res.status(400).json({ error: 'الحد الأدنى للاحتفاظ بالسجلات 90 يوماً على الأقل' });
+  }
+  try {
+    const r = await pool.query(
+      `DELETE FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval RETURNING id`,
+      [collection, olderThanDays]
+    );
+    res.json({ deleted: r.rowCount, collection, olderThanDays });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تنظيف السجلات' });
+  }
+});
+// معاينة فقط (بدون حذف): كم سجلاً سيُحذف لو طُبِّقت فترة احتفاظ معيّنة — يُستخدم فى شاشة الإعدادات
+// ليرى الأدمن الأثر قبل تنفيذ الحذف الفعلي.
+app.get('/api/records/:collection/prune-preview', requireAuth, requireRole('admin'), async (req, res) => {
+  const { collection } = req.params;
+  if (!PRUNABLE_COLLECTIONS.includes(collection)) {
+    return res.status(400).json({ error: 'هذا التصنيف غير مسموح بمعاينته من هذه النقطة' });
+  }
+  const olderThanDays = Number(req.query?.olderThanDays);
+  if (!Number.isFinite(olderThanDays) || olderThanDays < 90) {
+    return res.status(400).json({ error: 'الحد الأدنى للاحتفاظ بالسجلات 90 يوماً على الأقل' });
+  }
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval`,
+      [collection, olderThanDays]
+    );
+    const total = await pool.query('SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1', [collection]);
+    res.json({ wouldDelete: r.rows[0].c, total: total.rows[0].c, collection, olderThanDays });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حساب المعاينة' });
+  }
+});
+
 /* ---------------- قراءة فواتير الدورات من ملفات حقيقية (PDF/صور) بالذكاء الاصطناعي ----------------
    تستقبل مجموعة ملفات (Base64)، وترسل كل ملف لـ Claude API لاستخراج البيانات المطبوعة داخله فقط
    (رقم الهوية، رقم الفاتورة، تاريخ الفاتورة، القيمة الفعلية). لا شيء يُحفظ هنا في قاعدة البيانات —
