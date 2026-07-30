@@ -1208,6 +1208,48 @@ table {
   box-shadow: 0 1px 0 var(--border);
 }
 
+/* أعمدة ثابتة (تحديد + الاسم) تفضل ظاهرة جنب بعض أثناء السكرول الأفقي للجداول العريضة */
+.sticky-col {
+  position: sticky;
+  background: var(--surface);
+}
+
+.sticky-col-1 {
+  right: 0;
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  text-align: center;
+  z-index: 3;
+}
+
+.sticky-col-2 {
+  right: 34px;
+  z-index: 2;
+  box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.35);
+}
+
+thead th.sticky-col {
+  z-index: 4;
+  background: var(--surface);
+}
+
+tbody tr:hover .sticky-col {
+  background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+}
+
+tbody tr.owe .sticky-col,
+tbody tr.paid .sticky-col {
+  background: var(--surface);
+}
+
+@media (max-width: 900px) {
+  .sticky-col {
+    position: static;
+    box-shadow: none;
+  }
+}
+
 thead th {
   text-align: right;
   font-size: 11px;
