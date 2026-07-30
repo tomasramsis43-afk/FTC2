@@ -658,10 +658,29 @@ app.get('/api/client-records/version', requireAuth, async (req, res) => {
   }
 });
 
+// كشف تكرار رقم الهوية عبر كل مستخدمي النظام (بمن فيهم كل مستخدمي الاستقبال المعزولين عن بعضهم
+// وعن باقي البيانات): ترجع فقط قائمة أرقام هوية موجودة بالفعل — لا اسم، لا هاتف، لا مبالغ، لا أي
+// حقل آخر — فلا تكسر عزل خصوصية بيانات الاستقبال المطبَّق فى كل مكان آخر، وتسمح فى نفس الوقت بمنع
+// تسجيل نفس رقم الهوية مرتين فى النظام (حتى لو كان الرقم الآخر تابعاً لمستخدم استقبال مختلف أو
+// لعميل عام لا يراه الاستقبال أصلاً). لا فلترة origin/status هنا عمداً: حتى السجلات المعلَّقة
+// (pending) لاستقبال آخر تحسب كـ"مستخدَمة بالفعل" لمنع تكرارها.
+app.get('/api/client-records/ids', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> ''`);
+    res.json({ ids: r.rows.map(row => ({ id: row.id, clientId: row.client_id })) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب قائمة أرقام الهوية' });
+  }
+});
+
 app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   const { enc } = req.body || {};
   if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات العميل المرسلة غير صحيحة' });
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
+  // clientId اختياري نصاً صريحاً (غير مشفّر) بغرض فحص التكرار فقط عبر /api/client-records/ids —
+  // لا يُستخدم فى أي مكان آخر ولا يُعرَض عبر أي نقطة وصول أخرى غير هذه.
+  const plainClientId = (typeof req.body?.clientId === 'string' && req.body.clientId.trim()) ? req.body.clientId.trim() : null;
   try {
     // حماية عزل بيانات الاستقبال: يمنع نهائياً (حتى عبر طلب مباشر بمعرّف يعرفه) لمس أي سجل ليس
     // origin='reception' AND created_by = هو نفسه — سواء كان تعديلاً لسجل قائم لمستخدم استقبال
@@ -676,14 +695,14 @@ app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res)
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
     const upsert = await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by)
-       VALUES ($1, $2, 1, $3, $5, $6, $3)
+      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
+       VALUES ($1, $2, 1, $3, $5, $6, $3, $7)
        ON CONFLICT (id) DO UPDATE SET
          enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by
+         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
        WHERE client_records.version = $4
        RETURNING version, origin, status`,
-      [req.params.id, enc, req.user.username, knownVersion, newOrigin, newStatus]
+      [req.params.id, enc, req.user.username, knownVersion, newOrigin, newStatus, plainClientId]
     );
     if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     const current = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
@@ -757,19 +776,20 @@ app.post('/api/client-records/bulk-migrate', requireAuth, async (req, res) => {
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
     const values = [];
     const placeholders = records.map((r, idx) => {
-      const base = idx * 5;
-      values.push(String(r.id), String(r.enc), req.user.username, newOrigin, newStatus);
-      return `($${base + 1},$${base + 2},1,$${base + 3},$${base + 4},$${base + 5},$${base + 3})`;
+      const base = idx * 6;
+      const plainClientId = (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null;
+      values.push(String(r.id), String(r.enc), req.user.username, newOrigin, newStatus, plainClientId);
+      return `($${base + 1},$${base + 2},1,$${base + 3},$${base + 4},$${base + 5},$${base + 3},$${base + 6})`;
     }).join(',');
     const roleParamIndex = values.length + 1; // بارامتر إضافي واحد فى آخر القائمة (بعد كل صفوف السجلات)
     const usernameParamIndex = values.length + 2;
     values.push(req.user.role, req.user.username);
     await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by)
+      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
        VALUES ${placeholders}
        ON CONFLICT (id) DO UPDATE SET
          enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by
+         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
        -- حماية عزل بيانات الاستقبال: لو المرسل بدور 'reception'، يُتجاهَل صامتاً أي تعارض مع
        -- سجل ليس أصلاً origin='reception' AND created_by له هو (بدل الكتابة فوق بيانات عميل
        -- عام أو عميل مستخدم استقبال آخر لا يملكه).

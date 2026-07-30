@@ -154,6 +154,11 @@ CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(or
 -- حتى لو حرّره الأدمن لاحقاً. للسجلات القديمة قبل هذا العمود نملأها افتراضياً من updated_by.
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS created_by TEXT;
 UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
+-- رقم الهوية بنص صريح (غير مشفّر) لغرض واحد فقط: كشف التكرار عبر كل مستخدمي النظام (بما فيهم
+-- الاستقبال المعزول عادةً عن رؤية باقي البيانات) قبل الحفظ، دون كشف أي بيانات أخرى عن العميل
+-- (الاسم/الهاتف/المبالغ...) تبقى بالكامل داخل enc المشفّر كما هي تماماً بلا أي تغيير.
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS client_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_client_records_client_id ON client_records(client_id);
 
 -- ============================================================
 -- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (سجل واحد = صف واحد)

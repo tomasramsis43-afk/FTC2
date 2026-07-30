@@ -1878,6 +1878,16 @@ $('#client-form').addEventListener('submit', async e=>{
   if(!data.name){ showToast('الاسم مطلوب'); return; }
   const dupId = clients.find(c=>c.clientId===data.clientId && c.id!==editingId);
   if(dupId){ showToast(`رقم الهوية مستخدم بالفعل لعميل آخر: ${dupId.name}`); return; }
+  // فحص إضافي عبر الخادم (لا يعتمد على قائمة العملاء المحمَّلة محلياً فقط): مهم خصوصاً لمستخدم
+  // الاستقبال المعزول عادةً عن رؤية باقي عملاء الشركة — بدون هذا الفحص قد يسجّل رقم هوية مكرر
+  // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً.
+  const allIds = await fetchAllClientIds();
+  if(allIds){
+    const existingRecordId = allIds.get(data.clientId);
+    if(existingRecordId && existingRecordId !== editingId){
+      showToast('رقم الهوية مستخدم بالفعل لعميل آخر فى النظام'); return;
+    }
+  }
   const wasEdit = !!editingId;
   const prevClientForEvents = editingId ? clients.find(x=>x.id===editingId) : null;
   const prevCourseNumberForEvent = prevClientForEvents ? (prevClientForEvents.courseNumber||'') : '';
@@ -2062,6 +2072,16 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   if(!toAdd.length){ showToast('لم تُدخل بيانات أي عميل'); return; }
   // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي أعلاه
   if(!_clientsFirstRealSyncDone){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
+  // فحص إضافي عبر الخادم عن أرقام هوية مكررة موجودة فعلاً فى النظام ولا تظهر فى القائمة المحمَّلة
+  // محلياً (نفس سبب الفحص المضاف فى النموذج الفردي أعلاه — مهم خصوصاً لمستخدم الاستقبال المعزول).
+  const allIdsBulk = await fetchAllClientIds();
+  if(allIdsBulk){
+    const dupRows = toAdd.filter(c=>allIdsBulk.has(c.clientId));
+    if(dupRows.length){
+      showToast(`رقم الهوية مستخدم بالفعل فى النظام: ${dupRows.map(c=>c.clientId).join('، ')}`);
+      return;
+    }
+  }
   snapshotState(`إضافة ${toAdd.length} عميل دفعة واحدة`);
   toAdd.forEach(c=>{ clients.push(c); syncClientLedgerEntry(c); });
   await saveClients();
