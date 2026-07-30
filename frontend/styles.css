@@ -1,41 +1,41 @@
-/* ============= CSS VARIABLES & ROOT ============= */
+/* ============= CSS VARIABLES & ROOT (ثيم كحلي غامق / سايان-بنفسجي) ============= */
 :root {
-  --bg: #F7F8FA;
-  --surface: #FFFFFF;
-  --surface-alt: #F0F2F5;
-  --navy: #19527A;
-  --navy-dark: #0E395A;
-  --gold: #D89A3E;
-  --gold-dark: #B67D28;
-  --gold-soft: #E8C08A;
-  --teal: #2FA84F;
-  --red: #E24C3D;
-  --text: #1B1F26;
-  --text-muted: #6B7280;
-  --border: #E4E6EB;
-  --radius: 10px;
+  --bg: #060e1c;
+  --surface: #0c1b32;
+  --surface-alt: #10233f;
+  --navy: #22d3ee;
+  --navy-dark: #0891b2;
+  --gold: #8b5cf6;
+  --gold-dark: #6d28d9;
+  --gold-soft: #a78bfa;
+  --teal: #34d399;
+  --red: #f87171;
+  --text: #eaf2ff;
+  --text-muted: #8fa3c4;
+  --border: rgba(56, 189, 238, 0.16);
+  --radius: 12px;
   --font-display: 'Tajawal', 'Markazi Text', sans-serif;
-  --shadow: 0 1px 2px rgba(20, 30, 40, 0.04);
-  --shadow-hover: 0 2px 10px rgba(20, 30, 40, 0.08);
-  color-scheme: light;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.16);
+  color-scheme: dark;
 }
 
 body.dark-theme {
-  --bg: #10141C;
-  --surface: #171C26;
-  --surface-alt: #1E2430;
-  --navy: #4A8FBE;
-  --navy-dark: #19527A;
-  --gold: #E8B36B;
-  --gold-dark: #D89A3E;
-  --gold-soft: #F0C98C;
-  --teal: #4FCB7A;
-  --red: #F0776A;
-  --text: #E7EAEE;
-  --text-muted: #8B93A0;
-  --border: #2B323D;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-hover: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --bg: #03060d;
+  --surface: #0a1628;
+  --surface-alt: #0d1c34;
+  --navy: #22d3ee;
+  --navy-dark: #0891b2;
+  --gold: #8b5cf6;
+  --gold-dark: #6d28d9;
+  --gold-soft: #a78bfa;
+  --teal: #34d399;
+  --red: #f87171;
+  --text: #eaf2ff;
+  --text-muted: #8296b8;
+  --border: rgba(56, 189, 238, 0.22);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.22);
   color-scheme: dark;
 }
 
@@ -164,8 +164,8 @@ header.top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #EAF3F9;
-  border: 1px solid #D3E6F2;
+  background: #0e1d34;
+  border: 1px solid #1c3854;
   border-radius: var(--radius);
   padding: 14px 24px;
   color: var(--text);
@@ -177,8 +177,8 @@ header.top {
 }
 
 body.dark-theme header.top {
-  background: #1A2C3D;
-  border-color: #26405A;
+  background: #0a1628;
+  border-color: #17324c;
 }
 
 header.top::before {
@@ -205,9 +205,9 @@ header.top .seal {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #fff;
-  border: 1.5px solid var(--gold);
-  box-shadow: 0 0 0 3px rgba(232, 149, 31, 0.15);
+  background: rgba(6, 16, 32, 0.4);
+  border: 1.5px solid var(--navy);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 0 18px rgba(34, 211, 238, 0.25);
   transition: transform 0.3s ease;
   will-change: transform;
 }
@@ -334,8 +334,8 @@ nav.tabs {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  background: #EAF3F9;
-  border: 1px solid #D3E6F2;
+  background: #0e1d34;
+  border: 1px solid #1c3854;
   padding: 12px 10px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -350,8 +350,8 @@ nav.tabs {
 }
 
 body.dark-theme nav.tabs {
-  background: #1A2C3D;
-  border-color: #26405A;
+  background: #0a1628;
+  border-color: #17324c;
 }
 
 nav.tabs.collapsed {
@@ -991,14 +991,15 @@ section.view.active {
 }
 
 .btn-primary {
-  background: var(--navy);
-  color: #fff;
-  box-shadow: none;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
+  color: #04101f;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(34, 211, 238, 0.25);
 }
 
 .btn-primary:hover {
-  background: var(--navy-dark);
-  box-shadow: none;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(34, 211, 238, 0.35);
 }
 
 .btn-gold {
@@ -1026,11 +1027,11 @@ section.view.active {
 .btn-danger {
   background: transparent;
   color: var(--red);
-  border: 1px solid #E9CFC9;
+  border: 1px solid rgba(248,113,113,0.35);
 }
 
 .btn-danger:hover {
-  background: #FBEEEA;
+  background: rgba(248,113,113,0.12);
 }
 
 .btn-sm {
@@ -1452,19 +1453,35 @@ tbody tr:hover {
   }
 }
 
-/* ============= LOGIN ============= */
+/* ============= LOGIN (ثيم كحلي غامق / سايان متوهج) ============= */
 #license-screen,
 #server-login-screen {
-  background-image: url('assets/img/login-bg.webp');
-  background-size: cover;
+  --auth-bg-deep: #060e1c;
+  --auth-bg-mid: #0b2140;
+  --auth-panel: rgba(15, 33, 61, 0.55);
+  --auth-border: rgba(56, 189, 248, 0.35);
+  --auth-cyan: #22d3ee;
+  --auth-cyan-bright: #5eead4;
+  --auth-violet: #6366f1;
+  --auth-text: #eaf2ff;
+  --auth-text-dim: #8fa3c4;
+  background:
+    radial-gradient(circle at 20% 15%, var(--auth-bg-mid) 0%, var(--auth-bg-deep) 55%),
+    repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.05) 0px, rgba(34, 211, 238, 0.05) 1px, transparent 1px, transparent 42px),
+    repeating-linear-gradient(90deg, rgba(34, 211, 238, 0.05) 0px, rgba(34, 211, 238, 0.05) 1px, transparent 1px, transparent 42px),
+    var(--auth-bg-deep);
+  background-size: cover, 42px 42px, 42px 42px, cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
 .login-box {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  background: var(--auth-panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--auth-border);
+  border-radius: 18px;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08) inset;
   padding: 30px 28px;
   width: 100%;
   max-width: 360px;
@@ -1473,9 +1490,12 @@ tbody tr:hover {
 .login-container {
   display: flex;
   align-items: stretch;
-  background: #fff;
-  border-radius: var(--radius);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  background: var(--auth-panel);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--auth-border);
+  border-radius: 18px;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08) inset;
   overflow: hidden;
   width: 100%;
   max-width: 560px;
@@ -1483,24 +1503,27 @@ tbody tr:hover {
 
 .login-container .login-box {
   box-shadow: none;
+  border: none;
   border-radius: 0;
+  background: transparent;
   flex: 1 1 auto;
   max-width: none;
 }
 
 .login-logo-panel {
   flex: 0 0 190px;
-  background: #fff;
-  border-inline-end: 1px solid var(--border);
+  background: rgba(6, 16, 32, 0.35);
+  border-inline-end: 1px solid var(--auth-border);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 18px;
 }
 
-.login-logo-panel img {
-  max-width: 130px;
-  max-height: 130px;
+.login-logo-panel img,
+.login-logo-panel svg {
+  max-width: 110px;
+  max-height: 110px;
   width: 100%;
   height: auto;
   object-fit: contain;
@@ -1514,12 +1537,13 @@ tbody tr:hover {
   .login-logo-panel {
     flex: none;
     border-inline-end: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--auth-border);
     padding: 18px;
   }
-  .login-logo-panel img {
-    max-width: 80px;
-    max-height: 80px;
+  .login-logo-panel img,
+  .login-logo-panel svg {
+    max-width: 72px;
+    max-height: 72px;
   }
 }
 
@@ -1534,12 +1558,13 @@ tbody tr:hover {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #fff;
-  border: 1.5px solid var(--gold);
-  box-shadow: 0 0 0 3px rgba(232, 149, 31, 0.15);
+  background: rgba(6, 16, 32, 0.4);
+  border: 1.5px solid var(--auth-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 0 24px rgba(34, 211, 238, 0.35);
 }
 
-.login-box .seal img {
+.login-box .seal img,
+.login-box .seal svg {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1550,27 +1575,57 @@ tbody tr:hover {
   text-align: center;
   margin: 0 0 4px;
   font-size: 16px;
-  color: var(--navy);
+  color: var(--auth-text);
 }
 
 .login-box p.sub {
   text-align: center;
   margin: 0 0 20px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--auth-text-dim);
 }
 
 .login-box .field {
   margin-bottom: 12px;
 }
 
-.login-box .btn {
+.login-box .field label {
+  color: var(--auth-text-dim);
+}
+
+.login-box .field input {
+  background: rgba(6, 16, 32, 0.55);
+  border: 1px solid rgba(148, 180, 222, 0.18);
+  color: var(--auth-text);
+  box-shadow: none;
+}
+
+.login-box .field input::placeholder {
+  color: #5c7295;
+}
+
+.login-box .field input:focus {
+  border-color: var(--auth-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.login-box .btn-primary {
   width: 100%;
   margin-top: 6px;
+  background: linear-gradient(135deg, var(--auth-cyan) 0%, var(--auth-violet) 100%);
+  color: #04101f;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 8px 24px rgba(34, 211, 238, 0.35);
+}
+
+.login-box .btn-primary:hover {
+  background: linear-gradient(135deg, var(--auth-cyan-bright) 0%, var(--auth-violet) 100%);
+  box-shadow: 0 12px 30px rgba(34, 211, 238, 0.45);
 }
 
 .login-error {
-  color: var(--red);
+  color: #f87171;
   font-size: 12.5px;
   text-align: center;
   margin-top: 10px;
@@ -1580,9 +1635,9 @@ tbody tr:hover {
 .login-hint {
   margin-top: 16px;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--auth-text-dim);
   text-align: center;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--auth-border);
   padding-top: 12px;
 }
 
@@ -1686,8 +1741,9 @@ td select:hover:not(:focus) {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%) translateY(8px);
-  background: var(--navy);
-  color: #fff;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
+  color: #04101f;
+  font-weight: 600;
   padding: 11px 22px;
   border-radius: 10px;
   font-size: 13.5px;
@@ -1935,12 +1991,12 @@ td select:hover:not(:focus) {
 
 /* رأس الجدول بتينت أزرق فاتح (نفس روح لون القائمة الجانبية) */
 #view-clients thead th {
-  background: #EAF3F9;
+  background: #0e1d34;
   color: var(--navy-dark);
 }
 
 body.dark-theme #view-clients thead th {
-  background: #1A2C3D;
+  background: #0a1628;
   color: var(--text);
 }
 
