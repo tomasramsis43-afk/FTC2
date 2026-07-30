@@ -565,6 +565,22 @@ async function checkAllRecordsChanged(){
   }catch(e){ return false; }
 }
 
+// يجلب فقط أرقام هوية العملاء الموجودة بالفعل فى كل النظام (بلا أي بيانات أخرى)، لفحص التكرار قبل
+// الحفظ — يعمل حتى لمستخدم الاستقبال المعزول عادةً عن رؤية باقي بيانات العملاء، لأن هذه النقطة
+// تحديداً مصمَّمة لترجع الأرقام فقط بغض النظر عن origin/status/created_by (راجع تعليق الخادم).
+// يرجع Map من رقم الهوية -> معرّف السجل (id) الداخلي، لتمييز "نفس العميل الذي أعدّله الآن" عن
+// "عميل آخر يملك نفس الرقم فعلاً".
+async function fetchAllClientIds(){
+  try{
+    const res = await serverFetch('/api/client-records/ids');
+    if(!res.ok) return null; // تعذّر السؤال عن الخادم — المستدعي يقرر خط الرجعة (فحص محلي فقط)
+    const data = await res.json();
+    const map = new Map();
+    (data.ids||[]).forEach(row=>{ if(row.clientId) map.set(row.clientId, row.id); });
+    return map;
+  }catch(e){ return null; }
+}
+
 async function fetchAllClientRecords(){
   const res = await serverFetch('/api/client-records');
   if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
@@ -595,7 +611,7 @@ async function saveOneClientRecord(client, plainJson){
     const enc = await encryptValue(plainJson);
     const res = await serverFetch(`/api/client-records/${encodeURIComponent(client.id)}`, {
       method: 'PUT',
-      body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0 }),
+      body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0, clientId: client.clientId || '' }),
     });
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
@@ -640,7 +656,7 @@ async function bulkUploadClientRecords(clientsList){
   for(let i=0;i<clientsList.length;i+=CHUNK){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
-    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)) });
+    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '' });
     const res = await serverFetch('/api/client-records/bulk-migrate', {
       method: 'POST',
       body: JSON.stringify({ records }),
