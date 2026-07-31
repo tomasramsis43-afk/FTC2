@@ -273,6 +273,29 @@ function vaultDuplicateClientIds(){
   Object.keys(counts).forEach(id=>{ if(counts[id]>1) dup.add(id); });
   return dup;
 }
+/* ---------------- كشف الحركات غير المعتادة إحصائياً (Anomaly Detection) ----------------
+   مقارنة إحصائية بسيطة (وليست ذكاءً اصطناعياً): لكل تصنيف مصروف (category)، يُحسب المتوسط
+   والانحراف المعياري لمبالغ كل الحركات الصادرة التاريخية بنفس التصنيف. أي حركة يتجاوز مبلغها
+   المتوسط + 2.5 انحراف معياري تُعتبر "غير معتادة" وتحتاج مراجعة (قد تكون خطأ إدخال أو حالة
+   استثنائية تستحق الانتباه). يتطلب 5 حركات على الأقل بنفس التصنيف حتى يُعتد بالمتوسط، وإلا
+   يبقى التصنيف بلا حكم كافٍ (بيانات غير كافية). */
+function vaultAnomalyIds(){
+  const byCat = {};
+  vaultTx.forEach(t=>{ if(t.type==='out' && t.category){ (byCat[t.category] = byCat[t.category]||[]).push(t); } });
+  const anomalies = new Set();
+  Object.values(byCat).forEach(list=>{
+    if(list.length < 5) return;
+    const amounts = list.map(t=>num(t.amount));
+    const mean = amounts.reduce((a,b)=>a+b,0)/amounts.length;
+    const variance = amounts.reduce((s,v)=>s+Math.pow(v-mean,2),0)/amounts.length;
+    const stdev = Math.sqrt(variance);
+    if(stdev===0) return;
+    list.forEach(t=>{
+      if((num(t.amount)-mean)/stdev > 2.5) anomalies.add(t.id);
+    });
+  });
+  return anomalies;
+}
 function vaultFilteredRows(){
   const from = $('#v-from').value;
   const to = $('#v-to').value;
@@ -282,8 +305,11 @@ function vaultFilteredRows(){
   const dupOnly = $('#v-filter-dup')?.checked;
   const dupIds = dupOnly ? vaultDuplicateClientIds() : null;
   const noMethodOnly = $('#v-filter-nomethod')?.checked;
+  const anomalyOnly = $('#v-filter-anomaly')?.checked;
+  const anomalyIds = anomalyOnly ? vaultAnomalyIds() : null;
   const frecepV = $('#v-filter-reception') ? $('#v-filter-reception').value : '';
   return vaultTx.filter(t=>{
+    if(anomalyOnly && !anomalyIds.has(t.id)) return false;
     if(frecepV){
       const linkedClient = t.autoClientId ? clients.find(c=>c.id===t.autoClientId) : null;
       if(!linkedClient || linkedClient.createdBy!==frecepV) return false;
@@ -463,6 +489,127 @@ function renderProjectedBalanceCard(){
     <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${trendIcon} متوسط صافي يومي: ${fmt(p.avgDailyNet)} (بناءً على ${p.daysOfData} يوم من آخر 30 يوماً) — تقدير تقريبي وليس ضماناً</div>
   </div>`;
 }
+/* بطاقة ملخص الحركات غير المعتادة إحصائياً ضمن النتائج المفلترة حالياً */
+function renderAnomalyCard(filteredRows){
+  const anomalyIds = vaultAnomalyIds();
+  const countInView = filteredRows.filter(t=>anomalyIds.has(t.id)).length;
+  if(anomalyIds.size===0){
+    return `<div class="card"><div class="k">حركات غير معتادة إحصائياً</div><div class="v teal" style="font-size:16px;">لا يوجد</div></div>`;
+  }
+  return `<div class="card">
+    <div class="k">حركات غير معتادة إحصائياً</div>
+    <div class="v ${countInView>0?'red':''}">${countInView} <span style="font-size:12px; font-weight:400;">ضمن العرض الحالي</span></div>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">إجمالي كل السجل: ${anomalyIds.size} حركة — استخدم مربع "عرض الحركات غير المعتادة فقط" أعلى الجدول لعرضها</div>
+  </div>`;
+}
+/* ---------------- رسم بياني: توقع التدفق النقدي القادم ----------------
+   يرسم الرصيد الفعلي لآخر 21 يوماً (خط متصل) ثم يمدّه بخط متقطع لأيام السبعة القادمة بناءً
+   على متوسط صافي الحركة اليومي لآخر 30 يوماً (نفس منطق projectedBalance أعلاه). رسم مخصص
+   (وليس عبر drawLineChart المشترك) حتى نتحكم بشكل الخط المتقطع للجزء المتوقع دون التأثير
+   على أي استخدام آخر لدالة drawLineChart في باقي شاشات البرنامج. */
+function renderCashFlowForecastChart(dest){
+  const el = $('#chart-cashflow-forecast');
+  if(!el) return;
+  const HIST_DAYS = 21, FUT_DAYS = 7;
+  const today = todayISO();
+  const histDates = [];
+  for(let i=HIST_DAYS-1;i>=0;i--){ const d=new Date(today+'T00:00:00'); d.setDate(d.getDate()-i); histDates.push(d.toISOString().slice(0,10)); }
+  const netByDay = {};
+  histDates.forEach(d=>netByDay[d]=0);
+  vaultTx.forEach(t=>{
+    if((t.destination||'vault')!==dest) return;
+    if(!vaultTxCountsTowardBalance(t)) return;
+    if(!(t.date in netByDay)) return;
+    netByDay[t.date] += (t.type==='in' ? num(t.amount) : -num(t.amount));
+  });
+  const currentBal = balanceOf(dest);
+  const histBalances = new Array(histDates.length);
+  histBalances[histDates.length-1] = currentBal;
+  for(let i=histDates.length-2;i>=0;i--) histBalances[i] = histBalances[i+1] - netByDay[histDates[i+1]];
+
+  const p = projectedBalance(dest);
+  const futDates = [];
+  const futBalances = [];
+  let running = currentBal;
+  for(let i=1;i<=FUT_DAYS;i++){
+    const d = new Date(today+'T00:00:00'); d.setDate(d.getDate()+i);
+    futDates.push(d.toISOString().slice(0,10));
+    running += (p.avgDailyNet||0);
+    futBalances.push(Math.round(running*100)/100);
+  }
+  if(p.daysOfData < 3){
+    el.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">بيانات غير كافية لعرض توقع موثوق (أقل من 3 أيام حركة مؤخراً)</div>';
+    return;
+  }
+
+  const allLabels = [...histDates, ...futDates];
+  const allValues = [...histBalances, ...futBalances];
+  const W = 900, H = 260, padL = 65, padR = 20, padT = 16, padB = 30;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  let max = Math.max(...allValues, 0), min = Math.min(...allValues, 0);
+  if(max===min) max = min + 1;
+  const n = allLabels.length;
+  const xStep = n>1 ? innerW/(n-1) : 0;
+  const yScale = v => padT + innerH - ((v-min)/(max-min))*innerH;
+  const xScale = i => padL + i*xStep;
+  const gridLines = 4;
+  let gridsHtml = '';
+  for(let g=0; g<=gridLines; g++){
+    const v = min + (max-min)*g/gridLines;
+    const y = yScale(v);
+    gridsHtml += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
+    gridsHtml += `<text x="${padL-8}" y="${(y+4).toFixed(1)}" font-size="10" fill="var(--text-muted)" text-anchor="end">${fmt(Math.round(v))}</text>`;
+  }
+  // خط الرصيد الفعلي (من 0 حتى نقطة اليوم الحالي، وهي نفس نقطة بداية الخط المتقطع)
+  const histPts = histBalances.map((v,i)=>`${xScale(i).toFixed(1)},${yScale(v).toFixed(1)}`).join(' ');
+  // خط التوقع المتقطع (يبدأ من نقطة اليوم الحالي نفسها لضمان الاتصال البصري بين الخطين)
+  const futPtsArr = [`${xScale(histDates.length-1).toFixed(1)},${yScale(currentBal).toFixed(1)}`, ...futBalances.map((v,i)=>`${xScale(histDates.length+i).toFixed(1)},${yScale(v).toFixed(1)}`)];
+  const futPts = futPtsArr.join(' ');
+  const showEvery = n>10 ? Math.ceil(n/10) : 1;
+  const labelsHtml = allLabels.map((l,i)=> i%showEvery===0 ? `<text x="${xScale(i).toFixed(1)}" y="${H-6}" font-size="10" fill="var(--text-muted)" text-anchor="middle">${escapeHtml(l.slice(5))}</text>` : '').join('');
+  el.innerHTML = `
+    <div style="margin-bottom:10px;">
+      <span style="display:inline-flex; align-items:center; gap:5px; margin-left:16px; font-size:12px; color:var(--text-muted);"><span style="width:16px; height:2.5px; background:var(--teal); display:inline-block;"></span>فعلي</span>
+      <span style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted);"><span style="width:16px; height:2.5px; background:var(--gold-dark); display:inline-block; border-top:2px dashed var(--gold-dark);"></span>متوقع (تقريبي)</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; max-height:260px; display:block;">
+      ${gridsHtml}
+      <polyline points="${histPts}" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="${futPts}" fill="none" stroke="var(--gold-dark)" stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round" stroke-linecap="round"/>
+      ${labelsHtml}
+    </svg>`;
+}
+/* ---------------- لمحة سريعة: الفعلي مقابل الموازنة للشهر الحالي داخل شيت الحركات المالية ----------------
+   يعتمد بالكامل على بيانات شاشة الموازنة التقديرية (EPM) الموجودة أصلاً في module-accounting.js
+   (budgetEntries, actualForLineMonth) بدل تكرار المنطق، فيبقى الرقمان متطابقين دائماً بين الشاشتين. */
+function renderVaultBudgetGlance(){
+  const el = $('#vault-budget-glance-cards');
+  if(!el) return;
+  if(typeof budgetLineSources!=='function' || typeof actualForLineMonth!=='function'){
+    el.innerHTML = `<div class="card"><div class="k">الموازنة التقديرية</div><div class="v" style="font-size:13px; color:var(--text-muted);">غير متاحة حالياً</div></div>`;
+    return;
+  }
+  const now = new Date();
+  const year = now.getFullYear(), monthIdx = now.getMonth();
+  const sources = budgetLineSources();
+  let budgetExp = 0, actualExp = 0, budgetRev = 0, actualRev = 0;
+  sources.expense.forEach(key=>{
+    const entry = getBudgetEntry(year, 'expense', key);
+    budgetExp += entry ? num(entry.months[monthIdx]) : 0;
+    actualExp += actualForLineMonth('expense', key, year, monthIdx);
+  });
+  sources.revenue.forEach(key=>{
+    const entry = getBudgetEntry(year, 'revenue', key);
+    budgetRev += entry ? num(entry.months[monthIdx]) : 0;
+    actualRev += actualForLineMonth('revenue', key, year, monthIdx);
+  });
+  const expPct = budgetExp!==0 ? (actualExp/budgetExp*100) : (actualExp>0 ? null : 0);
+  const revPct = budgetRev!==0 ? (actualRev/budgetRev*100) : (actualRev>0 ? null : 0);
+  el.innerHTML = `
+    <div class="card"><div class="k">نسبة تنفيذ المصروفات المخططة (هذا الشهر)</div><div class="v ${expPct!==null && expPct>100?'red':'gold'}">${expPct===null?'—':fmt(expPct)+'%'}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">فعلي ${fmt(actualExp)} / مخطط ${fmt(budgetExp)}</div></div>
+    <div class="card"><div class="k">نسبة تحقيق الإيرادات المخططة (هذا الشهر)</div><div class="v teal">${revPct===null?'—':fmt(revPct)+'%'}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">فعلي ${fmt(actualRev)} / مخطط ${fmt(budgetRev)}</div></div>
+  `;
+}
 function seqNumbers(){
   const map = {};
   ['vault','bank','network'].forEach(dest=>{
@@ -500,6 +647,7 @@ function renderVault(){
     <div class="card"><div class="k">الشبكة — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('network')<0?'red':'gold'}">${fmt(netOfDestFiltered('network'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('network'))}</div></div>
     <div class="card"><div class="k">صافي الفترة المحددة (كل الحسابات المفلترة)</div><div class="v">${fmt(periodIn-periodOut)}</div></div>
     ${renderProjectedBalanceCard()}
+    ${renderAnomalyCard(rows)}
   `;
 
   $('#vault-empty').style.display = rows.length ? 'none' : 'block';
@@ -507,7 +655,7 @@ function renderVault(){
   // إعادة الصفحة إلى الأولى تلقائياً كلما تغيّر البحث أو أي فلتر (وليس عند التنقّل بين الصفحات فقط)
   const vaultFilterSig = JSON.stringify([
     $('#v-from')?.value, $('#v-to')?.value, $('#v-filter-type')?.value, $('#v-filter-dest')?.value,
-    $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked
+    $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked, $('#v-filter-anomaly')?.checked
   ]);
   if(vaultFilterSig !== vaultLastFilterSig){ vaultCurrentPage = 1; vaultLastFilterSig = vaultFilterSig; }
 
@@ -537,8 +685,10 @@ function renderVault(){
 
   const seq = seqNumbers();
   const dupIdsForHighlight = vaultDuplicateClientIds();
+  const anomalyIdsForHighlight = vaultAnomalyIds();
   $('#vault-table-body').innerHTML = pageRows.map(t=>{
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
+    const isAnomaly = anomalyIdsForHighlight.has(t.id);
     return `
     <tr>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
@@ -552,7 +702,7 @@ function renderVault(){
       <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}</td>
+      <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
       <td class="${vaultInlineEditable(t)?'editable-cell':''}" data-label="ملاحظات"${vaultInlineEditable(t)?` data-inline-field="notes" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : (t.type==='in' && t.companyTransferId) ? `
@@ -582,6 +732,8 @@ function renderVault(){
   ensureDenomUiBuilt();
   recalcDenomTable();
   renderDenomHistory();
+  renderCashFlowForecastChart('vault');
+  renderVaultBudgetGlance();
 }
 
 /* ---------------- تصنيف الفئات النقدية بالخزنة (سجل حركات دخول/خروج) ----------------
@@ -734,7 +886,7 @@ function renderDenomHistory(){
     });
   });
 }
-['#v-from','#v-to','#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); el?.addEventListener('change', renderVault); });
+['#v-from','#v-to','#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); el?.addEventListener('change', renderVault); });
 onSearchInput('#v-search', renderVault);
 $('#vault-page-size')?.addEventListener('change', ()=>{ vaultCurrentPage = 1; renderVault(); });
 $('#vault-page-first')?.addEventListener('click', ()=>{ vaultCurrentPage = 1; renderVault(); });
