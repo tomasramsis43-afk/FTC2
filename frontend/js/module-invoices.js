@@ -979,12 +979,18 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
   statusEl.style.display = 'block';
   statusEl.textContent = 'جارٍ إعادة ضبط المصنع...';
   try{
-    // 1) حذف كل مفاتيح البيانات المحفوظة
+    // 1) حذف كل مفاتيح البيانات المحفوظة (بلوكات kv_store القديمة)
     const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers','bankStatementRows','vaultDenomTx'];
     const deleteErrors = [];
     for(const k of keys){
       try{ await window.storage.delete(k, false); }catch(e){ deleteErrors.push(`${k}: ${e.message||e}`); }
     }
+    // auditLog مُخزَّن الآن كسجلات مستقلة (collection_records) — حذف دفعة واحدة عبر النقطة
+    // المخصصة لذلك بدل الاعتماد على مقارنة baseline سجل سجل (أبطأ وغير مضمون لسجل كبير).
+    try{
+      await serverFetch('/api/records/auditLog', { method: 'DELETE' });
+      _collectionSyncBaseline['auditLog'] = new Map();
+    }catch(e){ deleteErrors.push(`auditLog (سجلات مستقلة): ${e.message||e}`); }
 
     // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)
