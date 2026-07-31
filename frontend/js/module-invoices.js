@@ -985,12 +985,15 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     for(const k of keys){
       try{ await window.storage.delete(k, false); }catch(e){ deleteErrors.push(`${k}: ${e.message||e}`); }
     }
-    // auditLog مُخزَّن الآن كسجلات مستقلة (collection_records) — حذف دفعة واحدة عبر النقطة
-    // المخصصة لذلك بدل الاعتماد على مقارنة baseline سجل سجل (أبطأ وغير مضمون لسجل كبير).
-    try{
-      await serverFetch('/api/records/auditLog', { method: 'DELETE' });
-      _collectionSyncBaseline['auditLog'] = new Map();
-    }catch(e){ deleteErrors.push(`auditLog (سجلات مستقلة): ${e.message||e}`); }
+    // التصنيفات دي كلها مُخزَّنة الآن كسجلات مستقلة (collection_records) — حذف دفعة واحدة لكل
+    // تصنيف عبر النقطة المخصصة لذلك بدل الاعتماد على مقارنة baseline سجل سجل (أبطأ وغير مضمون).
+    const migratedCollections = ['bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','courseSessions','auditLog','companies','companyTransfers'];
+    for(const c of migratedCollections){
+      try{
+        await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
+        _collectionSyncBaseline[c] = new Map();
+      }catch(e){ deleteErrors.push(`${c} (سجلات مستقلة): ${e.message||e}`); }
+    }
 
     // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)

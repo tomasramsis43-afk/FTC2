@@ -1023,6 +1023,16 @@ async function loadData(cacheOnly){
       kv[k] = null;
     }
   }));
+  // مساعد مشترك لتحميل أي تصنيف مُوصَّل بنظام السجلات المستقلة (collection_records) — يحدّث
+  // _collectionSyncBaseline[collection] تلقائياً، ويرجع مصفوفة فارغة بأمان لو تعذّر الوصول
+  // (بدل تفريغ الشاشة بخطأ قاتل)، تماماً بنفس منطق تحميل العملاء أعلاه.
+  async function loadGeneric(collection){
+    try{
+      const { list, baseline } = await loadCollectionGeneric(collection, cacheOnly);
+      _collectionSyncBaseline[collection] = baseline;
+      return list;
+    }catch(e){ _collectionSyncBaseline[collection] = null; return []; }
+  }
 
   // ---- تحميل العملاء: عملاء كسجلات مستقلة (client_records) بدل كتلة واحدة ----
   // فى وضع cacheOnly (عرض فوري من الجهاز بدون انتظار الشبكة عند فتح البرنامج) نستخدم آخر نسخة
@@ -1250,23 +1260,14 @@ async function loadData(cacheOnly){
     if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
-  try{
-    const r = kv.bagStock;
-    bagStock = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ bagStock = []; }
+  bagStock = await loadGeneric('bagStock');
   // ترحيل/تصحيح تلقائي: أي عميل مصدر حقيبته "من المخزون" (bagSource==='stock') ولم يكن له عملية "تسليم"
   // مقابلة في سجل عمليات مخزون الحقائب — تُضاف له عملية بأثر رجعي، حتى يبقى "المخزون الحالي" مبنياً دائماً
   // على سجل عمليات المخزون نفسه ومتزامناً مع شيت العملاء. الدالة نفسها تُستدعى أيضاً بعد أي استيراد Excel
   // قد يضبط مصدر حقيبة عميل على "من المخزون"، حتى يتحدّث رقم المخزون فوراً دون الحاجة لإعادة تحميل التطبيق.
   await syncBagStockIssues();
-  try{
-    const r = kv.vaultTx;
-    vaultTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ vaultTx = []; }
-  try{
-    const r = kv.deletedVaultTx;
-    deletedVaultTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ deletedVaultTx = []; }
+  vaultTx = await loadGeneric('vaultTx');
+  deletedVaultTx = await loadGeneric('deletedVaultTx');
   {
     const renumberedCount = renumberVaultSeqChronologically();
     if(renumberedCount>0){
@@ -1275,22 +1276,10 @@ async function loadData(cacheOnly){
       await logAudit('edit','الحركات المالية', `ترحيل تلقائي لمرة واحدة: تم إعادة ترقيم الرقم التسلسلي لكل الحركات المالية (${renumberedCount} حركة) بشكل مستقل لكل حساب (الخزنة كاش / البنك / الشبكة / أخرى) حسب تاريخ كل حركة، بحيث تبدأ كل وجهة برقمها من 1`);
     }
   }
-  try{
-    const r = kv.vaultDenomTx;
-    vaultDenomTx = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ vaultDenomTx = []; }
-  try{
-    const r = kv.bankStatementRows;
-    bankStatementRows = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ bankStatementRows = []; }
-  try{
-    const r = kv.deletedInvoices;
-    deletedInvoices = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ deletedInvoices = []; }
-  try{
-    const r = kv.courseSessions;
-    courseSessions = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ courseSessions = []; }
+  vaultDenomTx = await loadGeneric('vaultDenomTx');
+  bankStatementRows = await loadGeneric('bankStatementRows');
+  deletedInvoices = await loadGeneric('deletedInvoices');
+  courseSessions = await loadGeneric('courseSessions');
   try{
     const r = kv.appLang;
     currentLang = (r && r.value) ? r.value : 'ar';
@@ -1322,14 +1311,8 @@ async function loadData(cacheOnly){
     auditLog = list;
     _collectionSyncBaseline['auditLog'] = baseline;
   }catch(e){ auditLog = []; _collectionSyncBaseline['auditLog'] = null; }
-  try{
-    const r = kv.companies;
-    companies = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ companies = []; }
-  try{
-    const r = kv.companyTransfers;
-    companyTransfers = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ companyTransfers = []; }
+  companies = await loadGeneric('companies');
+  companyTransfers = await loadGeneric('companyTransfers');
   {
     const migratedCount = migrateCompanyTransfersToLumpSum();
     if(migratedCount>0){
@@ -1357,39 +1340,18 @@ async function loadData(cacheOnly){
       await logAudit('edit','شيت العملاء', `إصلاح تلقائي: تم تصفير تخصيص ${orphanFixedCount} عميل كانوا معلَّمين كمُرحَّلين من حوالة شركة رغم عدم ارتباطهم بأي حوالة حالية (بيانات قديمة قبل حذف متدرب/حوالة)`);
     }
   }
-  try{
-    const r = kv.journalEntries;
-    journalEntries = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ journalEntries = []; }
-  try{
-    const r = kv.chartOfAccounts;
-    chartOfAccounts = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ chartOfAccounts = []; }
+  journalEntries = await loadGeneric('journalEntries');
+  chartOfAccounts = await loadGeneric('chartOfAccounts');
   seedChartOfAccountsIfEmpty();
-  try{
-    const r = kv.journalDE;
-    journalDE = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ journalDE = []; }
-  try{
-    const r = kv.budgetEntries;
-    budgetEntries = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ budgetEntries = []; }
-  try{
-    const r = kv.suppliers;
-    suppliers = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ suppliers = []; }
-  try{
-    const r = kv.purchases;
-    purchases = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ purchases = []; }
+  journalDE = await loadGeneric('journalDE');
+  budgetEntries = await loadGeneric('budgetEntries');
+  suppliers = await loadGeneric('suppliers');
+  purchases = await loadGeneric('purchases');
   // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
   // سجّلها هو بنفسه.
   // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
-  try{
-    const r = kv.manualSalesInvoices;
-    manualSalesInvoices = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ manualSalesInvoices = []; }
+  manualSalesInvoices = await loadGeneric('manualSalesInvoices');
   try{
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
@@ -1475,22 +1437,22 @@ async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
 }
 async function saveBagStock(){
-  try{ await window.storage.set('bagStock', JSON.stringify(bagStock), false); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
+  try{ await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
 }
 async function saveVaultTx(){
-  try{ await window.storage.set('vaultTx', JSON.stringify(vaultTx), false); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
+  try{ await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
 }
 async function saveDeletedVaultTx(){
-  try{ await window.storage.set('deletedVaultTx', JSON.stringify(deletedVaultTx), false); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
+  try{ await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
 }
 async function saveVaultDenomTx(){
-  try{ await window.storage.set('vaultDenomTx', JSON.stringify(vaultDenomTx), false); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
+  try{ await saveCollectionGeneric('vaultDenomTx', vaultDenomTx); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
 }
 async function saveBankStatementRows(){
-  try{ await window.storage.set('bankStatementRows', JSON.stringify(bankStatementRows), false); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
+  try{ await saveCollectionGeneric('bankStatementRows', bankStatementRows); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
 }
 async function saveDeletedInvoices(){
-  try{ await window.storage.set('deletedInvoices', JSON.stringify(deletedInvoices), false); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
+  try{ await saveCollectionGeneric('deletedInvoices', deletedInvoices); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
 }
 
 /* ================= معايير محاسبية: ترقيم تسلسلي رسمي + قفل فترات + حذف منطقي ================= */
@@ -1568,13 +1530,13 @@ function pushVaultTxHistory(tx, beforeSnapshot, afterSnapshot){
   });
 }
 async function saveCourseSessions(){
-  try{ await window.storage.set('courseSessions', JSON.stringify(courseSessions), false); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
+  try{ await saveCollectionGeneric('courseSessions', courseSessions); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
 }
 async function saveCompanies(){
-  try{ await window.storage.set('companies', JSON.stringify(companies), false); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
+  try{ await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
 }
 async function saveCompanyTransfers(){
-  try{ await window.storage.set('companyTransfers', JSON.stringify(companyTransfers), false); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
+  try{ await saveCollectionGeneric('companyTransfers', companyTransfers); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
 }
 /* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
    سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).
@@ -1671,19 +1633,19 @@ function cleanupDuplicateCompanyTraineeVaultEntries(){
   return removedCount;
 }
 async function saveJournalEntries(){
-  try{ await window.storage.set('journalEntries', JSON.stringify(journalEntries), false); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
+  try{ await saveCollectionGeneric('journalEntries', journalEntries); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
 }
 async function saveChartOfAccounts(){
-  try{ await window.storage.set('chartOfAccounts', JSON.stringify(chartOfAccounts), false); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
+  try{ await saveCollectionGeneric('chartOfAccounts', chartOfAccounts); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
 }
 async function saveJournalDE(){
-  try{ await window.storage.set('journalDE', JSON.stringify(journalDE), false); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
+  try{ await saveCollectionGeneric('journalDE', journalDE); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
 }
 async function saveBudgetEntries(){
-  try{ await window.storage.set('budgetEntries', JSON.stringify(budgetEntries), false); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
+  try{ await saveCollectionGeneric('budgetEntries', budgetEntries); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
 }
 async function saveSuppliers(){
-  try{ await window.storage.set('suppliers', JSON.stringify(suppliers), false); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
+  try{ await saveCollectionGeneric('suppliers', suppliers); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
 }
 /* ---------------- ترحيل مرفقات فواتير المشتريات القديمة (مرة واحدة) ----------------
    قبل هذا التحديث كان مرفق كل فاتورة (dataUrl الصورة كاملة) مخزَّناً داخل نفس عنصر الفاتورة
@@ -1706,10 +1668,10 @@ async function migratePurchaseAttachmentsOut(){
   await savePurchases();
 }
 async function savePurchases(){
-  try{ await window.storage.set('purchases', JSON.stringify(purchases), false); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
+  try{ await saveCollectionGeneric('purchases', purchases); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
 }
 async function saveManualSalesInvoices(){
-  try{ await window.storage.set('manualSalesInvoices', JSON.stringify(manualSalesInvoices), false); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
+  try{ await saveCollectionGeneric('manualSalesInvoices', manualSalesInvoices); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
 }
 async function saveZakatAdjustments(){
   try{ await window.storage.set('zakatAdjustments', JSON.stringify(zakatAdjustments), false); }catch(e){ showToast('تعذر حفظ تعديلات وعاء الزكاة'); }
