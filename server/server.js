@@ -25,7 +25,7 @@ app.use(helmet({
       defaultSrc:    ["'self'"],
       // 'unsafe-inline' مطلوبة لأن الواجهة تستخدم innerHTML مع onclick ومعالجات أحداث مضمّنة.
       // cdnjs.cloudflare.com مطلوب للمكتبات الخارجية (xlsx, qrious, html2canvas, jspdf).
-      scriptSrc:     ["'self'", "cdnjs.cloudflare.com", "'unsafe-inline'"],
+      scriptSrc:     ["'self'", "cdnjs.cloudflare.com"],
       styleSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
       fontSrc:       ["'self'", "fonts.gstatic.com"],
       imgSrc:        ["'self'", "data:", "blob:"],
