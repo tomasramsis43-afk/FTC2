@@ -1008,8 +1008,10 @@ async function loadData(cacheOnly){
   const wantUsers = normalizeRole(SERVER_AUTH_ROLE) === 'admin';
   // 'clients' أُزيل من هذه القائمة: له مسار تحميل خاص أسفل (عملاء كسجلات مستقلة، أسرع بكثير مع
   // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
+  // 'auditLog' أُزيل من هذه القائمة أيضاً: له مسار تحميل خاص أسفل (سجلات مستقلة عبر
+  // loadCollectionGeneric، أول تصنيف يُوصَّل فعلياً بنظام collection_records الجاهز من قبل).
   const kvKeys = ['settings','bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows',
-    'deletedInvoices','courseSessions','appLang','auditLog','companies','companyTransfers','journalEntries',
+    'deletedInvoices','courseSessions','appLang','companies','companyTransfers','journalEntries',
     'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
   ].concat(wantUsers ? ['users'] : []);
   const kv = {};
@@ -1312,10 +1314,14 @@ async function loadData(cacheOnly){
   } else {
     users = [];
   }
+  // ---- تحميل سجل المراجعة: أول تصنيف يُوصَّل فعلياً بنظام السجلات المستقلة (collection_records)
+  // بدل كتلة واحدة — سجل المراجعة يُضاف إليه سطر واحد مع كل إضافة/تعديل/حذف فى أي شاشة بالبرنامج،
+  // فكان أكثر مفتاح يُعاد رفعه/تحميله كاملاً بلا داعٍ (راجع saveAuditLog/logAudit أسفل).
   try{
-    const r = kv.auditLog;
-    auditLog = r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ auditLog = []; }
+    const { list, baseline } = await loadCollectionGeneric('auditLog', cacheOnly);
+    auditLog = list;
+    _collectionSyncBaseline['auditLog'] = baseline;
+  }catch(e){ auditLog = []; _collectionSyncBaseline['auditLog'] = null; }
   try{
     const r = kv.companies;
     companies = r && r.value ? JSON.parse(r.value) : [];
@@ -1398,7 +1404,7 @@ async function saveUsers(){
   try{ await window.storage.set('users', JSON.stringify(users), false); }catch(e){ showToast('تعذر حفظ بيانات المستخدمين'); }
 }
 async function saveAuditLog(){
-  try{ await window.storage.set('auditLog', JSON.stringify(auditLog), false); }catch(e){ /* silent */ }
+  try{ await saveCollectionGeneric('auditLog', auditLog); }catch(e){ /* silent */ }
 }
 async function logAudit(action, section, description){
   auditLog.push({
