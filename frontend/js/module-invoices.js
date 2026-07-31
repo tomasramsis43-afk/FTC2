@@ -754,6 +754,7 @@ function renderSettings(){
   renderPinLockPanel();
   renderRolePermissionsPanel();
   renderReceptionRestrictionsPanel();
+  renderPruneRecordsPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -834,6 +835,64 @@ if($('#btn-save-reception-restrictions')) $('#btn-save-reception-restrictions').
   showToast('تم حفظ قيود الاستقبال');
   renderTable();
 });
+/* ---------------- تنظيف السجلات القديمة (سجل المراجعة/المحذوفات) — أدمن فقط، يدوي بالكامل ---------------- */
+const PRUNE_RECORDS_CONFIG = [
+  { key: 'auditLog', label: 'سجل المراجعة (auditLog)', defaultDays: 730, warning: null },
+  { key: 'deletedVaultTx', label: 'حركات خزنة محذوفة (deletedVaultTx)', defaultDays: 365, warning: null },
+  { key: 'deletedInvoices', label: 'فواتير محذوفة (deletedInvoices)', defaultDays: 2190, warning: '⚠️ يجب الاحتفاظ بالفواتير 6 سنوات على الأقل بموجب لوائح ضريبة القيمة المضافة/ZATCA — راجع محاسبك قبل تقصير هذه المدة.' },
+];
+function renderPruneRecordsPanel(){
+  const wrap = $('#prune-records-rows');
+  if(!wrap) return;
+  wrap.innerHTML = PRUNE_RECORDS_CONFIG.map(cfg => `
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-color);">
+      <span style="min-width:210px;">${escapeHtml(cfg.label)}</span>
+      <label style="display:flex; align-items:center; gap:6px; font-size:13px;">الاحتفاظ بآخر
+        <input type="number" min="90" step="1" value="${cfg.defaultDays}" data-prune-days="${cfg.key}" style="width:90px;"> يوم
+      </label>
+      <button class="btn btn-ghost btn-sm" data-prune-preview="${cfg.key}">👁️ معاينة</button>
+      <button class="btn btn-danger btn-sm" data-prune-run="${cfg.key}">🗑️ حذف نهائي</button>
+      <span class="mono" id="prune-result-${cfg.key}" style="font-size:12.5px; color:var(--text-muted);"></span>
+      ${cfg.warning ? `<div class="hint" style="width:100%; font-size:12.5px; color:var(--red);">${escapeHtml(cfg.warning)}</div>` : ''}
+    </div>`).join('');
+}
+async function prunePreview(collection, days){
+  const el = $(`#prune-result-${collection}`);
+  if(el) el.textContent = 'جارٍ الحساب...';
+  try{
+    const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(collection)}/prune-preview?olderThanDays=${encodeURIComponent(days)}`, {
+      headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّرت المعاينة');
+    if(el) el.textContent = `سيُحذف ${data.wouldDelete} من إجمالي ${data.total} سجل`;
+  }catch(e){ if(el) el.textContent = '⚠️ ' + e.message; }
+}
+async function pruneExecute(collection, days){
+  const label = (PRUNE_RECORDS_CONFIG.find(c=>c.key===collection)||{}).label || collection;
+  if(!await customConfirm(`سيتم حذف كل سجلات "${label}" الأقدم من ${days} يوماً نهائياً ولا يمكن التراجع عن هذا. متابعة؟`)) return;
+  const el = $(`#prune-result-${collection}`);
+  if(el) el.textContent = 'جارٍ الحذف...';
+  try{
+    const res = await fetch(`${API_BASE}/api/records/${encodeURIComponent(collection)}/prune`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+      body: JSON.stringify({ olderThanDays: Number(days) }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر الحذف');
+    if(el) el.textContent = `✅ تم حذف ${data.deleted} سجل`;
+    await logAudit('delete','الإعدادات', `تم تنظيف ${data.deleted} سجل قديم من "${label}" (أقدم من ${days} يوماً)`);
+    showToast(`تم حذف ${data.deleted} سجل من "${label}"`);
+  }catch(e){ if(el) el.textContent = '⚠️ ' + e.message; }
+}
+document.addEventListener('click', (e)=>{
+  const pb = e.target.closest('[data-prune-preview]');
+  if(pb){ const key = pb.dataset.prunePreview; const days = $(`[data-prune-days="${key}"]`).value; prunePreview(key, days); return; }
+  const rb = e.target.closest('[data-prune-run]');
+  if(rb){ const key = rb.dataset.pruneRun; const days = $(`[data-prune-days="${key}"]`).value; pruneExecute(key, days); return; }
+});
+
 function formatDeviceInfo(ua){
   if(!ua) return '—';
   // تحليل مبسّط لسلسلة الـ User-Agent لعرض اسم مفهوم للجهاز/المتصفح بدل السلسلة الخام،
