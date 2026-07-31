@@ -3552,10 +3552,18 @@
       <div class="hint hint-info" id="last-autobackup-hint" style="margin-top:0;">آخر نسخة احتياطية تلقائية: ١‏/٢‏/١٤٤٨ هـ ١١:٥٧:٥٨ ص</div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
         <button class="btn btn-gold btn-sm" id="btn-backup-now">⬇️ تنزيل نسخة احتياطية كاملة الآن</button>
+        <button class="btn btn-ghost btn-sm" id="btn-backup-server-now">☁️ نسخ احتياطي على السيرفر الآن</button>
         <button class="btn btn-ghost btn-sm" id="btn-restore-backup">⬆️ استعادة من نسخة احتياطية</button>
         <input type="file" id="restore-backup-input" accept=".json" style="display:none;">
       </div>
-      <div class="hint hint-info" style="margin-top:10px;">النسخة الاحتياطية التلقائية تُنزَّل تلقائياً كملف على جهازك عند فتح البرنامج إذا مرّت المدة المحددة منذ آخر نسخة — تأكد من مراجعة مجلد التنزيلات لديك بشكل دوري أو نقل الملفات لمكان آمن.</div>
+      <div class="hint hint-info" style="margin-top:10px;">النسخة التلقائية تُنزَّل كملف على جهازك <b>وتُرفَع مشفَّرة على السيرفر أيضاً</b> عند فتح البرنامج إذا مرّت المدة المحددة منذ آخر نسخة — بحيث تبقى نسخة محفوظة حتى لو تغيّر الجهاز.</div>
+      <div style="margin-top:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <b style="font-size:13.5px;">النسخ المحفوظة على السيرفر</b>
+          <button class="btn btn-ghost btn-sm" id="btn-refresh-server-backups">🔄 تحديث</button>
+        </div>
+        <div id="server-backups-list"><div class="hint hint-info">اضغط "تحديث" لعرض النسخ المحفوظة على السيرفر</div></div>
+      </div>
     </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;">🔔 إعدادات التنبيهات الذكية</h3>

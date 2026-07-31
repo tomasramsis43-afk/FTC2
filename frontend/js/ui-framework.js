@@ -1702,9 +1702,44 @@ async function maybeRunAutoBackup(){
   const last = settings.lastAutoBackupAt ? new Date(settings.lastAutoBackupAt).getTime() : 0;
   if(Date.now() - last < intervalMs) return;
   downloadFullBackup(true);
+  await uploadBackupToServer('auto');
   settings.lastAutoBackupAt = new Date().toISOString();
   await saveSettings();
-  showToast('تم إنشاء نسخة احتياطية تلقائية وتنزيلها');
+  showToast('تم إنشاء نسخة احتياطية تلقائية (محلياً + على السيرفر)');
+}
+// يرفع نسخة كاملة مشفّرة (بنفس مفتاح تشفير بيانات البرنامج) إلى السيرفر — أمان: السيرفر يخزّن
+// الكتلة المشفّرة فقط، فلن يقدر أي شخص يطّلع على البيانات دون مفتاح التشفير المحلي نفسه (تماماً
+// كباقي بيانات البرنامج المخزّنة فى collection_records/client_records).
+async function uploadBackupToServer(kind){
+  try{
+    const data = gatherFullBackupData();
+    const enc = await encryptValue(JSON.stringify(data));
+    const res = await serverFetch('/api/backups', { method:'POST', body: JSON.stringify({ kind, enc }) });
+    if(!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'فشل الرفع');
+    return true;
+  }catch(e){ console.error('uploadBackupToServer', e); return false; }
+}
+async function listServerBackups(){
+  try{
+    const res = await serverFetch('/api/backups');
+    if(!res.ok) throw new Error('تعذّر جلب القائمة');
+    return await res.json();
+  }catch(e){ return []; }
+}
+async function downloadServerBackup(id){
+  const res = await serverFetch(`/api/backups/${encodeURIComponent(id)}`);
+  if(!res.ok) throw new Error('تعذّر جلب النسخة');
+  const row = await res.json();
+  const plaintext = await decryptValue(row.enc);
+  const blob = new Blob([plaintext], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `نسخة_احتياطية_سيرفر_${row.id}_${stampNow()}.json`;
+  a.click();
+}
+async function deleteServerBackup(id){
+  const res = await serverFetch(`/api/backups/${encodeURIComponent(id)}`, { method:'DELETE' });
+  if(!res.ok) throw new Error('تعذّر حذف النسخة');
 }
 async function restoreFullBackup(file){
   let data;
