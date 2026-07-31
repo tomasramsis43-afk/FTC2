@@ -192,8 +192,12 @@ CREATE TABLE IF NOT EXISTS login_history (
   logged_in_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE login_history ADD COLUMN IF NOT EXISTS device_info TEXT;
+-- محاولات الدخول الفاشلة (اسم مستخدم خطأ/كلمة مرور خطأ/حساب معطّل) — لرصد أنماط brute-force
+-- أو محاولات دخول غير مصرّح بها لم تكتشفها rate limiting وحدها (مثال: محاولات متفرقة بطيئة).
+ALTER TABLE login_history ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT true;
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
+CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;
 
 -- نسخ احتياطية كاملة مُجدوَلة: "enc" هو نفس محتوى gatherFullBackupData() فى الواجهة، بعد تشفيره
 -- بمفتاح المستخدم (نفس آلية encryptValue المستخدمة لكل بيانات البرنامج) — السيرفر لا يرى ولا
