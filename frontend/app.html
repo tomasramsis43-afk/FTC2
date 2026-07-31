@@ -10,15 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FTC">
 <link rel="icon" href="/icons/icon-192.png">
-<script>
-  // تسجيل Service Worker: يتيح تثبيت البرنامج كتطبيق على الجهاز، ويخدم كطبقة إضافية
-  // للعمل بدون اتصال (بجانب التخزين المحلي لبيانات العملاء نفسها في IndexedDB).
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', ()=>{
-      navigator.serviceWorker.register('/sw.js').catch(()=>{});
-    });
-  }
-</script>
+<script defer src="sw-register.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Markazi+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
