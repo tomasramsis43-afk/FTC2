@@ -968,7 +968,7 @@ if($('#login-history-list')) $('#login-history-list').addEventListener('click', 
 });
 /* ---------------- إعادة ضبط البرنامج بالكامل (حذف كل البيانات) ---------------- */
 $('#btn-reset-app').addEventListener('click', async ()=>{
-  const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) ولن يمكن التراجع عن ذلك.\n\nهل أنت متأكد أنك تريد المتابعة؟');
+  const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، القيود والحسابات المحاسبية، الموازنة، الموردين، المشتريات، فواتير المبيعات اليدوية، تعديلات الزكاة، الإعدادات، المستخدمين، وسجل المراجعة) ولن يمكن التراجع عن ذلك.\n\nهل أنت متأكد أنك تريد المتابعة؟');
   if(!firstConfirm) return;
   const secondConfirm = await customConfirm('تأكيد أخير: سيتم الحذف فوراً بمجرد الضغط على "موافق" ولن تتمكن من التراجع.\n\nهل تريد المتابعة والحذف الآن؟');
   if(!secondConfirm){
@@ -979,15 +979,19 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
   statusEl.style.display = 'block';
   statusEl.textContent = 'جارٍ إعادة ضبط المصنع...';
   try{
-    // 1) حذف كل مفاتيح البيانات المحفوظة (بلوكات kv_store القديمة)
-    const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers','bankStatementRows','vaultDenomTx'];
+    // 1) حذف كل مفاتيح البيانات المحفوظة (بلوكات kv_store القديمة/المتبقية + zakatAdjustments الذي لا يزال عليها فعلياً)
+    const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers',
+      'bankStatementRows','vaultDenomTx','deletedInvoices','journalEntries','chartOfAccounts','journalDE','budgetEntries',
+      'suppliers','purchases','manualSalesInvoices','zakatAdjustments'];
     const deleteErrors = [];
     for(const k of keys){
       try{ await window.storage.delete(k, false); }catch(e){ deleteErrors.push(`${k}: ${e.message||e}`); }
     }
     // التصنيفات دي كلها مُخزَّنة الآن كسجلات مستقلة (collection_records) — حذف دفعة واحدة لكل
     // تصنيف عبر النقطة المخصصة لذلك بدل الاعتماد على مقارنة baseline سجل سجل (أبطأ وغير مضمون).
-    const migratedCollections = ['bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','courseSessions','auditLog','companies','companyTransfers'];
+    const migratedCollections = ['bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','courseSessions',
+      'auditLog','companies','companyTransfers','deletedInvoices','journalEntries','chartOfAccounts','journalDE',
+      'budgetEntries','suppliers','purchases','manualSalesInvoices'];
     for(const c of migratedCollections){
       try{
         await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
@@ -1000,22 +1004,35 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     clients = [];
     bagStock = [];
     vaultTx = [];
+    deletedVaultTx = [];
+    vaultDenomTx = [];
     courseSessions = [];
     companies = [];
     companyTransfers = [];
     auditLog = [];
     bankStatementRows = [];
-    vaultDenomTx = [];
+    deletedInvoices = [];
+    journalEntries = [];
+    chartOfAccounts = [];
+    journalDE = [];
+    budgetEntries = [];
+    suppliers = [];
+    purchases = [];
+    manualSalesInvoices = [];
+    zakatAdjustments = {};
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
     undoStack = [];
     redoStack = [];
+    seedChartOfAccountsIfEmpty();
 
     const saveErrors = [];
     const saveResults = await Promise.allSettled([
-      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(),
+      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(), saveDeletedVaultTx(), saveVaultDenomTx(),
       saveCourseSessions(), saveCompanies(), saveCompanyTransfers(),
-      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveVaultDenomTx()
+      saveUsers(), saveAuditLog(), saveBankStatementRows(), saveDeletedInvoices(),
+      saveJournalEntries(), saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(),
+      saveSuppliers(), savePurchases(), saveManualSalesInvoices(), saveZakatAdjustments()
     ]);
     saveResults.forEach((r,i)=>{ if(r.status==='rejected') saveErrors.push(String(r.reason)); });
 
