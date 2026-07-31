@@ -7,6 +7,20 @@ if (!JWT_SECRET) {
   console.error('❌ متغيّر البيئة JWT_SECRET غير موجود. راجع ملف .env.example');
   process.exit(1);
 }
+// دعم تدوير (rotation) آمن للمفتاح: أثناء التدوير فقط، اضبط JWT_SECRET على القيمة الجديدة
+// و JWT_SECRET_PREVIOUS على القيمة القديمة معاً. كل توكن جديد يُوقَّع بالمفتاح الجديد فوراً،
+// بينما التوكنات القديمة (حتى 30 يوماً، مدة صلاحيتها القصوى) تظل تعمل عبر المحاولة بالمفتاح
+// القديم كخط رجعة، فلا يُسجَّل خروج أي مستخدم بالقوة أثناء التدوير. بعد مرور 30 يوماً على
+// التدوير (تأكد عملياً بمرور شهر كامل)، احذف JWT_SECRET_PREVIOUS نهائياً من متغيرات البيئة.
+const JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS || '';
+function verifyAnyJwtSecret(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (e) {
+    if (JWT_SECRET_PREVIOUS) return jwt.verify(token, JWT_SECRET_PREVIOUS);
+    throw e;
+  }
+}
 
 /* ---------------- حساب الطوارئ (Break-glass account) ----------------
    حساب دخول ثابت مخزّن بالكامل في متغيرات البيئة (اسم المستخدم + hash كلمة
@@ -55,7 +69,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'لم يتم تسجيل الدخول' });
   let payload;
   try {
-    payload = jwt.verify(token, JWT_SECRET);
+    payload = verifyAnyJwtSecret(token);
   } catch (e) {
     return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
   }
