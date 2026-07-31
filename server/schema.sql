@@ -211,3 +211,12 @@ CREATE TABLE IF NOT EXISTS app_backups (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_app_backups_created_at ON app_backups(created_at DESC);
+
+-- المصادقة الثنائية (TOTP) — متاحة لأي مستخدم لكن الاستخدام الفعلي حالياً مقتصر على الأدمن.
+-- totp_secret مخزّن base32 خام (نفس ما تتطلبه تطبيقات المصادقة العادية Google/Microsoft Authenticator)؛
+-- لا يُعتبر سراً حساساً بنفس درجة كلمة المرور (لا يُستخدم بمفرده للدخول)، فلا حاجة لتشفيره إضافياً.
+-- pending_secret يُستخدم أثناء خطوة الإعداد فقط (قبل تأكيد أول كود بنجاح)، ثم يُنقل إلى totp_secret.
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_pending_secret TEXT;
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT; -- JSON: مصفوفة { hash, usedAt } لأكواد احتياطية أحادية الاستخدام

@@ -7,13 +7,13 @@ function showServerLoginScreen(errorMsg){
   if(errorMsg){ errEl.textContent = errorMsg; errEl.style.display = 'block'; }
   else { errEl.style.display = 'none'; }
 }
-async function serverLogin(username, password){
+async function serverLogin(username, password, totpCode){
   let res;
   try{
     res = await fetch(API_BASE + '/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify(totpCode ? { username, password, totpCode } : { username, password }),
     });
   }catch(e){
     // فشل اتصال فعلي بالسيرفر (لا رد إطلاقاً) — نميّزه هنا بعلامة صريحة حتى لا يُعامَل كخطأ
@@ -24,6 +24,13 @@ async function serverLogin(username, password){
   }
   const data = await res.json();
   if(!res.ok) throw new Error(data.error || 'تعذّر تسجيل الدخول');
+  // كلمة المرور صحيحة لكن هذا الحساب مفعّل عنده مصادقة ثنائية ولسه محتاجين الكود — مش خطأ،
+  // نرجّع علامة صريحة للنموذج يعرض حقل الكود ويعيد المحاولة بدل اعتبارها فشل دخول.
+  if(data.requires2FA){
+    const need2fa = new Error('أدخل كود المصادقة الثنائية');
+    need2fa.requires2FA = true;
+    throw need2fa;
+  }
   SERVER_AUTH_TOKEN = data.token;
   /* الصلاحية (admin/staff) أصبحت تُحدَّد من استجابة الخادم نفسها (هوية المستخدم الذي سجّل دخوله فعليًا)،
      وليس من قائمة "المستخدمين" الداخلية داخل البرنامج. إن لم يُرجع الخادم دور المستخدم لأي سبب،

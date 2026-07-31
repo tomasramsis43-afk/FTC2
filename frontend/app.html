@@ -47,6 +47,10 @@
       <form id="server-login-form">
         <div class="field"><label>اسم المستخدم</label><input type="text" id="server-login-user" autocomplete="username" required=""></div>
         <div class="field"><label>كلمة المرور</label><input type="password" id="server-login-pass" autocomplete="current-password" required=""></div>
+        <div class="field" id="server-login-2fa-field" style="display:none;">
+          <label>كود المصادقة الثنائية (من تطبيق المصادقة، أو كود احتياطي)</label>
+          <input type="text" id="server-login-2fa" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
+        </div>
         <button type="submit" class="btn btn-primary">دخول</button>
         <div class="login-error" id="server-login-error" style="display:none;"></div>
       </form>
@@ -3785,6 +3789,13 @@
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
       <button class="btn btn-ghost btn-sm" id="btn-refresh-login-history" style="margin-bottom:10px;">🔄 تحديث السجل</button>
       <div id="login-history-list"><div class="hint hint-info">اضغط "تحديث السجل" لعرض آخر عمليات الدخول</div></div>
+    </div>
+    <div class="panel" id="panel-2fa">
+      <h3 style="margin:0 0 4px;">🔐 المصادقة الثنائية (2FA)</h3>
+      <div id="tfa-status-wrap">
+        <span id="tfa-status-badge" class="hint hint-info">جارٍ التحقق من الحالة...</span>
+      </div>
+      <div id="tfa-controls" style="margin-top:10px;"></div>
     </div>
     <div class="panel" id="panel-prune-records">
       <h3 style="margin:0 0 4px;">🧹 تنظيف السجلات القديمة (سجل المراجعة والمحذوفات)</h3>
