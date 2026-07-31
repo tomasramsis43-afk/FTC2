@@ -772,7 +772,7 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
 // المعروفة لدى المرسل قبل هذا الرفع (0 لسجل جديد لم يُرحَّل بعد). لو تغيّر السجل فعلياً على السيرفر
 // من جهاز/مستخدم آخر فى نفس اللحظة (نادر لكن ممكن أثناء استيراد ضخم)، يُتجاهَل هذا السجل تحديداً
 // بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts ليعيد المستدعي معالجته بمسار الحفظ الفردي المعتاد.
-app.post('/api/client-records/bulk-migrate', requireAuth, async (req, res) => {
+app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
   const client = await pool.connect();
@@ -931,7 +931,7 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
 // فحص تعارض لكل سجل على حدة (بنفس منطق /api/records/:collection/:id تماماً): كل سجل يحمل version
 // المعروفة لدى المرسل قبل هذا الرفع (0 لسجل جديد). لو تغيّر السجل فعلياً على السيرفر من جهاز/مستخدم
 // آخر أثناء نفس العملية، يُتجاهَل هذا السجل تحديداً بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts.
-app.post('/api/records/:collection/bulk-migrate', requireAuth, requireValidCollection, async (req, res) => {
+app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
   const client = await pool.connect();
@@ -983,7 +983,7 @@ app.delete('/api/records/:collection', requireAuth, requireRole('admin'), requir
 // الحد الأقصى لعدد النسخ المحفوظة فى نفس الوقت — أي نسخة جديدة تتخطى الحد تحذف أقدم نسخة تلقائياً،
 // بحيث لا يتضخم الجدول بلا نهاية (خصوصاً مع "auto" التي قد تتكرر كل أسبوع لسنوات).
 const MAX_BACKUPS_RETAINED = 30;
-app.post('/api/backups', requireAuth, requireRole('admin'), async (req, res) => {
+app.post('/api/backups', requireAuth, storageLimiter, requireRole('admin'), async (req, res) => {
   const enc = req.body?.enc;
   const kind = req.body?.kind === 'manual' ? 'manual' : 'auto';
   if (typeof enc !== 'string' || !enc.length) return res.status(400).json({ error: 'بيانات النسخة الاحتياطية مفقودة' });
@@ -1039,7 +1039,7 @@ app.delete('/api/backups/:id', requireAuth, requireRole('admin'), async (req, re
 // deletedInvoices يخضع لالتزام الاحتفاظ بسجلات الفواتير 6 سنوات على الأقل بموجب لوائح ضريبة القيمة
 // المضافة/ZATCA فى السعودية؛ لا يجوز حذفها تلقائياً بفترة قصيرة دون مراجعة الأدمن لهذا تحديداً.
 const PRUNABLE_COLLECTIONS = ['auditLog', 'deletedVaultTx', 'deletedInvoices'];
-app.post('/api/records/:collection/prune', requireAuth, requireRole('admin'), async (req, res) => {
+app.post('/api/records/:collection/prune', requireAuth, storageLimiter, requireRole('admin'), async (req, res) => {
   const { collection } = req.params;
   if (!PRUNABLE_COLLECTIONS.includes(collection)) {
     return res.status(400).json({ error: 'هذا التصنيف غير مسموح بتنظيفه من هذه النقطة' });
