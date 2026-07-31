@@ -342,12 +342,126 @@ document.querySelectorAll('#view-vault thead th.sortable').forEach(th=>{
 });
 /* دفعة نقدية معلّقة (سُجّلت من الاستقبال ولم يؤكد المسؤول عن الخزنة استلامها فعلياً بعد)
    لا تُحتسب ضمن رصيد الخزنة الفعلي حتى تتم تسويتها من "صندوق تسويات الاستقبال" */
+/* ---------------- تعديل مباشر سريع (Inline Edit) للمبلغ والملاحظات ----------------
+   متاح فقط للحركات العادية (ليست دفعة تسجيل تلقائية autoClientId، وليست قيد حوالة شركة موحّد
+   companyTransferId لأنه يمثّل مجموع عدة متدربين) وغير واقعة ضمن فترة مقفلة. الهدف تسريع تصحيح
+   خطأ بسيط في مبلغ أو ملاحظة دون فتح المودال الكامل، مع الحفاظ الكامل على نفس قواعد القفل
+   المحاسبي والتراجع (Undo) والتدقيق (Audit Log) المستخدمة في مسار التعديل العادي. */
+function vaultInlineEditable(t){
+  return !t.autoClientId && !t.companyTransferId && !isDateLocked(t.date);
+}
+let _vaultInlineEditingCell = null;
+function startVaultInlineEdit(td){
+  if(_vaultInlineEditingCell) return; // تعديل واحد فقط في نفس اللحظة
+  const id = td.dataset.inlineId;
+  const field = td.dataset.inlineField;
+  const t = vaultTx.find(x=>x.id===id);
+  if(!t) return;
+  if(isDateLocked(t.date)){ vaultLockToast(); return; }
+  _vaultInlineEditingCell = td;
+  const originalHtml = td.innerHTML;
+  const currentVal = field==='amount' ? num(t.amount) : (t.notes||'');
+  const input = document.createElement('input');
+  input.type = field==='amount' ? 'number' : 'text';
+  if(field==='amount'){ input.step = '0.01'; input.min = '0'; }
+  input.value = currentVal;
+  input.className = 'inline-edit-input';
+  input.style.cssText = 'width:100%; box-sizing:border-box; font:inherit; padding:2px 4px;';
+  td.innerHTML = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+  const commit = async ()=>{
+    if(_vaultInlineEditingCell!==td) return;
+    _vaultInlineEditingCell = null;
+    const rawVal = input.value;
+    if(field==='amount'){
+      const newAmount = num(rawVal);
+      if(newAmount<=0){ showToast('أدخل مبلغاً صحيحاً أكبر من صفر'); renderVault(); return; }
+      if(newAmount===num(t.amount)){ renderVault(); return; }
+      snapshotState('تعديل سريع لمبلغ حركة مالية');
+      const { history: _h, ...before } = t;
+      t.amount = newAmount;
+      const { history: _h2, ...after } = t;
+      pushVaultTxHistory(t, before, after);
+      await saveVaultTx();
+      await logAudit('edit','الحركات المالية', `تعديل سريع للمبلغ في حركة رقم تسلسلي #${t.seq||'—'} إلى ${fmt(newAmount)}`);
+      showToast('تم تحديث المبلغ');
+    }else{
+      const newNotes = rawVal.trim();
+      if(newNotes===(t.notes||'')){ renderVault(); return; }
+      snapshotState('تعديل سريع لملاحظة حركة مالية');
+      const { history: _h, ...before } = t;
+      t.notes = newNotes;
+      const { history: _h2, ...after } = t;
+      pushVaultTxHistory(t, before, after);
+      await saveVaultTx();
+      await logAudit('edit','الحركات المالية', `تعديل سريع لملاحظة حركة رقم تسلسلي #${t.seq||'—'}`);
+      showToast('تم تحديث الملاحظة');
+    }
+    renderVault();
+    if(typeof renderDashboard==='function') renderDashboard();
+  };
+  const cancel = ()=>{
+    if(_vaultInlineEditingCell!==td) return;
+    _vaultInlineEditingCell = null;
+    td.innerHTML = originalHtml;
+  };
+  input.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ e.preventDefault(); input.blur(); }
+    else if(e.key==='Escape'){ e.preventDefault(); cancel(); }
+  });
+  input.addEventListener('blur', commit, { once:true });
+}
+$('#vault-table-body').addEventListener('dblclick', e=>{
+  const td = e.target.closest('td[data-inline-field]');
+  if(td) startVaultInlineEdit(td);
+});
 function vaultTxCountsTowardBalance(t){
   return !(t.autoClientId && (t.destination||'vault')==='vault' && t.settled===false);
+}
+/* ---------------- الرصيد المتوقع نهاية اليوم / نهاية الأسبوع ----------------
+   تقدير بسيط (ليس تنبؤاً بالذكاء الاصطناعي): يحسب متوسط صافي الحركة اليومي (وارد فعلي - صادر)
+   خلال آخر 30 يوماً فعلياً (بغض النظر عن أي فلتر حالي، لأن التوقع خاص بالرصيد الحقيقي للحساب)،
+   ثم يسقط هذا المتوسط على الأيام المتبقية حتى نهاية اليوم ونهاية الأسبوع (السبت أساس الأسبوع).
+   كلما زاد عدد الأيام التي فيها بيانات فعلية كلما كان المتوسط أدق. */
+function projectedBalance(dest){
+  const today = todayISO();
+  const from = new Date(today); from.setDate(from.getDate()-30);
+  const fromISO = from.toISOString().slice(0,10);
+  const recent = vaultTx.filter(t=>(t.destination||'vault')===dest && t.date>=fromISO && t.date<=today && vaultTxCountsTowardBalance(t));
+  if(!recent.length) return { current: balanceOf(dest), endOfDay: balanceOf(dest), endOfWeek: balanceOf(dest), daysOfData: 0 };
+  const daysSet = new Set(recent.map(t=>t.date));
+  const netTotal = recent.reduce((s,t)=> s + (t.type==='in' ? num(t.amount) : -num(t.amount)), 0);
+  const avgDailyNet = netTotal / Math.max(1, daysSet.size);
+  const current = balanceOf(dest);
+  // باقي أيام الأسبوع حتى السبت (بداية الأسبوع في السعودية) — لو اليوم نفسه سبت، الأسبوع القادم
+  const dow = new Date(today+'T00:00:00').getDay(); // 0=أحد...6=سبت
+  const daysToWeekEnd = dow===6 ? 7 : (6-dow);
+  return {
+    current,
+    endOfDay: current, // نفس الرصيد الحالي هو رصيد نهاية اليوم لأنه يشمل كل حركات اليوم المسجّلة فعلياً
+    endOfWeek: Math.round((current + avgDailyNet*daysToWeekEnd)*100)/100,
+    avgDailyNet: Math.round(avgDailyNet*100)/100,
+    daysOfData: daysSet.size
+  };
 }
 function balanceOf(dest){
   return vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0)
        - vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='out').reduce((s,t)=>s+num(t.amount),0);
+}
+/* بطاقة الرصيد المتوقع للخزنة (كاش) — تقدير تقريبي وليس ضماناً، مبني على متوسط أداء الأيام الماضية فقط */
+function renderProjectedBalanceCard(){
+  const p = projectedBalance('vault');
+  if(p.daysOfData < 3){
+    return `<div class="card"><div class="k">الرصيد المتوقع (الخزنة كاش)</div><div class="v" style="font-size:14px; color:var(--text-muted);">بيانات غير كافية للتقدير (أقل من 3 أيام حركة مؤخراً)</div></div>`;
+  }
+  const trendIcon = p.avgDailyNet>=0 ? '📈' : '📉';
+  return `<div class="card">
+    <div class="k">الرصيد المتوقع (الخزنة كاش)</div>
+    <div class="v ${p.endOfWeek<0?'red':''}">${fmt(p.endOfWeek)} <span style="font-size:12px; font-weight:400;">نهاية الأسبوع</span></div>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${trendIcon} متوسط صافي يومي: ${fmt(p.avgDailyNet)} (بناءً على ${p.daysOfData} يوم من آخر 30 يوماً) — تقدير تقريبي وليس ضماناً</div>
+  </div>`;
 }
 function seqNumbers(){
   const map = {};
@@ -385,6 +499,7 @@ function renderVault(){
     <div class="card"><div class="k">البنك — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('bank')<0?'red':'teal'}">${fmt(netOfDestFiltered('bank'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('bank'))}</div></div>
     <div class="card"><div class="k">الشبكة — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('network')<0?'red':'gold'}">${fmt(netOfDestFiltered('network'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('network'))}</div></div>
     <div class="card"><div class="k">صافي الفترة المحددة (كل الحسابات المفلترة)</div><div class="v">${fmt(periodIn-periodOut)}</div></div>
+    ${renderProjectedBalanceCard()}
   `;
 
   $('#vault-empty').style.display = rows.length ? 'none' : 'block';
@@ -437,8 +552,8 @@ function renderVault(){
       <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono" data-label="المبلغ">${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}</td>
-      <td data-label="ملاحظات">${escapeHtml(t.notes||'')}</td>
+      <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}</td>
+      <td class="${vaultInlineEditable(t)?'editable-cell':''}" data-label="ملاحظات"${vaultInlineEditable(t)?` data-inline-field="notes" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : (t.type==='in' && t.companyTransferId) ? `
         <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button>` : `
@@ -818,6 +933,8 @@ $('#vf-clientid').addEventListener('input', ()=>{
 });
 
 $('#btn-add-vault').addEventListener('click', ()=>openVaultModal(null));
+// زرار عائم متاح من أي شاشة في البرنامج لفتح مودال "حركة خزنة جديدة" مباشرة بدون الحاجة للانتقال لشيت الحركات المالية أولاً
+$('#btn-fab-quickadd')?.addEventListener('click', ()=>openVaultModal(null));
 function openVaultModal(id){
   if(id){
     const lockedTx = vaultTx.find(x=>x.id===id);

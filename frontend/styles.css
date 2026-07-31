@@ -2072,3 +2072,57 @@ body.dark-theme #view-clients thead th {
 #view-clients tbody tr.paid {
   box-shadow: inset 3px 0 0 var(--navy);
 }
+
+/* ================= زرار الإضافة السريعة العائم (حركة خزنة) — مرحلة 1 من تطوير شيت الحركات المالية ================= */
+.fab-quickadd {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--navy-dark);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  cursor: pointer;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.fab-quickadd:hover { transform: scale(1.08); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.fab-quickadd:active { transform: scale(0.95); }
+@media (max-width: 720px) {
+  .fab-quickadd { bottom: 78px; left: 16px; width: 50px; height: 50px; font-size: 26px; }
+}
+
+/* ================= خلايا التعديل المباشر السريع (Inline Edit) في جدول الحركات المالية ================= */
+#vault-table-body td.editable-cell {
+  cursor: text;
+  position: relative;
+}
+#vault-table-body td.editable-cell:hover {
+  background: rgba(196, 154, 74, .12);
+  outline: 1px dashed var(--gold-dark);
+  outline-offset: -2px;
+}
+#vault-table-body td.editable-cell:hover::after {
+  content: "✎";
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--gold-dark);
+  opacity: .8;
+}
+.inline-edit-input {
+  border: 1px solid var(--gold-dark);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
