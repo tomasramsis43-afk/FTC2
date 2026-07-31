@@ -194,3 +194,16 @@ CREATE TABLE IF NOT EXISTS login_history (
 ALTER TABLE login_history ADD COLUMN IF NOT EXISTS device_info TEXT;
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
+
+-- نسخ احتياطية كاملة مُجدوَلة: "enc" هو نفس محتوى gatherFullBackupData() فى الواجهة، بعد تشفيره
+-- بمفتاح المستخدم (نفس آلية encryptValue المستخدمة لكل بيانات البرنامج) — السيرفر لا يرى ولا
+-- يقدر يفك أي بيانات فعلية هنا أبداً، فقط يخزّن الكتلة المشفّرة كما هي.
+CREATE TABLE IF NOT EXISTS app_backups (
+  id           SERIAL PRIMARY KEY,
+  kind         TEXT NOT NULL DEFAULT 'auto', -- 'auto' أو 'manual'
+  enc          TEXT NOT NULL,
+  size_bytes   INTEGER NOT NULL DEFAULT 0,
+  created_by   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_app_backups_created_at ON app_backups(created_at DESC);

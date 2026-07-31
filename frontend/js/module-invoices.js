@@ -1210,6 +1210,45 @@ $('#btn-backup-now').addEventListener('click', ()=>{
   downloadFullBackup(false);
   showToast('تم تنزيل النسخة الاحتياطية');
 });
+$('#btn-backup-server-now')?.addEventListener('click', async ()=>{
+  const btn = $('#btn-backup-server-now'); btn.disabled = true; btn.textContent = 'جارٍ الرفع…';
+  try{
+    const ok = await uploadBackupToServer('manual');
+    showToast(ok ? 'تم رفع نسخة احتياطية للسيرفر' : 'تعذّر رفع النسخة الاحتياطية');
+    if(ok) await renderServerBackupsList();
+  }finally{ btn.disabled = false; btn.textContent = '☁️ نسخ احتياطي على السيرفر الآن'; }
+});
+async function renderServerBackupsList(){
+  const wrap = $('#server-backups-list');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="hint hint-info">جارٍ التحميل...</div>';
+  const rows = await listServerBackups();
+  if(!rows.length){ wrap.innerHTML = '<div class="hint hint-info">لا توجد نسخ محفوظة على السيرفر بعد</div>'; return; }
+  wrap.innerHTML = `<div class="table-scroll table-scroll-compact cards-mobile"><table><thead><tr>
+    <th>التاريخ</th><th>النوع</th><th>الحجم</th><th>بواسطة</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr>
+      <td class="mono" data-label="التاريخ">${new Date(r.created_at).toLocaleString('ar-SA')}</td>
+      <td data-label="النوع">${r.kind==='manual'?'يدوية':'تلقائية'}</td>
+      <td class="mono" data-label="الحجم">${((r.size_bytes||0)/1024).toFixed(0)} كيلوبايت</td>
+      <td data-label="بواسطة">${escapeHtml(r.created_by||'—')}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-ghost btn-sm" data-dl-backup="${r.id}">⬇️ تنزيل</button>
+        <button class="btn btn-danger btn-sm" data-del-backup="${r.id}">🗑️</button>
+      </td>
+    </tr>`).join('')}
+  </tbody></table></div>`;
+}
+$('#btn-refresh-server-backups')?.addEventListener('click', renderServerBackupsList);
+document.addEventListener('click', async (e)=>{
+  const dl = e.target.closest('[data-dl-backup]');
+  if(dl){ try{ await downloadServerBackup(dl.dataset.dlBackup); }catch(err){ showToast('تعذّر تنزيل النسخة: '+(err.message||'')); } return; }
+  const del = e.target.closest('[data-del-backup]');
+  if(del){
+    if(!await customConfirm('حذف هذه النسخة الاحتياطية نهائياً؟')) return;
+    try{ await deleteServerBackup(del.dataset.delBackup); await renderServerBackupsList(); }
+    catch(err){ showToast('تعذّر حذف النسخة: '+(err.message||'')); }
+  }
+});
 $('#btn-restore-backup').addEventListener('click', ()=> $('#restore-backup-input').click());
 $('#restore-backup-input').addEventListener('change', async e=>{
   const file = e.target.files[0];
