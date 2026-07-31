@@ -735,13 +735,22 @@ $('#server-login-form').addEventListener('submit', async e=>{
   const btn = e.target.querySelector('button[type="submit"]');
   const uname = $('#server-login-user').value.trim();
   const upass = $('#server-login-pass').value;
+  const totpCode = $('#server-login-2fa').value.trim();
   $('#server-login-error').style.display = 'none';
   if(btn) btn.disabled = true;
   try{
-    await serverLogin(uname, upass);
+    await serverLogin(uname, upass, totpCode || undefined);
     $('#server-login-screen').style.display = 'none';
     await startApp();
   }catch(err){
+    if(err && err.requires2FA){
+      $('#server-login-2fa-field').style.display = 'block';
+      $('#server-login-2fa').focus();
+      $('#server-login-error').textContent = 'أدخل كود المصادقة الثنائية من تطبيق المصادقة';
+      $('#server-login-error').style.display = 'block';
+      if(btn) btn.disabled = false;
+      return;
+    }
     if(err && err.networkError){
       // تعذّر الوصول للسيرفر إطلاقاً (لا إنترنت) — نجرّب التحقق من بيانات الدخول نفسها محلياً
       // مقابل التجزئة المحفوظة من آخر تسجيل دخول ناجح لهذا المستخدم بالذات على هذا الجهاز، بدل

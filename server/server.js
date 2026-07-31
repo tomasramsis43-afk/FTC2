@@ -6,7 +6,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
-const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken } = require('./auth');
+const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
+  generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('./auth');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -80,6 +81,70 @@ const storageLimiter = rateLimit({
   message: { error: 'طلبات حفظ كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
 
+
+/* ---------------- المصادقة الثنائية (TOTP) — أدمن فقط حالياً ---------------- */
+// خطوة 1: توليد سر مؤقّت (pending) + رابط otpauth للـ QR — لا يُفعَّل فعلياً إلا بعد
+// تأكيد أول كود صحيح فى /verify (يمنع تفعيل غير مقصود لو المستخدم أغلق الصفحة قبل المسح).
+app.post('/api/2fa/setup', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const secret = generateTotpSecret();
+    await pool.query('UPDATE server_users SET totp_pending_secret = $1 WHERE username = $2', [secret, req.user.username]);
+    const otpauthUrl = totpOtpauthUrl(secret, req.user.username);
+    res.json({ secret, otpauthUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر بدء إعداد المصادقة الثنائية' });
+  }
+});
+// خطوة 2: تأكيد أول كود من تطبيق المصادقة — عند النجاح ينتقل السر من pending إلى الفعلي
+// وتُولَّد 10 أكواد احتياطية تُعرض للمستخدم مرة واحدة فقط (النص الصريح لا يُخزَّن أبداً).
+app.post('/api/2fa/verify-setup', requireAuth, requireRole('admin'), authLimiter, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT totp_pending_secret FROM server_users WHERE username = $1', [req.user.username]);
+    const pending = r.rows[0]?.totp_pending_secret;
+    if (!pending) return res.status(400).json({ error: 'ابدأ خطوة الإعداد أولاً' });
+    if (!verifyTotpToken(req.body?.totpCode, pending)) {
+      return res.status(401).json({ error: 'الكود غير صحيح، تأكد من مزامنة الوقت فى جهازك وحاول مجدداً' });
+    }
+    const backupCodes = generateBackupCodes(10);
+    const hashed = await hashBackupCodes(backupCodes);
+    await pool.query(
+      `UPDATE server_users SET totp_secret = $1, totp_pending_secret = NULL, totp_enabled = true,
+       totp_backup_codes = $2, token_version = token_version + 1 WHERE username = $3`,
+      [pending, JSON.stringify(hashed), req.user.username]
+    );
+    res.json({ enabled: true, backupCodes }); // النص الصريح لهذه الأكواد يُعرض مرة واحدة فقط هنا
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تفعيل المصادقة الثنائية' });
+  }
+});
+// إلغاء التفعيل — يتطلب كلمة المرور الحالية كتأكيد إضافي (مش مجرد ضغطة زر عابرة على حساب حساس)
+app.post('/api/2fa/disable', requireAuth, requireRole('admin'), authLimiter, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT password_hash FROM server_users WHERE username = $1', [req.user.username]);
+    const ok = r.rows[0] && await verifyPassword(req.body?.password || '', r.rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+    await pool.query(
+      `UPDATE server_users SET totp_secret = NULL, totp_pending_secret = NULL, totp_enabled = false,
+       totp_backup_codes = NULL WHERE username = $1`,
+      [req.user.username]
+    );
+    res.json({ enabled: false });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إلغاء المصادقة الثنائية' });
+  }
+});
+app.get('/api/2fa/status', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT totp_enabled FROM server_users WHERE username = $1', [req.user.username]);
+    res.json({ enabled: !!(r.rows[0] && r.rows[0].totp_enabled) });
+  } catch (e) {
+    res.status(500).json({ error: 'تعذّر جلب حالة المصادقة الثنائية' });
+  }
+});
+
 /* ---------------- تسجيل الدخول ---------------- */
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {};
@@ -131,6 +196,33 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         [user.username, user.role || 'staff', loginIp, loginDevice]
       ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
       return res.status(403).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
+    }
+    // المصادقة الثنائية: كلمة المرور صحيحة والحساب مفعّل، لكن لو هذا المستخدم مفعّل عنده TOTP
+    // فلازم نتحقق من كود إضافي قبل إصدار أي توكن — بدون هذه الخطوة، كلمة المرور وحدها كانت كافية.
+    if (user.totp_enabled) {
+      const { totpCode, backupCode } = req.body || {};
+      if (!totpCode && !backupCode) {
+        // لسه محتاجين الخطوة التانية — مش خطأ، فقط إشارة للواجهة إنها تعرض حقل الكود.
+        // لا نُصدر أي توكن هنا إطلاقاً.
+        return res.json({ requires2FA: true, username: user.username });
+      }
+      let verified = false;
+      if (totpCode) {
+        verified = verifyTotpToken(totpCode, user.totp_secret);
+      } else if (backupCode) {
+        const result = await consumeBackupCode(user.totp_backup_codes, backupCode);
+        verified = result.ok;
+        if (result.ok) {
+          await pool.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
+        }
+      }
+      if (!verified) {
+        pool.query(
+          'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+          [user.username, user.role || 'staff', loginIp, loginDevice]
+        ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+        return res.status(401).json({ error: 'كود التحقق غير صحيح' });
+      }
     }
     const token = signToken(user);
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع

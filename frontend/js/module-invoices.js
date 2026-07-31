@@ -755,6 +755,7 @@ function renderSettings(){
   renderRolePermissionsPanel();
   renderReceptionRestrictionsPanel();
   renderPruneRecordsPanel();
+  renderTfaPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -892,6 +893,75 @@ document.addEventListener('click', (e)=>{
   const rb = e.target.closest('[data-prune-run]');
   if(rb){ const key = rb.dataset.pruneRun; const days = $(`[data-prune-days="${key}"]`).value; pruneExecute(key, days); return; }
 });
+
+/* ---------------- المصادقة الثنائية (TOTP) — إعداد/تفعيل/إلغاء من شاشة الإعدادات ---------------- */
+async function renderTfaPanel(){
+  const badge = $('#tfa-status-badge');
+  const controls = $('#tfa-controls');
+  if(!badge || !controls) return;
+  let enabled = false;
+  try{
+    const res = await serverFetch('/api/2fa/status');
+    const data = await res.json();
+    enabled = !!data.enabled;
+  }catch(e){ badge.textContent = 'تعذّر التحقق من الحالة'; return; }
+  badge.className = 'hint';
+  badge.style.color = enabled ? 'var(--green, #22c55e)' : '';
+  badge.textContent = enabled ? '✅ المصادقة الثنائية مفعّلة حالياً' : '⭕ المصادقة الثنائية غير مفعّلة';
+  if(enabled){
+    controls.innerHTML = `<button class="btn btn-danger btn-sm" id="btn-tfa-disable">إلغاء تفعيل المصادقة الثنائية</button>`;
+    $('#btn-tfa-disable').addEventListener('click', async ()=>{
+      const password = prompt('لتأكيد إلغاء المصادقة الثنائية، أدخل كلمة مرور حسابك الحالية:');
+      if(!password) return;
+      try{
+        const res = await serverFetch('/api/2fa/disable', { method:'POST', body: JSON.stringify({ password }) });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.error||'فشل الإلغاء');
+        showToast('تم إلغاء تفعيل المصادقة الثنائية');
+        renderTfaPanel();
+      }catch(e){ showToast('⚠️ '+e.message); }
+    });
+  } else {
+    controls.innerHTML = `<button class="btn btn-gold btn-sm" id="btn-tfa-enable">تفعيل المصادقة الثنائية الآن</button>`;
+    $('#btn-tfa-enable').addEventListener('click', startTfaSetup);
+  }
+}
+async function startTfaSetup(){
+  const controls = $('#tfa-controls');
+  try{
+    const res = await serverFetch('/api/2fa/setup', { method:'POST' });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||'فشل بدء الإعداد');
+    controls.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:10px; max-width:340px;">
+        <div>امسح هذا الكود بتطبيق مصادقة (Google Authenticator / Microsoft Authenticator / أي تطبيق TOTP مشابه):</div>
+        <canvas id="tfa-qr-canvas"></canvas>
+        <div class="hint hint-info">أو أدخل هذا المفتاح يدوياً فى التطبيق: <code class="mono">${escapeHtml(data.secret)}</code></div>
+        <label>أدخل الكود المكوّن من 6 أرقام الذي يظهر فى التطبيق للتأكيد:</label>
+        <input type="text" id="tfa-verify-code" inputmode="numeric" placeholder="123456" style="max-width:160px;">
+        <button class="btn btn-gold btn-sm" id="btn-tfa-confirm">تأكيد وتفعيل</button>
+      </div>`;
+    if(typeof QRious !== 'undefined'){
+      new QRious({ element: $('#tfa-qr-canvas'), value: data.otpauthUrl, size: 200, level:'M' });
+    }
+    $('#btn-tfa-confirm').addEventListener('click', async ()=>{
+      const totpCode = $('#tfa-verify-code').value.trim();
+      if(!totpCode){ showToast('أدخل الكود أولاً'); return; }
+      try{
+        const res2 = await serverFetch('/api/2fa/verify-setup', { method:'POST', body: JSON.stringify({ totpCode }) });
+        const data2 = await res2.json();
+        if(!res2.ok) throw new Error(data2.error||'كود غير صحيح');
+        controls.innerHTML = `
+          <div class="hint" style="font-weight:600; color:var(--green, #22c55e);">✅ تم تفعيل المصادقة الثنائية بنجاح</div>
+          <div style="margin-top:8px;">احتفظ بهذه الأكواد الاحتياطية فى مكان آمن — كل كود يُستخدم مرة واحدة فقط، وتظهر هنا الآن فقط ولن تظهر مرة أخرى أبداً:</div>
+          <div class="mono" style="background:var(--bg-secondary); padding:10px; border-radius:8px; margin-top:6px; line-height:2;">
+            ${data2.backupCodes.map(c=>escapeHtml(c)).join(' &nbsp; ')}
+          </div>`;
+        showToast('تم تفعيل المصادقة الثنائية');
+      }catch(e){ showToast('⚠️ '+e.message); }
+    });
+  }catch(e){ showToast('⚠️ '+e.message); }
+}
 
 function formatDeviceInfo(ua){
   if(!ua) return '—';

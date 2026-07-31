@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const otplib = require('otplib');
 const { pool } = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -126,4 +127,51 @@ async function verifyPassword(plain, hash) {
   return bcrypt.compare(plain, hash);
 }
 
-module.exports = { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken };
+/* ---------------- المصادقة الثنائية (TOTP) ---------------- */
+// otplib v13 يستخدم دوال مستقلة بمعاملات-كائن بدل كائن authenticator القديم (v12).
+// epochTolerance:1 = تسامح خطوة واحدة (٣٠ ثانية) قبل/بعد — تعويض فروق ساعة بسيطة بين
+// جهاز المستخدم والسيرفر، نفس الإعداد الافتراضي الشائع فى تطبيقات المصادقة.
+function generateTotpSecret() {
+  return otplib.generateSecret(); // base32
+}
+function totpOtpauthUrl(secret, username) {
+  return otplib.generateURI({ issuer: 'FTC2', label: username, secret });
+}
+function verifyTotpToken(token, secret) {
+  try {
+    const cleaned = String(token || '').replace(/\s/g, '');
+    if (!cleaned) return false;
+    return !!otplib.verifySync({ secret, token: cleaned, epochTolerance: 1 }).valid;
+  } catch (e) { return false; }
+}
+// أكواد احتياطية أحادية الاستخدام (10 أكواد، 8 أرقام لكل كود) — لحالة فقدان جهاز المصادقة.
+// تُخزَّن كـ bcrypt hash فقط، وتُستهلك (تُحذف) فور استخدام أي كود منها مرة واحدة.
+function generateBackupCodes(count = 10) {
+  const codes = [];
+  for (let i = 0; i < count; i++) {
+    codes.push(String(Math.floor(10000000 + Math.random() * 90000000)));
+  }
+  return codes;
+}
+async function hashBackupCodes(codes) {
+  const hashed = [];
+  for (const c of codes) hashed.push({ hash: await bcrypt.hash(c, 10), usedAt: null });
+  return hashed;
+}
+async function consumeBackupCode(storedJson, code) {
+  let list;
+  try { list = JSON.parse(storedJson || '[]'); } catch (e) { list = []; }
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].usedAt) continue;
+    if (await bcrypt.compare(String(code || ''), list[i].hash)) {
+      list.splice(i, 1); // استهلاك فوري: حذف الكود المستخدم نهائياً بدل مجرد وضع علامة عليه
+      return { ok: true, remaining: JSON.stringify(list) };
+    }
+  }
+  return { ok: false, remaining: storedJson };
+}
+
+module.exports = {
+  signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
+  generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode,
+};
