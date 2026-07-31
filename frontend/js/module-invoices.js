@@ -924,17 +924,25 @@ async function renderLoginHistory(){
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'تعذّر جلب سجل الدخول');
     const history = data.history || [];
+    const suspiciousActivity = data.suspiciousActivity || [];
     if(!history.length){ el.innerHTML = `<div class="hint">لا يوجد سجل دخول بعد</div>`; return; }
     const uniqueUsers = [...new Set(history.map(h=>h.username))];
+    const suspiciousBanner = suspiciousActivity.length ? `
+      <div style="background:#FEF2F2; border:1px solid #FCA5A5; border-radius:8px; padding:10px 14px; margin-bottom:12px; color:#991B1B;">
+        ⚠️ نشاط مشبوه: محاولات دخول فاشلة متكررة خلال آخر ساعة —
+        ${suspiciousActivity.map(s=>`<b>${escapeHtml(s.username)}</b> (${s.failed_count} محاولة من ${escapeHtml(s.ip_address||'—')})`).join('، ')}
+      </div>` : '';
     el.innerHTML = `
+      ${suspiciousBanner}
       <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
         ${uniqueUsers.map(u=>`<button class="btn btn-danger btn-sm" data-forcelogout="${escapeHtml(u)}" ${u===currentUser?'disabled title="لا يمكنك إنهاء جلستك الحالية من هنا"':''}>🔒 إنهاء جلسات "${escapeHtml(u)}"</button>`).join('')}
       </div>
       <div class="table-scroll table-scroll-compact cards-mobile">
       <table>
-        <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>الوقت</th><th>الجهاز</th><th>عنوان IP</th></tr></thead>
+        <thead><tr><th>الحالة</th><th>اسم المستخدم</th><th>الصلاحية</th><th>الوقت</th><th>الجهاز</th><th>عنوان IP</th></tr></thead>
         <tbody>
-          ${history.map(h=>`<tr>
+          ${history.map(h=>`<tr ${h.success===false?'style="background:#FEF2F2;"':''}>
+            <td data-label="الحالة">${h.success===false?'❌ فشلت':'✅ ناجحة'}</td>
             <td data-label="اسم المستخدم">${escapeHtml(h.username)}${h.username===currentUser?' — أنت':''}</td>
             <td data-label="الصلاحية">${escapeHtml(SERVER_ROLE_LABELS[h.role]||h.role||'—')}</td>
             <td class="mono" data-label="الوقت">${new Date(h.logged_in_at).toLocaleString('ar-SA')}</td>
