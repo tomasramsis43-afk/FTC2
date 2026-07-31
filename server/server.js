@@ -108,12 +108,28 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     }
     const r = await pool.query('SELECT * FROM server_users WHERE username = $1', [username.trim()]);
     const user = r.rows[0];
-    if (!user) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    if (!user) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [username.trim(), null, loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
     const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    if (!ok) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
     // حساب معطّل من طرف المدير: نرفض الدخول برسالة واضحة قبل إصدار أي توكن،
     // حتى لو كانت كلمة المرور صحيحة.
     if (user.is_active === false) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
       return res.status(403).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
     }
     const token = signToken(user);
@@ -222,13 +238,23 @@ app.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req
   }
 });
 
-// GET /api/login-history -> آخر عمليات الدخول الناجحة لكل المستخدمين (admin فقط) — سجل الدخول والجلسات
+// GET /api/login-history -> آخر عمليات الدخول (ناجحة وفاشلة) لكل المستخدمين (admin فقط)، بالإضافة
+// لملخص "نشاط مشبوه" (تجميع محاولات فاشلة حسب اسم المستخدم/الـ IP خلال آخر ساعة)، حتى يلاحظ
+// المدير أي محاولات دخول غير مصرّح بها لم تصل لحد rate limiting نفسه (محاولات متفرقة بطيئة).
 app.get('/api/login-history', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT username, role, ip_address, device_info, logged_in_at FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
+      'SELECT username, role, ip_address, device_info, logged_in_at, success FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
     );
-    res.json({ history: r.rows });
+    const suspicious = await pool.query(
+      `SELECT username, ip_address, COUNT(*)::int AS failed_count, MAX(logged_in_at) AS last_attempt
+       FROM login_history
+       WHERE success = false AND logged_in_at > now() - INTERVAL '1 hour'
+       GROUP BY username, ip_address
+       HAVING COUNT(*) >= 3
+       ORDER BY failed_count DESC`
+    );
+    res.json({ history: r.rows, suspiciousActivity: suspicious.rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب سجل الدخول' });
