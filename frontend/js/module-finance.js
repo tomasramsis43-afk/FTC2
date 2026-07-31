@@ -610,6 +610,198 @@ function renderVaultBudgetGlance(){
     <div class="card"><div class="k">نسبة تحقيق الإيرادات المخططة (هذا الشهر)</div><div class="v teal">${revPct===null?'—':fmt(revPct)+'%'}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">فعلي ${fmt(actualRev)} / مخطط ${fmt(budgetRev)}</div></div>
   `;
 }
+/* ================= المرحلة 3: الحركات المتكررة والمجدولة تلقائياً ================= */
+/* ---------------- اكتشاف الأنماط المتكررة تلقائياً ----------------
+   يبحث في تاريخ الحركات "الصادرة" عن مجموعات بنفس التصنيف + نفس اسم المستلم، تكرّرت 3 مرات
+   على الأقل بفارق زمني قريب من شهر (25-35 يوماً) بين كل حركة والتي تليها، وتذبذب المبلغ بينها
+   محدود (لا يتجاوز 20% عن المتوسط). هذه مجرد اقتراحات للمستخدم ليقرر تحويلها لقالب مجدول أو
+   تجاهلها — لا تُنشئ أي حركة أو تغيير تلقائي بحد ذاتها. */
+function detectRecurringVaultPatterns(){
+  const byKey = {};
+  vaultTx.forEach(t=>{
+    if(t.type!=='out' || !t.category || !t.recipientName) return;
+    const key = t.category+'|||'+t.recipientName;
+    (byKey[key] = byKey[key]||[]).push(t);
+  });
+  const suggestions = [];
+  Object.entries(byKey).forEach(([key, list])=>{
+    if(list.length < 3) return;
+    const sorted = [...list].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+    const gaps = [];
+    for(let i=1;i<sorted.length;i++){
+      const d1 = new Date(sorted[i-1].date), d2 = new Date(sorted[i].date);
+      if(isNaN(d1)||isNaN(d2)) continue;
+      gaps.push((d2-d1)/86400000);
+    }
+    const monthlyGaps = gaps.filter(g=>g>=25 && g<=35);
+    if(monthlyGaps.length < Math.max(2, Math.ceil((sorted.length-1)*0.6))) return; // معظم الفجوات شهرية تقريباً
+    const amounts = sorted.map(t=>num(t.amount));
+    const avgAmount = amounts.reduce((a,b)=>a+b,0)/amounts.length;
+    if(avgAmount<=0) return;
+    const withinTolerance = amounts.every(a=> Math.abs(a-avgAmount)/avgAmount <= 0.2);
+    if(!withinTolerance) return;
+    const [category, recipientName] = key.split('|||');
+    const last = sorted[sorted.length-1];
+    suggestions.push({ category, recipientName, avgAmount: Math.round(avgAmount*100)/100, occurrences: sorted.length, lastDate: last.date, lastMethod: last.method, lastDestination: last.destination||'vault' });
+  });
+  return suggestions.sort((a,b)=>b.occurrences-a.occurrences);
+}
+function renderRecurringSuggestions(){
+  const el = $('#vault-recurring-suggestions');
+  if(!el) return;
+  const suggestions = detectRecurringVaultPatterns();
+  // لا تُقترَح الأنماط التي لها بالفعل قالب مجدول مطابق (نفس التصنيف والمستلم)
+  const existingKeys = new Set(scheduledVaultTx.map(s=> s.category+'|||'+s.recipientName));
+  const filtered = suggestions.filter(s=> !existingKeys.has(s.category+'|||'+s.recipientName));
+  if(!filtered.length){
+    el.innerHTML = `<div class="hint" style="color:var(--text-muted); font-size:13px;">لا توجد أنماط متكررة مكتشفة حالياً (يحتاج 3 حركات متتالية على الأقل بفارق شهري تقريباً ومبلغ متقارب)</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(s=>`
+    <div class="computed" style="margin-bottom:8px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+      <span>🔁 <b>${escapeHtml(s.category)}</b> — ${escapeHtml(s.recipientName)}</span>
+      <span class="mono">~${fmt(s.avgAmount)}</span>
+      <span style="font-size:12px; color:var(--text-muted);">تكررت ${s.occurrences} مرات، آخرها ${escapeHtml(s.lastDate||'—')}</span>
+      <button type="button" class="btn btn-gold btn-sm" data-scheduletemplate="${encodeURIComponent(JSON.stringify(s))}">تحويل لقالب مجدول</button>
+    </div>`).join('');
+}
+document.addEventListener('click', e=>{
+  const raw = e.target?.dataset?.scheduletemplate;
+  if(!raw) return;
+  const s = JSON.parse(decodeURIComponent(raw));
+  openScheduleModal(null, s);
+});
+
+/* ---------------- قوالب الحركات المجدولة (CRUD) ---------------- */
+let editingScheduleId = null;
+function renderScheduledVaultTable(){
+  const body = $('#scheduled-vault-body');
+  if(!body) return;
+  body.innerHTML = scheduledVaultTx.map(s=>`
+    <tr>
+      <td>${escapeHtml(s.recipientName||'—')}</td>
+      <td>${escapeHtml(s.category||'—')}</td>
+      <td class="mono">${fmt(num(s.amount))}</td>
+      <td>${escapeHtml(destLabel(s.destination||'vault'))}</td>
+      <td class="mono">${s.dayOfMonth}</td>
+      <td><span class="stamp ${s.active!==false?'paid':'owe'}">${s.active!==false?'نشط':'متوقف'}</span></td>
+      <td style="white-space:nowrap;">
+        <button type="button" class="btn btn-ghost btn-sm" data-schedtoggle="${s.id}">${s.active!==false?'إيقاف':'تفعيل'}</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-schededit="${s.id}">${tr('edit')}</button>
+        <button type="button" class="btn btn-danger btn-sm" data-scheddel="${s.id}">${tr('delete')}</button>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد قوالب مجدولة بعد</td></tr>`;
+}
+function openScheduleModal(id, prefill){
+  editingScheduleId = id || null;
+  const s = id ? scheduledVaultTx.find(x=>x.id===id) : null;
+  $('#sched-modal-title').textContent = id ? 'تعديل قالب مجدول' : 'قالب حركة مجدولة جديدة';
+  populateSelect($('#sched-category'), settings.expenseCategories, false);
+  $('#sched-recipient').value = s?.recipientName || prefill?.recipientName || '';
+  $('#sched-category').value = s?.category || prefill?.category || '';
+  $('#sched-amount').value = s?.amount ?? prefill?.avgAmount ?? '';
+  populateSelect($('#sched-method'), settings.channels.map(c=>c.name), false);
+  $('#sched-method').value = s?.method || prefill?.lastMethod || settings.channels[0]?.name || '';
+  $('#sched-destination').value = s?.destination || prefill?.lastDestination || 'vault';
+  $('#sched-day').value = s?.dayOfMonth || 1;
+  $('#sched-notes').value = s?.notes || '';
+  $('#sched-active').checked = s ? s.active!==false : true;
+  $('#schedule-overlay').classList.add('show'); SoundFX.open();
+}
+$('#btn-add-schedule')?.addEventListener('click', ()=>openScheduleModal(null));
+$('#sched-cancel')?.addEventListener('click', ()=>{ $('#schedule-overlay').classList.remove('show'); editingScheduleId=null; });
+$('#schedule-overlay')?.addEventListener('click', e=>{ if(e.target.id==='schedule-overlay'){ $('#schedule-overlay').classList.remove('show'); editingScheduleId=null; } });
+$('#schedule-form')?.addEventListener('submit', async e=>{
+  e.preventDefault();
+  const recipientName = $('#sched-recipient').value.trim();
+  const category = $('#sched-category').value;
+  const amount = num($('#sched-amount').value);
+  const dayOfMonth = Math.min(28, Math.max(1, parseInt($('#sched-day').value,10)||1));
+  if(!recipientName){ showToast('أدخل اسم المستلم / البيان'); return; }
+  if(!category){ showToast('اختر تصنيف المصروف'); return; }
+  if(amount<=0){ showToast('أدخل مبلغاً صحيحاً'); return; }
+  const data = {
+    recipientName, category, amount, dayOfMonth,
+    method: $('#sched-method').value,
+    destination: $('#sched-destination').value,
+    notes: $('#sched-notes').value.trim(),
+    active: $('#sched-active').checked
+  };
+  if(editingScheduleId){
+    const idx = scheduledVaultTx.findIndex(x=>x.id===editingScheduleId);
+    scheduledVaultTx[idx] = {...scheduledVaultTx[idx], ...data};
+    await logAudit('edit','الحركات المالية', `تعديل قالب حركة مجدولة: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
+  }else{
+    scheduledVaultTx.push({ id:uid(), createdAt:Date.now(), lastRunMonth:null, ...data });
+    await logAudit('add','الحركات المالية', `إضافة قالب حركة مجدولة جديد: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
+  }
+  await saveScheduledVaultTx();
+  $('#schedule-overlay').classList.remove('show'); editingScheduleId=null;
+  renderScheduledVaultTable();
+  renderRecurringSuggestions();
+  showToast('تم حفظ القالب المجدول');
+});
+document.addEventListener('click', async e=>{
+  const toggleId = e.target?.dataset?.schedtoggle;
+  const editId = e.target?.dataset?.schededit;
+  const delId = e.target?.dataset?.scheddel;
+  if(toggleId){
+    const s = scheduledVaultTx.find(x=>x.id===toggleId);
+    if(s){ s.active = s.active===false; await saveScheduledVaultTx(); renderScheduledVaultTable(); }
+  }
+  if(editId) openScheduleModal(editId);
+  if(delId){
+    if(!await customConfirm('حذف هذا القالب المجدول نهائياً؟ لن يؤثر على أي حركات سابقة أُنشئت منه.')) return;
+    scheduledVaultTx = scheduledVaultTx.filter(x=>x.id!==delId);
+    await saveScheduledVaultTx();
+    await logAudit('delete','الحركات المالية', `حذف قالب حركة مجدولة`);
+    renderScheduledVaultTable();
+  }
+});
+/* ---------------- تنفيذ الحركات المجدولة المستحقة ----------------
+   تُفحص كل القوالب النشطة عند كل تحميل/عرض لشيت الحركات المالية: لو وصل يوم الشهر المحدد
+   ولم تُنفَّذ هذه القالب بعد لهذا الشهر تحديداً (lastRunMonth)، تُنشأ حركة خزنة فعلية تلقائياً
+   بنفس بيانات القالب مع تسجيلها في سجل التدقيق وسجل التراجع (Undo) تماماً كأي حركة يدوية،
+   وتُحترَم فترة القفل المحاسبي (لو الشهر مقفل، لا تُنشأ الحركة وتبقى مستحقة لحين فتح القفل). */
+async function runDueScheduledVaultTx(){
+  const today = todayISO();
+  const [ny, nm] = today.split('-');
+  const currentMonthKey = `${ny}-${nm}`;
+  const todayDay = parseInt(today.split('-')[2],10);
+  let anyRun = false;
+  for(const s of scheduledVaultTx){
+    if(s.active===false) continue;
+    if(s.lastRunMonth===currentMonthKey) continue;
+    if(todayDay < num(s.dayOfMonth)) continue;
+    if(isDateLocked(today)) continue; // الشهر مقفل — تبقى مستحقة لحين فتح القفل، لا تُفقد
+    snapshotState(`تنفيذ حركة مجدولة تلقائية: ${s.recipientName}`);
+    const savedTx = {
+      id: uid(), seq: allocVaultSeq(s.destination||'vault'), createdAt: Date.now(),
+      type: 'out', isReturn: false, date: today, amount: num(s.amount),
+      method: s.method, notes: (s.notes ? s.notes+' — ' : '') + 'حركة مجدولة تلقائية',
+      clientId: '', clientName: '', manual: '', category: s.category,
+      recipientName: s.recipientName, referenceNo: 'مجدولة تلقائياً',
+      destination: s.destination||'vault', networkInvoice: ''
+    };
+    vaultTx.push(savedTx);
+    await saveSettings();
+    s.lastRunMonth = currentMonthKey;
+    anyRun = true;
+    await logAudit('add','الحركات المالية', `تنفيذ تلقائي لقالب مجدول رقم تسلسلي #${savedTx.seq||'—'}: ${s.recipientName} بمبلغ ${fmt(num(s.amount))}`);
+  }
+  if(anyRun){
+    await saveVaultTx();
+    await saveScheduledVaultTx();
+    showToast('تم تنفيذ حركة/حركات مجدولة مستحقة تلقائياً — راجعها في الجدول أدناه');
+  }
+  return anyRun;
+}
+$('#btn-run-due-schedules')?.addEventListener('click', async ()=>{
+  const ran = await runDueScheduledVaultTx();
+  if(!ran) showToast('لا توجد حركات مجدولة مستحقة الآن');
+  renderVault();
+});
+
 function seqNumbers(){
   const map = {};
   ['vault','bank','network'].forEach(dest=>{
@@ -632,6 +824,9 @@ function renderVault(){
   if(typeof renderBankRecon==='function') renderBankRecon();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
+  runDueScheduledVaultTx().then(ran=>{ if(ran) renderVault(); });
+  renderRecurringSuggestions();
+  renderScheduledVaultTable();
   const dl = $('#dl-clients');
   dl.innerHTML = clients.filter(c=>c.clientId).map(c=>`<option value="${escapeHtml(c.clientId)}" label="${escapeHtml(c.name)}"></option>`).join('');
 

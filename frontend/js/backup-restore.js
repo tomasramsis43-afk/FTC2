@@ -6,7 +6,7 @@ function gatherFullBackupData(){
     clients, settings, bagStock, vaultTx, courseSessions,
     users, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
     suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments,
-    chartOfAccounts, journalDE, budgetEntries
+    chartOfAccounts, journalDE, budgetEntries, scheduledVaultTx
   };
 }
 function downloadFullBackup(auto){
@@ -90,6 +90,7 @@ async function restoreFullBackup(file){
   suppliers = data.suppliers || [];
   purchases = data.purchases || [];
   vaultDenomTx = data.vaultDenomTx || [];
+  scheduledVaultTx = data.scheduledVaultTx || [];
   manualSalesInvoices = data.manualSalesInvoices || [];
   zakatAdjustments = data.zakatAdjustments || {};
   chartOfAccounts = data.chartOfAccounts || [];
@@ -100,7 +101,7 @@ async function restoreFullBackup(file){
     saveClients(true), saveSettings(), saveBagStock(), saveVaultTx(),
     saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
     saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
-    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries()
+    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(), saveScheduledVaultTx()
   ]);
   await logAudit('edit','الإعدادات', 'تمت استعادة كل بيانات البرنامج من ملف نسخة احتياطية');
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();

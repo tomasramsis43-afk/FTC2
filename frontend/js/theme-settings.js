@@ -122,6 +122,7 @@ let vaultTx = [];
 let deletedVaultTx = []; // سجل الحركات المالية الملغاة (حذف منطقي Soft Delete) — لا تُستخدم في أي حسابات، فقط للتدقيق والاسترجاع
 let vaultDenomTx = []; // سجل حركات تصنيف الفئات النقدية بالخزنة (دخول/خروج/تسوية جرد) — رصيد كل فئة = مجموع الدخول - مجموع الخروج، لا يدخل ضمن أي رصيد محاسبي آخر
 let bankStatementRows = []; // كشف الحساب البنكي المستورد لأغراض المطابقة البنكية — لا يدخل ضمن أي رصيد أو تقرير، فقط للمطابقة اليدوية/التلقائية مع حركات "البنك"
+let scheduledVaultTx = []; // قوالب الحركات المالية المتكررة/المجدولة (مثال: إيجار شهري ثابت) — كل قالب: {id, active, type, category/manual, recipientName, amount, method, destination, dayOfMonth, notes, lastRunMonth}. تُنشئ حركة خزنة فعلية تلقائياً عند استحقاقها (راجع runDueScheduledVaultTx في module-finance.js)، ولا تُعتبر بحد ذاتها حركة مالية فعلية
 let bankReconShowMatched = false; // تبديل عرض الحركات المطابَقة في شاشة المطابقة البنكية
 let deletedInvoices = []; // سجل فواتير العملاء المحذوفة (حذف منطقي) — يحتفظ برقم الفاتورة التسلسلي والسبب دون إعادة استخدام الرقم أبداً
 let courseSessions = [];
