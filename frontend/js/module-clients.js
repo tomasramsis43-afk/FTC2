@@ -373,6 +373,17 @@ function renderCfoDashboard(){
   const purchasesTrend = monthlyPurchasesTrend(12);
   const apBars = supplierUnpaidTotals();
 
+  // === لوحة 5: أعمار الذمم المدينة (AR Aging) — نفس منطق buildARAging فى شاشة المحاسبة، معروضة
+  // هنا كملخص سريع فى الداشبورد الرئيسي بدل الحاجة للدخول لشاشة منفصلة كل مرة.
+  const arData = (typeof buildARAging==='function') ? buildARAging(todayISO()) : null;
+  const arOverdue90 = arData ? arData.buckets['أكثر من 90 يوم'] : 0;
+  const arBars = arData ? [
+    ['0–30 يوم', arData.buckets['0–30 يوم']],
+    ['31–60 يوم', arData.buckets['31–60 يوم']],
+    ['61–90 يوم', arData.buckets['61–90 يوم']],
+    ['أكثر من 90 يوم', arData.buckets['أكثر من 90 يوم']],
+  ] : [];
+
   el.innerHTML = `
     <div class="cfo-panel">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
@@ -416,6 +427,16 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">أعمار الذمم المدينة (المتأخرات على العملاء)</h3>
+      <div class="cfo-kpis">
+        ${cfoKpi('wallet','إجمالي الذمم المدينة', fmt(arData?arData.total:0)+' ﷼')}
+        ${cfoKpi('alert','متأخر أكثر من 90 يوم', fmt(arOverdue90)+' ﷼')}
+      </div>
+      ${arOverdue90>0 ? `<div class="cfo-caption" style="color:var(--red); font-weight:600;">⚠️ يوجد ${fmt(arOverdue90)} ﷼ متأخر السداد أكثر من 90 يوم — راجع شاشة المحاسبة → أعمار الديون</div>` : ''}
+      ${arBars.length ? `<div class="cfo-visual cfo-bars" id="cfo-bars-ar"></div>` : `<div class="cfo-caption" style="color:var(--text-muted);">لا توجد ذمم مدينة حالياً</div>`}
+    </div>
+
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -423,6 +444,7 @@ function renderCfoDashboard(){
   if(apBars.length){ drawBars('#cfo-bars-ap', apBars, 6, v=>fmt(v)+' ﷼'); }
   else { drawLineChart('#cfo-trend-purchases', purchasesTrend.labels, purchasesTrend.series); }
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
+  if(arBars.length){ drawBars('#cfo-bars-ar', arBars, 4, v=>fmt(v)+' ﷼'); }
 }
 function groupCount(list, field){
   const map = {};
