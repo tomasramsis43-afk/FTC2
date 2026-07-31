@@ -1444,6 +1444,28 @@
       <div class="grid-cards" id="vault-budget-glance-cards"></div>
     </div>
 
+    <div class="panel" id="vault-recurring-panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+      <h3 style="margin:0 0 4px;">🔁 حركات متكررة مكتشفة</h3>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتشاف تلقائي لأنماط مصروفات تتكرر بفارق شهري تقريباً (نفس التصنيف والمستلم ومبلغ متقارب) — اقتراح فقط، ولن يتحول لقالب فعلي إلا بضغطك على الزر.</p>
+      <div id="vault-recurring-suggestions"></div>
+    </div>
+
+    <div class="panel" id="vault-scheduled-panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+      <h3 style="margin:0 0 4px;">قوالب الحركات المجدولة (شهرية)</h3>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">أي قالب نشط يُنفَّذ تلقائياً كحركة خزنة فعلية عند وصول يوم الشهر المحدد (مرة واحدة فقط شهرياً)، مع تسجيله في سجل التدقيق وإمكانية التراجع عنه كأي حركة عادية.</p>
+      <div class="toolbar">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-run-due-schedules">تشغيل الحركات المستحقة الآن</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-gold" id="btn-add-schedule">+ قالب مجدول جديد</button>
+      </div>
+      <div class="table-scroll cards-mobile">
+        <table>
+          <thead><tr><th>المستلم / البيان</th><th>التصنيف</th><th>المبلغ</th><th>الحساب</th><th>يوم الشهر</th><th>الحالة</th><th></th></tr></thead>
+          <tbody id="scheduled-vault-body"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="panel">
       <h3>توزيع الحركات حسب طريقة الدفع (حسب الفلتر الحالي)</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">يتحدّث تلقائياً مع أي تغيير في فلاتر التاريخ / الوجهة / النوع / البحث أعلاه.</p>
@@ -4222,6 +4244,38 @@
 
 
 <button type="button" id="btn-fab-quickadd" class="fab-quickadd" title="حركة خزنة جديدة (سريع)" aria-label="حركة خزنة جديدة سريعة">+</button>
+
+<div class="overlay" id="schedule-overlay">
+  <div class="modal">
+    <h2 id="sched-modal-title">قالب حركة مجدولة جديدة</h2>
+    <form id="schedule-form">
+      <div class="formgrid">
+        <div class="field full"><label>اسم المستلم / البيان</label><input type="text" id="sched-recipient" placeholder="مثال: مالك المبنى (إيجار)، فلان (راتب)..."></div>
+        <div class="field"><label>التصنيف</label><select id="sched-category"></select></div>
+        <div class="field"><label>المبلغ (شهرياً)</label><input type="number" step="0.01" min="0" id="sched-amount"></div>
+        <div class="field"><label>الحساب / الوجهة</label>
+          <select id="sched-destination">
+            <option value="vault">الخزنة (كاش)</option>
+            <option value="bank">البنك</option>
+            <option value="network">الشبكة</option>
+          </select>
+        </div>
+        <div class="field"><label>طريقة الدفع</label><select id="sched-method"></select></div>
+        <div class="field"><label>يوم الشهر (1-28)</label><input type="number" min="1" max="28" id="sched-day" value="1"></div>
+        <div class="field full">
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text);">
+            <input type="checkbox" id="sched-active" checked style="width:auto;"> القالب نشط (سيُنفَّذ تلقائياً كل شهر)
+          </label>
+        </div>
+        <div class="field full"><label data-i18n="fieldNotes">ملاحظات</label><textarea id="sched-notes" rows="2"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="sched-cancel">إلغاء</button>
+        <button type="submit" class="btn btn-primary">حفظ</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="overlay" id="vault-overlay">
   <div class="modal">
