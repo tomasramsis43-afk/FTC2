@@ -82,6 +82,32 @@ async function restoreFullBackup(file){
   }
   // نسخة احتياطية من الوضع الحالي قبل الاستبدال، تحسّباً
   downloadFullBackup(false);
+
+  /* ============================================================================
+     إصلاح خلل "تعارض عند الاستعادة": كانت الاستعادة تستبدل المصفوفات فى الذاكرة فقط، ثم تحفظها
+     معتمدةً على آخر baseline/أرقام نسخ محلية معروفة من هذه الجلسة (والتي قد تكون قديمة تماماً —
+     مثال شائع: استعادة نسخة احتياطية مباشرة بعد "ضبط المصنع"). أي عدم تطابق بين ما يظنه الجهاز
+     (النسخة/الـ baseline المحلية) وما هو موجود فعلياً على السيرفر كان يجعل السيرفر يرفض الحفظ
+     ببعض السجلات بخطأ 409 "تعارض" رغم عدم وجود أي تعديل متزامن حقيقي من جهاز آخر.
+     الحل: بما أن المستخدم أكّد بالفعل أن هذه العملية تستبدل كل البيانات الحالية بالكامل، نمسح فعلياً
+     كل البيانات على السيرفر أولاً (تماماً كنقطة بداية "ضبط المصنع")، ثم نُصفِّر كل حالة تتبّع
+     المزامنة المحلية، بحيث تُكتَب كل بيانات النسخة الاحتياطية كسجلات جديدة تماماً بلا أي تعارض ممكن.
+     ============================================================================ */
+  try{
+    await serverFetch('/api/client-records', { method: 'DELETE' });
+    for(const c of ALLOWED_COLLECTIONS_LOCAL){
+      await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
+    }
+  }catch(e){ console.error('restoreFullBackup: تعذّر مسح بيانات السيرفر قبل الاستعادة', e); }
+  Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
+  clientRecordMeta = {};
+  _clientRecordsAggVersion = null;
+  _clientsSyncBaseline = new Map();
+  for(const c of ALLOWED_COLLECTIONS_LOCAL){
+    _recordVersions[c] = new Map();
+    _collectionSyncBaseline[c] = new Map();
+  }
+
   clients = data.clients || [];
   settings = data.settings || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   bagStock = data.bagStock || [];
