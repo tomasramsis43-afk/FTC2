@@ -468,6 +468,7 @@ async function bulkUploadRecordsGeneric(collection, list){
   const CHUNK = 300;
   if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
   const versions = _recordVersions[collection];
+  const allConflictIds = [];
   for(let i=0;i<list.length;i+=CHUNK){
     const chunk = list.slice(i, i+CHUNK);
     const records = [];
@@ -483,9 +484,11 @@ async function bulkUploadRecordsGeneric(collection, list){
     for(const item of chunk) if(!(data.conflicts||[]).some(c=>c.id===item.id)) versions.set(item.id, (versions.get(item.id)||0) + 1);
     if(data.conflicts && data.conflicts.length){
       for(const c of data.conflicts) versions.set(c.id, c.currentVersion || 0);
+      allConflictIds.push(...data.conflicts.map(c=>c.id));
       showToast(`⚠️ تعذّر رفع ${data.conflicts.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
+  return allConflictIds; // معرّفات السجلات التي فشل رفعها فعلياً — لا يجوز اعتبارها مُتزامنة
 }
 
 // تحميل تصنيف واحد كامل: يحاول النظام الجديد (سجل فردي لكل عنصر) أولاً؛ لو رجع فارغاً فعلياً
@@ -560,8 +563,9 @@ async function saveCollectionGeneric(collection, arr){
       let anyNetworkFailure = false;
       if(changed.length > 20){
         try{
-          await bulkUploadRecordsGeneric(collection, changed.map(x=>x.item));
-          changed.forEach(x=> baseline.set(x.item.id, x.json));
+          const conflictIds = await bulkUploadRecordsGeneric(collection, changed.map(x=>x.item));
+          const conflictSet = new Set(conflictIds);
+          changed.forEach(x=> { if(!conflictSet.has(x.item.id)) baseline.set(x.item.id, x.json); });
         }catch(e){ anyNetworkFailure = true; }
       }else{
         for(const {item, json} of changed){
@@ -723,6 +727,7 @@ async function approveClientRecord(id){
 // وفى العمليات الضخمة دفعة واحدة (استيراد، تحديث شامل) بدل طلب منفصل لكل عميل.
 async function bulkUploadClientRecords(clientsList){
   const CHUNK = 300;
+  const allConflictIds = [];
   for(let i=0;i<clientsList.length;i+=CHUNK){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
@@ -737,9 +742,11 @@ async function bulkUploadClientRecords(clientsList){
     for(const c of chunk) if(!(data.conflicts||[]).some(x=>x.id===c.id)) _clientRecordVersions[c.id] = (_clientRecordVersions[c.id]||0) + 1;
     if(data.conflicts && data.conflicts.length){
       for(const c of data.conflicts) _clientRecordVersions[c.id] = c.currentVersion || 0;
+      allConflictIds.push(...data.conflicts.map(c=>c.id));
       showToast(`⚠️ تعذّر رفع ${data.conflicts.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
+  return allConflictIds; // معرّفات العملاء التي فشل رفعها فعلياً بسبب تعارض حقيقي — لا يجوز اعتبارها مُتزامنة
 }
 
 // تحقق دوري خفيف جداً: هل تغيّرت بيانات العملاء على السيرفر من جهاز آخر؟ (طلب صغير واحد، بدون
