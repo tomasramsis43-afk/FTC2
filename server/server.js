@@ -976,8 +976,11 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
     const conflicts = [];
     let migrated = 0;
+    // نفس تصحيح bulk-migrate الخاص بـ collection_records بالضبط: ترتيب ثابت حسب id يمنع تعارض
+    // الأقفال الدائري (deadlock) بين طلبين متزامنين يعدّلون سجلات عملاء مشتركة بترتيب مختلف.
+    const sortedRecords = records.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
     await client.query('BEGIN');
-    for (const r of records) {
+    for (const r of sortedRecords) {
       const id = String(r.id);
       const enc = String(r.enc);
       const knownVersion = Number.isInteger(r.version) ? r.version : 0;
@@ -1133,8 +1136,13 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
   try {
     const conflicts = [];
     let migrated = 0;
+    // نرتّب السجلات حسب الـ id قبل التعديل: لو طلبين bulk-migrate اشتغلوا فى نفس اللحظة على نفس
+    // التصنيف بسجلات مشتركة، وكل واحد بيعدّلها بترتيب مختلف، كل طلب بيقفل صف وينتظر التاني يفكّ
+    // قفل صف هو ماسكه (deadlock دائري — كود 40P01). ترتيب ثابت لكل الطلبات يضمن أخذ الأقفال
+    // بنفس الترتيب دايماً، فيمنع هذا التعارض الدائري من الأساس.
+    const sortedRecords = records.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
     await client.query('BEGIN');
-    for (const r of records) {
+    for (const r of sortedRecords) {
       const id = String(r.id);
       const enc = String(r.enc);
       const knownVersion = Number.isInteger(r.version) ? r.version : 0;
