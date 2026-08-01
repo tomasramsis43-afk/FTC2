@@ -739,9 +739,15 @@ $('#server-login-form').addEventListener('submit', async e=>{
   $('#server-login-error').style.display = 'none';
   if(btn) btn.disabled = true;
   try{
-    await serverLogin(uname, upass, totpCode || undefined);
+    const loginData = await serverLogin(uname, upass, totpCode || undefined);
     $('#server-login-screen').style.display = 'none';
     await startApp();
+    // تنبيه استباقي: لو السيرفر رجّع نشاط دخول مشبوه (محاولات فاشلة متكررة) لم يشاهده هذا
+    // الأدمن بعد، نعرضه فوراً هنا بدل انتظار فتحه شاشة الإعدادات بنفسه بالصدفة.
+    if(Array.isArray(loginData?.suspiciousAlert) && loginData.suspiciousAlert.length && typeof showToast==='function'){
+      const s = loginData.suspiciousAlert[0];
+      showToast(`⚠️ نشاط دخول مشبوه: ${s.failed_count} محاولة فاشلة على حساب "${s.username}" من ${s.ip_address||'IP غير معروف'} — راجع سجل الدخول فى الإعدادات`);
+    }
   }catch(err){
     if(err && err.requires2FA){
       $('#server-login-2fa-field').style.display = 'block';
