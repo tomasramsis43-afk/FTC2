@@ -150,6 +150,26 @@ async function flushPendingWrites(){
   if(!pending.length){ markOnline(); return; }
   _ftcSyncInFlight = true;
   try{
+    // تحضير أرقام النسخ الحقيقية للمفاتيح المعلَّقة التي لا تملك _kvVersions معروفة لهذه الجلسة
+    // (مثال: انقطع الاتصال من أول لحظة فتح البرنامج قبل نجاح أي GET، فـ_kvVersions[key] بيفضل
+    // undefined طول الوقت). بدون هذه الخطوة، كل هذه المفاتيح كانت ستُرسَل بـ version:0 دائماً
+    // (افتراض "مفتاح جديد" وهو خاطئ)، فيرفضها السيرفر بـ409 "تعارض" كاذب رغم عدم وجود أي تعديل
+    // فعلي من جهاز آخر — فقط لأن هذا الجهاز لم يكن يعرف رقم النسخة الحقيقي أصلاً. لا نلمس أي مفتاح
+    // له _kvVersions معروفة بالفعل هذه الجلسة (تلك تمثل النسخة التي بُني عليها التعديل فعلياً،
+    // وتترك لآلية 409 العادية لتكتشف أي تعارض حقيقي كما كانت).
+    const unknownKeys = pending.map(p => p.key).filter(k => !(k in _kvVersions));
+    if(unknownKeys.length){
+      try{
+        const versionsRes = await serverFetch('/api/storage-versions');
+        if(versionsRes.ok){
+          const versionsData = await versionsRes.json();
+          const serverVersions = versionsData.versions || {};
+          for(const k of unknownKeys){
+            if(k in serverVersions) _kvVersions[k] = serverVersions[k];
+          }
+        }
+      }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) — سيُكمل بالمنطق القديم أدناه كخط رجعة */ }
+    }
     for(const item of pending){
       try{
         const res = await serverFetch(`/api/storage/${encodeURIComponent(item.key)}`, {
