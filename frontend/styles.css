@@ -2138,7 +2138,7 @@ body.dark-theme #view-clients thead th {
     margin-bottom: 10px;
   }
 
-  .table-scroll tbody tr:has(td.sticky-col-1) {
+  .table-scroll tbody tr:has(td.sticky-col-1[data-label=""]) {
     padding-top: 36px;
   }
 
@@ -2200,8 +2200,10 @@ body.dark-theme #view-clients thead th {
     display: none;
   }
 
-  /* خانة التحديد (checkbox) تُثبَّت في الزاوية العلوية اليمنى للصندوق بدل أن تشغل سطراً كاملاً */
-  .table-scroll tbody td.sticky-col-1 {
+  /* خانة التحديد (checkbox) فقط تُثبَّت في الزاوية العلوية اليمنى للصندوق بدل أن تشغل سطراً كاملاً.
+     أي عمود آخر بكلاس sticky-col-1 لكن يحمل بيانات فعلية (مثال: اسم العميل فى شيت الفواتير،
+     أو رقم الهوية فى شيت حوالات الشركات) يبقى صفاً عادياً ولا يُثبَّت، حتى لا يتراكب فوق العمود التالي. */
+  .table-scroll tbody td.sticky-col-1[data-label=""] {
     position: absolute;
     top: 8px;
     right: 8px;
@@ -2210,8 +2212,16 @@ body.dark-theme #view-clients thead th {
     width: auto;
   }
 
-  .table-scroll tbody td.sticky-col-1::before {
+  .table-scroll tbody td.sticky-col-1[data-label=""]::before {
     display: none;
+  }
+
+  /* عمود sticky-col-1 ببيانات فعلية بلا data-label نهائياً (مثال: شيت حوالات الشركات) —
+     يظهر كسطر عادي فقط بدون تسمية بدل أن يختفي أو يتراكب */
+  .table-scroll tbody td.sticky-col-1:not([data-label]) {
+    display: block;
+    font-weight: 700;
+    color: var(--text);
   }
 }
 
