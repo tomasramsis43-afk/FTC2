@@ -68,6 +68,58 @@ async function deleteServerBackup(id){
   const res = await serverFetch(`/api/backups/${encodeURIComponent(id)}`, { method:'DELETE' });
   if(!res.ok) throw new Error('تعذّر حذف النسخة');
 }
+const RESTORE_RESYNC_FLAG_KEY = 'ftcPendingFullResyncAfterRestore';
+const RESTORE_OLD_SNAPSHOT_KEY = 'ftcPreRestoreSnapshotEnc';
+
+/* ============================================================================
+   إصلاح خلل "تعارض عند الاستعادة": كانت الاستعادة تستبدل المصفوفات فى الذاكرة فقط، ثم تحفظها
+   معتمدةً على آخر baseline/أرقام نسخ محلية معروفة من هذه الجلسة (والتي قد تكون قديمة تماماً —
+   مثال شائع: استعادة نسخة احتياطية مباشرة بعد "ضبط المصنع"، أو بعد استعادة تمت بينما هذا الجهاز
+   كان غير متصل). أي عدم تطابق بين ما يظنه الجهاز (النسخة/الـ baseline المحلية) وما هو موجود فعلياً
+   على السيرفر كان يجعل السيرفر يرفض الحفظ ببعض السجلات بخطأ 409 "تعارض" رغم عدم وجود أي تعديل
+   متزامن حقيقي من جهاز آخر. الحل: نمسح فعلياً كل البيانات على السيرفر أولاً (تماماً كنقطة بداية
+   "ضبط المصنع")، ثم نُصفِّر كل حالة تتبّع المزامنة المحلية، وأيضاً نحدّث رقم النسخة الحقيقي لمفاتيح
+   settings/users/zakatAdjustments (اللي لسه على الطريقة القديمة فى kv_store ولا تدخل ضمن مسح
+   السجلات المستقلة أعلاه)، بحيث تُكتَب كل بيانات النسخة الاحتياطية كسجلات جديدة تماماً بلا أي
+   تعارض ممكن — سواء تم هذا المسح فوراً وقت الاستعادة (متصل) أو لاحقاً عند عودة الاتصال (راجع
+   resyncRestoredDataWithServer وcheckPendingRestoreResync أسفل).
+   ============================================================================ */
+async function wipeServerDataForFreshRestore(){
+  try{
+    await serverFetch('/api/client-records', { method: 'DELETE' });
+    for(const c of ALLOWED_COLLECTIONS_LOCAL){
+      await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
+    }
+  }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر مسح بيانات السيرفر', e); throw e; }
+  Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
+  clientRecordMeta = {};
+  _clientRecordsAggVersion = null;
+  _clientsSyncBaseline = new Map();
+  for(const c of ALLOWED_COLLECTIONS_LOCAL){
+    _recordVersions[c] = new Map();
+    _collectionSyncBaseline[c] = new Map();
+  }
+  try{
+    await Promise.allSettled([
+      window.storage.primeKeyVersion('settings'),
+      window.storage.primeKeyVersion('users'),
+      window.storage.primeKeyVersion('zakatAdjustments'),
+    ]);
+  }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر تحديث أرقام نسخ settings/users/zakatAdjustments', e); }
+}
+// يرفع كل بيانات البرنامج الحالية (الموجودة فعلاً فى متغيرات الذاكرة الآن) للسيرفر من جديد —
+// تُستدعى بعد wipeServerDataForFreshRestore مباشرة، سواء وقت الاستعادة نفسها (متصل) أو لاحقاً
+// عند عودة الاتصال لو تمت الاستعادة أصلاً بدون اتصال.
+async function pushCurrentDataToServer(){
+  await Promise.allSettled([
+    saveClients(true), saveSettings(), saveBagStock(), saveVaultTx(),
+    saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
+    saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
+    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(), saveScheduledVaultTx()
+  ]);
+}
+function isCurrentlyOffline(){ return manualOfflineMode || _ftcIsOffline; }
+
 async function restoreFullBackup(file){
   let data;
   try{
@@ -77,35 +129,34 @@ async function restoreFullBackup(file){
   if(!data || typeof data!=='object' || !('clients' in data) || !('settings' in data)){
     showToast('هذا الملف لا يبدو نسخة احتياطية صحيحة لهذا البرنامج'); return;
   }
-  if(!await customConfirm('سيتم استبدال كل البيانات الحالية في البرنامج (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) بمحتوى ملف النسخة الاحتياطية المختار.\n\nيُنصَح بتنزيل نسخة احتياطية من الوضع الحالي أولاً قبل المتابعة. هل تريد المتابعة؟')){
+  if(!await customConfirm('سيتم استبدال كل البيانات الحالية في البرنامج (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) بمحتوى ملف النسخة الاحتياطية المختار.\n\nستُحفَظ نسخة من البيانات الحالية (قبل الاستبدال) محلياً وعلى السيرفر أيضاً، يمكن الرجوع إليها لاحقاً إذا احتجت التراجع. هل تريد المتابعة؟')){
     return;
   }
-  // نسخة احتياطية من الوضع الحالي قبل الاستبدال، تحسّباً
+  // نسخة احتياطية محلية (ملف على الجهاز) من الوضع الحالي قبل الاستبدال، تحسّباً
   downloadFullBackup(false);
 
-  /* ============================================================================
-     إصلاح خلل "تعارض عند الاستعادة": كانت الاستعادة تستبدل المصفوفات فى الذاكرة فقط، ثم تحفظها
-     معتمدةً على آخر baseline/أرقام نسخ محلية معروفة من هذه الجلسة (والتي قد تكون قديمة تماماً —
-     مثال شائع: استعادة نسخة احتياطية مباشرة بعد "ضبط المصنع"). أي عدم تطابق بين ما يظنه الجهاز
-     (النسخة/الـ baseline المحلية) وما هو موجود فعلياً على السيرفر كان يجعل السيرفر يرفض الحفظ
-     ببعض السجلات بخطأ 409 "تعارض" رغم عدم وجود أي تعديل متزامن حقيقي من جهاز آخر.
-     الحل: بما أن المستخدم أكّد بالفعل أن هذه العملية تستبدل كل البيانات الحالية بالكامل، نمسح فعلياً
-     كل البيانات على السيرفر أولاً (تماماً كنقطة بداية "ضبط المصنع")، ثم نُصفِّر كل حالة تتبّع
-     المزامنة المحلية، بحيث تُكتَب كل بيانات النسخة الاحتياطية كسجلات جديدة تماماً بلا أي تعارض ممكن.
-     ============================================================================ */
-  try{
-    await serverFetch('/api/client-records', { method: 'DELETE' });
-    for(const c of ALLOWED_COLLECTIONS_LOCAL){
-      await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
-    }
-  }catch(e){ console.error('restoreFullBackup: تعذّر مسح بيانات السيرفر قبل الاستعادة', e); }
-  Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
-  clientRecordMeta = {};
-  _clientRecordsAggVersion = null;
-  _clientsSyncBaseline = new Map();
-  for(const c of ALLOWED_COLLECTIONS_LOCAL){
-    _recordVersions[c] = new Map();
-    _collectionSyncBaseline[c] = new Map();
+  const wasOffline = isCurrentlyOffline();
+  if(!wasOffline){
+    // نحتفظ بنسخة من البيانات "القديمة" (قبل الاستعادة) على السيرفر أيضاً — بجانب الملف المحلي
+    // أعلاه — حتى يمكن الرجوع إليها لاحقاً من قائمة "النسخ المحفوظة على السيرفر" فى الإعدادات لو
+    // احتاج المستخدم التراجع عن هذه الاستعادة.
+    try{ await uploadBackupToServer('قبل استعادة نسخة أخرى'); }
+    catch(e){ console.error('restoreFullBackup: تعذّر حفظ نسخة السيرفر القديمة قبل الاستعادة', e); }
+  }else{
+    // بدون اتصال: لا يمكن رفع نسخة البيانات القديمة للسيرفر الآن، فنحفظها مشفَّرة محلياً لحين
+    // عودة الاتصال، حيث تُرفَع تلقائياً كنسخة احتياطية على السيرفر (راجع مستمع 'online' أسفل الملف).
+    try{
+      const oldSnapshotEnc = await encryptValue(JSON.stringify(gatherFullBackupData()));
+      localStorage.setItem(RESTORE_OLD_SNAPSHOT_KEY, oldSnapshotEnc);
+    }catch(e){ console.error('restoreFullBackup: تعذّر حفظ نسخة البيانات القديمة محلياً لرفعها لاحقاً', e); }
+  }
+
+  // مسح فعلي لبيانات السيرفر وتصفير تتبّع المزامنة يحدث الآن فقط لو متصلين فعلاً؛ لو غير متصلين
+  // نؤجّله بالكامل حتى عودة الاتصال (راجع resyncRestoredDataWithServer وcheckPendingRestoreResync
+  // أسفل) حتى لا نحاول التواصل مع سيرفر غير متاح الآن دون فائدة.
+  if(!wasOffline){
+    try{ await wipeServerDataForFreshRestore(); }
+    catch(e){ /* فشل المسح مسجَّل بالفعل داخل الدالة؛ نكمل الاستعادة محلياً على أي حال */ }
   }
 
   clients = data.clients || [];
@@ -129,13 +180,20 @@ async function restoreFullBackup(file){
   seedChartOfAccountsIfEmpty();
   journalDE = data.journalDE || [];
   budgetEntries = data.budgetEntries || [];
-  await Promise.allSettled([
-    saveClients(true), saveSettings(), saveBagStock(), saveVaultTx(),
-    saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
-    saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
-    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(), saveScheduledVaultTx()
-  ]);
-  await logAudit('edit','الإعدادات', 'تمت استعادة كل بيانات البرنامج من ملف نسخة احتياطية');
+  // يُطبَّق دائماً على الذاكرة والكاش المحلي فوراً بغضّ النظر عن الاتصال؛ كل دالة save* هنا تتعامل
+  // بالفعل مع انقطاع الاتصال بحفظ محلي + طابور رفع تلقائي (راجع window.storage.set وsaveOneRecordGeneric)،
+  // فتُطبَّق الاستعادة محلياً فوراً حتى بدون سيرفر، وتُرفَع لاحقاً تلقائياً عند توفر الاتصال.
+  await pushCurrentDataToServer();
+
+  if(wasOffline){
+    // نسجّل أن هناك استعادة كاملة بانتظار مزامنتها الحقيقية مع السيرفر (مسح + رفع نظيف بلا تعارض)
+    // بمجرد عودة الاتصال، بدل الاكتفاء بالمزامنة الجزئية العادية لطابور "التعديلات المعلَّقة".
+    try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
+  }
+
+  await logAudit('edit','الإعدادات', wasOffline
+    ? 'تمت استعادة كل بيانات البرنامج محلياً من ملف نسخة احتياطية (بانتظار المزامنة الكاملة مع السيرفر عند عودة الاتصال)'
+    : 'تمت استعادة كل بيانات البرنامج من ملف نسخة احتياطية، مع حفظ نسخة من البيانات القديمة على السيرفر');
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();
   if(typeof renderDashboard==='function') renderDashboard();
   if(typeof renderTable==='function') renderTable();
@@ -151,7 +209,50 @@ async function restoreFullBackup(file){
   if(typeof renderSettings==='function') renderSettings();
   if(typeof renderZatca==='function') renderZatca();
   applyTheme(!!settings.darkMode); applySoundIcon(); applyThemeColors();
-  showToast('تمت استعادة البيانات بنجاح');
+  showToast(wasOffline
+    ? 'تمت استعادة البيانات محلياً بنجاح ✅ — سيتم رفعها ومزامنتها مع السيرفر تلقائياً عند عودة الاتصال'
+    : 'تمت استعادة البيانات بنجاح، ورُفعت للسيرفر — تم حفظ نسخة من البيانات القديمة على السيرفر يمكن الرجوع إليها من "النسخ المحفوظة على السيرفر"');
+}
+
+// يكمل مزامنة استعادة تمت أصلاً بدون اتصال (راجع علامة RESTORE_RESYNC_FLAG_KEY فى restoreFullBackup
+// أعلاه): يرفع أولاً نسخة البيانات "القديمة" (المحفوظة محلياً مشفَّرة قبل الاستعادة) كنسخة احتياطية
+// على السيرفر إن وُجدت، ثم يمسح أي بقايا قديمة على السيرفر ويرفع البيانات المستعادة الحالية من جديد
+// بلا أي تعارض ممكن (بنفس منطق الاستعادة وقت الاتصال بالضبط).
+async function resyncRestoredDataWithServer(){
+  try{
+    const oldSnapshotEnc = localStorage.getItem(RESTORE_OLD_SNAPSHOT_KEY);
+    if(oldSnapshotEnc){
+      const res = await serverFetch('/api/backups', {
+        method: 'POST',
+        body: JSON.stringify({ kind: 'قبل استعادة نسخة أخرى (تمت بدون اتصال)', enc: oldSnapshotEnc }),
+      });
+      if(res.ok) localStorage.removeItem(RESTORE_OLD_SNAPSHOT_KEY);
+      // لو فشل الرفع، نترك المفتاح كما هو ليُعاد المحاولة فى المرة القادمة التي تنجح فيها هذه الدالة
+    }
+    await wipeServerDataForFreshRestore();
+    await pushCurrentDataToServer();
+    localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY);
+    showToast('تمت مزامنة نسخة الاستعادة المحلية مع السيرفر بنجاح ✅ مع الاحتفاظ بنسخة من البيانات القديمة');
+  }catch(e){
+    // تعذّر إتمام المزامنة رغم عودة الاتصال (خطأ عابر) — نترك العلامة موجودة ليُعاد المحاولة
+    // تلقائياً عند محاولة الاتصال التالية، بدل فقد فرصة المزامنة الكاملة بصمت.
+    console.error('resyncRestoredDataWithServer: تعذّرت المزامنة الكاملة بعد عودة الاتصال', e);
+  }
+}
+window.addEventListener('online', async ()=>{
+  let pending = null;
+  try{ pending = localStorage.getItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){ /* تجاهل */ }
+  if(pending === '1') await resyncRestoredDataWithServer();
+});
+// يفحص وجود استعادة سابقة بانتظار المزامنة الكاملة (راجع RESTORE_RESYNC_FLAG_KEY) — يُستدعى من
+// backgroundSyncCheck (بعد تحميل بيانات البرنامج فعلياً فى الذاكرة، عند بدء التشغيل وكل دقيقتين)
+// بدل تشغيله مباشرة عند تحميل هذا الملف، حتى لا يحاول رفع بيانات فارغة/افتراضية قبل اكتمال
+// تحميل البيانات الحقيقية من الكاش المحلي أو السحابة.
+async function checkPendingRestoreResync(){
+  try{
+    if(isCurrentlyOffline()) return;
+    if(localStorage.getItem(RESTORE_RESYNC_FLAG_KEY) === '1') await resyncRestoredDataWithServer();
+  }catch(e){ console.error('checkPendingRestoreResync error:', e); }
 }
 
 const ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
