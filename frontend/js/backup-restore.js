@@ -1,10 +1,16 @@
 /* ========== نسخ احتياطي كامل / استعادة ========== */
 function gatherFullBackupData(){
+  // مصفوفة users القديمة (من قبل نظام المصادقة الحقيقي على السيرفر) لا تُستخدم فى أي تحقق هوية
+  // فعلي الآن (المصادقة الحقيقية عبر جدول server_users المشفّر — راجع hashPassword/verifyPassword
+  // فى server.js)؛ الاستخدام الوحيد المتبقي لها هو قراءة username/role فقط (راجع isReceptionUsername
+  // فى module-finance.js). حقل password بداخلها لا يُقرأ فى أي مكان إطلاقاً، فلا داعي لتضمينه هنا —
+  // تضمينه كان يعني تسريب كلمة مرور حقيقية (أو الافتراضية) نص صريح فى كل نسخة احتياطية.
+  const usersWithoutPasswords = users.map(({ password, ...rest }) => rest);
   return {
     _backupType: 'مركز-فهد-نسخة-احتياطية-كاملة',
     _createdAt: new Date().toISOString(),
     clients, settings, bagStock, vaultTx, courseSessions,
-    users, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
+    users: usersWithoutPasswords, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
     suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments,
     chartOfAccounts, journalDE, budgetEntries, scheduledVaultTx
   };
