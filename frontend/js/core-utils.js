@@ -192,22 +192,78 @@ const KV_IDB_STORE = 'kv';
 // مخزن ثانٍ (نفس قاعدة IndexedDB) للتعديلات التي لم تُرفع للسيرفر بعد — يُستخدَم فقط
 // عند العمل بدون اتصال إنترنت، حتى لا تُفقد أي بيانات أُدخلت أثناء انقطاع الشبكة.
 const KV_IDB_PENDING_STORE = 'pending';
+// مخزن ثالث (نفس قاعدة IndexedDB): تعديلات فردية معلّقة لم تُرفع للسيرفر بعد فى نظام "السجلات
+// المستقلة" (عميل واحد أو سطر واحد من أي شيت — الخزنة/المخزون/المشتريات...)، بخلاف KV_IDB_PENDING_STORE
+// أعلاه المخصَّص فقط للمفاتيح الكاملة القديمة (settings, clients كخط رجعة...). المفتاح المركّب
+// "collection::id" (ckey) يمنع تصادم نفس الـid بين تصنيفين مختلفين (مثال: عميل ومصروف بنفس id عرضاً).
+// سبب وجود هذا المخزن: قبل إضافته، أي فشل رفع فردي (انقطاع نت لحظي، rate limit، إغلاق الصفحة أثناء
+// الحفظ) كان بيضيع نهائياً بمجرد أي ريفرش لاحق — راجع flushPendingRecordWrites فى storage-sync.js.
+const RECORD_PENDING_STORE = 'pendingRecords';
 let _kvIdbPromise = null;
 function _openKvIdb(){
   if(_kvIdbPromise) return _kvIdbPromise;
   _kvIdbPromise = new Promise((resolve)=>{
     try{
       if(!window.indexedDB){ resolve(null); return; }
-      const req = indexedDB.open(KV_IDB_NAME, 2);
+      const req = indexedDB.open(KV_IDB_NAME, 3);
       req.onupgradeneeded = ()=>{
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_STORE)) req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore kv failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore pending failed:', e); }
+        try{ if(!req.result.objectStoreNames.contains(RECORD_PENDING_STORE)) req.result.createObjectStore(RECORD_PENDING_STORE, { keyPath: 'ckey' }); }catch(e){ console.error('[Core] IDB createObjectStore pendingRecords failed:', e); }
       };
       req.onsuccess = ()=> resolve(req.result);
       req.onerror = ()=> resolve(null); // فشل الفتح — سنستخدم localStorage كخط رجعة
     }catch(e){ resolve(null); }
   });
   return _kvIdbPromise;
+}
+// يخزّن/يحدّث تعديلاً فردياً معلّقاً. payload لعملية upsert: { op:'upsert', enc, clientId? }،
+// ولعملية حذف: { op:'delete' }. قيد واحد فقط لكل (collection,id) — آخر تعديل معلّق فقط يهمّ.
+function _recordCkey(collection, id){ return collection + '::' + id; }
+async function _pendingRecordPut(collection, id, payload){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
+        tx.objectStore(RECORD_PENDING_STORE).put(Object.assign({ ckey: _recordCkey(collection,id), collection, id, queuedAt: Date.now() }, payload));
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){ console.error('[Core] _pendingRecordPut failed:', e); }
+}
+async function _pendingRecordDelete(collection, id){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
+        tx.objectStore(RECORD_PENDING_STORE).delete(_recordCkey(collection,id));
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){ console.error('[Core] _pendingRecordDelete failed:', e); }
+}
+async function _pendingRecordReadAll(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return [];
+    return await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(RECORD_PENDING_STORE, 'readonly');
+        const req = tx.objectStore(RECORD_PENDING_STORE).getAll();
+        req.onsuccess = ()=> resolve(req.result || []);
+        req.onerror = ()=> resolve([]);
+      }catch(e){ resolve([]); }
+    });
+  }catch(e){ return []; }
+}
+async function _pendingRecordCount(){
+  try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
 }
 async function _kvCacheRead(key){
   try{
