@@ -2101,6 +2101,120 @@ body.dark-theme #view-clients thead th {
   .fab-quickadd { bottom: 78px; left: 16px; width: 50px; height: 50px; font-size: 26px; }
 }
 
+/* ============= صناديق/بطاقات الجوال — تحويل كل جداول البرنامج (كل الشاشات) لصناديق مرتبة بدل التمرير الأفقي =============
+   يعتمد على data-label و card-full الموجودتين مسبقاً في كل جدول (JS) لكنهما كانتا بلا تنسيق CSS فعلي.
+   لأن كل جدول تقريباً في البرنامج مغلّف بـ .table-scroll، هذا القسم الواحد يوحّد شكل كل الصناديق فى كل البرنامج دفعة واحدة. */
+@media (max-width: 680px) {
+  .table-scroll {
+    max-height: none;
+    border: none;
+    overflow: visible;
+    background: transparent;
+  }
+
+  .table-scroll table {
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .table-scroll thead {
+    display: none;
+  }
+
+  .table-scroll tbody {
+    display: block;
+  }
+
+  .table-scroll tbody tr {
+    display: block;
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 6px 14px;
+    margin-bottom: 10px;
+  }
+
+  .table-scroll tbody tr:has(td.sticky-col-1) {
+    padding-top: 36px;
+  }
+
+  .table-scroll tbody tr:hover {
+    background: var(--surface);
+  }
+
+  .table-scroll tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--border);
+    white-space: normal;
+    text-align: start;
+    position: static;
+    background: transparent;
+  }
+
+  .table-scroll tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .table-scroll tbody td::before {
+    content: attr(data-label);
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  /* عمود اسم العميل (card-full بلابل): يظهر كعنوان كامل العرض بارز أعلى الصندوق بدل سطر جنب سطر */
+  .table-scroll tbody td.card-full:not([data-label=""]) {
+    display: block;
+  }
+
+  .table-scroll tbody td.card-full:not([data-label=""])::before {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .table-scroll tbody td.sticky-col-2.card-full:not([data-label=""]) {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text);
+    padding-top: 2px;
+  }
+
+  /* أعمدة بلا لابل (أزرار الإجراءات، أو أي حقل كامل العرض): صف سفلي كامل العرض بدل سطر جنب سطر */
+  .table-scroll tbody td[data-label=""] {
+    display: block;
+    padding-top: 10px;
+  }
+
+  .table-scroll tbody td[data-label=""]::before {
+    display: none;
+  }
+
+  /* خانة التحديد (checkbox) تُثبَّت في الزاوية العلوية اليمنى للصندوق بدل أن تشغل سطراً كاملاً */
+  .table-scroll tbody td.sticky-col-1 {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 0;
+    border-bottom: none;
+    width: auto;
+  }
+
+  .table-scroll tbody td.sticky-col-1::before {
+    display: none;
+  }
+}
+
 /* ================= خلايا التعديل المباشر السريع (Inline Edit) في جدول الحركات المالية ================= */
 #vault-table-body td.editable-cell {
   cursor: text;
