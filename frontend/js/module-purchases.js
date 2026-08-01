@@ -617,6 +617,7 @@ async function backgroundSyncCheck(){
     // هذه الدالة تُستدعى بعد اكتمال تحميل بيانات البرنامج فعلياً فى الذاكرة، فالتوقيت آمن.
     if(typeof checkPendingRestoreResync==='function') await checkPendingRestoreResync();
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
+    await flushPendingRecordWrites(); // نفس الشيء لطابور السجلات الفردية المعلّقة (عملاء/شيتات)
     // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
     // السجلات المستقلة الجديد (checkClientRecordsChanged)، و(ج) نفس الشيء لبقية الشيتات المحوَّلة
     // للسجلات المستقلة (checkAllRecordsChanged) — كل ذلك بطلبات صغيرة جداً بدون نقل بيانات فعلية

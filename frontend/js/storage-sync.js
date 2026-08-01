@@ -102,6 +102,22 @@ async function updateOfflineIndicator(){
   }catch(e){ console.error('[StorageSync] updateOfflineIndicator error:', e); }
 }
 let _ftcSyncInFlight = false;
+// عدّاد لعدد طلبات حفظ/حذف سجل فردي (عميل أو سطر شيت) الجارية الآن فعلياً (لسه منتظرة رد
+// السيرفر ولم تفشل بعد، فلم تُسجَّل فى طابور "السجلات المعلّقة" أصلاً). دونه، لو المستخدم عمل
+// ريفرش أو قفل الصفحة فى نفس اللحظة اللي طلب الحفظ لسه طاير فى الشبكة، مفيش أي وسيلة تمنعه أو
+// حتى تنبّهه — راجع beforeunload أسفل.
+let _activeRecordSaves = 0;
+window.addEventListener('beforeunload', (e)=>{
+  // لا ننتظر أي Promise هنا (المتصفح لا يسمح بذلك فى beforeunload) — فقط نتحقق من العدّاد
+  // الحالي فى الذاكرة (طلبات حفظ لسه جارية) بشكل متزامن. طابور IndexedDB نفسه (تعديلات
+  // فشلت فعلاً ومسجّلة) لا يحتاج تحذيراً هنا لأنه أصلاً هيُعاد رفعه تلقائياً عند فتح البرنامج
+  // من جديد أو عودة الاتصال — التحذير هنا فقط لمنع فقدان تعديل لسه "فى الهواء" لم يُحسم بعد.
+  if(_activeRecordSaves > 0){
+    e.preventDefault();
+    e.returnValue = 'فيه تعديلات لسه بتتحفظ على السيرفر — لو غادرت الصفحة دلوقتي ممكن تفقد آخر تعديل. متأكد إنك عايز تكمل؟';
+    return e.returnValue;
+  }
+});
 // ---------------- تثبيت البرنامج كتطبيق (PWA) على الجهاز ----------------
 // يلتقط حدث beforeinstallprompt (مدعوم في Chrome/Edge/Android) ويُظهر زر "تثبيت البرنامج"
 // في الشريط العلوي بدل الاعتماد على خيار مخفي داخل قائمة المتصفح قد لا ينتبه له المستخدم.
@@ -203,10 +219,67 @@ async function flushPendingWrites(){
     if(remaining === 0) markOnline(); else updateOfflineIndicator();
   }
 }
-window.addEventListener('online', ()=>{ flushPendingWrites(); });
+window.addEventListener('online', ()=>{ flushPendingWrites(); flushPendingRecordWrites(); });
 window.addEventListener('offline', ()=>{ markOffline(); });
 // محاولة دورية احتياطية (كل 20 ثانية) بجانب حدث online، ولا تُكلّف شيئاً لو الطابور فارغ بالفعل
-setInterval(()=>{ flushPendingWrites().catch(()=>{}); }, 20000);
+setInterval(()=>{ flushPendingWrites().catch(()=>{}); flushPendingRecordWrites().catch(()=>{}); }, 20000);
+let _ftcRecordSyncInFlight = false;
+// نفس فكرة flushPendingWrites بالضبط لكن لطابور "السجلات الفردية المعلّقة" (عملاء/سطور شيتات فشل
+// رفعها أو حذفها فعلياً — راجع _pendingRecordPut). تُستدعى عند استعادة الاتصال، دورياً، وأيضاً فى
+// بداية كل تحميل بيانات (loadData/loadCollectionGeneric) قبل اعتبار ما يرجعه السيرفر بيانات نهائية،
+// حتى لا يُقرأ السيرفر وكأنه "الحقيقة الكاملة" بينما فيه تعديلات محلية لسه فى طريقها إليه.
+async function flushPendingRecordWrites(){
+  if(_ftcRecordSyncInFlight) return;
+  const pending = await _pendingRecordReadAll();
+  if(!pending.length) return;
+  _ftcRecordSyncInFlight = true;
+  try{
+    for(const item of pending){
+      try{
+        const isClient = item.collection === 'clients';
+        const url = isClient ? `/api/client-records/${encodeURIComponent(item.id)}` : `/api/records/${encodeURIComponent(item.collection)}/${encodeURIComponent(item.id)}`;
+        let res;
+        if(item.op === 'delete'){
+          res = await serverFetch(url, { method: 'DELETE' });
+        }else{
+          const knownVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
+          const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '' } : { enc: item.enc, version: knownVersion };
+          res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
+        }
+        if(res.status === 409){
+          // تعارض حقيقي — نفس معاملة flushPendingWrites: نتخلى عن هذا التعديل المعلّق تحديداً
+          // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم بدل محاولة لا نهائية.
+          const conflict = await res.json().catch(()=>({}));
+          if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
+          else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
+          await _pendingRecordDelete(item.collection, item.id);
+          showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+          continue;
+        }
+        if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+        if(item.op === 'delete'){
+          if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
+          else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
+        }else{
+          const data = await res.json().catch(()=>({}));
+          if(isClient){
+            _clientRecordVersions[item.id] = data.version || 0;
+            if(data.origin && data.status) clientRecordMeta[item.id] = { origin: data.origin, status: data.status };
+          }else{
+            if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
+            _recordVersions[item.collection].set(item.id, data.version || 0);
+          }
+        }
+        await _pendingRecordDelete(item.collection, item.id);
+      }catch(e){
+        // لا يزال بدون اتصال فعلياً — نوقف هذه الجولة (باقي العناصر تفضل فى الطابور لمحاولة قادمة)
+        break;
+      }
+    }
+  } finally {
+    _ftcRecordSyncInFlight = false;
+  }
+}
 
 async function serverFetch(path, options = {}) {
   if(manualOfflineMode){
@@ -409,6 +482,7 @@ const _recordVersions = {}; // collection -> Map(id -> version)
 const _collectionSyncBaseline = {}; // collection -> Map(id -> json) | null (لسه غير مؤكدة هذه الجلسة)
 
 async function fetchAllRecordsGeneric(collection){
+  await flushPendingRecordWrites().catch(()=>{});
   const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}`);
   if(!res.ok) throw new Error('تعذّر جلب بيانات ' + collection);
   const data = await res.json();
@@ -427,41 +501,82 @@ async function fetchAllRecordsGeneric(collection){
     }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل التصنيف */ }
   }
   _recordVersions[collection] = versions;
+  // نفس خط الأمان الموجود فى fetchAllClientRecords بالضبط: أي سطر لسه معلّق فعلياً (بدون اتصال
+  // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً فى الذاكرة بدل اختفائه فجأة من الشاشة.
+  const stillPending = (await _pendingRecordReadAll()).filter(p=>p.collection===collection);
+  for(const p of stillPending){
+    if(p.op === 'delete'){
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list.splice(idx,1);
+      continue;
+    }
+    try{
+      const plain = await _decryptOrFail(p.enc);
+      const obj = JSON.parse(plain);
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list[idx] = obj; else list.push(obj);
+    }catch(e){ /* تعذّر فك تشفير تعديل معلّق تالف محلياً */ }
+  }
   return { list, baseline };
 }
 
 async function saveOneRecordGeneric(collection, id, plainJson){
+  _activeRecordSaves++;
   try{
     const enc = await encryptValue(plainJson);
     if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
     const knownVersion = _recordVersions[collection].get(id) || 0;
-    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enc, version: knownVersion }),
-    });
+    let res;
+    try{
+      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enc, version: knownVersion }),
+      });
+    }catch(e){
+      // فشل اتصال فعلي — نسجّله معلّقاً بدل ما يضيع صامتاً (نفس منطق saveOneClientRecord بالضبط).
+      await _pendingRecordPut(collection, id, { op:'upsert', enc });
+      return null;
+    }
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
       showToast('⚠️ ' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة'));
       return false;
     }
-    if(!res.ok) return null;
+    if(!res.ok){
+      await _pendingRecordPut(collection, id, { op:'upsert', enc });
+      return null;
+    }
     const data = await res.json();
     _recordVersions[collection].set(id, data.version || 0);
+    await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
+  finally{ _activeRecordSaves--; }
 }
 
 async function deleteOneRecordGeneric(collection, id){
+  _activeRecordSaves++;
   try{
-    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    let res;
+    try{
+      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    }catch(e){
+      await _pendingRecordPut(collection, id, { op:'delete' });
+      return null;
+    }
     // لازم نتحقق من res.ok: لو السيرفر رفض الحذف (مثال: 429 بسبب rate limiting، أو أي خطأ آخر)،
     // السجل لسه فعلياً موجود على السيرفر ولا يجوز اعتباره محذوفاً محلياً — وإلا سيرجع السجل
     // "المحذوف" فى المرة القادمة اللي يتحمّل فيها التصنيف من السيرفر، بينما البرنامج فاكر إنه اتمسح.
-    if(!res.ok) return null;
+    if(!res.ok){
+      await _pendingRecordPut(collection, id, { op:'delete' });
+      return null;
+    }
     if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+    await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
+  finally{ _activeRecordSaves--; }
 }
 
 // حذف عدة سجلات دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل id — يُستخدم لو عدد السجلات
@@ -477,9 +592,21 @@ async function bulkDeleteRecordsGeneric(collection, ids){
         method: 'POST',
         body: JSON.stringify({ ids: chunk }),
       });
-      if(!res.ok){ failedIds.push(...chunk); continue; }
-      for(const id of chunk) if(_recordVersions[collection]) _recordVersions[collection].delete(id);
-    }catch(e){ failedIds.push(...chunk); }
+      if(!res.ok){
+        failedIds.push(...chunk);
+        // نسجّل كل سطر فشل حذفه فى طابور المعلّقات أيضاً — خط رجعة إضافي حتى لو الاستدعاء لم
+        // يُعِد محاولة الحذف بنفسه لاحقاً (بعض الاستدعاءات القديمة كانت تكتفي بترك الـid فى baseline).
+        await Promise.all(chunk.map(id=> _pendingRecordPut(collection, id, { op:'delete' })));
+        continue;
+      }
+      for(const id of chunk){
+        if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+        await _pendingRecordDelete(collection, id);
+      }
+    }catch(e){
+      failedIds.push(...chunk);
+      await Promise.all(chunk.map(id=> _pendingRecordPut(collection, id, { op:'delete' })));
+    }
   }
   return failedIds; // القوائم التي فشل حذفها فعلياً (تبقى فى الـ baseline ليُعاد المحاولة لاحقاً)
 }
@@ -493,15 +620,34 @@ async function bulkUploadRecordsGeneric(collection, list){
     const chunk = list.slice(i, i+CHUNK);
     const records = [];
     for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: versions.get(item.id) || 0 });
-    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
-      method: 'POST',
-      body: JSON.stringify({ records }),
-    });
-    if(!res.ok) throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
+    let res;
+    try{
+      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
+        method: 'POST',
+        body: JSON.stringify({ records }),
+      });
+    }catch(e){
+      // فشل اتصال فعلي أثناء رفع الدفعة — نسجّل كل سطر فيها فى طابور المعلّقات فردياً (بدل
+      // الاعتماد فقط على نسخة احتياطية كاملة للتصنيف قد يتم تجاهلها لاحقاً لو رجع النظام
+      // الجديد بأي بيانات ولو ناقصة عند أول تحميل قادم)، ثم نرفع نفس الاستثناء كالسابق تماماً
+      // ليتعامل معه المستدعي (saveCollectionGeneric) بخط رجعته المعتاد.
+      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      throw e;
+    }
+    if(!res.ok){
+      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
+    }
     const data = await res.json().catch(()=>({}));
     // تحديث النسخ المعروفة محلياً لكل سجل نجح، والتنبيه لو رُفض سجل بسبب تعارض حقيقي (عدّله جهاز
     // آخر أثناء نفس عملية الرفع) — يبقى بياناته القديمة على السيرفر كما هي دون كتابة فوقها صامتاً.
-    for(const item of chunk) if(!(data.conflicts||[]).some(c=>c.id===item.id)) versions.set(item.id, (versions.get(item.id)||0) + 1);
+    const conflictIdSet = new Set((data.conflicts||[]).map(c=>c.id));
+    for(const item of chunk){
+      if(!conflictIdSet.has(item.id)){
+        versions.set(item.id, (versions.get(item.id)||0) + 1);
+        await _pendingRecordDelete(collection, item.id);
+      }
+    }
     if(data.conflicts && data.conflicts.length){
       for(const c of data.conflicts) versions.set(c.id, c.currentVersion || 0);
       allConflictIds.push(...data.conflicts.map(c=>c.id));
@@ -654,6 +800,9 @@ async function fetchAllClientIds(){
 }
 
 async function fetchAllClientRecords(){
+  // نحاول رفع أي تعديلات عملاء معلّقة أولاً (لو النت رجع من تحته) قبل قراءة "الحقيقة" من السيرفر —
+  // بدون هذه الخطوة، أي عميل نجح رفعه سابقاً جزئياً فقط كان سيظهر تاني بنسخته القديمة أو يختفي تماماً.
+  await flushPendingRecordWrites().catch(()=>{});
   const res = await serverFetch('/api/client-records');
   if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
   const data = await res.json();
@@ -672,6 +821,24 @@ async function fetchAllClientRecords(){
       baseline.set(r.id, plain);
     }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل العملاء */ }
   }
+  // خط الأمان الأخير: أي تعديل عميل لسه معلّق فعلياً بعد محاولة الرفع أعلاه (يعني لسه بدون اتصال
+  // حقيقي) لازم يظل ظاهراً فى الذاكرة رغم عدم تأكيده على السيرفر بعد — وإلا هيختفي من الشاشة فوراً
+  // رغم إنه محفوظ بأمان محلياً وهيُرفع تلقائياً أول ما الاتصال يرجع. عمداً لا نلمس baseline لهذا الـid
+  // (يظل كما جاء من السيرفر أو غير موجود)، حتى يكتشف saveClients الفرق ويعيد محاولة الحفظ لاحقاً.
+  const stillPending = (await _pendingRecordReadAll()).filter(p=>p.collection==='clients');
+  for(const p of stillPending){
+    if(p.op === 'delete'){
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list.splice(idx,1);
+      continue;
+    }
+    try{
+      const plain = await _decryptOrFail(p.enc);
+      const obj = JSON.parse(plain);
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list[idx] = obj; else list.push(obj);
+    }catch(e){ /* تعذّر فك تشفير تعديل معلّق تالف محلياً — نتجاهله بدل تعطيل التحميل كله */ }
+  }
   return { list, baseline };
 }
 
@@ -679,36 +846,65 @@ async function fetchAllClientRecords(){
 // (عدّله شخص آخر بينما هذا الجهاز يعمل بنسخة أقدم)، أو null لو تعذّر الوصول للسيرفر أصلاً
 // (بدون إنترنت) — المستدعي فى هذه الحالة يقرر خط الرجعة (راجع saveClients فى ui-framework.js).
 async function saveOneClientRecord(client, plainJson){
+  _activeRecordSaves++;
   try{
     const enc = await encryptValue(plainJson);
-    const res = await serverFetch(`/api/client-records/${encodeURIComponent(client.id)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0, clientId: client.clientId || '' }),
-    });
+    let res;
+    try{
+      res = await serverFetch(`/api/client-records/${encodeURIComponent(client.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0, clientId: client.clientId || '' }),
+      });
+    }catch(e){
+      // فشل اتصال فعلي (مش رفض من السيرفر) — نسجّل هذا العميل فى طابور "سجلات معلّقة" محلياً
+      // بدل ما يضيع نهائياً، ويُعاد رفعه تلقائياً لاحقاً (راجع flushPendingRecordWrites) حتى
+      // لو المستخدم عمل ريفرش أو قفل الصفحة قبل ما الاتصال يرجع.
+      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '' });
+      return null;
+    }
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _clientRecordVersions[client.id] = conflict.currentVersion || _clientRecordVersions[client.id];
       showToast(`⚠️ تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة`);
       return false;
     }
-    if(!res.ok) return null;
+    if(!res.ok){
+      // رفض من السيرفر بسبب غير تعارض (مثال: 429 rate limit، أو خطأ خادم مؤقت) — نفس معاملة
+      // فشل الاتصال: نسجّله معلّقاً بدل تجاهله.
+      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '' });
+      return null;
+    }
     const data = await res.json();
     _clientRecordVersions[client.id] = data.version || 0;
     if(data.origin && data.status) clientRecordMeta[client.id] = { origin: data.origin, status: data.status };
+    await _pendingRecordDelete('clients', client.id); // نجح الحفظ فعلياً — أي تعديل معلّق أقدم لنفس العميل لم يعد له داعٍ
     return true;
   }catch(e){ return null; }
+  finally{ _activeRecordSaves--; }
 }
 
 async function deleteOneClientRecord(id){
+  _activeRecordSaves++;
   try{
-    const res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    let res;
+    try{
+      res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    }catch(e){
+      await _pendingRecordPut('clients', id, { op:'delete' });
+      return null;
+    }
     // نفس تصحيح deleteOneRecordGeneric: لازم نتحقق من res.ok قبل اعتبار الحذف ناجحاً محلياً،
     // وإلا عميل فشل حذفه فعلياً على السيرفر (429/خطأ) هيرجع يظهر تاني عند أي تحميل قادم.
-    if(!res.ok) return null;
+    if(!res.ok){
+      await _pendingRecordPut('clients', id, { op:'delete' });
+      return null;
+    }
     delete _clientRecordVersions[id];
     delete clientRecordMeta[id];
+    await _pendingRecordDelete('clients', id);
     return true;
   }catch(e){ return null; }
+  finally{ _activeRecordSaves--; }
 }
 
 // حذف عدة عملاء دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل عميل — نفس فكرة
@@ -723,9 +919,19 @@ async function bulkDeleteClientRecords(ids){
         method: 'POST',
         body: JSON.stringify({ ids: chunk }),
       });
-      if(!res.ok){ failedIds.push(...chunk); continue; }
-      for(const id of chunk){ delete _clientRecordVersions[id]; delete clientRecordMeta[id]; }
-    }catch(e){ failedIds.push(...chunk); }
+      if(!res.ok){
+        failedIds.push(...chunk);
+        await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' })));
+        continue;
+      }
+      for(const id of chunk){
+        delete _clientRecordVersions[id]; delete clientRecordMeta[id];
+        await _pendingRecordDelete('clients', id);
+      }
+    }catch(e){
+      failedIds.push(...chunk);
+      await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' })));
+    }
   }
   return failedIds;
 }
@@ -752,14 +958,31 @@ async function bulkUploadClientRecords(clientsList){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
     for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: _clientRecordVersions[c.id] || 0 });
-    const res = await serverFetch('/api/client-records/bulk-migrate', {
-      method: 'POST',
-      body: JSON.stringify({ records }),
-    });
-    if(!res.ok) throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
+    let res;
+    try{
+      res = await serverFetch('/api/client-records/bulk-migrate', {
+        method: 'POST',
+        body: JSON.stringify({ records }),
+      });
+    }catch(e){
+      // فشل اتصال فعلي أثناء رفع دفعة عملاء — نسجّل كل عميل فى الدفعة فى طابور المعلّقات فردياً
+      // قبل رفع نفس الاستثناء، بدل الاعتماد فقط على نسخة احتياطية كاملة قد تُتجاهل لاحقاً.
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      throw e;
+    }
+    if(!res.ok){
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
+    }
     const data = await res.json().catch(()=>({}));
     // تحديث النسخ المعروفة محلياً، والتنبيه لو رُفض عميل بسبب تعارض حقيقي أثناء نفس عملية الرفع.
-    for(const c of chunk) if(!(data.conflicts||[]).some(x=>x.id===c.id)) _clientRecordVersions[c.id] = (_clientRecordVersions[c.id]||0) + 1;
+    const conflictIdSet = new Set((data.conflicts||[]).map(x=>x.id));
+    for(const c of chunk){
+      if(!conflictIdSet.has(c.id)){
+        _clientRecordVersions[c.id] = (_clientRecordVersions[c.id]||0) + 1;
+        await _pendingRecordDelete('clients', c.id);
+      }
+    }
     if(data.conflicts && data.conflicts.length){
       for(const c of data.conflicts) _clientRecordVersions[c.id] = c.currentVersion || 0;
       allConflictIds.push(...data.conflicts.map(c=>c.id));
