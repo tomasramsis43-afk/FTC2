@@ -503,7 +503,13 @@ async function loadCollectionGeneric(collection, cacheOnly){
   }
   try{
     const { list, baseline } = await fetchAllRecordsGeneric(collection);
-    if(list.length) return { list, baseline };
+    if(list.length){
+      // نفس تصحيح 'clients' بالضبط: نجهّز رقم نسخة المفتاح القديم (auditLog, bagStock, journalDE...)
+      // فى الخلفية، وإلا أي حفظ احتياطي لاحق عبر window.storage.set (خط الرجعة فى saveCollectionGeneric
+      // عند فشل الشبكة) سيرسل نسخة صفر دائماً ويُرفض بخطأ 409 رغم عدم وجود تعارض حقيقي.
+      window.storage.primeKeyVersion(collection).catch(()=>{});
+      return { list, baseline };
+    }
     // فارغ فعلاً فى النظام الجديد — نتحقق من وجود بيانات قديمة (كتلة واحدة) تحتاج ترحيل لمرة واحدة
     let legacyList = [];
     try{

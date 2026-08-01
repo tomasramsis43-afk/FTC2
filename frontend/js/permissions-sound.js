@@ -260,6 +260,11 @@ async function loadData(cacheOnly){
       if(list.length){
         clients = list;
         _clientsSyncBaseline = baseline;
+        // نجهّز رقم النسخة الحالي لمفتاح 'clients' القديم فى الخلفية (بدون انتظار): خط الرجعة
+        // فى saveClients (عند فشل الشبكة) يحفظ عبر window.storage.set('clients', ...) الذي يرسل
+        // _kvVersions['clients']، وهذا يبقى صفراً افتراضياً طالما لم يُستدعَ get()/primeKeyVersion
+        // لهذا المفتاح — فيُرفض الحفظ دائماً بخطأ 409 (تعارض) رغم عدم وجود أي تعارض حقيقي.
+        window.storage.primeKeyVersion('clients').catch(()=>{});
         if(isReceptionSession) await writeReceptionOwnCache(list);
       }else if(isReceptionSession){
         // قائمة فارغة فعلياً لهذا المستخدم تحديداً (وصلنا للسيرفر فعلاً) — لا يوجد أي "خط رجعة"
