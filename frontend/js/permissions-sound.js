@@ -587,8 +587,13 @@ async function saveClients(allowDrop){
         // تغييرات كثيرة دفعة واحدة (استيراد/تحديث شامل) — رفع مُجمَّع أخف وأسرع على السيرفر بدل
         // طلب منفصل لكل عميل، وبدون فحص تعارض (نفس منطق العمليات الجماعية الكبيرة الأخرى بالبرنامج).
         try{
-          await bulkUploadClientRecords(changed.map(x=>x.client));
-          changed.forEach(x=> _clientsSyncBaseline.set(x.client.id, x.json));
+          const conflictIds = await bulkUploadClientRecords(changed.map(x=>x.client));
+          // لازم نستثني العملاء اللي فشل رفعهم فعلياً بسبب تعارض حقيقي: تحديث الـ baseline لهم هنا
+          // كان يخلّي البرنامج يظن إنهم اتزامنوا رغم رفض السيرفر لتعديلهم فعلياً — فلا يُعاد رفعهم
+          // تاني أبداً رغم بقاء بياناتهم غير متطابقة مع السيرفر (أو، لو تغيّرت بياناتهم بعد ذلك مرة
+          // أخرى، يدخلون ويخرجون من نفس حلقة "تعذّر الرفع" كل مرة تُحفظ فيها البيانات من جديد).
+          const conflictSet = new Set(conflictIds);
+          changed.forEach(x=> { if(!conflictSet.has(x.client.id)) _clientsSyncBaseline.set(x.client.id, x.json); });
         }catch(e){ anyNetworkFailure = true; }
       }else{
         for(const {client, json} of changed){
