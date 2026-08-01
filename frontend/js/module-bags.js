@@ -1075,16 +1075,42 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
 /* ---------------- مطابقة كشف الحساب البنكي ---------------- */
 // يحاول ربط كل سطر غير مربوط في كشف الحساب المستورد بحركة "بنك" غير مربوطة في الحركات المالية،
 // فقط عندما يوجد تطابق فريد (نفس التاريخ + نفس المبلغ + نفس اتجاه الحركة). لا يربط تلقائياً عند وجود أكثر من مرشح.
+/* مطابقة تلقائية بين كشف الحساب البنكي وحركات "البنك": تمرّان —
+   (1) مطابقة دقيقة (نفس التاريخ + نفس المبلغ) وهي الأدق والأولى دائماً،
+   (2) مطابقة تقريبية (نفس المبلغ ± 3 أيام) للسطور التي لم تُطابَق دقيقاً، فقط إذا وُجد مرشّح
+       وحيد ضمن هذا النطاق (لتفادي أي ربط خاطئ عند تعدد المرشحين) — تغطي حالات تأخر ترحيل
+       البنك للحركة يوماً أو يومين عن تاريخ تسجيلها الفعلي بالبرنامج. */
 function autoMatchBankStatement(){
   const usedTxIds = new Set(bankStatementRows.filter(r=>r.matchedTxId).map(r=>r.matchedTxId));
   const bankTx = vaultTx.filter(t=>t.destination==='bank');
   let matchedCount = 0;
+  // التمرة الأولى: مطابقة دقيقة بالتاريخ والمبلغ
   bankStatementRows.forEach(row=>{
     if(row.matchedTxId) return;
     const wantType = row.type==='credit' ? 'in' : 'out';
     const candidates = bankTx.filter(t=>!usedTxIds.has(t.id) && t.type===wantType && t.date===row.date && Math.abs(num(t.amount)-num(row.amount))<0.01);
     if(candidates.length===1){
       row.matchedTxId = candidates[0].id;
+      usedTxIds.add(candidates[0].id);
+      matchedCount++;
+    }
+  });
+  // التمرة الثانية: مطابقة تقريبية بنفس المبلغ ضمن ± 3 أيام، فقط عند وجود مرشّح وحيد
+  const DAY_TOLERANCE = 3;
+  bankStatementRows.forEach(row=>{
+    if(row.matchedTxId) return;
+    const wantType = row.type==='credit' ? 'in' : 'out';
+    const rowDate = new Date(row.date+'T00:00:00');
+    if(isNaN(rowDate)) return;
+    const candidates = bankTx.filter(t=>{
+      if(usedTxIds.has(t.id) || t.type!==wantType || Math.abs(num(t.amount)-num(row.amount))>=0.01) return false;
+      const tDate = new Date(t.date+'T00:00:00');
+      if(isNaN(tDate)) return false;
+      return Math.abs((tDate-rowDate)/86400000) <= DAY_TOLERANCE;
+    });
+    if(candidates.length===1){
+      row.matchedTxId = candidates[0].id;
+      row.approxMatch = true; // للتمييز في العرض أن هذه مطابقة تقريبية وليست دقيقة بالتاريخ
       usedTxIds.add(candidates[0].id);
       matchedCount++;
     }
@@ -1135,7 +1161,7 @@ function renderBankRecon(){
       <td class="mono">${fmt(num(row.amount))}</td>
       <td>${escapeHtml(row.reference||'')}</td>
       <td>${matched
-        ? `<span class="hint" style="margin:0;">مربوطة بحركة #${matchedTx?matchedTx.seq:'—'} بتاريخ ${matchedTx?matchedTx.date:'—'}</span> <button type="button" class="btn btn-ghost btn-sm" data-unmatch="${row.id}">فك الربط</button>`
+        ? `<span class="hint" style="margin:0;">مربوطة بحركة #${matchedTx?matchedTx.seq:'—'} بتاريخ ${matchedTx?matchedTx.date:'—'}${row.approxMatch?' <span class="stamp owe" title="مطابقة تقريبية بفارق تاريخ حتى 3 أيام، وليست مطابقة دقيقة بنفس اليوم">تقريبية</span>':''}</span> <button type="button" class="btn btn-ghost btn-sm" data-unmatch="${row.id}">فك الربط</button>`
         : (candidates.length
             ? `<select data-select-for="${row.id}" style="max-width:220px; display:inline-block;">${candidates.map(c=>`<option value="${c.id}">#${c.seq} — ${c.date} — ${fmt(num(c.amount))} ﷼ — ${escapeHtml(c.clientName||c.manual||c.recipientName||c.category||'')}</option>`).join('')}</select> <button type="button" class="btn btn-gold btn-sm" data-match="${row.id}">ربط</button>`
             : `<span class="hint" style="margin:0;">لا توجد حركة بنك بالنظام بنفس الاتجاه غير مربوطة بعد لمطابقتها</span>`)
@@ -1225,6 +1251,13 @@ $('#import-bankrecon-input')?.addEventListener('change', async e=>{
     e.target.value = '';
   }
 });
+$('#btn-bankrecon-rerun-automatch')?.addEventListener('click', async ()=>{
+  if(!bankStatementRows.length){ showToast('لا يوجد كشف حساب مستورد أصلاً'); return; }
+  const matchedCount = autoMatchBankStatement();
+  await saveBankStatementRows();
+  renderBankRecon();
+  showToast(matchedCount ? `تمت مطابقة ${matchedCount} سطراً إضافياً تلقائياً` : 'لا توجد مطابقات تلقائية جديدة ممكنة حالياً');
+});
 $('#btn-bankrecon-clear')?.addEventListener('click', async ()=>{
   if(!bankStatementRows.length){ showToast('لا يوجد كشف حساب مستورد أصلاً'); return; }
   if(!await customConfirm('سيتم مسح كل سطور كشف الحساب البنكي المستورد وكل الربط الحالي معها. هذا لا يؤثر على الحركات المالية نفسها. متابعة؟')) return;
@@ -1242,11 +1275,11 @@ document.addEventListener('click', async e=>{
     const txId = sel && sel.value;
     if(!txId){ showToast('اختر حركة من القائمة أولاً'); return; }
     const row = bankStatementRows.find(r=>r.id===matchId);
-    if(row){ row.matchedTxId = txId; await saveBankStatementRows(); showToast('تم الربط'); renderBankRecon(); }
+    if(row){ row.matchedTxId = txId; delete row.approxMatch; await saveBankStatementRows(); showToast('تم الربط'); renderBankRecon(); }
   }
   if(unmatchId){
     const row = bankStatementRows.find(r=>r.id===unmatchId);
-    if(row){ row.matchedTxId = ''; await saveBankStatementRows(); showToast('تم فك الربط'); renderBankRecon(); }
+    if(row){ row.matchedTxId = ''; delete row.approxMatch; await saveBankStatementRows(); showToast('تم فك الربط'); renderBankRecon(); }
   }
   if(delId){
     if(!await customConfirm('حذف هذا السطر من كشف الحساب المستورد؟ هذا لا يحذف أي حركة مالية.')) return;

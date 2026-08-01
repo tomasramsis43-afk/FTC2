@@ -1204,6 +1204,15 @@
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">عند تسجيل عميل ودفعه لمبلغ عبر طريقة دفع معيّنة، يُرحَّل المبلغ تلقائياً إلى الحساب المرتبط بها (حسب إعداد "طرق الدفع" في الإعدادات). استخدم فلتر "الوجهة" أدناه لعرض حركات حساب واحد فقط كأنه شيت مستقل.</p>
     </div>
 
+    <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+      <h3 style="margin:0 0 4px;">🗣️ إدخال سريع بالعربي الطبيعي</h3>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتب الحركة بجملة عادية وسيحاول البرنامج استخراج المبلغ وطريقة الدفع تلقائياً، ثم يفتح لك نموذج "حركة صادر جديدة" معبّأً مسبقاً مع اقتراح تصنيف بالذكاء الاصطناعي — تراجعه وتؤكد الحفظ بنفسك دائماً. مثال: "دفعت 500 كهرباء نقدي" أو "صرفت 1200 صيانة تكييف شبكة".</p>
+      <div class="toolbar">
+        <input type="text" id="nl-expense-input" placeholder="مثال: دفعت 500 كهرباء نقدي" style="flex:1; min-width:240px;">
+        <button type="button" class="btn btn-gold" id="btn-nl-expense">تحليل وفتح النموذج</button>
+      </div>
+    </div>
+
     <div class="panel" style="border-right:4px solid var(--navy); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">قفل الفترة المحاسبية</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">بعد اعتماد القوائم المالية لفترة معيّنة، اقفلها لمنع أي إضافة أو تعديل أو حذف لأي حركة مالية بتاريخ يقع ضمنها أو قبلها — حماية لسلامة الأرقام المعتمدة.</p>
@@ -1234,6 +1243,7 @@
         <button class="btn btn-ghost btn-sm" id="btn-template-bankrecon">تحميل نموذج فارغ</button>
         <button class="btn btn-ghost btn-sm" id="btn-import-bankrecon">استيراد كشف الحساب من Excel</button>
         <input type="file" id="import-bankrecon-input" accept=".xlsx,.xls,.csv" style="display:none;">
+        <button class="btn btn-ghost btn-sm" id="btn-bankrecon-rerun-automatch">🔄 إعادة تشغيل المطابقة التلقائية</button>
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-bankrecon-toggle-matched">إظهار/إخفاء الحركات المطابَقة</button>
         <button class="btn btn-danger btn-sm" id="btn-bankrecon-clear">مسح كشف الحساب المستورد بالكامل</button>
