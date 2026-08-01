@@ -383,7 +383,7 @@ let clientRecordMeta = {}; // id -> { origin: 'general'|'reception', status: 'co
 const ALLOWED_COLLECTIONS_LOCAL = [
   'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
   'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
-  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices',
+  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
 ];
 const _recordVersions = {}; // collection -> Map(id -> version)
 const _collectionSyncBaseline = {}; // collection -> Map(id -> json) | null (لسه غير مؤكدة هذه الجلسة)
@@ -434,10 +434,34 @@ async function saveOneRecordGeneric(collection, id, plainJson){
 
 async function deleteOneRecordGeneric(collection, id){
   try{
-    await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    // لازم نتحقق من res.ok: لو السيرفر رفض الحذف (مثال: 429 بسبب rate limiting، أو أي خطأ آخر)،
+    // السجل لسه فعلياً موجود على السيرفر ولا يجوز اعتباره محذوفاً محلياً — وإلا سيرجع السجل
+    // "المحذوف" فى المرة القادمة اللي يتحمّل فيها التصنيف من السيرفر، بينما البرنامج فاكر إنه اتمسح.
+    if(!res.ok) return null;
     if(_recordVersions[collection]) _recordVersions[collection].delete(id);
     return true;
   }catch(e){ return null; }
+}
+
+// حذف عدة سجلات دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل id — يُستخدم لو عدد السجلات
+// المطلوب حذفها كبير (نفس فكرة bulkUploadRecordsGeneric بالضبط لكن للحذف)، لتفادي ضرب سقف
+// storageLimiter بإرسال عشرات/مئات الطلبات المتتالية فى ثوانٍ قليلة (كان بيرجع 429 لمعظمها).
+async function bulkDeleteRecordsGeneric(collection, ids){
+  const CHUNK = 300;
+  const failedIds = [];
+  for(let i=0;i<ids.length;i+=CHUNK){
+    const chunk = ids.slice(i, i+CHUNK);
+    try{
+      const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-delete`, {
+        method: 'POST',
+        body: JSON.stringify({ ids: chunk }),
+      });
+      if(!res.ok){ failedIds.push(...chunk); continue; }
+      for(const id of chunk) if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+    }catch(e){ failedIds.push(...chunk); }
+  }
+  return failedIds; // القوائم التي فشل حذفها فعلياً (تبقى فى الـ baseline ليُعاد المحاولة لاحقاً)
 }
 
 async function bulkUploadRecordsGeneric(collection, list){
@@ -540,10 +564,18 @@ async function saveCollectionGeneric(collection, arr){
           else if(ok === null) anyNetworkFailure = true;
         }
       }
-      for(const id of removedIds){
-        const ok = await deleteOneRecordGeneric(collection, id);
-        if(ok) baseline.delete(id);
-        else anyNetworkFailure = true;
+      if(removedIds.length > 20){
+        // حذف كثير دفعة واحدة (تنظيف/إعادة ضبط جزئي) — طلب واحد مُجمَّع بدل طلب DELETE منفصل
+        // لكل سجل، لتفادي ضرب سقف الـ rate limiter بعشرات/مئات الطلبات المتتالية.
+        const failedIds = await bulkDeleteRecordsGeneric(collection, removedIds);
+        for(const id of removedIds) if(!failedIds.includes(id)) baseline.delete(id);
+        if(failedIds.length) anyNetworkFailure = true;
+      }else{
+        for(const id of removedIds){
+          const ok = await deleteOneRecordGeneric(collection, id);
+          if(ok) baseline.delete(id);
+          else anyNetworkFailure = true;
+        }
       }
       if(anyNetworkFailure){
         _collectionSyncBaseline[collection] = null;
@@ -639,11 +671,33 @@ async function saveOneClientRecord(client, plainJson){
 
 async function deleteOneClientRecord(id){
   try{
-    await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    // نفس تصحيح deleteOneRecordGeneric: لازم نتحقق من res.ok قبل اعتبار الحذف ناجحاً محلياً،
+    // وإلا عميل فشل حذفه فعلياً على السيرفر (429/خطأ) هيرجع يظهر تاني عند أي تحميل قادم.
+    if(!res.ok) return null;
     delete _clientRecordVersions[id];
     delete clientRecordMeta[id];
     return true;
   }catch(e){ return null; }
+}
+
+// حذف عدة عملاء دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل عميل — نفس فكرة
+// bulkDeleteRecordsGeneric بالضبط لكن لسجلات العملاء، لتفادي ضرب سقف storageLimiter.
+async function bulkDeleteClientRecords(ids){
+  const CHUNK = 300;
+  const failedIds = [];
+  for(let i=0;i<ids.length;i+=CHUNK){
+    const chunk = ids.slice(i, i+CHUNK);
+    try{
+      const res = await serverFetch('/api/client-records/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids: chunk }),
+      });
+      if(!res.ok){ failedIds.push(...chunk); continue; }
+      for(const id of chunk){ delete _clientRecordVersions[id]; delete clientRecordMeta[id]; }
+    }catch(e){ failedIds.push(...chunk); }
+  }
+  return failedIds;
 }
 
 // اعتماد الأدمن لعميل سجّله الاستقبال (pending -> confirmed). لا حاجة لفك/إعادة تشفير أي شيء —
