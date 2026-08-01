@@ -1074,8 +1074,23 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
       try{
         await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
         _collectionSyncBaseline[c] = new Map();
+        _recordVersions[c] = new Map(); // إصلاح: كانت أرقام النسخ القديمة (قبل الحذف) تبقى فى الذاكرة
+        // ولا تُصفَّر هنا رغم تصفير baseline، فيُرسِلها الحفظ التالي (مثال: استعادة نسخة احتياطية
+        // مباشرة بعد ضبط المصنع) للسيرفر، الذي يرفضها بخطأ 409 "تعارض" رغم عدم وجود أي تعارض حقيقي
+        // (السجل غير موجود من الأساس بعد الحذف) — وهذا بالضبط سبب رفض إضافة بعض المعاملات.
       }catch(e){ deleteErrors.push(`${c} (سجلات مستقلة): ${e.message||e}`); }
     }
+    // إصلاح: حذف سجلات العملاء (client_records) كان مفقوداً هنا بالكامل رغم وجود نقطة سيرفر مخصّصة
+    // لذلك تحديداً (DELETE /api/client-records) — ما كان يعني أن "ضبط المصنع" لا يحذف بيانات
+    // العملاء فعلياً من قاعدة البيانات إطلاقاً رغم أن رسالة التأكيد تَعِد المستخدم بحذفها.
+    try{
+      await serverFetch('/api/client-records', { method: 'DELETE' });
+    }catch(e){ deleteErrors.push(`سجلات العملاء: ${e.message||e}`); }
+    // تصفير كامل لحالة تتبّع مزامنة العملاء محلياً (نفس سبب تصفير _recordVersions أعلاه بالضبط)
+    Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
+    clientRecordMeta = {};
+    _clientRecordsAggVersion = null;
+    _clientsSyncBaseline = new Map();
 
     // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)
