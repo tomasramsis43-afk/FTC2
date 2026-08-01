@@ -592,10 +592,16 @@ async function saveClients(allowDrop){
           else if(ok === null) anyNetworkFailure = true; // فشل اتصال فعلي (وليس تعارض — التعارض مُعالَج ومُبلَّغ بالفعل داخل saveOneClientRecord)
         }
       }
-      for(const id of removedIds){
-        const ok = await deleteOneClientRecord(id);
-        if(ok) _clientsSyncBaseline.delete(id);
-        else anyNetworkFailure = true;
+      if(removedIds.length > 20){
+        const failedIds = await bulkDeleteClientRecords(removedIds);
+        for(const id of removedIds) if(!failedIds.includes(id)) _clientsSyncBaseline.delete(id);
+        if(failedIds.length) anyNetworkFailure = true;
+      }else{
+        for(const id of removedIds){
+          const ok = await deleteOneClientRecord(id);
+          if(ok) _clientsSyncBaseline.delete(id);
+          else anyNetworkFailure = true;
+        }
       }
       if(anyNetworkFailure){
         // تعذّر الوصول للسيرفر أثناء رفع بعض التعديلات (انقطاع اتصال على الأرجح) — خط رجعة آمن:

@@ -926,6 +926,28 @@ app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
   }
 });
 
+// حذف عدة عملاء دفعة واحدة (طلب واحد) — نفس فكرة /api/records/:collection/bulk-delete، لتفادي
+// إرسال عشرات/مئات طلبات DELETE منفصلة عند حذف عدد كبير من العملاء دفعة واحدة.
+app.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+  if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  try {
+    if (req.user.role === 'reception') {
+      // نفس عزل مستخدم الاستقبال فى مسار الحذف الفردي: يحذف فقط سجلاته هو شخصياً.
+      await pool.query(
+        `DELETE FROM client_records WHERE id = ANY($1::text[]) AND origin = 'reception' AND created_by = $2`,
+        [ids, req.user.username]
+      );
+    } else {
+      await pool.query('DELETE FROM client_records WHERE id = ANY($1::text[])', [ids]);
+    }
+    res.json({ deleted: ids.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف بيانات العملاء' });
+  }
+});
+
 // حذف كل سجلات العملاء دفعة واحدة — يُستخدم فقط فى "إعادة ضبط المصنع" (حذف كل بيانات البرنامج)، أدمن فقط.
 app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req, res) => {
   try {
@@ -1019,7 +1041,7 @@ app.get('/api/storage-versions', requireAuth, async (req, res) => {
 const ALLOWED_COLLECTIONS = [
   'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
   'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
-  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices',
+  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
 ];
 function collectionRoleAllowed(role, collection) {
   if (collection in RESTRICTED_STORAGE_KEYS) {
@@ -1138,6 +1160,21 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
   } finally {
     client.release();
+  }
+});
+
+// حذف عدة سجلات محدَّدة بالـ id دفعة واحدة (طلب واحد بدل طلب DELETE منفصل لكل سجل) — يُستخدم عند
+// حذف عدد كبير من السجلات دفعة واحدة (مثال: تنظيف مخزون الشكاير) لتفادي ضرب سقف rate limiter
+// (storageLimiter) بإرسال عشرات/مئات طلبات DELETE متتالية فى ثوانٍ.
+app.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
+  if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  try {
+    await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])', [req.params.collection, ids]);
+    res.json({ deleted: ids.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف السجلات' });
   }
 });
 
