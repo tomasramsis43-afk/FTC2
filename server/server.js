@@ -80,6 +80,16 @@ const storageLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'طلبات حفظ كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
+// نقاط الذكاء الاصطناعي (قراءة فواتير OCR / تصنيف مصروفات) هي الوحيدة فى كل السيرفر التي تستدعي
+// Anthropic API خارجياً بتكلفة فعلية لكل طلب — بدون حد لمعدل الطلبات، حساب مُخترَق أو مسيء يقدر
+// يستهلك رصيد الـ API بسرعة (خصوصاً read-invoices اللي بتقبل حتى 30 ملف فى الطلب الواحد).
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20, // 20 طلب لكل IP خلال 15 دقيقة (كل طلب read-invoices قد يحتوي حتى 30 ملف بالفعل)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات ذكاء اصطناعي كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
+});
 
 
 /* ---------------- المصادقة الثنائية (TOTP) — أدمن فقط حالياً ---------------- */
@@ -1312,10 +1322,19 @@ async function extractInvoiceFile(f) {
   }
 }
 
-app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, async (req, res) => {
+app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, aiLimiter, async (req, res) => {
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
   if (!files.length) return res.status(400).json({ error: 'لم يتم إرسال أي ملفات' });
   if (files.length > 30) return res.status(400).json({ error: 'الحد الأقصى 30 ملفاً في المرة الواحدة' });
+  // حد أقصى 8 ميجابايت لكل ملف على حدة (أكثر من كافٍ لأي فاتورة/إيصال ممسوح ضوئياً) — دفاع إضافي
+  // بجانب حد الـ 40 ميجابايت الإجمالي لكل الطلب، بدل الاعتماد على الحد الكلي فقط.
+  const MAX_FILE_BYTES = 8 * 1024 * 1024;
+  for (const f of files) {
+    const approxBytes = f?.dataBase64 ? Math.ceil(f.dataBase64.length * 0.75) : 0;
+    if (approxBytes > MAX_FILE_BYTES) {
+      return res.status(400).json({ error: `الملف "${f.name || 'بدون اسم'}" أكبر من الحد المسموح (8 ميجابايت للملف الواحد)` });
+    }
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
   }
@@ -1343,7 +1362,7 @@ app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, async (req
    المفتاح يبقى في process.env.ANTHROPIC_API_KEY فقط ولا يُكشف للواجهة. */
 const AI_CLASSIFY_SYSTEM_PROMPT = 'أنت مساعد تصنيف مصروفات لمركز تدريب سعودي. سيصلك اسم مستلم مبلغ و/أو ملاحظة و/أو رقم مستند و/أو مبلغ مصروف. اختر أنسب تصنيف من قائمة "availableCategories" المُرسلة فقط إن وجد تصنيف مناسباً فعلياً. إن لم توجد أي تصنيف مناسب في القائمة، اقترح اسم تصنيف عربي جديد قصير (كلمة أو كلمتان) يصلح لتكرار هذا النوع من المصروفات مستقبلاً. أجب بصيغة JSON فقط بدون أي نص أو علامات ```json، بالشكل التالي بالضبط: {"category":"...", "isNew": true أو false, "reason":"جملة قصيرة توضح سبب الاختيار"}';
 
-app.post('/api/ai/classify-expense', requireAuth, async (req, res) => {
+app.post('/api/ai/classify-expense', requireAuth, aiLimiter, async (req, res) => {
   const { recipientName, notes, documentRef, amount, availableCategories } = req.body || {};
   if (!recipientName && !notes && !documentRef) {
     return res.status(400).json({ error: 'أدخل اسم مستلم المبلغ أو ملاحظة أو رقم مستند أولاً' });
