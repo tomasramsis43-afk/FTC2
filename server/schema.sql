@@ -220,3 +220,11 @@ ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
 ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_pending_secret TEXT;
 ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE server_users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT; -- JSON: مصفوفة { hash, usedAt } لأكواد احتياطية أحادية الاستخدام
+
+-- قفل تلقائي مؤقت للحساب بعد محاولات دخول فاشلة متتالية (بغض النظر عن الـ IP، على عكس rate
+-- limiting الحالي الذي يعمل بالـ IP فقط) — يحمي من محاولة تخمين موزّعة على عدة أجهزة/شبكات.
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+-- آخر مرة راجع فيها هذا المستخدم (أدمن) شاشة "سجل الدخول" — تُستخدم لتنبيهه فور تسجيل الدخول
+-- التالي لو ظهر نشاط مشبوه جديد لم يشاهده بعد، بدل انتظار فتحه شاشة الإعدادات بنفسه.
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS last_login_history_seen_at TIMESTAMPTZ;

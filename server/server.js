@@ -180,12 +180,30 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     }
+    // قفل تلقائي مؤقت (بغض النظر عن IP المُستخدَم فى المحاولة الحالية) — يحمي من محاولة تخمين
+    // موزّعة على عدة أجهزة/شبكات تتفادى rate limiting العادي المبني على IP وحده.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(403).json({ error: `الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة، حاول بعد ${minutesLeft} دقيقة` });
+    }
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) {
       pool.query(
         'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
         [user.username, user.role || 'staff', loginIp, loginDevice]
       ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      // 5 محاولات فاشلة متتالية بكلمة المرور تقفل الحساب 15 دقيقة، ثم يُعاد العداد لصفر.
+      pool.query(
+        `UPDATE server_users SET
+           failed_login_count = CASE WHEN failed_login_count + 1 >= 5 THEN 0 ELSE failed_login_count + 1 END,
+           locked_until = CASE WHEN failed_login_count + 1 >= 5 THEN now() + INTERVAL '15 minutes' ELSE locked_until END
+         WHERE id = $1`,
+        [user.id]
+      ).catch(e => console.error('تعذّر تحديث عداد المحاولات الفاشلة:', e));
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     }
     // حساب معطّل من طرف المدير: نرفض الدخول برسالة واضحة قبل إصدار أي توكن،
@@ -225,12 +243,34 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       }
     }
     const token = signToken(user);
+    // نجاح كامل: تصفير عداد المحاولات الفاشلة وأي قفل مؤقت قائم لهذا الحساب.
+    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+      .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
     // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
     pool.query(
       'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
       [user.username, user.role || 'staff', loginIp, loginDevice]
     ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+    // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات فاشلة متكررة) حصل منذ آخر مرة راجع فيها
+    // شاشة "سجل الدخول" ولسه ما شافوش، نُرجعه هنا فوراً بدل ما يفضل مدفون فى السجل لحد ما يفتحه
+    // بنفسه بالصدفة.
+    let suspiciousAlert = [];
+    if ((user.role || 'staff') === 'admin') {
+      try {
+        const since = user.last_login_history_seen_at || new Date(Date.now() - 24 * 3600 * 1000);
+        const sus = await pool.query(
+          `SELECT username, ip_address, COUNT(*)::int AS failed_count, MAX(logged_in_at) AS last_attempt
+           FROM login_history
+           WHERE success = false AND logged_in_at > $1
+           GROUP BY username, ip_address
+           HAVING COUNT(*) >= 3
+           ORDER BY failed_count DESC LIMIT 10`,
+          [since]
+        );
+        suspiciousAlert = sus.rows;
+      } catch (e) { console.error('تعذّر فحص النشاط المشبوه:', e); }
+    }
     // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
     // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
     res.json({
@@ -238,6 +278,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       username: user.username,
       role: user.role || 'staff',
       user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
+      suspiciousAlert,
     });
   } catch (e) {
     console.error(e);
@@ -346,6 +387,10 @@ app.get('/api/login-history', requireAuth, requireRole('admin'), async (req, res
        HAVING COUNT(*) >= 3
        ORDER BY failed_count DESC`
     );
+    // تسجيل أن هذا الأدمن راجع الشاشة الآن — يمنع تكرار نفس التنبيه الاستباقي عند دخوله لاحقاً
+    // لو مفيش نشاط جديد بعد هذه اللحظة.
+    pool.query('UPDATE server_users SET last_login_history_seen_at = now() WHERE username = $1', [req.user.username])
+      .catch(e => console.error('تعذّر تحديث وقت آخر مراجعة لسجل الدخول:', e));
     res.json({ history: r.rows, suspiciousActivity: suspicious.rows });
   } catch (e) {
     console.error(e);
