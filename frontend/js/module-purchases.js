@@ -612,6 +612,10 @@ async function backgroundSyncCheck(){
   if(_bgSyncInFlight) return;
   _bgSyncInFlight = true;
   try{
+    // لو كان هناك استعادة نسخة احتياطية كاملة تمت أصلاً بدون اتصال وما زالت بانتظار مزامنة كاملة
+    // مع السيرفر (راجع restoreFullBackup فى backup-restore.js)، نُتِمّها أولاً قبل أي مزامنة عادية —
+    // هذه الدالة تُستدعى بعد اكتمال تحميل بيانات البرنامج فعلياً فى الذاكرة، فالتوقيت آمن.
+    if(typeof checkPendingRestoreResync==='function') await checkPendingRestoreResync();
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
     // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
     // السجلات المستقلة الجديد (checkClientRecordsChanged)، و(ج) نفس الشيء لبقية الشيتات المحوَّلة
