@@ -1279,6 +1279,52 @@ $('#vf-clientid').addEventListener('input', ()=>{
   }
 });
 
+/* ================= المرحلة 4: إدخال سريع بالعربي الطبيعي ================= */
+/* ---------------- تحليل جملة عربية بسيطة لاستخراج مبلغ وطريقة دفع ----------------
+   استخراج بسيط بالكلمات المفتاحية (وليس ذكاءً اصطناعياً) — يلتقط أول رقم في الجملة كمبلغ،
+   ويحاول تخمين طريقة الدفع من كلمات شائعة (نقدي/كاش، شبكة/مدى/بطاقة، بنك/تحويل)، والباقي من
+   النص (بعد إزالة الرقم وكلمات الدفع والأفعال الشائعة) يُستخدم كاسم مستلم/بيان تُمرَّر بعدها
+   لاقتراح التصنيف بالذكاء الاصطناعي الموجود أصلاً (aiClassifyExpense) — فلا يوجد تكرار منطق. */
+function parseNaturalLanguageExpense(text){
+  const t = String(text||'').trim();
+  const amountMatch = t.match(/\d+(?:[.,]\d+)?/);
+  const amount = amountMatch ? parseFloat(amountMatch[0].replace(',','.')) : 0;
+  let method = null;
+  if(/نقد|كاش/.test(t)){
+    const ch = settings.channels.find(c=>c.dest==='vault');
+    method = ch ? ch.name : null;
+  }else if(/شبكة|مدى|بطاقة/.test(t)){
+    const ch = settings.channels.find(c=>/شبكة|مدى|بطاقة/.test(c.name)) || settings.channels.find(c=>c.dest==='network');
+    method = ch ? ch.name : null;
+  }else if(/بنك|تحويل/.test(t)){
+    const ch = settings.channels.find(c=>c.dest==='bank');
+    method = ch ? ch.name : null;
+  }
+  let rest = t;
+  if(amountMatch) rest = rest.replace(amountMatch[0], ' ');
+  rest = rest
+    .replace(/ريال|ر\.س|جنيه|دولار|﷼/g, ' ')
+    .replace(/نقدي|كاش|شبكة|مدى|بطاقة|بنك|تحويل/g, ' ')
+    .replace(/دفعت|صرفت|اشتريت|سددت|مصاريف|مصروف|فاتورة/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { amount, method, rest };
+}
+$('#btn-nl-expense')?.addEventListener('click', ()=>{
+  const raw = $('#nl-expense-input')?.value || '';
+  if(!raw.trim()){ showToast('اكتب وصف الحركة أولاً'); return; }
+  const parsed = parseNaturalLanguageExpense(raw);
+  if(!parsed.amount || parsed.amount<=0){ showToast('لم أستطع التعرّف على مبلغ رقمي في الجملة — أدخله يدوياً في النموذج'); }
+  openVaultModal(null);
+  $('#vf-type').value = 'out';
+  toggleVaultFields();
+  if(parsed.amount>0) $('#vf-amount').value = parsed.amount;
+  if(parsed.method) $('#vf-method').value = parsed.method;
+  $('#vf-recipient').value = parsed.rest || raw.trim();
+  $('#vf-notes').value = raw.trim();
+  showToast('راجع الحقول المعبّأة تلقائياً ثم اضغط "اقتراح تصنيف بالذكاء الاصطناعي" وتأكد قبل الحفظ');
+  $('#nl-expense-input').value = '';
+});
 $('#btn-add-vault').addEventListener('click', ()=>openVaultModal(null));
 // زرار عائم متاح من أي شاشة في البرنامج لفتح مودال "حركة خزنة جديدة" مباشرة بدون الحاجة للانتقال لشيت الحركات المالية أولاً
 $('#btn-fab-quickadd')?.addEventListener('click', ()=>openVaultModal(null));
