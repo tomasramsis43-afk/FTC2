@@ -668,13 +668,23 @@ async function startApp(){
     }
   }catch(e){
     if(e && e.isDecryptFailure){ showFatalDecryptErrorScreen(e); return; }
-    throw e;
+    // أي خطأ آخر غير متوقع أثناء تحميل البيانات (وليس فك التشفير تحديداً) كان يُرمى للمتصل (نموذج
+    // الدخول)، الذي يكون بالفعل قد أخفى شاشة الدخول قبل استدعاء startApp — فينتهي الأمر بشاشة سوداء
+    // تماماً بلا أي رسالة ظاهرة للمستخدم، والخطأ الفعلي يظهر فقط في console. نعرض هنا رسالة واضحة
+    // بدل ذلك، مع الاحتفاظ بتسجيل الخطأ الأصلي.
+    console.error('startApp: فشل تحميل البيانات', e);
+    showFatalDecryptErrorScreen(Object.assign(new Error((e && e.message) || 'خطأ غير متوقع أثناء تحميل بيانات البرنامج'), {}));
+    return;
   }
   updateOfflineIndicator();
   await renderAllViewsAfterLoad();
-  await maybeRunAutoBackup();
+  // إظهار الواجهة (#app-wrap) يجب أن يحدث هنا مباشرة بعد الرسم، قبل أي خطوة إضافية (نسخة احتياطية
+  // تلقائية / صوت الدخول)، حتى لو فشلت إحدى هاتين الخطوتين لاحقاً بخطأ غير متوقع، لا يبقى المستخدم
+  // أمام شاشة سوداء بلا واجهة — كان استثناء غير مُعالَج داخل maybeRunAutoBackup (مثلاً فشل رفع النسخة
+  // للسيرفر) يمنع الوصول لـ autoSignInLocalUser() نهائياً ويسبب بالضبط هذه المشكلة.
   autoSignInLocalUser();
-  SoundFX.login();
+  try{ await maybeRunAutoBackup(); }catch(e){ console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e); }
+  try{ SoundFX.login(); }catch(e){ console.error('startApp: فشلت خطوة "SoundFX.login"', e); }
   backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج (الأخطاء القاتلة تُعالَج داخلها)
 }
 
