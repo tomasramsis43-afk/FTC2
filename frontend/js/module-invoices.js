@@ -1388,6 +1388,12 @@ $('#restore-backup-input').addEventListener('change', async e=>{
   if(file) await restoreFullBackup(file);
   e.target.value = '';
 });
+$('#btn-restore-bagstock').addEventListener('click', ()=> $('#restore-bagstock-input').click());
+$('#restore-bagstock-input').addEventListener('change', async e=>{
+  const file = e.target.files[0];
+  if(file) await restoreBagStockOnly(file);
+  e.target.value = '';
+});
 $('#btn-add-user').addEventListener('click', async ()=>{
   const uname = $('#new-user-name').value.trim();
   const upass = $('#new-user-pass').value;
