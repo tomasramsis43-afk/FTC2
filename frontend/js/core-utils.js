@@ -282,6 +282,22 @@ async function _pendingRecordClearAll(){
 async function _pendingRecordCount(){
   try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
 }
+// يمسح طابور التعديلات المعلّقة القديمة (مخزن kv) بالكامل — يُستخدم مع _pendingRecordClearAll
+// أثناء "إعادة ضبط المصنع" حتى لا تُرفع أي تعديلات قديمة معلّقة فوق البيانات الممسوحة لاحقاً.
+async function _pendingClearAll(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(KV_IDB_PENDING_STORE, 'readwrite');
+        tx.objectStore(KV_IDB_PENDING_STORE).clear();
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){ console.error('[Core] _pendingClearAll failed:', e); }
+}
 async function _kvCacheRead(key){
   try{
     const db = await _openKvIdb();
