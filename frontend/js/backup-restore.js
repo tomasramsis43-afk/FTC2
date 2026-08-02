@@ -358,6 +358,110 @@ async function restoreFullBackup(file){
   if(shouldReload) setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1500);
 }
 
+/* ============================================================================
+   استعادة "سجلات تمويل مخزون الحقائب فقط" من ملف نسخة احتياطية — بدل الاستعادة
+   الكاملة التي تمسح كل بيانات البرنامج. تمسح سجل bagStock الحالي (من الذاكرة ومن
+   السيرفر) وتضع مكانه سجلات bagStock الموجودة في الملف، ثم تعيد احتساب دفتر التمويل
+   وترفع النتيجة للسيرفر. تُحفَظ نسخة من الوضع الحالي (محلياً وعلى السيرفر) قبل
+   الاستبدال للتراجع عند الحاجة. تنطبق فقط على bagStock — العملاء/الخزنة/الدورات...
+   لا تتأثر إطلاقاً. ملاحظات أمان مهمة:
+   - أي عمليات تمويل/اعتماد/صرف حدثت بعد تاريخ النسخة ستختفي (يُرجع إليها من نسخة
+     الوضع الحالي المحفوظة قبل الاستبدال).
+   - النسخ الاحتياطية لا تحفظ حالات "قيد الاعتماد" (recordMeta)، فكل السجلات المستعادة
+     تُعامل كمعتمَدة.
+   - السجلات المرتبطة (vaultTx.bagStockRef وصرف الحقائب للعملاء type=issue في شيت
+     العملاء) لا تتغير — فلذلك يُنصح بنسخة حديثة كفاية حتى لا يختل تطابق الأعداد.
+   ============================================================================ */
+async function restoreBagStockOnly(file){
+  let data;
+  try{
+    const text = await file.text();
+    data = JSON.parse(text);
+  }catch(e){ showToast('تعذّرت قراءة ملف النسخة الاحتياطية — تأكد أنه ملف JSON صحيح'); return; }
+  if(!data || typeof data!=='object' || !Array.isArray(data.bagStock)){
+    showToast('هذا الملف لا يبدو نسخة احتياطية صحيحة للبرنامج (لا يحتوي على سجل تمويل الحقائب)'); return;
+  }
+  if(normalizeRole(SERVER_AUTH_ROLE) !== 'admin'){
+    showToast('استعادة سجلات تمويل الحقائب متاحة للأدمن فقط'); return;
+  }
+  if(isCurrentlyOffline()){
+    showToast('هذه الاستعادة تتطلب اتصالاً بالإنترنت (تمسح سجل الحقائب على السيرفر وتستبدله)'); return;
+  }
+  const fromFile = (data.bagStock||[]).filter(b=> b && b.id).length;
+  const current = (bagStock||[]).filter(b=> b && b.id).length;
+  const backupDate = data._createdAt ? new Date(data._createdAt).toLocaleString('ar-EG', { dateStyle:'short', timeStyle:'short' }) : 'غير معروف';
+  const confirmMsg =
+    'سيتم استبدال سجل تمويل مخزون الحقائب الحالي بالكامل بما في ملف النسخة الاحتياطية (تاريخ النسخة: ' + backupDate + ').\n\n' +
+    'عدد السجلات حالياً: ' + current + ' — عدد السجلات في الملف: ' + fromFile + '\n\n' +
+    'تنبيهات مهمة:\n' +
+    '• أي عمليات تمويل/اعتماد/صرف تمت بعد تاريخ النسخة ستُحذف.\n' +
+    '• جميع السجلات المستعادة ستُعامل كمعتمَدة (حالة "قيد الاعتماد" لا تُحفظ في النسخ).\n' +
+    '• سجلات الخزنة المرتبطة وصرف الحقائب للعملاء لا تتغير — تأكد أن النسخة حديثة كفاية.\n\n' +
+    'ستُحفَظ نسخة من الوضع الحالي (قبل الاستبدال) محلياً وعلى السيرفر للرجوع إليها عند الحاجة. هل تريد المتابعة؟';
+  if(!await customConfirm(confirmMsg, 'استعادة سجلات تمويل الحقائب فقط')){
+    return;
+  }
+  // نسخة احتياطية من الوضع الحالي قبل الاستبدال (محلياً + على السيرفر) للتراجع عند الحاجة
+  downloadFullBackup(false);
+  try{ await uploadBackupToServer('قبل استعادة سجلات تمويل الحقائب فقط'); }
+  catch(e){ console.error('restoreBagStockOnly: تعذّر حفظ نسخة السيرفر القديمة قبل الاستعادة', e); }
+
+  try{
+    showAppLoadingOverlay();
+    setAppLoadingOverlayText('جاري مسح سجل الحقائب الحالي من السيرفر...');
+    const r = await serverFetch('/api/records/bagStock', { method: 'DELETE' });
+    if(!r.ok){
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.error || 'فشل مسح سجل الحقائب الحالي من السيرفر');
+    }
+    // تصفير تتبّع المزامنة الخاص بـ bagStock فقط حتى تُرفَع سجلات النسخة كسجلات جديدة تماماً
+    if(_recordVersions['bagStock']) _recordVersions['bagStock'] = new Map();
+    if(_collectionSyncBaseline['bagStock']) _collectionSyncBaseline['bagStock'] = new Map();
+    recordMeta['bagStock'] = {};
+    // مسح أي تعديلات bagStock معلّقة محلياً (لم ترفع بعد) — لم تعد صالحة بعد الاستبدال
+    try{
+      const pending = await _pendingRecordReadAll();
+      for(const p of (pending||[])){ if(p && p.collection==='bagStock') await _pendingRecordDelete('bagStock', p.id); }
+    }catch(e){ console.error('restoreBagStockOnly: تعذّر مسح تعديلات bagStock المعلّقة', e); }
+
+    // استبدال الذاكرة بسجل الملف ثم إعادة احتساب دفتر التمويل بالكامل
+    bagStock = (data.bagStock||[]).filter(b=> b && b.id);
+    recalcBagFundLedger();
+
+    setAppLoadingOverlayText('جاري رفع سجل الحقائب المستعاد إلى السيرفر...');
+    await fastUploadCollection('bagStock', bagStock);
+
+    // تحديث اللقطة المحلية (recordsSnap::bagStock) حتى لا يعرض فتح تالٍ السجل القديم من الكاش
+    try{ await _persistRecordsSnap('bagStock', bagStock, _collectionSyncBaseline['bagStock'], _recordVersions['bagStock'], recordMeta['bagStock']); }catch(e){ console.error('restoreBagStockOnly: تعذّر تحديث اللقطة المحلية', e); }
+
+    // تحقق سريع من ظهور العدد الكامل على السيرفر
+    let verified = false;
+    try{
+      const vRes = await serverFetch('/api/records-versions');
+      const vData = await vRes.json();
+      const sv = (vData.versions||{})['bagStock'];
+      verified = bagStock.length===0 || !!(sv && sv.count===bagStock.length);
+    }catch(e){ /* التحقق فشل عابر — لا يوقف الاستعادة */ }
+
+    await logAudit('edit','مخزون الحقائب', 'استعادة سجلات تمويل مخزون الحقائب فقط من ملف نسخة احتياطية (مسح الحالي وإضافة الملف) — ' + fromFile + ' سجلاً');
+    if(typeof refreshFilterOptions==='function') refreshFilterOptions();
+    if(typeof renderDashboard==='function') renderDashboard();
+    if(typeof renderBags==='function') renderBags();
+    if(typeof renderReports==='function') renderReports();
+    if(typeof renderSettings==='function') renderSettings();
+    if(verified){
+      showToast('تمت استعادة سجلات تمويل الحقائب من النسخة بنجاح ✅ (' + bagStock.length + ' سجلاً)');
+    }else{
+      showToast('⚠️ اكتملت الاستعادة محلياً، لكن التحقق من السيرفر لم يكتمل — ستُرفع تلقائياً عند استقرار الاتصال');
+    }
+  }catch(e){
+    console.error('restoreBagStockOnly:', e);
+    showToast('تعذّرت استعادة سجلات تمويل الحقائب: ' + (e.message||e) + ' — البيانات في ذاكرة البرنامج الآن وستُرفع تلقائياً عند محاولة المزامنة القادمة');
+  }finally{
+    hideAppLoadingOverlay();
+  }
+}
+
 // يكمل مزامنة استعادة تمت أصلاً بدون اتصال (راجع علامة RESTORE_RESYNC_FLAG_KEY فى restoreFullBackup
 // أعلاه): يرفع أولاً نسخة البيانات "القديمة" (المحفوظة محلياً مشفَّرة قبل الاستعادة) كنسخة احتياطية
 // على السيرفر إن وُجدت، ثم يمسح أي بقايا قديمة على السيرفر ويرفع البيانات المستعادة الحالية من جديد

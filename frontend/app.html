@@ -3633,8 +3633,11 @@
         <button class="btn btn-ghost btn-sm" id="btn-backup-server-now">☁️ نسخ احتياطي على السيرفر الآن</button>
         <button class="btn btn-ghost btn-sm" id="btn-restore-backup">⬆️ استعادة من نسخة احتياطية</button>
         <input type="file" id="restore-backup-input" accept=".json" style="display:none;">
+        <button class="btn btn-ghost btn-sm" id="btn-restore-bagstock">🎒 استعادة سجلات تمويل الحقائب فقط</button>
+        <input type="file" id="restore-bagstock-input" accept=".json" style="display:none;">
       </div>
       <div class="hint hint-info" style="margin-top:10px;">النسخة التلقائية تُنزَّل كملف على جهازك <b>وتُرفَع مشفَّرة على السيرفر أيضاً</b> عند فتح البرنامج إذا مرّت المدة المحددة منذ آخر نسخة — بحيث تبقى نسخة محفوظة حتى لو تغيّر الجهاز.</div>
+      <div class="hint hint-warn" style="margin-top:6px;">زر "استعادة سجلات تمويل الحقائب فقط" يحذف سجل تمويل مخزون الحقائب الحالي بالكامل ويستبدله بما في ملف النسخة المختار، مع حفظ نسخة من الوضع الحالي أولاً (محلياً وعلى السيرفر) للرجوع إليها — بقية بيانات البرنامج (العملاء، الخزنة، الدورات...) لا تتأثر.</div>
       <div style="margin-top:14px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <b style="font-size:13.5px;">النسخ المحفوظة على السيرفر</b>

@@ -2349,6 +2349,22 @@ td select:hover:not(:focus) {
   display: none !important;
 }
 
+/* تنبيه تحذيري ظاهر (يُستخدم لتحذيرات الاستعادة) */
+.hint-warn {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+body.dark-theme .hint-warn {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
 /* ============= شيت العملاء — تصميم مخصص ============= */
 #view-clients .toolbar-card {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
