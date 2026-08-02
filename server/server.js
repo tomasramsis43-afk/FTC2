@@ -5,8 +5,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const crypto = require('crypto');
 const { pool, ensureSchema } = require('./db');
-const { centralErrorHandler } = require('./errors');
 const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('./auth');
 
@@ -163,7 +163,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
   }
   try {
-    const loginIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    // ملاحظة أمنية: لا نقرأ رأس X-Forwarded-For يدوياً إطلاقاً — كان يُسمح لأي عميل بتزييفه
+    // (spoofing) ليُسجَّل عنوان مزوّر في سجل الدخول. نعتمد على req.ip الذي يحسبه Express نفسه
+    // وفقاً لإعداد trust proxy أعلاه (يثق فقط بأول proxy — ترتيب Render)، ففي الحالة الطبيعية عبر
+    // الـ LB يُرجَع IP الزائر الحقيقي، وفي حالة الاتصال المباشر يُرجَع عنوان الاتصال الفعلي.
+    const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
     // تحقق أولاً من حساب الطوارئ (مخزّن بالكامل في متغيرات البيئة، مستقل عن قاعدة
     // البيانات) — يسمح بالدخول للنظام حتى لو قاعدة البيانات اتغيرت أو كانت فاضية
@@ -239,10 +243,27 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       if (totpCode) {
         verified = verifyTotpToken(totpCode, user.totp_secret);
       } else if (backupCode) {
-        const result = await consumeBackupCode(user.totp_backup_codes, backupCode);
-        verified = result.ok;
-        if (result.ok) {
-          await pool.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
+        // استهلاك الكود الاحتياطي بشكل ذرّي (قفل الصف داخل معاملة قصيرة) — يُغلق نافذة TOCTOU
+        // التي كانت تسمح لطلبين متزامنين يحملان نفس الكود بالنجاح معاً قبل أن يلحق أيٌّ منهما
+        // بحفظ القائمة المحدَّثة (مقارنة bcrypt البطيئة توسّع النافذة). SELECT ... FOR UPDATE
+        // يجعل الطلب الثاني ينتظر حتى يُنفَّذ الأولُ ويُحفظ نتيجةَ الاستهلاك فيكتب فوقها،
+        // فيستهلك الكودَ طلبٌ واحد فقط مهما تزامن معه غيره.
+        const tx = await pool.connect();
+        try {
+          await tx.query('BEGIN');
+          const locked = await tx.query('SELECT totp_backup_codes FROM server_users WHERE id = $1 FOR UPDATE', [user.id]);
+          const result = await consumeBackupCode(locked.rows[0].totp_backup_codes, backupCode);
+          verified = result.ok;
+          if (result.ok) {
+            await tx.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
+          }
+          await tx.query('COMMIT');
+        } catch (e) {
+          await tx.query('ROLLBACK').catch(() => {});
+          console.error(e);
+          verified = false;
+        } finally {
+          tx.release();
         }
       }
       if (!verified) {
@@ -501,6 +522,10 @@ const RESTRICTED_STORAGE_KEYS = {
   // اللي فحصتها ولقيتها متشابكة فعلياً مع ميزات شرعية في شاشتي 'العملاء' و'الحقائب'.
   vaultDenomTx: 'vault',
   bankStatementRows: 'vault',
+  // سجل التدقيق محتواه حساس (من؟ ماذا؟ متى؟) ويُقرأ فقط من شاشة 'التدقيق' المغلقة عن كل الأدوار
+  // غير الأدمن (راجع RESTRICTED_STAFF_VIEWS/ROLE_PERMISSIONS) — فيُقيَّد هنا على نفس الشاشة بدل
+  // بقائه مفتوحاً كتصنيف بيانات عادي لأي دور مصادق يفتح /api/records/auditLog مباشرة.
+  auditLog: 'audit',
 };
 function restrictKeyToAdmin(req, res, next) {
   const key = req.params.key;
@@ -833,15 +858,17 @@ app.get('/api/client-records/version', requireAuth, async (req, res) => {
 });
 
 // كشف تكرار رقم الهوية عبر كل مستخدمي النظام (بمن فيهم كل مستخدمي الاستقبال المعزولين عن بعضهم
-// وعن باقي البيانات): ترجع فقط قائمة أرقام هوية موجودة بالفعل — لا اسم، لا هاتف، لا مبالغ، لا أي
-// حقل آخر — فلا تكسر عزل خصوصية بيانات الاستقبال المطبَّق فى كل مكان آخر، وتسمح فى نفس الوقت بمنع
-// تسجيل نفس رقم الهوية مرتين فى النظام (حتى لو كان الرقم الآخر تابعاً لمستخدم استقبال مختلف أو
-// لعميل عام لا يراه الاستقبال أصلاً). لا فلترة origin/status هنا عمداً: حتى السجلات المعلَّقة
-// (pending) لاستقبال آخر تحسب كـ"مستخدَمة بالفعل" لمنع تكرارها.
+// وعن باقي البيانات): ترجع فقط معرّف السجل + بصمة (SHA-256) لرقم الهوية — لا النص الصريح إطلاقاً،
+// ولا اسم/هاتف/مبالغ/أي حقل آخر — فلا تكسر عزل خصوصية بيانات الاستقبال المطبَّق فى كل مكان آخر،
+// وفي نفس الوقت تمنع (على مستوى السيرفر نفسه) أي مستخدم مصادق — حتى الاستقبال الأقل صلاحية — من
+// نسخ أرقام الهوية الكاملة لكل عملاء الشركة دفعةً واحدة (إصلاح تسريب البيانات الشخصية). العميل
+// يحسب البصمة لنفس المدخل بنفس الخوارزمية (SHA-256، hex) فبقى فحص التكرار يعمل كما هو عمداً.
+// لا فلترة origin/status هنا عمداً: حتى السجلات المعلَّقة (pending) لاستقبال آخر تحسب كـ"مستخدَمة
+// بالفعل" لمنع تكرارها.
 app.get('/api/client-records/ids', requireAuth, async (req, res) => {
   try {
     const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> ''`);
-    res.json({ ids: r.rows.map(row => ({ id: row.id, clientId: row.client_id })) });
+    res.json({ ids: r.rows.map(row => ({ id: row.id, clientIdHash: crypto.createHash('sha256').update(row.client_id).digest('hex') })) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب قائمة أرقام الهوية' });
@@ -859,10 +886,18 @@ app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res)
     // حماية عزل بيانات الاستقبال: يمنع نهائياً (حتى عبر طلب مباشر بمعرّف يعرفه) لمس أي سجل ليس
     // origin='reception' AND created_by = هو نفسه — سواء كان تعديلاً لسجل قائم لمستخدم استقبال
     // آخر، أو حتى إعادة استخدام نفس المعرّف لسجل عام محذوف مسبقاً. كل مستخدم استقبال معزول عن
-    // البقية تماماً، وليس فقط عن باقي الأدوار. لا يُطبَّق أي فحص إضافي على باقي الأدوار (سلوكها كالسابق).
+    // البقية تماماً، وليس فقط عن باقي الأدوار. والأدمن بلا قيود (كما كان دائماً). أي دور آخر
+    // (staff/accountant) يُعدِّل فقط السجلات المعتمدة status='confirmed' — نفس شرط الرؤية تماماً
+    // فى clientRecordsVisibilitySql — فلا يمكنه عبر طلب مباشر لمس مسودات/سجلات استقبال معلّقة
+    // لا يملك رؤيتها أصلاً (إصلاح ثغرة تجاوز العزل بالمعرّف).
     if (req.user.role === 'reception') {
       const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
       if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+        return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
+      }
+    } else if (req.user.role !== 'admin') {
+      const existing = await pool.query('SELECT status FROM client_records WHERE id = $1', [req.params.id]);
+      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
       }
     }
@@ -913,9 +948,16 @@ app.post('/api/client-records/:id/approve', requireAuth, requireRole('admin'), a
 app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   try {
     // نفس حماية العزل: مستخدم الاستقبال يقدر يحذف فقط سجلاته هو شخصياً، وليس سجلات مستخدم استقبال آخر.
+    // أي دور آخر (staff/accountant) يحذف فقط السجلات المعتمدة status='confirmed' (نفس شرط الرؤية)،
+    // فلا يمس عبر طلب مباشر مسودات/سجلات الاستقبال المعلّقة التي لا يملك رؤيتها أصلاً.
     if (req.user.role === 'reception') {
       const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
       if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+        return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
+      }
+    } else if (req.user.role !== 'admin') {
+      const existing = await pool.query('SELECT status FROM client_records WHERE id = $1', [req.params.id]);
+      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
       }
     }
@@ -939,8 +981,12 @@ app.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, async (
         `DELETE FROM client_records WHERE id = ANY($1::text[]) AND origin = 'reception' AND created_by = $2`,
         [ids, req.user.username]
       );
-    } else {
+    } else if (req.user.role === 'admin') {
       await pool.query('DELETE FROM client_records WHERE id = ANY($1::text[])', [ids]);
+    } else {
+      // staff/accountant: نفس شرط الرؤية الفردي — يحذف فقط السجلات المعتمدة، ولا يمس
+      // مسودات/سجلات استقبال معلّقة لا يملك رؤيتها أصلاً (إصلاح ثغرة تجاوز العزل دفعةً واحدة).
+      await pool.query(`DELETE FROM client_records WHERE id = ANY($1::text[]) AND status = 'confirmed'`, [ids]);
     }
     res.json({ deleted: ids.length });
   } catch (e) {
@@ -986,6 +1032,15 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
       const enc = String(r.enc);
       const knownVersion = Number.isInteger(r.version) ? r.version : 0;
       const plainClientId = (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null;
+      // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
+      // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود —
+      // كل ذلك مع فحص التعارض بالنسخة المعروفة. (السجلات الجديدة التي لا يوجد لها صف أصلاً لا
+      // تمر على هذا الشرط إطلاقاً فتُدرج بوجهة/حالة الدور العادية).
+      const conflictGuard = req.user.role === 'reception'
+        ? `($7 = 'reception' AND client_records.origin = 'reception' AND client_records.created_by = $3)`
+        : req.user.role === 'admin'
+        ? `$7 = 'admin'`
+        : `client_records.status = 'confirmed'`;
       const upsert = await client.query(
         `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
          VALUES ($1, $2, 1, $3, $4, $5, $3, $6)
@@ -993,8 +1048,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
            enc = EXCLUDED.enc, version = client_records.version + 1,
            updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
          -- حماية عزل بيانات الاستقبال (كالسابق تماماً) + فحص التعارض بالنسخة المعروفة
-         WHERE ($7 <> 'reception' OR (client_records.origin = 'reception' AND client_records.created_by = $3))
-           AND client_records.version = $8
+         WHERE ${conflictGuard} AND client_records.version = $8
          RETURNING version`,
         [id, enc, req.user.username, newOrigin, newStatus, plainClientId, req.user.role, knownVersion]
       );
@@ -1495,7 +1549,10 @@ app.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), async 
 });
 
 // إرسال فاتورة مبيعات (تُبنى من الواجهة الأمامية بنفس أرقام الفاتورة المطبوعة)
-app.post('/api/zatca/invoice', requireAuth, async (req, res) => {
+// مقيَّدة على الأدوار التي تملك فعلياً شاشة الخزنة/العملاء التي تُرسل منها (admin/accountant/staff) —
+// الاستقبال محروم لعدم امتلاكه أي من هذه الشاشات أصلاً، ويمنع إرسال فواتير/سجلات ضريبية مزوّرة
+// عبر طلب مباشر بأقل صلاحية (إغلاق ثغرة غياب رقابة الدور على هذه النقطة).
+app.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
   const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime } = req.body || {};
   if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
     return res.status(400).json({ error: 'بيانات الفاتورة غير مكتملة' });
@@ -1517,8 +1574,8 @@ app.post('/api/zatca/invoice', requireAuth, async (req, res) => {
   }
 });
 
-// إرسال إشعار دائن (مردود مبيعات)
-app.post('/api/zatca/return', requireAuth, async (req, res) => {
+// إرسال إشعار دائن (مردود مبيعات) — نفس رقابة الدور أعلاه (ممنوع عن الاستقبال).
+app.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
   const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime, canceledInvoiceNumber, reason } = req.body || {};
   if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
     return res.status(400).json({ error: 'بيانات المردود غير مكتملة' });
@@ -1558,10 +1615,6 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-// شبكة أمان مركزية — تمسك أي خطأ يفلت من الـ routes (خصوصاً الجديدة/المُهاجَرة اللي
-// بتستخدم asyncHandler من errors.js). لا تُغيّر سلوك أي route قديم عنده try/catch خاص به.
-app.use(centralErrorHandler);
-
 ensureSchema()
   .then(async () => {
     // مزامنة عند بدء التشغيل: لو عدد صفوف clients_rows لا يطابق عدد عملاء kv_store الفعلي
