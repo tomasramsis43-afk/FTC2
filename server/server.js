@@ -973,7 +973,7 @@ app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
 // إرسال عشرات/مئات طلبات DELETE منفصلة عند حذف عدد كبير من العملاء دفعة واحدة.
 app.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
-  if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  if (!ids.length || ids.length > 1000) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   try {
     if (req.user.role === 'reception') {
       // نفس عزل مستخدم الاستقبال فى مسار الحذف الفردي: يحذف فقط سجلاته هو شخصياً.
@@ -1007,7 +1007,7 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
 });
 
 // نقطة رفع مُجمَّع تُستخدم فى: (أ) الترحيل لمرة واحدة من التخزين القديم (كل العملاء ككتلة واحدة)
-// إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 500 سجل فى
+// إلى التخزين الجديد، و(ب) عمليات ضخمة دفعة واحدة (استيراد/تحديث شامل) — تقبل حتى 1000 سجل فى
 // الطلب الواحد بدل طلب منفصل لكل عميل (5888 عميل مثلاً كانت ستعني 5888 طلباً منفصلاً تصطدم فوراً
 // بحد معدّل الطلبات).
 // فحص تعارض لكل سجل على حدة (بنفس منطق /api/client-records/:id تماماً): كل سجل يحمل version
@@ -1016,7 +1016,7 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
 // بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts ليعيد المستدعي معالجته بمسار الحفظ الفردي المعتاد.
 app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
-  if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  if (!records.length || records.length > 1000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   const client = await pool.connect();
   try {
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
@@ -1180,13 +1180,13 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
 });
 
 // نقطة رفع مُجمَّع: تُستخدم للترحيل لمرة واحدة من التخزين القديم (كتلة واحدة) إلى النظام الجديد،
-// وللعمليات الضخمة دفعة واحدة (استيراد شامل) — حتى 500 سجل فى الطلب الواحد.
+// وللعمليات الضخمة دفعة واحدة (استيراد شامل) — حتى 1000 سجل فى الطلب الواحد.
 // فحص تعارض لكل سجل على حدة (بنفس منطق /api/records/:collection/:id تماماً): كل سجل يحمل version
 // المعروفة لدى المرسل قبل هذا الرفع (0 لسجل جديد). لو تغيّر السجل فعلياً على السيرفر من جهاز/مستخدم
 // آخر أثناء نفس العملية، يُتجاهَل هذا السجل تحديداً بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts.
 app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
-  if (!records.length || records.length > 500) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  if (!records.length || records.length > 1000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   const client = await pool.connect();
   try {
     const conflicts = [];
@@ -1231,7 +1231,7 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
 // (storageLimiter) بإرسال عشرات/مئات طلبات DELETE متتالية فى ثوانٍ.
 app.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
-  if (!ids.length || ids.length > 500) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 500 لكل طلب)' });
+  if (!ids.length || ids.length > 1000) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   try {
     await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])', [req.params.collection, ids]);
     res.json({ deleted: ids.length });
