@@ -1716,8 +1716,9 @@ $('#btn-lang-toggle').addEventListener('click', ()=>{
 });
 $('#btn-theme-toggle').addEventListener('click', async ()=>{
   settings.darkMode = !settings.darkMode;
-  // زر الليلي/النهاري خاص بالثيم الأصلي فقط؛ ثيم Stitch فاتح بطبيعته وله زر اختيار مستقل
-  if((settings.colorScheme||'original') === 'original') applyTheme(settings.darkMode);
+  // زر الليلي/النهاري خاص بالثيم الأصلي فقط؛ ثيم Stitch وثيم Obsidian Light فاتحان
+  // بطبيعتهما ولهما بطاقة اختيار مستقلة في الإعدادات
+  if((settings.colorScheme||'obsidian') === 'original') applyTheme(settings.darkMode);
   await saveSettings();
 });
 $('#btn-sound-toggle').addEventListener('click', async ()=>{

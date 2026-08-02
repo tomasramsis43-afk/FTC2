@@ -598,7 +598,7 @@ async function renderAllViewsAfterLoad(){
   safeStep(()=>renderAccounting(), 'renderAccounting');
   safeStep(()=>renderPurchases(), 'renderPurchases');
   safeStep(()=>applyLanguage(currentLang), 'applyLanguage');
-  safeStep(()=>{ applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'original'); applySoundIcon(); applyThemeColors(); }, 'applyTheme');
+  safeStep(()=>{ applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'obsidian'); applySoundIcon(); applyThemeColors(); }, 'applyTheme');
 }
 
 // هل يوجد على هذا الجهاز نسخة محفوظة محلياً يمكن الانطلاق منها فوراً بدون انتظار الشبكة؟

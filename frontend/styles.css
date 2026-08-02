@@ -86,6 +86,63 @@ body.theme-stitch textarea {
   color-scheme: light;
 }
 
+/* ============= ثيم "Obsidian Light" (مالي عصري فاتح) =============
+   ثيم فاتح كامل وفق مواصفات التصميم "Obsidian Light": خلفية أوف-وايت #f8fafc،
+   لوحات بيضاء #ffffff، تينت جانبية سليت فاتح #f1f5f9، وسايان مالي #0891b2
+   كلون أساسي مريح (WCAG AA). هو الثيم الافتراضي حالياً، ويُختار من لوحة
+   الإعدادات كبديل للثيم الأصلي أو Stitch — بدون حذف أي منهما إطلاقاً.
+   يُفعَّل عبر إضافة الكلاس theme-obsidian على body (انظر applyColorScheme
+   في theme-settings.js). ملاحظة: خطوط الواجهة تُبقى عربية (Tajawal) لأن خطوط
+   التصميم الأصلية (Manrope/Hanken Grotesk) لا تدعم العربية إطلاقاً. */
+body.theme-obsidian {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-alt: #f2f4f6;
+  --bg-soft: #f2f4f6;
+  --navy: #0891b2;
+  --navy-dark: #0e7490;
+  --gold: #d97706;
+  --gold-dark: #b45309;
+  --gold-soft: #fbbf24;
+  --teal: #059669;
+  --success: #059669;
+  --red: #e11d48;
+  --danger: #e11d48;
+  --text: #191c1e;
+  --text-muted: #3e484d;
+  --border: #e2e8f0;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.10);
+  --on-accent-text: #ffffff;
+  color-scheme: light;
+}
+body.theme-obsidian select,
+body.theme-obsidian input,
+body.theme-obsidian textarea {
+  color-scheme: light;
+}
+/* الرأس والقائمة الجانبية فاتحان في هذا الثيم (أبيض / تينت سليت #f1f5f9) بدل
+   الأزرق الغامق الثابت — كما تنص مواصفات "Obsidian Light" للقائمة الجانبية. */
+body.theme-obsidian header.top {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-bottom: 2px solid var(--navy);
+}
+body.theme-obsidian nav.tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+body.theme-obsidian header.top .seal {
+  background: rgba(15, 23, 42, 0.04);
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12), 0 0 18px rgba(8, 145, 178, 0.10);
+}
+/* رأس جدول العملاء: تينت فاتح بدل الأزرق الغامق، ونص سماوي غامق قابل للقراءة */
+body.theme-obsidian #view-clients thead th {
+  background: #f1f5f9;
+  color: var(--navy-dark);
+}
+
 /* بطاقات اختيار مظهر الواجهة في الإعدادات */
 .theme-scheme-card {
   transition: border-color 0.15s, transform 0.1s;

@@ -398,7 +398,16 @@ async function loadData(cacheOnly){
     if(!settings.nextVoucherNo) settings.nextVoucherNo = 1;
     if(!settings.nextManualSalesInvoiceNo) settings.nextManualSalesInvoiceNo = 1;
     if(settings.darkMode===undefined) settings.darkMode = false;
-    if(settings.colorScheme===undefined) settings.colorScheme = 'original';
+    // الثيم الافتراضي أصبح Obsidian Light (فاتح). الحسابات القديمة التي كانت محفوظة
+    // على 'original' تُرحَّل إليه لمرة واحدة فقط (راية themeMigratedToObsidian)؛ من
+    // يختار 'original' يدوياً بعدها لا يُرحَّل مجدداً. من اختار 'stitch' يبقى على اختياره.
+    if(settings.colorScheme===undefined){
+      settings.colorScheme = 'obsidian';
+    }else if(settings.colorScheme==='original' && !settings.themeMigratedToObsidian){
+      settings.colorScheme = 'obsidian';
+      settings.themeMigratedToObsidian = true;
+      await saveSettings();
+    }
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;
     if(settings.autoBackupEnabled===undefined) settings.autoBackupEnabled = true;
     if(settings.lowBalanceThreshold===undefined) settings.lowBalanceThreshold = 5000;
