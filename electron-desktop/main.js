@@ -15,17 +15,25 @@ try {
     if (cfg.serverUrl) REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
   }
 } catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
-// نفس الملفات اللي بتتحدّث فعلياً من الواجهة (بدون الأيقونات والـ manifest
-// الثابتة اللي نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده
-// نت، ونكتبها فوق النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد
-// التثبيت نفسه، عشان الكتابة تكون مسموحة من غير صلاحيات Admin).
+// نفس ملفات الواجهة اللي تتحدّث فعلياً (بلا الأيقونات والـ manifest الثابتة اللي
+// نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده نت، ونكتبها فوق
+// النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد التثبيت نفسه، عشان الكتابة
+// تكون مسموحة من غير صلاحيات Admin).
+// القائمة مضبوطة على ملفات js المدرجة فعلياً في app.html (22 سكربت defer بنفس
+// الترتيب) + app.html/styles.css/sw.js — كان ينقصها 10 ملفات حقيقية (theme-settings,
+// permissions-sound, accounting-core, backup-restore, undo-redo, clients-*...) وكان
+// فيها ملفان غير موجودين أصلاً (ui-framework.js و module-clients.js كانا مُلغيَّين من
+// الواجهة) — فكانت أي نسخة سطح مكتب حديثة تفقد هؤلاء المُحدَّثين ولا تتحدّث أبداً.
 const SYNCED_FILES = [
   'app.html', 'styles.css', 'sw.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/auth-licensing.js',
-  'js/ui-framework.js', 'js/module-clients.js', 'js/module-invoices.js',
-  'js/module-bags.js', 'js/module-finance.js', 'js/module-reports.js',
-  'js/module-accounting.js', 'js/module-companies.js', 'js/module-purchases.js',
-  'js/module-zatca.js', 'js/boot.js'
+  'js/theme-settings.js', 'js/permissions-sound.js', 'js/accounting-core.js',
+  'js/backup-restore.js', 'js/undo-redo.js', 'js/clients-alerts-overview.js',
+  'js/clients-cfo-dashboard.js', 'js/clients-pagination-filters.js', 'js/clients-print-modals.js',
+  'js/clients-bulk-ops.js', 'js/module-invoices.js', 'js/module-bags.js',
+  'js/module-finance.js', 'js/module-reports.js', 'js/module-accounting.js',
+  'js/module-companies.js', 'js/module-purchases.js', 'js/module-zatca.js',
+  'js/boot.js'
 ];
 let mainWindow;
 let userAssetsDir;
