@@ -172,6 +172,19 @@ let SERVER_AUTH_ROLE = null; // صلاحية المستخدم كما أرجعه�
    يجب أن يُرجع الخادم (/api/auth/login) أحد هذه القيم بالضبط في data.role حتى يُفعَّل الدور المطلوب — أي قيمة أخرى أو فارغة تُعامل كـ staff احترازياً. */
 const VALID_ROLES = ['admin','accountant','reception','staff'];
 function normalizeRole(r){ return VALID_ROLES.includes(r) ? r : 'staff'; }
+/* هروب أحرف HTML — معرّفة هنا (الملف الأول المحمّل) بدل clients-pagination-filters.js لأن
+   backup-restore.js وملفات أخرى تستدعيها قبل تحميل ذلك الملف، وكان ذلك يرمي ReferenceError */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+/* معدل ضريبة القيمة المضافة المركزي — كل حسابات الضريبة في النظام (فواتير الدورات، المبيعات
+   اليدوية، المشتريات، إقرارات ضريبة القيمة المضافة، بيانات ZATCA) تستخدم هذا الثابت فقط،
+   حتى لا يتشتت المعدل بين عدة قيم حرفية (0.15 / ÷1.15) يصعب تحديثها أو عرضة للتناقض.
+   المبالغ المخزّنة في النظام شاملة الضريبة أصلاً، لذلك تُستخرج الضريبة من داخل المبلغ وليس
+   تُضاف فوقه (راجع تعليقات module-invoices.js). */
+const VAT_RATE = 0.15;
+// يستخرج مبلغ الضريبة من إجمالي شامل الضريبة (gross ÷ 1.15): vat = gross - gross/(1+rate)
+function vatFromGross(g){ const v = num(g); return v - (v/(1+VAT_RATE)); }
+// يستخرج صافي المبلغ (بدون الضريبة) من إجمالي شامل الضريبة
+function netFromGross(g){ return num(g)/(1+VAT_RATE); }
 const _kvVersions = {}; // آخر نسخة (version) معروفة لكل مفتاح، لمنع الكتابة فوق تعديل شخص آخر بصمت
 
 // كاش محلي دائم للقيم المُشفَّرة كما وصلت من السيرفر، مربوط برقم النسخة.

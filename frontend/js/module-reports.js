@@ -1,6 +1,6 @@
 /* ---------------- Reports ---------------- */
 function allTimeTotals(){
-  const income = vaultTx.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
+  const income = vaultTx.filter(t=>t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0);
   const expense = vaultTx.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
   const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
   const {purchasedQty, spentBulk} = bagStockTotals();
@@ -510,8 +510,7 @@ function suggestedFixedCost(){
   return totals.length ? Math.round(totals.reduce((a,b)=>a+b,0)/totals.length) : 0;
 }
 function avgRevenuePerClient(){
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-90);
-  const cutoffStr = cutoff.toISOString().slice(0,10);
+  const cutoffStr = (typeof addDaysISO==='function' && typeof todayISO==='function') ? addDaysISO(todayISO(), -90) : (()=>{ const c=new Date(); c.setDate(c.getDate()-90); return c.toISOString().slice(0,10); })();
   const recent = clients.filter(c=>!c.cancelled && (c.date||'')>=cutoffStr);
   if(!recent.length) return 0;
   const total = recent.reduce((s,c)=>s+centerIncome(c),0);
@@ -547,7 +546,7 @@ $('#btn-suggest-fixed-cost')?.addEventListener('click', ()=>{
 function renderReports(){
   if($('#wa3-report-month') && !$('#wa3-report-month').value) $('#wa3-report-month').value = lastCompleteMonthKey();
   if($('#vat-report-year') && !$('#vat-report-year').value) $('#vat-report-year').value = new Date().getFullYear();
-  if($('#vat-report-quarter') && !$('#vat-report-quarter').value) $('#vat-report-quarter').value = String(Math.max(1, Math.ceil((new Date().getMonth()) / 3)) || 1);
+  if($('#vat-report-quarter') && !$('#vat-report-quarter').value) $('#vat-report-quarter').value = String(Math.max(1, Math.ceil((new Date().getMonth() + 1) / 3)) || 1);
   renderBudget();
   renderCourseProfitability();
   renderAgingReport();
@@ -701,7 +700,17 @@ function revenueBreakdown(from, to){
   return totals;
 }
 function salesReturnsTotal(from, to){
-  return vaultTx.filter(t=>t.type==='out' && t.isReturn && inRange(t.date, from, to)).reduce((s,t)=>s+num(t.amount),0);
+  return vaultTx.filter(t=>t.type==='out' && t.isReturn && inRange(t.date, from, to)).reduce((s,t)=>{
+    // تسجيل مردود لعميل يُحوّله تلقائياً إلى "ملغى" (module-finance.js) — وإيراد العميل الملغى
+    // مستبعد أصلاً من revenueBreakdown (الفلتر !c.cancelled). لو خصمنا مردوده هنا أيضاً
+    // كان صافي الإيراد يسجل سالباً بدل صفر (خصم مزدوج). نخصم فقط المرتجعات التي لا تُحسب
+    // قيمتها ضمن الإيرادات — أي المرتجع لعملاء غير ملغين، أو مرتجع بلا عميل مرتبط.
+    if(t.clientId){
+      const c = clients.find(x=>x.clientId===t.clientId);
+      if(c && c.cancelled) return s;
+    }
+    return s+num(t.amount);
+  },0);
 }
 function expenseBreakdown(from, to){
   const rows = vaultTx.filter(t=>t.type==='out' && !t.bagStockRef && !t.isReturn && t.category!=='مسحوبات شركاء' && !isLoanTx(t) && inRange(t.date, from, to));
@@ -756,7 +765,7 @@ function buildVatReturn(from, to){
   }));
   const manualRows = manualSalesInvoices.filter(m=> m.date && m.date>=from && m.date<=to).map(m=>({
     source:'manual', date: m.date, name: m.name||'', clientId:'', invoice: formatManualSalesInvoiceNo(m.invoiceNo||0),
-    totalInclVat: num(m.total), vat: num(m.total) - (num(m.total)/1.15)
+    totalInclVat: num(m.total), vat: vatFromGross(m.total)
   }));
   const salesRows = courseRows.concat(manualRows);
   const salesGross = salesRows.reduce((s,r)=> s+r.totalInclVat, 0);
@@ -764,7 +773,16 @@ function buildVatReturn(from, to){
 
   // مردودات المبيعات (استرجاعات) خلال نفس الفترة
   const returnRows = vaultTx.filter(t=>t.type==='out' && t.isReturn && inRange(t.date, from, to))
-    .map(t=>({ date:t.date, name:t.clientName||t.clientId||'—', amount:num(t.amount), vat: num(t.amount)-(num(t.amount)/1.15) }))
+    .filter(t=>{
+      // تسجيل المردود يُلغي العميل ويوقفه (module-finance.js) — فعميل المردود مستبعد أصلاً من
+      // courseInvoiceClients (!c.suspended)، فلا يجوز خصم مردوده مرة ثانية هنا (خصم مزدوج).
+      if(t.clientId){
+        const c = clients.find(x=>x.clientId===t.clientId);
+        if(c && c.cancelled) return false;
+      }
+      return true;
+    })
+    .map(t=>({ date:t.date, name:t.clientName||t.clientId||'—', amount:num(t.amount), vat: vatFromGross(t.amount) }))
     .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
   const returnsGross = returnRows.reduce((s,r)=> s+r.amount, 0);
   const returnsVat = returnRows.reduce((s,r)=> s+r.vat, 0);
@@ -885,6 +903,10 @@ function buildCashFlowStatement(from, to){
   rows.forEach(t=>{
     const amt = num(t.amount);
     if(t.type==='in'){
+      // حركات الوارد غير المسوّاة (autoClientId + vault + settled=false) لا تدخل رصيد الخزنة
+      // إطلاقاً (vaultTxCountsTowardBalance) — ولو دخلت هنا دون استبعادها لظهر فرق بين
+      // (بداية الفترة + صافي التغيّر) ورصيد النهاية في فحص التطابق أسفل الجدول.
+      if(!vaultTxCountsTowardBalance(t)) return;
       // قيد الحوالة الموحّد لحوالات الشركات (companyTransferId) هو أيضاً دخل تشغيلي حقيقي من عميل
       // (شركة)، تماماً مثل أي قيد عادي بـ clientId — فقط لا يحمل clientId لأنه يمثّل عدة متدربين
       // دفعة واحدة. بدون هذا الشرط كان يُصنَّف خطأً كـ "تمويلي" (تبرعات/قروض) بدل "تشغيلي".
@@ -961,7 +983,7 @@ function agingBucket(days){
   return 'أكثر من 90 يوم';
 }
 function buildARAging(asOf){
-  const rows = clients.filter(c=>!c.suspended && !c.cancelled).map(c=>{
+  const rows = clients.filter(c=>!c.suspended && !c.cancelled && (!asOf || (c.date||'')<=asOf)).map(c=>{
     const bal = Math.max(0, total(c) - paidTotalAsOf(c, asOf));
     if(bal<=0) return null;
     const dueDate = c.clientType==='company' && num(c.creditDays)>0 ? addDaysISO(c.date||asOf, num(c.creditDays)) : (c.date||asOf);
@@ -1147,7 +1169,11 @@ function renderBalanceSheetTable(asOf, bs){
     : `<span class="stamp owe">⚠ فرق توازن قدره ${fmt(diff)} ريال — راجع القيود اليدوية</span>`;
 }
 
-function renderTrialBalanceTable(asOf, bs, incomeStmt){
+function renderTrialBalanceTable(asOf, bs, incomeStmt, periodFrom){
+  // الأرباح المرحلة تُحسب حتى بداية الفترة المعروضة (اليوم السابق لبدايتها) وليس حتى نهايتها،
+  // لأن "صافي إيرادات الفترة" و"إجمالي مصروفات الفترة" يُعرضان كسطرين مستقلين بالجدول —
+  // استخدام الأرباح المرحلة حتى نهاية الفترة كان يعني إدراج صافي دخل الفترة مرتين في الميزان.
+  const retainedEarningsStart = periodFrom ? retainedEarningsAsOf(addDaysISO(periodFrom, -1)) : bs.retainedEarnings;
   const rows = [
     ['الخزنة (كاش)','أصول', bs.cash, 0],
     ['البنك','أصول', bs.bank, 0],
@@ -1160,12 +1186,12 @@ function renderTrialBalanceTable(asOf, bs, incomeStmt){
     ['قروض','خصوم', 0, bs.loans],
     ['مصروفات مستحقة','خصوم', 0, bs.accrued],
     ['التزامات أخرى','خصوم', 0, bs.otherLiab],
-    ['الأرباح المرحلة','حقوق ملكية', 0, Math.max(0,bs.retainedEarnings)],
+    ['الأرباح المرحلة','حقوق ملكية', 0, Math.max(0,retainedEarningsStart)],
     ['رأس المال ومساهمات أخرى','حقوق ملكية', bs.ownerCapital<0?-bs.ownerCapital:0, bs.ownerCapital>0?bs.ownerCapital:0],
     ['صافي إيرادات الفترة','إيرادات', 0, incomeStmt.netRevenue],
     ['إجمالي مصروفات الفترة','مصروفات', incomeStmt.totalExpense, 0],
   ];
-  if(bs.retainedEarnings<0) { rows.find(r=>r[0]==='الأرباح المرحلة')[2] = -bs.retainedEarnings; rows.find(r=>r[0]==='الأرباح المرحلة')[3]=0; }
+  if(retainedEarningsStart<0) { rows.find(r=>r[0]==='الأرباح المرحلة')[2] = -retainedEarningsStart; rows.find(r=>r[0]==='الأرباح المرحلة')[3]=0; }
   let totalDr=0, totalCr=0;
   const bodyHtml = rows.filter(r=>r[2]!==0 || r[3]!==0).map(([name,cat,dr,cr])=>{
     totalDr += dr; totalCr += cr;
@@ -1228,7 +1254,7 @@ function renderAccounting(){
   renderVatReturnTable(from, to);
   renderCashFlowTable(from, to);
   renderARAPModule();
-  renderTrialBalanceTable(asOf, bs, incomeStmt);
+  renderTrialBalanceTable(asOf, bs, incomeStmt, from);
   renderQuarterlyTable(year);
   renderJournalTable();
   renderDoubleEntryModule();

@@ -1,5 +1,7 @@
 /* ================= المشتريات (موردون + فواتير شراء) ================= */
-const PURCHASE_TAX_RATE = 0.15; // ضريبة القيمة المضافة الثابتة على فواتير المشتريات
+// معدل الضريبة مركزي في core-utils.js (VAT_RATE) — أي تعديل على المعدل يُطبَّق هنا تلقائياً
+function purchaseVat(gross){ return vatFromGross(gross); }
+function purchaseTax(subtotal){ return subtotal * VAT_RATE; }
 function purchaseMatchesFilters(p){
   const q = ($('#purchase-search')?.value||'').trim().toLowerCase();
   const supF = $('#purchase-supplier-filter')?.value||'';
@@ -231,7 +233,7 @@ function updatePurchaseTotalDisplay(){
   $all('#pu-items .pu-item-row').forEach(row=>{
     subtotal += num(row.querySelector('.pu-item-qty').value) * num(row.querySelector('.pu-item-price').value);
   });
-  const tax = subtotal * PURCHASE_TAX_RATE;
+  const tax = purchaseTax(subtotal);
   const total = subtotal + tax;
   const subEl = $('#pu-subtotal-display'); if(subEl) subEl.textContent = fmt(subtotal);
   const taxEl = $('#pu-tax-display'); if(taxEl) taxEl.textContent = fmt(tax);
@@ -399,8 +401,13 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
     if(name) items.push({name, qty, price});
   });
   if(!items.length){ showToast('أضف صنفاً واحداً على الأقل'); return; }
+  const badItem = items.find(it=> num(it.qty)<0 || num(it.price)<0);
+  if(badItem){
+    showToast(`الكمية والسعر يجب ألا يكونا سالبين — تحقق من صنف "${badItem.name}"`);
+    return;
+  }
   const subtotal = items.reduce((s,it)=>s+it.qty*it.price,0);
-  const taxAmount = subtotal * PURCHASE_TAX_RATE;
+  const taxAmount = purchaseTax(subtotal);
   const total = subtotal + taxAmount;
   const date = $('#pu-date').value || todayISO();
   const method = $('#pu-method').value;
@@ -459,6 +466,14 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
 
   if(existing){
     Object.assign(existing, {supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta});
+    // تعديل فاتورة موجودة: القيد المزدوج المُرحَّل سابقاً أصبح قديماً (المبالغ/التاريخ تغيّرت) —
+    // نحذفه ونعيد ترحيله من القيم الجديدة بدل تركه يعرض المبالغ القديمة في دفتر الأستاذ.
+    if(typeof saveJournalDE==='function' && journalDE.some(e=>e.sourcePurchaseId===existing.id)){
+      journalDE = journalDE.filter(e=>e.sourcePurchaseId!==existing.id);
+      existing.linkedDEId = null;
+    }
+    autoPostPurchase(existing);
+    await saveJournalDE();
     await logAudit('edit','المشتريات', `تعديل فاتورة شراء: ${invoiceNo||'—'} — ${supplier.name} (${fmt(total)} ﷼ شامل الضريبة)`);
   } else {
     const newPurchase = {id: purchaseId, supplierId, supplierName: supplier.name, invoiceNo, date, items, subtotal, taxAmount, total, method, status, notes, vaultTxId, attachment: attachmentMeta, createdAt: Date.now(), createdBy: currentUser};
@@ -480,8 +495,8 @@ $('#btn-export-purchases')?.addEventListener('click', ()=>{
   const rows = purchases.filter(purchaseMatchesFilters).map(p=>({
     'التاريخ': p.date, 'المورد': p.supplierName, 'رقم الفاتورة': p.invoiceNo,
     'الأصناف': (p.items||[]).map(i=>`${i.name} (${i.qty} × ${i.price})`).join(' | '),
-    'الإجمالي قبل الضريبة': num(p.subtotal ?? (num(p.total)/(1+PURCHASE_TAX_RATE))),
-    'الضريبة (15%)': num(p.taxAmount ?? (num(p.total) - num(p.total)/(1+PURCHASE_TAX_RATE))),
+    'الإجمالي قبل الضريبة': num(p.subtotal ?? netFromGross(p.total)),
+    'الضريبة (15%)': num(p.taxAmount ?? vatFromGross(p.total)),
     'الإجمالي شامل الضريبة': num(p.total), 'طريقة الدفع': p.method, 'الحالة': p.status==='paid'?'مدفوعة':'غير مدفوعة',
     'ملاحظات': p.notes||''
   }));

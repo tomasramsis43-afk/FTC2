@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS zatca_invoice_log (
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter ON zatca_invoice_log(invoice_counter);
+-- قيد تفرد على رقم الفاتورة (ICV): طبقة حماية أخيرة ضد تكرار الرقم في بداية السلسلة أو أي
+-- سباق آخر — يمنع إدراج فاتورتين بنفس الرقم مهما تزامن الطلبات (يكمل القفل التنبيهي في lib.js).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter_uniq ON zatca_invoice_log(invoice_counter);
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_source ON zatca_invoice_log(source_ref);
 
 -- ============================================================

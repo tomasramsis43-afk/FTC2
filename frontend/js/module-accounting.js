@@ -397,7 +397,7 @@ function buildDELinesForManualSale(m){
   const arAcc = accountByCode('1100'), revAcc = accountByCode('4000'), vatAcc = accountByCode('2100');
   if(!arAcc || !revAcc || !vatAcc) return null;
   const total = num(m.total);
-  const vat = total - (total/1.15);
+  const vat = vatFromGross(total);
   const net = total - vat;
   const lines = [{accountId:arAcc.id, debit:total, credit:0}, {accountId:revAcc.id, debit:0, credit:net}];
   if(vat>0.004) lines.push({accountId:vatAcc.id, debit:0, credit:vat});

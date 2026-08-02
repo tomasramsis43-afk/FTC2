@@ -257,7 +257,7 @@ $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
   if(typeof renderVault==='function') renderVault();
   showToast(`تم حذف ${ids.length} عميل بنجاح`);
 });
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+/* escapeHtml معرّفة الآن في core-utils.js (الملف الأول المحمّل) — كانت هنا ويُستدعى منها قبل تحميل هذا الملف */
 
 /* تطبيع رقم جوال العميل ليتوافق مع صيغة واتساب الدولية (يفترض أرقام السعودية عند غياب رمز الدولة) */
 function normalizePhoneForWhatsapp(phone){

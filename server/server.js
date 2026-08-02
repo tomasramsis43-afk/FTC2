@@ -248,8 +248,9 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         // بحفظ القائمة المحدَّثة (مقارنة bcrypt البطيئة توسّع النافذة). SELECT ... FOR UPDATE
         // يجعل الطلب الثاني ينتظر حتى يُنفَّذ الأولُ ويُحفظ نتيجةَ الاستهلاك فيكتب فوقها،
         // فيستهلك الكودَ طلبٌ واحد فقط مهما تزامن معه غيره.
-        const tx = await pool.connect();
+        let tx = null;
         try {
+          tx = await pool.connect();
           await tx.query('BEGIN');
           const locked = await tx.query('SELECT totp_backup_codes FROM server_users WHERE id = $1 FOR UPDATE', [user.id]);
           const result = await consumeBackupCode(locked.rows[0].totp_backup_codes, backupCode);
@@ -259,11 +260,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
           }
           await tx.query('COMMIT');
         } catch (e) {
-          await tx.query('ROLLBACK').catch(() => {});
+          if (tx) await tx.query('ROLLBACK').catch(() => {});
           console.error(e);
           verified = false;
         } finally {
-          tx.release();
+          if (tx) tx.release();
         }
       }
       if (!verified) {
@@ -679,20 +680,22 @@ async function syncClientsRows(value) {
   try { arr = JSON.parse(value || '[]'); } catch (e) { return; }
   if (!Array.isArray(arr)) return;
   const valid = arr.filter(c => c && c.id);
-  const ids = [];
+  // كل المعرّفات الموجودة فعلاً في المصفوفة الجديدة — يستخدمها الـ DELETE النهائي لمعرفة
+  // الصفوف التي "أُزيلت فعلاً" من القائمة. استخدام المعرّفات الناجحة فقط (كما كان) كان
+  // يحذف صفوف عملاء ما زالوا موجودين في المصفوفة لو فشل رفعهم مؤقتاً (انقطاع شبكة لحظي
+  // مثلاً) — أي فقدان بيانات مفهرسة مؤقت بحجة مزامنة ناجحة جزئياً.
+  const allIds = valid.map(c => c.id);
   let failedRows = 0;
   for (let start = 0; start < valid.length; start += CLIENTS_ROWS_CHUNK_SIZE) {
     const chunk = valid.slice(start, start + CLIENTS_ROWS_CHUNK_SIZE);
     try {
       await upsertClientsRowsChunk(chunk);
-      chunk.forEach(c => ids.push(c.id));
     } catch (e) {
       // فشلت الدفعة كاملة (مثلاً id مكرر داخلها) — نعيد المحاولة صفاً صفاً لهذه الدفعة
       // فقط، حتى نتجاوز الصف السيّئ تحديداً دون فقد باقي الدفعة.
       for (const c of chunk) {
         try {
           await upsertClientsRowsChunk([c]);
-          ids.push(c.id);
         } catch (e2) {
           failedRows++;
           console.error(`تعذّرت مزامنة صف عميل واحد (id=${c.id}):`, e2.message);
@@ -702,14 +705,17 @@ async function syncClientsRows(value) {
   }
   if (failedRows) console.error(`مزامنة clients_rows: تم تجاوز ${failedRows} صف بسبب خطأ (غالباً id مكرر)، وتمت مزامنة الباقي بنجاح`);
   try {
-    if (ids.length) {
-      await pool.query(`DELETE FROM clients_rows WHERE id != ALL($1)`, [ids]);
+    if (allIds.length) {
+      // يُحذف فقط ما ليس في المصفوفة الجديدة إطلاقاً — الصفوف التي فشلت للتو تبقى لأن
+      // معرّفها ضمن allIds (على الأرجح موجودة أصلاصاً من مزامنة سابقة، والأفضل إبقاؤها
+      // من حذفها وفقدان ظهورها مؤقتاً في شيت العملاء).
+      await pool.query(`DELETE FROM clients_rows WHERE id != ALL($1)`, [allIds]);
     } else if (arr.length === 0) {
       // المصفوفة فارغة فعلاً (لا يوجد أي عميل) — نفرّغ الجدول المفهرس ليطابق ذلك.
       await pool.query('DELETE FROM clients_rows');
     }
-    // لو arr غير فارغة لكن ids فارغة (كل الصفوف فشلت)، لا نحذف شيئاً تحسباً لخطأ عابر
-    // (مثل انقطاع اتصال) حتى لا نفقد البيانات المفهرسة السابقة بلا داعٍ.
+    // لو arr غير فارغة لكن كل الصفوف فشلت (allIds فارغ فقط لو لا صف صالح أصلاً) لا نحذف
+    // شيئاً تحسباً لخطأ عابر (مثل انقطاع اتصال) حتى لا نفقد البيانات المفهرسة السابقة بلا داعٍ.
   } catch (e) {
     console.error('تعذّر حذف الصفوف القديمة من clients_rows:', e.message);
   }
@@ -1052,8 +1058,9 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
       return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
     }
   }
-  const client = await pool.connect();
+  let client = null;
   try {
+    client = await pool.connect();
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
     // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
@@ -1113,11 +1120,11 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
     await client.query('COMMIT');
     res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
   } catch (e) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
-    res.status(500).json({ error: 'تعذّر ترحيل السجلات', detail: e && e.message });
+    res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -1352,7 +1359,7 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
       return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
     }
   }
-  const client = await pool.connect();
+  let client = null;
   try {
     // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
     // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
@@ -1404,11 +1411,11 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
     await client.query('COMMIT');
     res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
   } catch (e) {
-    await client.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -1709,6 +1716,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 /* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
 const zatca = require('./zatca/lib');
+const { centralErrorHandler } = require('./errors');
 
 // حالة التسجيل الحالية (بدون أي بيانات حسّاسة) — تُستخدم لعرض حالة الربط في الواجهة
 app.get('/api/zatca/status', requireAuth, async (req, res) => {
@@ -1810,9 +1818,15 @@ app.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 's
 // (تفادي إعادة تحميل المحتوى نفسه) دون خطر تقديم نسخة قديمة بعد كل نشر جديد.
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'المسار غير موجود' });
+  }
   res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, '..', 'frontend', 'app.html'));
 });
+
+// معالج أخطاء مركزي — شبكة أمان لأي خطأ يفلت من معالجات الـ routes (يُثبَّت بعد كل الـ routes)
+app.use(centralErrorHandler);
 
 const PORT = process.env.PORT || 3000;
 ensureSchema()
