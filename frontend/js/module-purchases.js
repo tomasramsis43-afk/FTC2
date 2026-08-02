@@ -618,6 +618,22 @@ async function backgroundSyncCheck(){
     if(typeof checkPendingRestoreResync==='function') await checkPendingRestoreResync();
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
     await flushPendingRecordWrites(); // نفس الشيء لطابور السجلات الفردية المعلّقة (عملاء/شيتات)
+    // لو فُتح البرنامج من النسخة المحلية فقط (cacheOnly) أو فشلت مزامنة سابقة، تكون كل baselines
+    // الجلسة الحالية null أو بعضها — أي أنه لا يوجد أساس مؤكد للمقارنة مع السحابة. الفحوصات أدناه
+    // كانت تتجاهل التصنيفات ذات baseline null (checkAllRecordsChanged) وتستبعدها checkClientRecordsChanged
+    // لأنها "تخزّن" آخر مجموع نسخ عند أول فحص وترجع false — فيبقى المستخدم على بيانات محلية قديمة/
+    // فارغة طوال الجلسة دون أي تحميل حقيقي من السحابة، وأي تعديل يُحفظ عبر خط الرجعة القديم (كتلة
+    // كاملة) لا يصل لنظام السجلات الجديد ويُفقد عند أول تحميل حقيقي لاحقاً. الحل: ننفّذ فوراً
+    // تحميلاً كاملاً من السحابة (loadData(false)) كلما وُجد أي baseline null — بعدها تتأكد كل
+    // الـ baselines وتصبح المقارنات أدناه صحيحة (وتُعاد المحاولة تلقائياً كل دقيقتين لو كان الخلل
+    // انقطاع اتصال مؤقتاً).
+    const needsFullSync = _clientsSyncBaseline === null ||
+      Object.keys(_collectionSyncBaseline).some(col => !_collectionSyncBaseline[col]);
+    if(needsFullSync){
+      await loadData(false);
+      await renderAllViewsAfterLoad();
+      return;
+    }
     // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
     // السجلات المستقلة الجديد (checkClientRecordsChanged)، و(ج) نفس الشيء لبقية الشيتات المحوَّلة
     // للسجلات المستقلة (checkAllRecordsChanged) — كل ذلك بطلبات صغيرة جداً بدون نقل بيانات فعلية
