@@ -301,8 +301,8 @@ async function _kvCacheWrite(key, version, value){
           const tx = db.transaction(KV_IDB_STORE, 'readwrite');
           tx.objectStore(KV_IDB_STORE).put({ key, version, value });
           tx.oncomplete = ()=> resolve();
-          tx.onerror = ()=> resolve();
-        }catch(e){ resolve(); }
+          tx.onerror = ()=>{ console.error('[Core] IDB write tx error:', key); resolve(); };
+        }catch(e){ console.error('[Core] IDB write exception:', key, e); resolve(); }
       });
       return;
     }
