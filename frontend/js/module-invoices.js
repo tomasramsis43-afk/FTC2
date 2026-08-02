@@ -1091,6 +1091,7 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     // تصفير كامل لحالة تتبّع مزامنة العملاء محلياً (نفس سبب تصفير _recordVersions أعلاه بالضبط)
     Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
     clientRecordMeta = {};
+    recordMeta = {};
     _clientRecordsAggVersion = null;
     _clientsSyncBaseline = new Map();
 

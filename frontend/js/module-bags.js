@@ -234,18 +234,21 @@ function renderBags(){
   $('#bag-stock-body').innerHTML = bagStockRows.length ? bagStockPageRows.map(b=>{
     const typeLabel = (b.type==='withdraw' ? 'سحب' : (b.type==='deposit' ? 'إيداع' : (b.type==='issue' ? 'تسليم لعميل من المخزون' : 'إضافة يدوية (سجل قديم)'))) + (b.manualQty ? ' (عدد فعلي)' : '');
     const typeColor = b.type==='withdraw' ? 'red' : (b.type==='deposit' ? 'teal' : (b.type==='issue' ? 'red' : ''));
+    const bMeta = (typeof recordMeta==='object' && recordMeta && recordMeta.bagStock) ? recordMeta.bagStock[b.id] : null;
+    const isBPending = !!(bMeta && bMeta.status==='pending');
     const qtyDisplay = num(b.qty)>0 ? `+${b.qty}` : `${b.qty}`;
     const amountDisplay = b.amount!==undefined ? fmt(num(b.amount)) : fmt(num(b.qty)*num(b.unitPrice));
     return `
     <tr>
       <td class="mono" data-label="التاريخ">${b.date||'—'}</td>
-      <td class="${typeColor}" data-label="النوع">${typeLabel}</td>
+      <td class="${typeColor}" data-label="النوع">${typeLabel}${isBPending ? ' <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تدخل إجماليات المخزون/الحقائب للأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}</td>
       <td class="mono" data-label="المبلغ">${amountDisplay}</td>
       <td class="mono ${num(b.qty)<0?'red':''}" data-label="الكمية">${qtyDisplay}</td>
       <td class="mono" data-label="الرصيد بعدها">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
       <td data-label="طريقة الدفع">${escapeHtml(b.method||'')}</td>
       <td data-label="ملاحظات">${escapeHtml(b.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
+        ${(isBPending && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approvestock="${b.id}" title="اعتماد هذه العملية لتدخل في إجماليات المخزون والحقائب">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-rejectstock="${b.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
         ${b.type && b.type!=='issue' ? `<button class="btn btn-ghost btn-sm" data-editstock="${b.id}">${tr('edit')}</button>` : ''}
         <button class="btn btn-danger btn-sm" data-delstock="${b.id}">${tr('delete')}</button>
       </td>
@@ -881,6 +884,36 @@ document.addEventListener('click', async e=>{
       renderBags(); renderTable(); renderCourses(); renderMissingCourse();
       showToast('تم تسليم الحقيبة من المخزون');
     }
+  }
+  if(e.target.dataset.approvestock){
+    const id = e.target.dataset.approvestock;
+    if(await customConfirm('اعتماد هذه العملية في مخزون الحقائب؟ ستدخل فوراً في إجماليات المخزون والحقائب كباقي العمليات.')){
+      const ok = await approveRecordGeneric('bagStock', id);
+      if(ok){
+        await logAudit('edit','مخزون الحقائب', 'تم اعتماد عملية الاستقبال في مخزون الحقائب');
+        refreshEverything();
+        showToast('✅ تم اعتماد العملية');
+      }else{
+        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
+  if(e.target.dataset.rejectstock){
+    const id = e.target.dataset.rejectstock;
+    const rejectedItem = bagStock.find(b=>b.id===id);
+    if(await customConfirm('رفض وحذف تسجيل الاستقبال المعلّق في مخزون الحقائب نهائياً؟ لا يمكن التراجع عن هذا الإجراء.')){
+      const ok = await deleteOneRecordGeneric('bagStock', id);
+      if(ok!==false){
+        bagStock = bagStock.filter(b=>b.id!==id);
+        await logAudit('delete','مخزون الحقائب', `تم رفض وحذف تسجيل الاستقبال المعلّق في مخزون الحقائب (${rejectedItem?.date||''})`);
+        refreshEverything();
+        showToast('تم رفض التسجيل وحذفه');
+      }else{
+        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
   }
   if(e.target.dataset.editstock){
     openBagStockEdit(e.target.dataset.editstock);

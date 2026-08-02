@@ -20,8 +20,116 @@ function renderDashboard(){
     renderCfoDashboard();
     renderSmartAlerts();
     renderCloseOverview(c, totalPaid, totalRemaining);
+    if(currentUserRole==='admin') refreshPendingApprovals();
   }
 }
+
+/* ============ عمليات الاستقبال قيد الاعتماد (الأدمن فقط) ============ */
+// قائمة سجلات الاستقبال المعلّقة من كل التصنيفات التشغيلية (تُجلب من /api/records/pending) —
+// تُعرض في لوحة التحكم مع زر اعتماد/رفض، وتُحدِّث عداد الإشعار للأدمن.
+let pendingApprovals = [];
+const PENDING_COLLECTION_LABELS = { vaultTx: 'الحركات المالية (الخزنة)', bagStock: 'مخزون الحقائب', courseSessions: 'الدورات' };
+function pendingCollectionLabel(c){ return PENDING_COLLECTION_LABELS[c] || c; }
+// وصف موجز قابل للعرض لمحتوى سجل معلّق (بعد فك تشفيره محلياً) — بدون كشف بيانات غير ذات صلة.
+function pendingRecordSummary(item){
+  const o = item.obj;
+  if(!o) return '';
+  switch(item.collection){
+    case 'vaultTx': {
+      const amt = fmt(num(o.amount));
+      const dir = o.type==='in' ? 'وارد' : (o.isReturn ? 'مردود' : 'صادر');
+      return `${dir} ${amt} ${o.clientName ? '— ' + o.clientName : (o.category ? '— ' + o.category : '')}`;
+    }
+    case 'bagStock': {
+      const q = num(o.qty);
+      const amt = o.amount!==undefined ? ` بقيمة ${fmt(num(o.amount))}` : '';
+      return `${o.type==='withdraw' ? 'سحب' : (o.type==='deposit' ? 'إيداع' : 'تسليم')} ${q}${amt}${o.notes ? ' — ' + o.notes : ''}`;
+    }
+    case 'courseSessions': return `${o.courseNumber||''} — ${o.courseType||''}`;
+    default: return '';
+  }
+}
+async function refreshPendingApprovals(){
+  if(currentUserRole!=='admin'){ pendingApprovals = []; renderPendingApprovalsPanel(); return; }
+  try{
+    const res = await serverFetch('/api/records/pending');
+    if(!res.ok){ pendingApprovals = []; renderPendingApprovalsPanel(); return; }
+    const data = await res.json();
+    const out = [];
+    for(const r of (data.records||[])){
+      const item = { collection: r.collection, id: r.id, enc: r.enc, version: r.version, createdBy: r.created_by, updatedAt: r.updated_at, obj: null };
+      try{
+        const plain = await decryptValue(r.enc);
+        const obj = JSON.parse(plain);
+        if(obj && typeof obj==='object') item.obj = obj;
+      }catch(e){ /* تعذّر فك السجل — يُعرض بالمعرّف فقط */ }
+      out.push(item);
+    }
+    pendingApprovals = out;
+  }catch(e){ pendingApprovals = []; }
+  renderPendingApprovalsPanel();
+  // تحديث التنبيهات الذكية أيضاً (عداد "قيد الاعتماد" يظهر فور وصول الجلب الأول)
+  if(isViewActive('dashboard') && typeof renderSmartAlerts==='function') renderSmartAlerts();
+}
+function renderPendingApprovalsPanel(){
+  const el = $('#pending-approvals-panel');
+  if(!el) return;
+  if(currentUserRole!=='admin' || !pendingApprovals.length){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
+    <h3 style="margin:0 0 10px;">🛂 عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد</div>
+    <div class="table-scroll cards-mobile">
+    <table>
+      <thead><tr><th>الشاشة</th><th>العملية</th><th>سجّلها</th><th>التاريخ</th><th></th></tr></thead>
+      <tbody>${pendingApprovals.map(item=>`
+        <tr>
+          <td data-label="الشاشة">${escapeHtml(pendingCollectionLabel(item.collection))}</td>
+          <td data-label="العملية">${item.obj ? escapeHtml(pendingRecordSummary(item)) : escapeHtml(item.id)}</td>
+          <td data-label="سجّلها">${escapeHtml(item.createdBy||'—')}</td>
+          <td class="mono" data-label="التاريخ">${item.updatedAt ? escapeHtml(new Date(item.updatedAt).toLocaleString('ar-EG')) : '—'}</td>
+          <td class="card-full" data-label="" style="white-space:nowrap;">
+            <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير">✅ اعتماد</button>
+            <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>
+    </div>
+  </div>`;
+}
+$('#pending-approvals-panel')?.addEventListener('click', async e=>{
+  const approveBtn = e.target.closest('[data-pa-approve]');
+  const rejectBtn = e.target.closest('[data-pa-reject]');
+  if(!approveBtn && !rejectBtn) return;
+  const collection = (approveBtn||rejectBtn).dataset.paCollection;
+  const id = (approveBtn||rejectBtn).dataset.paId;
+  const item = pendingApprovals.find(x=>x.collection===collection && x.id===id);
+  const desc = item && item.obj ? pendingRecordSummary(item) : id;
+  if(approveBtn){
+    if(!await customConfirm(`اعتماد العملية (${desc})؟ ستدخل فوراً في الحسابات والتقارير كباقي البيانات.`)) return;
+    const ok = await approveRecordGeneric(collection, id);
+    if(ok){
+      await logAudit('edit', pendingCollectionLabel(collection), `تم اعتماد عملية الاستقبال: ${desc}`);
+      refreshEverything();
+      showToast('✅ تم اعتماد العملية');
+    }else{
+      showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+    }
+  }else{
+    if(!await customConfirm(`رفض وحذف هذه العملية (${desc}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+    const ok = await deleteOneRecordGeneric(collection, id);
+    if(ok!==false){
+      await logAudit('delete', pendingCollectionLabel(collection), `تم رفض وحذف عملية الاستقبال المعلّقة: ${desc}`);
+      refreshEverything();
+      showToast('تم رفض العملية وحذفها');
+    }else{
+      showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+    }
+  }
+  refreshPendingApprovals();
+});
 
 /* ============ التنبيهات الذكية (Smart Alerts) ============ */
 function daysSinceDate(dateStr){
@@ -34,6 +142,11 @@ function renderSmartAlerts(){
   const el = $('#smart-alerts-panel');
   if(!el) return;
   const alerts = [];
+
+  // ٠) عمليات الاستقبال بانتظار اعتماد الأدمن — أول تنبيه وأهمه (إشعار فوري بعدد المعلّق)
+  if(currentUserRole==='admin' && pendingApprovals.length){
+    alerts.push({level:'red', icon:'🛂', text:`${pendingApprovals.length} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
+  }
 
   // ١) حقائب مطلوب شراؤها متأخرة عن الحد المسموح
   const overdueDays = settings.bagOverdueDays || 14;

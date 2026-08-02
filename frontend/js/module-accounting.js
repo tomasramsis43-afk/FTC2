@@ -963,16 +963,19 @@ function renderCourses(){
     const days = courseDurationDays(s.courseType);
     const capLabel = s.capacity ? `${enrolled.length} / ${s.capacity}` : `${enrolled.length}`;
     const full = s.capacity && enrolled.length>=s.capacity;
+    const sMeta = (typeof recordMeta==='object' && recordMeta && recordMeta.courseSessions) ? recordMeta.courseSessions[s.id] : null;
+    const isSPending = !!(sMeta && sMeta.status==='pending');
     return `<div class="panel">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
         <div>
-          <h3 style="margin:0 0 4px;">${escapeHtml(s.courseNumber||'—')} — ${escapeHtml(s.courseType||tr('notSpecified'))}</h3>
+          <h3 style="margin:0 0 4px;">${escapeHtml(s.courseNumber||'—')} — ${escapeHtml(s.courseType||tr('notSpecified'))}${isSPending ? ' <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تظهر للأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}</h3>
           <div style="font-size:12.5px; color:var(--text-muted);">${tr('courseDateLabel')}: ${escapeHtml(s.date||'—')} · ${tr('languageLabel')}: ${escapeHtml(s.language||'—')} · ${tr('durationLabel')}: ${days} ${tr('dayWord')} · ${tr('countLabel')} <span class="mono">${capLabel}</span>
             ${full ? ` <span class="stamp owe">${tr('fullCoursesLabel')}</span>` : ''}
             ${s.isDefined ? '' : ` <span class="stamp owe">${tr('undefinedInCourseSheet')}</span>`}
           </div>
         </div>
         <div style="white-space:nowrap;">
+          ${(isSPending && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve-session="${s.id}" title="اعتماد هذه الدورة لتظهر للجميع وتدخل في الشيتات">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject-session="${s.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
           ${s.isDefined ? `<button class="btn btn-ghost btn-sm" data-edit-session="${s.id}">${tr('editCourse')}</button>
           <button class="btn btn-danger btn-sm" data-del-session="${s.id}">${tr('delete')}</button>` : ''}
           <button class="btn btn-gold btn-sm" data-print-attendance="${escapeHtml(s.courseNumber)}">${tr('printAttendance')}</button>
@@ -1350,6 +1353,37 @@ $('#courses-sessions-list').addEventListener('click', async e=>{
   const markAbsent = e.target.dataset.markAbsent;
   const clearAbsent = e.target.dataset.clearAbsent;
   if(editS) openSessionModal(editS);
+  if(e.target.dataset.approveSession){
+    const id = e.target.dataset.approveSession;
+    const s = courseSessions.find(x=>x.id===id);
+    if(await customConfirm(`اعتماد دورة الاستقبال "${s?.courseNumber||id}"؟ ستظهر للجميع وتدخل في الشيتات والتقارير كباقي الدورات.`)){
+      const ok = await approveRecordGeneric('courseSessions', id);
+      if(ok){
+        await logAudit('edit','الدورات', `تم اعتماد تسجيل الاستقبال للدورة رقم ${s?.courseNumber||id}`);
+        refreshEverything();
+        showToast('✅ تم اعتماد الدورة');
+      }else{
+        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
+  if(e.target.dataset.rejectSession){
+    const id = e.target.dataset.rejectSession;
+    const s = courseSessions.find(x=>x.id===id);
+    if(await customConfirm(`رفض وحذف تسجيل الاستقبال المعلّق للدورة "${s?.courseNumber||id}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)){
+      const ok = await deleteOneRecordGeneric('courseSessions', id);
+      if(ok!==false){
+        courseSessions = courseSessions.filter(x=>x.id!==id);
+        await logAudit('delete','الدورات', `تم رفض وحذف تسجيل الاستقبال المعلّق للدورة رقم ${s?.courseNumber||id}`);
+        refreshEverything();
+        showToast('تم رفض التسجيل وحذفه');
+      }else{
+        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
   if(delS){
     if(await customConfirm('تأكيد حذف هذه الدورة من الشيت؟ لن يتم حذف العملاء المسجلين، فقط بيانات الدورة نفسها.')){
       const removed = courseSessions.find(s=>s.id===delS);

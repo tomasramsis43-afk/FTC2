@@ -102,6 +102,7 @@ async function wipeServerDataForFreshRestore(){
   // تعارض نسخ بالنسخة الحالية من السيرفر (currentVersion) فيلتئم كل شيء بدون تعارضات دائمة.
   Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
   clientRecordMeta = {};
+  recordMeta = {};
   _clientRecordsAggVersion = null;
   _clientsSyncBaseline = new Map();
   for(const c of ALLOWED_COLLECTIONS_LOCAL){
