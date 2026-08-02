@@ -1025,10 +1025,15 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
     // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
     // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
     // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
+    // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
+    // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود.
+    // القيم تُضمَّن نصياً آمنة (الدور/اسم المستخدم من الـ JWT مع تهريب علامات الاقتباس) لأن
+    // معاملات pg داخل CREATE TEMP TABLE AS SELECT مع شرط OR لا تُحدَّد أنواعها فيفشل التحليل.
+    const esc = s => String(s).replace(/'/g, "''");
     const guard = req.user.role === 'reception'
-      ? `($3 = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2)`
+      ? `('${esc(req.user.role)}' = 'reception' AND cr.origin = 'reception' AND cr.created_by = '${esc(req.user.username)}')`
       : req.user.role === 'admin'
-      ? `$3 = 'admin'`
+      ? `'${esc(req.user.role)}' = 'admin'`
       : `cr.status = 'confirmed'`;
     const payload = JSON.stringify(records.map(r => ({
       id: String(r.id),
@@ -1054,8 +1059,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
        SELECT cr.id, cr.version AS current_version
        FROM _inc i
        JOIN client_records cr ON cr.id = i.id
-       WHERE cr.version <> i.known_version OR NOT (${guard})`,
-      [req.user.username, req.user.username, req.user.role]
+       WHERE cr.version <> i.known_version OR NOT (${guard})`
     );
     // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
     await step('upsert',
