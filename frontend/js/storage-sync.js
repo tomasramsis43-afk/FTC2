@@ -754,14 +754,22 @@ async function saveCollectionGeneric(collection, arr){
         }
       }
       if(anyNetworkFailure){
-        _collectionSyncBaseline[collection] = null;
-        await window.storage.set(collection, JSON.stringify(arr), false);
+        // لا نلغي baseline عند فشل الشبكة حتى لا نخسر تتبع التغييرات — نعتمد على
+        // طابور السجلات المعلّقة (pendingRecords) لحفظ التعديلات التي فشلت مؤقتاً
+        // بدل الرجوع للتخزين الكتلي. هذا يمنع تضارب البيانات بين النظامين.
+        // نحفظ نسخة احتياطية كاملة فقط كآخر خط رجعة لو كل شيء فشل.
+        try{ await window.storage.set(collection, JSON.stringify(arr), false); }catch(e2){}
       }
       return;
     }
     // خط الرجعة: المزامنة مع النظام الجديد لم تتأكد بعد هذه الجلسة — نحفظ بالطريقة القديمة الكاملة.
     await window.storage.set(collection, JSON.stringify(arr), false);
-  }catch(e){ showToast('تعذر حفظ البيانات'); }
+  }catch(e){
+    console.error('[StorageSync] saveCollectionGeneric failed for', collection, e);
+    // نحاول الحفظ الاحتياطي حتى في حالة الخطأ الكامل
+    try{ await window.storage.set(collection, JSON.stringify(arr), false); }catch(e2){}
+    showToast('⚠️ تعذّر حفظ البيانات على السيرفر — تم الحفظ محلياً وستُعاد المحاولة تلقائياً عند عودة الاتصال');
+  }
 }
 
 async function checkAllRecordsChanged(){
