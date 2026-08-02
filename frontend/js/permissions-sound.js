@@ -371,6 +371,7 @@ async function loadData(cacheOnly){
     if(!settings.nextVoucherNo) settings.nextVoucherNo = 1;
     if(!settings.nextManualSalesInvoiceNo) settings.nextManualSalesInvoiceNo = 1;
     if(settings.darkMode===undefined) settings.darkMode = false;
+    if(settings.colorScheme===undefined) settings.colorScheme = 'original';
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;
     if(settings.autoBackupEnabled===undefined) settings.autoBackupEnabled = true;
     if(settings.lowBalanceThreshold===undefined) settings.lowBalanceThreshold = 5000;

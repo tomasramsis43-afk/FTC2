@@ -208,7 +208,7 @@ async function restoreFullBackup(file){
   if(typeof renderAuditLog==='function') renderAuditLog();
   if(typeof renderSettings==='function') renderSettings();
   if(typeof renderZatca==='function') renderZatca();
-  applyTheme(!!settings.darkMode); applySoundIcon(); applyThemeColors();
+  applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'original'); applySoundIcon(); applyThemeColors();
   showToast(wasOffline
     ? 'تمت استعادة البيانات محلياً بنجاح ✅ — سيتم رفعها ومزامنتها مع السيرفر تلقائياً عند عودة الاتصال'
     : 'تمت استعادة البيانات بنجاح، ورُفعت للسيرفر — تم حفظ نسخة من البيانات القديمة على السيرفر يمكن الرجوع إليها من "النسخ المحفوظة على السيرفر"');

@@ -27,6 +27,10 @@ const DEFAULT_SETTINGS = {
   nextVoucherNo: 1,
   nextManualSalesInvoiceNo: 1,
   darkMode: false,
+  // الثيم الكامل المختار للواجهة: 'original' (الثيم الأصلي كحلي/سايان-بنفسجي) أو
+  // 'stitch' (ثيم Stitch — فيريديان فلو، فاتح بألوان أخضر/أزرق). الاثنان متاحان دائماً
+  // من لوحة الإعدادات ولا يُحذف أي منهما.
+  colorScheme: 'original',
   soundEnabled: true,
   autoBackupEnabled: true,
   autoBackupIntervalDays: 7,
@@ -636,6 +640,35 @@ function applyTheme(isDark){
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
+/* التبديل بين "الثيم الأصلي" وثيم "Stitch — فيريديان فلو" الجديد — طقمان كاملان
+   ثابتان (وليس تخصيص ألوان يدوي حر، الذي أُلغي عمداً سابقاً في applyThemeColors أدناه).
+   يُحفظ الاختيار ضمن إعدادات البرنامج (settings.colorScheme) فيبقى نفسه لكل من يفتح
+   البرنامج على هذا الحساب. */
+function applyColorScheme(scheme){
+  const isStitch = scheme === 'stitch';
+  document.body.classList.toggle('theme-stitch', isStitch);
+  // ثيم Stitch فاتح بطبيعته، فلا داعي لأي تراكب مع كلاس الوضع الليلي الداكن في نفس الوقت
+  if(isStitch) document.body.classList.remove('dark-theme');
+  else applyTheme(!!settings.darkMode);
+  renderThemeSchemePanel();
+}
+function renderThemeSchemePanel(){
+  const scheme = settings.colorScheme || 'original';
+  $all('[data-color-scheme]').forEach(card=>{
+    card.classList.toggle('active', card.dataset.colorScheme === scheme);
+  });
+}
+if($('#theme-scheme-panel')) $('#theme-scheme-panel').addEventListener('click', async (e)=>{
+  const card = e.target.closest('[data-color-scheme]');
+  if(!card) return;
+  const scheme = card.dataset.colorScheme;
+  if(settings.colorScheme === scheme) return;
+  settings.colorScheme = scheme;
+  applyColorScheme(scheme);
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : 'الثيم الأصلي'}`);
+  showToast('تم تغيير مظهر الواجهة');
+});
 /* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
    (no-op) حتى لا تفرض أي لون عبر inline style على body، وتبقى ألوان الواجهة كما هي
    مضبوطة في CSS الثابت فقط (رمادي محايد). أُبقيت الدالة موجودة بلا محتوى فقط لتفادي
@@ -721,7 +754,7 @@ const SETTINGS_EXPORT_KEYS = [
   'courses','nationalities','channels','bagPrice','priceSaudi','priceNonSaudi','expenseCategories',
   'centerInfo','darkMode','soundEnabled','autoBackupEnabled','autoBackupIntervalDays','lowBalanceThreshold',
   'bagOverdueDays','monthlyReportWhatsapp','monthlyPdfReportsWhatsappNumbers','vatPdfReportWhatsappNumbers',
-  'bagFinanceLinkEnabled','powerAutomate','themeColors','themePresetId'
+  'bagFinanceLinkEnabled','powerAutomate','themeColors','themePresetId','colorScheme'
 ];
 function exportSettingsToFile(){
   const exportObj = {};
@@ -749,6 +782,7 @@ async function importSettingsFromFile(file){
   await saveSettings();
   applyThemeColors(settings.themeColors);
   applyTheme(!!settings.darkMode);
+  applyColorScheme(settings.colorScheme||'original');
   await logAudit('edit','الإعدادات', `تم استيراد إعدادات البرنامج من ملف خارجي (${foundKeys.length} إعداد)`);
   renderSettings();
   showToast('تم استيراد الإعدادات بنجاح');
