@@ -119,10 +119,14 @@ function renderAgingReport(){
 
 /* ============ التقرير الشهري عبر واتساب ============ */
 function lastCompleteMonthKey(){
-  const d = new Date();
-  d.setDate(1); // أول يوم بالشهر الحالي
-  d.setDate(0); // آخر يوم بالشهر السابق (الشهر المكتمل)
-  return d.toISOString().slice(0,7);
+  // الشهر المكتمل: الشهر السابق للشهر الحالي، محسوباً بالتوقيت المحلي (وليس UTC).
+  // toISOString() هنا كان يُزيح التاريخ للتوقيت العالمي (+3 في السعودية) فيُرجع الشهر
+  // الحالي بدل السابق في الساعات الأولى من اليوم.
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-11
+  const prev = m === 0 ? [y-1, 11] : [y, m-1];
+  return `${prev[0]}-${String(prev[1]+1).padStart(2,'0')}`;
 }
 function monthSummaryData(key){
   const income = vaultTx.filter(t=>t.type==='in' && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);

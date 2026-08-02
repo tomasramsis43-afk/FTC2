@@ -317,10 +317,11 @@ async function submitSimplifiedInvoice(params) {
         // شهادة إنتاج (PCSID) موجودة → إرسال فعلي (تقرير الفاتورة)
         zatcaResponse = await egs.reportInvoice(prepared.signed_invoice_string, prepared.invoice_hash);
         const reportingStatus = zatcaResponse?.reportingStatus;
-        if (reportingStatus === 'REPORTED') {
-          status = 'reported';
-        } else if (zatcaResponse?.warningMessages?.length && reportingStatus === 'REPORTED') {
+        if (reportingStatus === 'REPORTED' && zatcaResponse?.warningMessages?.length) {
+          // أُبلِّغ عنها بنجاح مع تحذيرات — حالة متميزة تُعرض للمراجعة، وليست اعتماداً نظيفاً.
           status = 'warning';
+        } else if (reportingStatus === 'REPORTED') {
+          status = 'reported';
         } else {
           // أي حالة غير REPORTED (مرفوضة/مرفوضة بتحذيرات) يجب ألا تُسجَّل كمبلَّغ عنها —
           // كانت تُخزَّن "reported" فتظهر الفاتورة معتمدة رغم رفض الهيئة لها (خطأ امتثال).
