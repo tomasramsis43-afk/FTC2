@@ -803,6 +803,7 @@ async function bulkUploadRecordsGeneric(collection, list){
     const chunk = list.slice(i, i+CHUNK);
     const records = [];
     for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: versions.get(item.id) || 0 });
+    for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير سجل من "' + collection + '" — أُوقف الرفع حفاظاً على بياناتك (حدّث الصفحة وأعد المحاولة)'); }
     let res;
     try{
       res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
@@ -1221,6 +1222,7 @@ async function bulkUploadClientRecords(clientsList){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
     for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: _clientRecordVersions[c.id] || 0 });
+    for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير بيانات عميل — أُوقف الرفع حفاظاً على بياناتك (حدّث الصفحة وأعد المحاولة)'); }
     let res;
     try{
       res = await serverFetch('/api/client-records/bulk-migrate', {
@@ -1314,6 +1316,7 @@ async function fastUploadCollection(collection, list){
     const chunk = list.slice(i, i+CHUNK);
     const records = [];
     for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: 0 });
+    for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير سجل من "' + collection + '" — أُوقف الرفع حفاظاً على بياناتك'); }
     let res = null;
     for(let attempt=0; attempt<4; attempt++){
       try{
@@ -1343,6 +1346,7 @@ async function fastUploadClients(clientsList){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
     for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: 0 });
+    for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير بيانات عميل — أُوقف الرفع حفاظاً على بياناتك'); }
     let res = null;
     for(let attempt=0; attempt<4; attempt++){
       try{
