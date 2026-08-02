@@ -682,6 +682,9 @@ async function startApp(){
   // كانت تُضبَط سابقاً فقط بعد اكتمال التحميل والعرض بالكامل (autoSignInLocalUser في آخر السطر).
   currentUser = SERVER_AUTH_USERNAME || 'غير معروف';
   currentUserRole = normalizeRole(SERVER_AUTH_ROLE);
+  // شاشة الدخول أُخفيت بالفعل — نعرض "جاري تحميل البيانات..." فوراً حتى لا يبقى المستخدم أمام
+  // شاشة سوداء صامتة بينما اكتمال التحميل قد يستغرق وقتاً (سيرفر بطيء/أول فتح كامل بعد استعادة).
+  showAppLoadingOverlay();
   try{
     const localFirst = await hasLocalCache();
     if(localFirst){
@@ -693,6 +696,7 @@ async function startApp(){
       await loadData(false);
     }
   }catch(e){
+    hideAppLoadingOverlay();
     if(e && e.isDecryptFailure){ showFatalDecryptErrorScreen(e); return; }
     // أي خطأ آخر غير متوقع أثناء تحميل البيانات (وليس فك التشفير تحديداً) كان يُرمى للمتصل (نموذج
     // الدخول)، الذي يكون بالفعل قد أخفى شاشة الدخول قبل استدعاء startApp — فينتهي الأمر بشاشة سوداء

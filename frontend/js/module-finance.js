@@ -1707,6 +1707,7 @@ $('#btn-export-audit').addEventListener('click', ()=>{
    (admin/staff) تُشتق مباشرة من هوية المستخدم الذي سجّل دخوله فعليًا على الخادم (SERVER_AUTH_USERNAME/
    SERVER_AUTH_ROLE)، وليس من أول مستخدم في قائمة "المستخدمين" الداخلية للبرنامج. */
 function autoSignInLocalUser(){
+  hideAppLoadingOverlay(); // اكتمل التحميل والعرض — نخفي شاشة "جاري تحميل البيانات..."
   $('#app-wrap').style.display = 'block';
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();

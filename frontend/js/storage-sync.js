@@ -264,9 +264,38 @@ async function flushPendingRecordWrites(){
             res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
           }
           if(res.status === 409){
-            // تعارض حقيقي — نفس معاملة flushPendingWrites: نتخلى عن هذا التعديل المعلّق تحديداً
-            // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم.
+            // نفس مشكلة "النسخة صفر/القديمة" التي عالجها مسار kv (flushPendingWrites) بتحضير أرقام
+            // النسخ من السيرفر قبل الرفع: تعديل معلّق هنا يُرفع بنسخة لا يعرفها هذا الجهاز فعلياً
+            // (لقطة محلية قديمة من آخر فتح، أو عنصر غائب عن _recordVersions هذه الجلسة بعد استعادة
+            // نسخة احتياطية/أول فتح — فيُرسَل version:0 وهو خاطئ) فيرفضه السيرفر بـ409 "تعارض" كاذب
+            // رغم عدم وجود أي تعديل فعلي من جهاز آخر — فقط لأن هذا الجهاز لم يكن يعرف الرقم الحقيقي.
+            // وبما أن طابور المعلّقات يمثّل تعديلات هذا الجهاز نفسه التي لم تصل للسيرفر بعد، نعيد
+            // المحاولة تلقائياً مرة واحدة بالنسخة الحالية التي أبلغنا بها السيرفر (currentVersion) —
+            // فيُطبَّق تعديلنا بدل سقوطه صامتاً مع إشعار خاطئ. فقط لو فشلت المحاولة الثانية أيضاً بـ409
+            // (تغيّر حقيقي لحظي على نفس البيانات أثناء إعادة المحاولة) نعتبرها تعارضاً حقيقياً:
+            // نتخلى عن التعديل المعلّق وننبّه المستخدم — نفس معاملة flushPendingWrites تماماً.
             const conflict = await res.json().catch(()=>({}));
+            const retryVersion = conflict.currentVersion || 0;
+            if(item.op === 'upsert' && retryVersion > 0){
+              const retryBody = isClient ? { enc: item.enc, version: retryVersion, clientId: item.clientId || '' } : { enc: item.enc, version: retryVersion };
+              const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify(retryBody) });
+              if(retryRes.status === 409){
+                // تعارض حقيقي أثناء إعادة المحاولة — نكمل للمسار أدناه (إسقاط + إشعار)
+              }else if(!retryRes.ok){
+                continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+              }else{
+                const retryData = await retryRes.json().catch(()=>({}));
+                if(isClient){
+                  _clientRecordVersions[item.id] = retryData.version || retryVersion;
+                  if(retryData.origin && retryData.status) clientRecordMeta[item.id] = { origin: retryData.origin, status: retryData.status };
+                }else{
+                  if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
+                  _recordVersions[item.collection].set(item.id, retryData.version || retryVersion);
+                }
+                await _pendingRecordDelete(item.collection, item.id);
+                continue;
+              }
+            }
             if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
             else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
             await _pendingRecordDelete(item.collection, item.id);
@@ -308,22 +337,66 @@ async function serverFetch(path, options = {}) {
     // (القراءة من الكاش المحلي، والكتابة في طابور الانتظار لحين إعادة تفعيل الاتصال).
     throw new Error('وضع العمل من الجهاز فقط مفعَّل — لا يوجد اتصال بالسيرفر');
   }
-  const res = await fetch(API_BASE + path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(SERVER_AUTH_TOKEN ? { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } : {}),
-      ...(options.headers || {}),
-    },
-  });
-  if (res.status === 401) {
-    // انتهت الجلسة أو لم يسجَّل الدخول بعد — أعد عرض شاشة الدخول على الخادم
-    SERVER_AUTH_TOKEN = null;
-    try { sessionStorage.removeItem('serverAuthToken'); } catch (e) { console.error('[StorageSync] Failed to clear serverAuthToken:', e); }
-    showServerLoginScreen('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
-    throw new Error('غير مصرَّح — يرجى تسجيل الدخول');
+  // مهلة زمنية لكل طلب (افتراضياً 60 ثانية): سيرفر مثقل/نائم كان يمكن أن يعلق الطلب إلى الأبد،
+  // فتظل شاشة فتح البرنامج سوداء بلا أي محتوى (الواجهة تظهر فقط بعد اكتمال loadData). الآن أي
+  // طلب عالق يُلغى بعد المهلة وتتعامل دوال القراءة معه كفشل اتصال (الرجوع لآخر نسخة محلية)،
+  // وتُعاد المحاولة تلقائياً لاحقاً من المزامنة الخلفية. يمكن للمتصل تمديدها عبر options.timeout.
+  const { timeout = 60000, ...fetchOptions } = options || {};
+  const controller = new AbortController();
+  const timer = setTimeout(()=> controller.abort(), timeout);
+  try{
+    const res = await fetch(API_BASE + path, {
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(SERVER_AUTH_TOKEN ? { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } : {}),
+        ...(fetchOptions.headers || {}),
+      },
+    });
+    if (res.status === 401) {
+      // انتهت الجلسة أو لم يسجَّل الدخول بعد — أعد عرض شاشة الدخول على الخادم
+      SERVER_AUTH_TOKEN = null;
+      try { sessionStorage.removeItem('serverAuthToken'); } catch (e) { console.error('[StorageSync] Failed to clear serverAuthToken:', e); }
+      showServerLoginScreen('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+      throw new Error('غير مصرَّح — يرجى تسجيل الدخول');
+    }
+    return res;
+  } finally {
+    clearTimeout(timer);
   }
-  return res;
+}
+
+// شاشة "جاري تحميل البيانات..." — تُعرض فور إخفاء شاشة الدخول حتى لا يبقى المستخدم أمام شاشة
+// سوداء صامتة بينما loadData/renderAllViewsAfterLoad تعملان (قد تستغرق وقتاً على سيرفر بطيء
+// أو مثقل، أو عند أول فتح كامل بعد استعادة نسخة احتياطية). تُخفى عند ظهور الواجهة الفعلية
+// (autoSignInLocalUser) أو عند الشاشة القاتلة (showFatalDecryptErrorScreen).
+let _appLoadingOverlay = null;
+function showAppLoadingOverlay(){
+  try{
+    if(_appLoadingOverlay) return;
+    _appLoadingOverlay = document.createElement('div');
+    _appLoadingOverlay.id = 'app-loading-overlay';
+    _appLoadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:999990;background:#060e1c;color:#eaf2ff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;direction:rtl;';
+    const spinner = document.createElement('div');
+    spinner.style.cssText = 'width:44px;height:44px;border:4px solid rgba(56,189,248,.25);border-top-color:#22d3ee;border-radius:50%;animation:appSpin .9s linear infinite;';
+    const label = document.createElement('div');
+    label.style.cssText = 'font-size:15px;opacity:.9;';
+    label.textContent = 'جاري تحميل البيانات...';
+    _appLoadingOverlay.appendChild(spinner);
+    _appLoadingOverlay.appendChild(label);
+    if(!document.getElementById('appSpinKeyframes')){
+      const st = document.createElement('style');
+      st.id = 'appSpinKeyframes';
+      st.textContent = '@keyframes appSpin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(_appLoadingOverlay);
+  }catch(e){ console.error('[StorageSync] showAppLoadingOverlay failed:', e); }
+}
+function hideAppLoadingOverlay(){
+  try{ if(_appLoadingOverlay && _appLoadingOverlay.parentNode) _appLoadingOverlay.parentNode.removeChild(_appLoadingOverlay); }catch(e){}
+  _appLoadingOverlay = null;
 }
 
 // فك تشفير "غير قابل للتجاهل": لو فشل فك التشفير (مثال: هذا الجهاز مفتاح تشفيره غير جاهز
@@ -744,8 +817,13 @@ async function bulkUploadRecordsGeneric(collection, list){
       throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
     }
     const data = await res.json().catch(()=>({}));
-    // تحديث النسخ المعروفة محلياً لكل سجل نجح، والتنبيه لو رُفض سجل بسبب تعارض حقيقي (عدّله جهاز
-    // آخر أثناء نفس عملية الرفع) — يبقى بياناته القديمة على السيرفر كما هي دون كتابة فوقها صامتاً.
+    // تحديث النسخ المعروفة محلياً لكل سجل نجح. أما السجلات التي رفضها السيرفر بتعارض نسخ
+    // (conflicts مع currentVersion) فسببها غالباً انحراف في تتبع النسخ المحلية (لقطة قديمة، أو
+    // مسح/استعادة جزئية للبيانات — النسخة المحلية صارت قديمة/مصفّرة وليست تعديلاً فعلياً من جهاز
+    // آخر)، فلو تُرك السجل "متعارضاً" يبقى محلياً غير متزامن إلى الأبد مع إشعارات 409 متكررة عند
+    // كل حفظ لاحق. نعيد رفعه تلقائياً مرة واحدة بالنسخة الحالية من السيرفر (currentVersion) —
+    // نفس تصحيح flushPendingRecordWrites — فيُطبَّق تعديلنا ويُلتئم الانحراف فوراً. فقط لو فشلت
+    // إعادة المحاولة أيضاً بـ409 (تغيّر حقيقي لحظي أثناءها) يبقى السجل متعارضاً ويُبلَّغ عنه.
     const conflictIdSet = new Set((data.conflicts||[]).map(c=>c.id));
     for(const item of chunk){
       if(!conflictIdSet.has(item.id)){
@@ -753,10 +831,41 @@ async function bulkUploadRecordsGeneric(collection, list){
         await _pendingRecordDelete(collection, item.id);
       }
     }
-    if(data.conflicts && data.conflicts.length){
-      for(const c of data.conflicts) versions.set(c.id, c.currentVersion || 0);
-      allConflictIds.push(...data.conflicts.map(c=>c.id));
-      showToast(`⚠️ تعذّر رفع ${data.conflicts.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+    const conflicted = data.conflicts || [];
+    const stillConflictIds = [];
+    if(conflicted.length){
+      const retryRecords = [];
+      for(const c of conflicted){
+        const item = chunk.find(x=>x.id===c.id);
+        if(item) retryRecords.push({ id: item.id, enc: item.enc, version: c.currentVersion || 0 });
+      }
+      let retryRes = null;
+      try{
+        retryRes = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
+          method: 'POST',
+          body: JSON.stringify({ records: retryRecords }),
+        });
+      }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
+      if(retryRes && retryRes.ok){
+        const retryData = await retryRes.json().catch(()=>({}));
+        const retryConflicted = retryData.conflicts || [];
+        for(const rc of retryConflicted) versions.set(rc.id, rc.currentVersion || 0);
+        for(const r of retryRecords){
+          if(retryConflicted.some(rc=>rc.id===r.id)){
+            stillConflictIds.push(r.id);
+          }else{
+            versions.set(r.id, (r.version||0) + 1);
+            await _pendingRecordDelete(collection, r.id);
+          }
+        }
+      }else{
+        // فشل الاتصال أثناء إعادة المحاولة — نسجّل السجلات معلّقة ليُعاد رفعها لاحقاً تلقائياً
+        await Promise.all(retryRecords.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      }
+    }
+    if(stillConflictIds.length){
+      allConflictIds.push(...stillConflictIds);
+      showToast(`⚠️ تعذّر رفع ${stillConflictIds.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
   return allConflictIds; // معرّفات السجلات التي فشل رفعها فعلياً — لا يجوز اعتبارها مُتزامنة
@@ -1124,7 +1233,10 @@ async function bulkUploadClientRecords(clientsList){
       throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
     }
     const data = await res.json().catch(()=>({}));
-    // تحديث النسخ المعروفة محلياً، والتنبيه لو رُفض عميل بسبب تعارض حقيقي أثناء نفس عملية الرفع.
+    // نفس تصحيح bulkUploadRecordsGeneric بالضبط: أي عميل رفضه السيرفر بتعارض نسخ يُعاد رفعه
+    // تلقائياً مرة واحدة بالنسخة الحالية (currentVersion) — يلتئم أي انحراف في تتبع النسخ
+    // المحلية (استعادة/مسح جزئي/لقطة قديمة) بدل تراكم إشعارات تعارض دائمة، ويبقى متعارضاً فقط
+    // لو فشلت إعادة المحاولة أيضاً بـ409 (تغيّر حقيقي لحظي).
     const conflictIdSet = new Set((data.conflicts||[]).map(x=>x.id));
     for(const c of chunk){
       if(!conflictIdSet.has(c.id)){
@@ -1132,10 +1244,40 @@ async function bulkUploadClientRecords(clientsList){
         await _pendingRecordDelete('clients', c.id);
       }
     }
-    if(data.conflicts && data.conflicts.length){
-      for(const c of data.conflicts) _clientRecordVersions[c.id] = c.currentVersion || 0;
-      allConflictIds.push(...data.conflicts.map(c=>c.id));
-      showToast(`⚠️ تعذّر رفع ${data.conflicts.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
+    const conflicted = data.conflicts || [];
+    const stillConflictIds = [];
+    if(conflicted.length){
+      const retryRecords = [];
+      for(const c of conflicted){
+        const client = chunk.find(x=>x.id===c.id);
+        if(client) retryRecords.push({ id: client.id, enc: client.enc, clientId: client.clientId || '', version: c.currentVersion || 0 });
+      }
+      let retryRes = null;
+      try{
+        retryRes = await serverFetch('/api/client-records/bulk-migrate', {
+          method: 'POST',
+          body: JSON.stringify({ records: retryRecords }),
+        });
+      }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
+      if(retryRes && retryRes.ok){
+        const retryData = await retryRes.json().catch(()=>({}));
+        const retryConflicted = retryData.conflicts || [];
+        for(const rc of retryConflicted) _clientRecordVersions[rc.id] = rc.currentVersion || 0;
+        for(const r of retryRecords){
+          if(retryConflicted.some(rc=>rc.id===r.id)){
+            stillConflictIds.push(r.id);
+          }else{
+            _clientRecordVersions[r.id] = (r.version||0) + 1;
+            await _pendingRecordDelete('clients', r.id);
+          }
+        }
+      }else{
+        await Promise.all(retryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      }
+    }
+    if(stillConflictIds.length){
+      allConflictIds.push(...stillConflictIds);
+      showToast(`⚠️ تعذّر رفع ${stillConflictIds.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
   return allConflictIds; // معرّفات العملاء التي فشل رفعها فعلياً بسبب تعارض حقيقي — لا يجوز اعتبارها مُتزامنة
