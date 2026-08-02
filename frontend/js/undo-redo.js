@@ -249,7 +249,20 @@ function downloadXlsx(filename, sheetName, rows){
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31));
   XLSX.writeFile(wb, filename);
 }
-function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function num(v){
+  if(typeof v==='number') return v;
+  if(v===null || v===undefined || v==='') return 0;
+  // يُقرأ الرقم بدقة مهما كان شكله الوارد: الأرقام العربية-الهندية (٠١٢٣٤٥٦٧٨٩ أو ۰۱۲۳)
+  // تُحوَّل لإنجليزية، والفاصلة العشرية العربية (٫) تُحوَّل لنقطة، وفواصل الآلاف (٬ والفاصلة
+  // الإنجليزية) تُحذف. كانت parseFloat("1,000") أو parseFloat("١٬٠٠٠") تُرجع 1 — أي قيمة
+  // مُستوردة/مُلصقة بهذا الشكل كانت تُسجَّل بألف مرة أقل من حقيقتها في الخزنة والدفاتر.
+  let s = String(v).trim();
+  s = s.replace(/[\u0660-\u0669\u06F0-\u06F9]/g, ch => String(ch.charCodeAt(0) & 15));
+  s = s.replace(/\u066B/g, '.');
+  s = s.replace(/[,\u066C\u2019\u0027]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 function fmt(n){ return n.toLocaleString('en-US',{maximumFractionDigits:2}); }
 /* ---------------- تفقيط المبالغ (تحويل الرقم إلى كتابة بالحروف) ---------------- */
 function numberToArabicWords(amount){

@@ -559,6 +559,21 @@ async function loadData(cacheOnly){
   // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
   manualSalesInvoices = await loadGeneric('manualSalesInvoices');
+  // تنظيف القيود اليومية اليتيمة (قيد مُرحَّل تلقائياً لمصدر حُذف لاحقاً — فاتورة/قيد/مبيعات
+  // يدوية): يُنفَّذ قبل الترحيل التلقائي الشامل أدناه حتى يعيد الأخير ترحيل أي وثيقة حية
+  // فُقد قيدها (راجع cleanupOrphanedJournalDE في module-accounting.js). آمن للتكرار — يعمل
+  // على الحالة الحالية فقط، فيصلح أي بقايا قديمة مرة واحدة عند أول تحميل بعد هذا التحديث.
+  try{
+    const cleanup = typeof cleanupOrphanedJournalDE==='function' ? cleanupOrphanedJournalDE() : null;
+    if(cleanup){
+      await saveJournalDE();
+      if(cleanup.pointersFixed>0){
+        await saveJournalEntries();
+        await saveClients();
+      }
+      await logAudit('delete','المحاسبة', `إصلاح تلقائي: تم حذف ${cleanup.removed} قيد يومية يتيم لوثائق محذوفة، وإعادة ربط ${cleanup.pointersFixed} وثيقة بقيدها المفقود`);
+    }
+  }catch(e){ console.error('فشل تنظيف القيود اليومية اليتيمة', e); }
   try{
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};

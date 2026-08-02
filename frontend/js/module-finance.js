@@ -763,38 +763,48 @@ document.addEventListener('click', async e=>{
    ولم تُنفَّذ هذه القالب بعد لهذا الشهر تحديداً (lastRunMonth)، تُنشأ حركة خزنة فعلية تلقائياً
    بنفس بيانات القالب مع تسجيلها في سجل التدقيق وسجل التراجع (Undo) تماماً كأي حركة يدوية،
    وتُحترَم فترة القفل المحاسبي (لو الشهر مقفل، لا تُنشأ الحركة وتبقى مستحقة لحين فتح القفل). */
+let _dueScheduleRunPromise = null;
 async function runDueScheduledVaultTx(){
-  const today = todayISO();
-  const [ny, nm] = today.split('-');
-  const currentMonthKey = `${ny}-${nm}`;
-  const todayDay = parseInt(today.split('-')[2],10);
-  let anyRun = false;
-  for(const s of scheduledVaultTx){
-    if(s.active===false) continue;
-    if(s.lastRunMonth===currentMonthKey) continue;
-    if(todayDay < num(s.dayOfMonth)) continue;
-    if(isDateLocked(today)) continue; // الشهر مقفل — تبقى مستحقة لحين فتح القفل، لا تُفقد
-    snapshotState(`تنفيذ حركة مجدولة تلقائية: ${s.recipientName}`);
-    const savedTx = {
-      id: uid(), seq: allocVaultSeq(s.destination||'vault'), createdAt: Date.now(),
-      type: 'out', isReturn: false, date: today, amount: num(s.amount),
-      method: s.method, notes: (s.notes ? s.notes+' — ' : '') + 'حركة مجدولة تلقائية',
-      clientId: '', clientName: '', manual: '', category: s.category,
-      recipientName: s.recipientName, referenceNo: 'مجدولة تلقائياً',
-      destination: s.destination||'vault', networkInvoice: ''
-    };
-    vaultTx.push(savedTx);
-    await saveSettings();
-    s.lastRunMonth = currentMonthKey;
-    anyRun = true;
-    await logAudit('add','الحركات المالية', `تنفيذ تلقائي لقالب مجدول رقم تسلسلي #${savedTx.seq||'—'}: ${s.recipientName} بمبلغ ${fmt(num(s.amount))}`);
-  }
-  if(anyRun){
-    await saveVaultTx();
-    await saveScheduledVaultTx();
-    showToast('تم تنفيذ حركة/حركات مجدولة مستحقة تلقائياً — راجعها في الجدول أدناه');
-  }
-  return anyRun;
+  // single-flight: renderVault تُستدعى من عشرات الأماكن وكل استدعاء يشغّل هذه الدالة (وقائمة
+  // renderAllViewsAfterLoad تستدعيها مع أنشطة أخرى متزامنة). بدون حارس، استدعاءان متزامنان
+  // عند أول يوم من الشهر كانا يقرآن lastRunMonth قبل تحديثه ويُنشئان نفس الحركة المجدولة مرتين
+  // (نسخة مكررة بمبلغ مضاعف في الخزنة ودفاتر المحاسبة). أي استدعاء أثناء تشغيل سابق ينتظر نفس
+  // النتيجة بدل تكرار الفحص/الإنشاء.
+  if(_dueScheduleRunPromise) return _dueScheduleRunPromise;
+  _dueScheduleRunPromise = (async()=>{
+    const today = todayISO();
+    const [ny, nm] = today.split('-');
+    const currentMonthKey = `${ny}-${nm}`;
+    const todayDay = parseInt(today.split('-')[2],10);
+    let anyRun = false;
+    for(const s of scheduledVaultTx){
+      if(s.active===false) continue;
+      if(s.lastRunMonth===currentMonthKey) continue;
+      if(todayDay < num(s.dayOfMonth)) continue;
+      if(isDateLocked(today)) continue; // الشهر مقفل — تبقى مستحقة لحين فتح القفل، لا تُفقد
+      snapshotState(`تنفيذ حركة مجدولة تلقائية: ${s.recipientName}`);
+      const savedTx = {
+        id: uid(), seq: allocVaultSeq(s.destination||'vault'), createdAt: Date.now(),
+        type: 'out', isReturn: false, date: today, amount: num(s.amount),
+        method: s.method, notes: (s.notes ? s.notes+' — ' : '') + 'حركة مجدولة تلقائية',
+        clientId: '', clientName: '', manual: '', category: s.category,
+        recipientName: s.recipientName, referenceNo: 'مجدولة تلقائياً',
+        destination: s.destination||'vault', networkInvoice: ''
+      };
+      vaultTx.push(savedTx);
+      await saveSettings();
+      s.lastRunMonth = currentMonthKey;
+      anyRun = true;
+      await logAudit('add','الحركات المالية', `تنفيذ تلقائي لقالب مجدول رقم تسلسلي #${savedTx.seq||'—'}: ${s.recipientName} بمبلغ ${fmt(num(s.amount))}`);
+    }
+    if(anyRun){
+      await saveVaultTx();
+      await saveScheduledVaultTx();
+      showToast('تم تنفيذ حركة/حركات مجدولة مستحقة تلقائياً — راجعها في الجدول أدناه');
+    }
+    return anyRun;
+  })().finally(()=>{ _dueScheduleRunPromise = null; });
+  return _dueScheduleRunPromise;
 }
 $('#btn-run-due-schedules')?.addEventListener('click', async ()=>{
   const ran = await runDueScheduledVaultTx();
