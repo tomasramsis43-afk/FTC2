@@ -292,22 +292,25 @@ function _kvCacheReadLegacyLS(key){
     return raw ? JSON.parse(raw) : null;
   }catch(e){ return null; }
 }
+// تُرجِع true عند نجاح الكتابة وfalse عند فشلها (IndexedDB معطّل/امتلاء مساحة/خطأ معاملة) — كان
+// الفشل يُبتلع بصمت سابقاً فتُصبح القراءة التالية من كاش قديم تُظهر بيانات قديمة وكأنها الحقيقة،
+// بل وتُقارَن أرقام نسخها بالسيرفر بشكل خاطئ. المتصلون الحاليون يتجاهلون القيمة الراجعة فلا يتأثرون.
 async function _kvCacheWrite(key, version, value){
   try{
     const db = await _openKvIdb();
     if(db){
-      await new Promise((resolve)=>{
+      return await new Promise((resolve)=>{
         try{
           const tx = db.transaction(KV_IDB_STORE, 'readwrite');
           tx.objectStore(KV_IDB_STORE).put({ key, version, value });
-          tx.oncomplete = ()=> resolve();
-          tx.onerror = ()=>{ console.error('[Core] IDB write tx error:', key); resolve(); };
-        }catch(e){ console.error('[Core] IDB write exception:', key, e); resolve(); }
+          tx.oncomplete = ()=> resolve(true);
+          tx.onerror = ()=>{ console.error('[Core] IDB write tx error:', key); resolve(false); };
+        }catch(e){ console.error('[Core] IDB write exception:', key, e); resolve(false); }
       });
-      return;
     }
-    localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
-  }catch(e){ console.error('[Core] _kvCacheWrite failed:', e); /* تجاهل امتلاء المساحة أو أي خطأ تخزين */ }
+    try{ localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value })); return true; }
+    catch(e){ console.error('[Core] LS cache write failed:', key, e); return false; }
+  }catch(e){ console.error('[Core] _kvCacheWrite failed:', e); return false; }
 }
 async function _kvCacheDelete(key){
   try{
@@ -324,5 +327,28 @@ async function _kvCacheDelete(key){
     }
   }catch(e){ console.error('[Core] _kvCacheDelete IDB failed:', e); }
   try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){ console.error('[Core] _kvCacheDelete LS failed:', e); }
+}
+// يمسح كامل كاش kv (مخزن 'kv' في IndexedDB + أي بقايا بنفس البادئة في localStorage) — دون أي مساس
+// بمخازن "التعديلات المعلّقة" (pending / pendingRecords) لأنها قد تحوي تعديلات محلية لم تُرفع للسيرفر
+// بعد ويجب ألا تضيع. يُستخدم بعد استعادة نسخة احتياطية كاملة (راجع restoreFullBackup)، حتى لا يبقى
+// في الكاش المحلي أي أثر للبيانات القديمة التي استُبدلت — فلو تُرك، كان أي فتح تالٍ من الكاش يُظهر
+// البيانات القديمة وكأنها ما زالت موجودة، وقد تُبنى تعديلات لاحقة فوقها بشكل خاطئ.
+async function _kvCacheClearKv(){
+  try{
+    const db = await _openKvIdb();
+    if(db){
+      await new Promise((resolve)=>{
+        try{
+          const tx = db.transaction(KV_IDB_STORE, 'readwrite');
+          tx.objectStore(KV_IDB_STORE).clear();
+          tx.oncomplete = ()=> resolve(true);
+          tx.onerror = ()=>{ console.error('[Core] _kvCacheClearKv tx error'); resolve(false); };
+        }catch(e){ console.error('[Core] _kvCacheClearKv exception:', e); resolve(false); }
+      });
+    }
+    const keys = [];
+    try{ for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && k.startsWith(KV_CACHE_PREFIX)) keys.push(k); } }catch(e){}
+    keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  }catch(e){ console.error('[Core] _kvCacheClearKv failed:', e); }
 }
 
