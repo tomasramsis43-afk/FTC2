@@ -1017,6 +1017,17 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
 app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 5000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 5000 لكل طلب)' });
+  // حارس سلامة البيانات: أي سجل بلا enc (أو enc=undefined من خطأ منطقي بالواجهة) يُرفض الطلب
+  // بالكامل قبل لمس أي صف — كان يُخزَّن نص 'undefined' حرفياً فيفشل فك تشفيره/تحليله عند أي
+  // تحميل لاحق فتختفي كل القائمة (مشكلة "اختفاء العملاء" التي ظهرت بعد استعادة النسخة).
+  for (const r of records) {
+    if (typeof r?.enc !== 'string' || !r.enc || r.enc === 'undefined') {
+      return res.status(400).json({ error: 'بيانات مرفوعة تالفة (enc مفقود) — أُوقفت العملية قبل حفظ أي شيء. حدّث الصفحة وأعد المحاولة' });
+    }
+    if (typeof r?.id !== 'string' || !r.id) {
+      return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
+    }
+  }
   const client = await pool.connect();
   try {
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
@@ -1205,6 +1216,16 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
 app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
   if (!records.length || records.length > 5000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 5000 لكل طلب)' });
+  // نفس حارس سلامة البيانات الخاص بـ client-records/bulk-migrate: رفض أي سجل بلا enc/id قبل
+  // لمس أي صف، حتى لا يُخزَّن نص 'undefined' فيختفي التصنيف كله عند أي تحميل لاحق.
+  for (const r of records) {
+    if (typeof r?.enc !== 'string' || !r.enc || r.enc === 'undefined') {
+      return res.status(400).json({ error: 'بيانات مرفوعة تالفة (enc مفقود) — أُوقفت العملية قبل حفظ أي شيء. حدّث الصفحة وأعد المحاولة' });
+    }
+    if (typeof r?.id !== 'string' || !r.id) {
+      return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
+    }
+  }
   const client = await pool.connect();
   try {
     // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
