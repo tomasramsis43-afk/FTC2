@@ -1,48 +1,58 @@
-/* ============= CSS VARIABLES & ROOT (ثيم كحلي غامق / سايان-بنفسجي) ============= */
+/* ============================================================================
+   FTC2 — TERMINAL DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
+   مأخوذ من تصميم Stitch "FTC2 Terminal v2.4.0": داكن زجاجي (سياں/نعناعي/بنفسجي)
+   + ثيم فاتح (Space Grotesk / أزرق). كل المحددات الأصلية محفوظة كما هي حتى لا
+   يتأثر أي كود جافاسكربت — أعيد بناء المظهر فقط.
+   ============================================================================ */
+
+/* ============= CSS VARIABLES & ROOT — Terminal Dark (الافتراضي) ============= */
 :root {
   --bg: #060e1c;
-  --surface: #0c1b32;
-  --surface-alt: #10233f;
-  --bg-soft: #10233f;
+  --surface: rgba(15, 28, 50, 0.74);
+  --surface-solid: #0d1933;
+  --surface-alt: #101d38;
+  --bg-soft: #101d38;
   --navy: #22d3ee;
-  --navy-dark: #0891b2;
+  --navy-dark: #8aebff;
   --gold: #8b5cf6;
-  --gold-dark: #6d28d9;
-  --gold-soft: #a78bfa;
-  --teal: #34d399;
-  --success: #34d399;
-  --red: #f87171;
-  --danger: #f87171;
-  --text: #eaf2ff;
+  --gold-dark: #a78bfa;
+  --gold-soft: #d0bcff;
+  --teal: #61f6b9;
+  --success: #61f6b9;
+  --red: #ff5470;
+  --danger: #ff5470;
+  --text: #e8effc;
   --text-muted: #8fa3c4;
-  --border: rgba(56, 189, 238, 0.16);
-  --radius: 12px;
-  --font-display: 'Tajawal', 'Markazi Text', sans-serif;
+  --border: rgba(138, 235, 255, 0.14);
+  --radius: 14px;
+  --font-display: 'Inter', 'Tajawal', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.16);
+  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.28);
   --on-accent-text: #04101f;
   color-scheme: dark;
 }
 
 body.dark-theme {
   --bg: #03060d;
-  --surface: #0a1628;
-  --surface-alt: #0d1c34;
-  --bg-soft: #0d1c34;
+  --surface: rgba(9, 17, 32, 0.82);
+  --surface-solid: #0a1526;
+  --surface-alt: #0e1b30;
+  --bg-soft: #0e1b30;
   --navy: #22d3ee;
-  --navy-dark: #0891b2;
+  --navy-dark: #7ee7ff;
   --gold: #8b5cf6;
-  --gold-dark: #6d28d9;
-  --gold-soft: #a78bfa;
-  --teal: #34d399;
-  --success: #34d399;
-  --red: #f87171;
-  --danger: #f87171;
-  --text: #eaf2ff;
+  --gold-dark: #a78bfa;
+  --gold-soft: #d0bcff;
+  --teal: #61f6b9;
+  --success: #61f6b9;
+  --red: #ff5470;
+  --danger: #ff5470;
+  --text: #e8effc;
   --text-muted: #8296b8;
-  --border: rgba(56, 189, 238, 0.22);
+  --border: rgba(138, 235, 255, 0.2);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.22);
+  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.34);
   --on-accent-text: #04101f;
   color-scheme: dark;
 }
@@ -54,14 +64,13 @@ body.dark-theme textarea {
 }
 
 /* ============= ثيم "Stitch — فيريديان فلو" (فاتح، طاقة أخضر ومياه أزرق) =============
-   طقم ثيم إضافي مأخوذ من تصميم Google Stitch (Veridian Flow / EcoSync)، يُختار من
-   لوحة الإعدادات كبديل كامل للثيم الأصلي أعلاه — بدون حذف أو تعديل الثيم الأصلي إطلاقاً.
-   يُفعَّل عبر إضافة الكلاس theme-stitch على body (انظر applyColorScheme في theme-settings.js). */
+   ثيم بديل يُختار من لوحة الإعدادات — بدون تعديل منطق theme-settings.js. */
 body.theme-stitch {
-  --bg: #f8f9ff;
+  --bg: #f4f8f5;
   --surface: #ffffff;
-  --surface-alt: #eff4ff;
-  --bg-soft: #e5eeff;
+  --surface-solid: #ffffff;
+  --surface-alt: #eef5f0;
+  --bg-soft: #e5f0ea;
   --navy: #006d32;
   --navy-dark: #005224;
   --gold: #0059bb;
@@ -73,10 +82,12 @@ body.theme-stitch {
   --danger: #ba1a1a;
   --text: #0b1c30;
   --text-muted: #3c4a3d;
-  --border: rgba(187, 203, 185, 0.35);
-  --radius: 10px;
+  --border: rgba(187, 203, 185, 0.4);
+  --radius: 12px;
+  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
-  --shadow-hover: 0 8px 28px rgba(11, 28, 48, 0.10);
+  --shadow-hover: 0 10px 28px rgba(11, 28, 48, 0.12);
   --on-accent-text: #ffffff;
   color-scheme: light;
 }
@@ -86,21 +97,17 @@ body.theme-stitch textarea {
   color-scheme: light;
 }
 
-/* ============= ثيم "Obsidian Light" (مالي عصري فاتح) =============
-   ثيم فاتح كامل وفق مواصفات التصميم "Obsidian Light": خلفية أوف-وايت #f8fafc،
-   لوحات بيضاء #ffffff، تينت جانبية سليت فاتح #f1f5f9، وسايان مالي #0891b2
-   كلون أساسي مريح (WCAG AA). هو الثيم الافتراضي حالياً، ويُختار من لوحة
-   الإعدادات كبديل للثيم الأصلي أو Stitch — بدون حذف أي منهما إطلاقاً.
-   يُفعَّل عبر إضافة الكلاس theme-obsidian على body (انظر applyColorScheme
-   في theme-settings.js). ملاحظة: خطوط الواجهة تُبقى عربية (Tajawal) لأن خطوط
-   التصميم الأصلية (Manrope/Hanken Grotesk) لا تدعم العربية إطلاقاً. */
+/* ============= ثيم "Obsidian Light" → مقلوب إلى التصميم الفاتح من Stitch =============
+   خلفية فاتحة #f4f7fb، لوحات بيضاء، أزرق #2563eb أساسي، خط Space Grotesk.
+   (الاسم محفوظ كما هو في الإعدادات والكود — القيم أعيد بناؤها). */
 body.theme-obsidian {
-  --bg: #f8fafc;
+  --bg: #f4f7fb;
   --surface: #ffffff;
-  --surface-alt: #f2f4f6;
-  --bg-soft: #f2f4f6;
-  --navy: #0891b2;
-  --navy-dark: #0e7490;
+  --surface-solid: #ffffff;
+  --surface-alt: #eef2f8;
+  --bg-soft: #eef2f8;
+  --navy: #2563eb;
+  --navy-dark: #1e40af;
   --gold: #d97706;
   --gold-dark: #b45309;
   --gold-soft: #fbbf24;
@@ -108,12 +115,14 @@ body.theme-obsidian {
   --success: #059669;
   --red: #e11d48;
   --danger: #e11d48;
-  --text: #191c1e;
-  --text-muted: #3e484d;
-  --border: #e2e8f0;
-  --radius: 12px;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --border: #dde5f0;
+  --radius: 14px;
+  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 10px 15px -3px rgba(15, 23, 42, 0.10);
+  --shadow-hover: 0 14px 30px -8px rgba(37, 99, 235, 0.18);
   --on-accent-text: #ffffff;
   color-scheme: light;
 }
@@ -122,48 +131,62 @@ body.theme-obsidian input,
 body.theme-obsidian textarea {
   color-scheme: light;
 }
-/* الرأس والقائمة الجانبية فاتحان في هذا الثيم (أبيض / تينت سليت #f1f5f9) بدل
-   الأزرق الغامق الثابت — كما تنص مواصفات "Obsidian Light" للقائمة الجانبية. */
+
+body.theme-obsidian {
+  font-family: var(--font-display);
+  background:
+    radial-gradient(1000px 480px at 90% -10%, rgba(37, 99, 235, 0.07), transparent 60%),
+    radial-gradient(800px 420px at -10% 30%, rgba(217, 119, 6, 0.05), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
 body.theme-obsidian header.top {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.8);
   border: 1px solid #e2e8f0;
-  border-bottom: 2px solid var(--navy);
+}
+body.theme-obsidian header.top::after {
+  background: linear-gradient(90deg, #2563eb, #d97706);
 }
 body.theme-obsidian nav.tabs {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.85);
   border: 1px solid #e2e8f0;
 }
 body.theme-obsidian header.top .seal {
-  background: rgba(15, 23, 42, 0.04);
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12), 0 0 18px rgba(8, 145, 178, 0.10);
+  background: rgba(15, 23, 42, 0.05);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14), 0 0 20px rgba(37, 99, 235, 0.12);
 }
-/* رأس جدول العملاء: تينت فاتح بدل الأزرق الغامق، ونص سماوي غامق قابل للقراءة */
 body.theme-obsidian #view-clients thead th {
-  background: #f1f5f9;
+  background: #eef2f8;
   color: var(--navy-dark);
+}
+body.theme-obsidian .table-scroll thead th {
+  background: #ffffff;
 }
 
 /* بطاقات اختيار مظهر الواجهة في الإعدادات */
 .theme-scheme-card {
-  transition: border-color 0.15s, transform 0.1s;
+  transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .theme-scheme-card:hover {
   transform: translateY(-2px);
 }
 .theme-scheme-card.active {
   border-color: var(--navy) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 25%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 25%, transparent), 0 8px 24px -8px color-mix(in srgb, var(--navy) 40%, transparent);
 }
 
 /* native <select> popup lists follow OS rendering by default;
    force theme colors so dropdowns (year filters, etc.) stay on-brand */
 select {
-  background-color: var(--surface);
+  background-color: var(--surface-solid);
   color: var(--text);
 }
 
 select option {
-  background-color: var(--surface);
+  background-color: var(--surface-solid);
   color: var(--text);
 }
 
@@ -178,12 +201,12 @@ select option:focus {
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: var(--gold) transparent;
+  scrollbar-color: color-mix(in srgb, var(--navy) 55%, transparent) transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -191,12 +214,12 @@ select option:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--navy) 55%, transparent), color-mix(in srgb, var(--gold) 45%, transparent));
   border-radius: 20px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gold);
+  background: linear-gradient(180deg, var(--navy), var(--gold));
 }
 
 html {
@@ -206,17 +229,29 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(34, 211, 238, 0.07), transparent 60%),
+    radial-gradient(900px 460px at -10% 20%, rgba(139, 92, 246, 0.06), transparent 60%),
+    radial-gradient(700px 400px at 50% 110%, rgba(97, 246, 185, 0.045), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.025) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(34, 211, 238, 0.025) 0 1px, transparent 1px 44px),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: 'Tajawal', sans-serif;
+  font-family: 'Inter', 'Tajawal', system-ui, sans-serif;
   min-height: 100vh;
   overflow-x: clip;
   width: 100%;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--navy) 35%, transparent);
+  color: var(--text);
+}
+
 .mono {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -285,29 +320,31 @@ section.view.active {
   }
 }
 
-/* ============= HEADER ============= */
+/* ============= HEADER (Top Bar زجاجي) ============= */
 header.top {
-  position: relative;
+  position: sticky;
+  top: 12px;
+  z-index: 40;
   overflow: hidden;
   isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #0e1d34;
-  border: 1px solid #1c3854;
-  border-radius: var(--radius);
-  padding: 14px 24px;
+  background: color-mix(in srgb, var(--surface-solid) 74%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 20px;
   color: var(--text);
-  box-shadow: var(--shadow);
-  margin-bottom: 12px;
+  box-shadow: var(--shadow), 0 18px 44px -22px rgba(34, 211, 238, 0.22);
+  margin-bottom: 14px;
   flex-wrap: wrap;
   gap: 12px;
-  border-bottom: 2px solid var(--navy);
 }
 
 body.dark-theme header.top {
-  background: #0a1628;
-  border-color: #17324c;
+  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
 }
 
 header.top::before {
@@ -315,18 +352,29 @@ header.top::before {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: none;
+  background: radial-gradient(400px 90px at 12% -40%, rgba(34, 211, 238, 0.14), transparent 70%);
+}
+
+header.top::after {
+  content: '';
+  position: absolute;
+  inset-inline: 18px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--navy), var(--gold), var(--teal));
+  opacity: 0.85;
 }
 
 header.top .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 13px;
 }
 
 header.top .seal {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   flex: none;
   position: relative;
@@ -335,8 +383,8 @@ header.top .seal {
   justify-content: center;
   overflow: hidden;
   background: rgba(6, 16, 32, 0.4);
-  border: 1.5px solid var(--navy);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 0 18px rgba(34, 211, 238, 0.25);
+  border: 1.5px solid color-mix(in srgb, var(--navy) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), 0 0 20px color-mix(in srgb, var(--navy) 28%, transparent);
   transition: transform 0.3s ease;
   will-change: transform;
 }
@@ -354,54 +402,67 @@ header.top .seal img {
 }
 
 header.top h1 {
-  font-size: 18px;
+  font-size: 16.5px;
   margin: 0;
   font-weight: 700;
   font-family: var(--font-display);
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
 }
 
 header.top p {
-  margin: 2px 0 0;
-  font-size: 12.5px;
+  margin: 3px 0 0;
+  font-size: 10.5px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
 }
 
 .quickstats {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-right: auto;
+  margin-inline-start: auto;
 }
 
 .quickstats div {
   text-align: center;
+  background: color-mix(in srgb, var(--surface-alt) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 7px 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .quickstats .n {
-  font-family: 'IBM Plex Mono', monospace;
-  font-weight: 600;
-  font-size: 16px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15.5px;
   color: var(--navy);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--navy) 45%, transparent);
 }
 
 .quickstats .l {
-  font-size: 10.5px;
+  font-size: 9.5px;
   color: var(--text-muted);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
 @media(max-width: 600px) {
   header.top {
-    padding: 14px 14px;
+    padding: 12px 14px;
     gap: 10px;
+    top: 8px;
   }
 
   header.top h1 {
-    font-size: 15.5px;
+    font-size: 15px;
   }
 
   header.top p {
-    font-size: 11px;
+    font-size: 9.5px;
   }
 
   header.top .seal {
@@ -410,7 +471,11 @@ header.top p {
   }
 
   .quickstats {
-    gap: 10px;
+    gap: 8px;
+  }
+
+  .quickstats div {
+    padding: 6px 12px;
   }
 
   .quickstats .n {
@@ -418,7 +483,7 @@ header.top p {
   }
 
   .quickstats .l {
-    font-size: 9.5px;
+    font-size: 9px;
   }
 }
 
@@ -427,19 +492,19 @@ header.top p {
   max-width: none;
   width: 100%;
   margin: 0 auto;
-  padding: 20px 32px 60px;
+  padding: 16px 28px 60px;
   box-sizing: border-box;
 }
 
 @media(min-width: 1600px) {
   .app {
-    padding: 20px 4vw 60px;
+    padding: 16px 4vw 60px;
   }
 }
 
 @media(max-width: 600px) {
   .app {
-    padding: 12px 10px 40px;
+    padding: 10px 10px 40px;
   }
 }
 
@@ -455,19 +520,21 @@ header.top p {
   min-width: 0;
 }
 
-/* ============= NAVIGATION ============= */
+/* ============= NAVIGATION (الشريط الجانبي 224px — Terminal) ============= */
 nav.tabs {
   flex: none;
   width: 224px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  background: #0e1d34;
-  border: 1px solid #1c3854;
-  padding: 12px 10px;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  gap: 5px;
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid var(--border);
+  padding: 14px 10px;
+  border-radius: 16px;
+  box-shadow: var(--shadow), 0 18px 44px -24px rgba(139, 92, 246, 0.25);
   position: sticky;
   top: 16px;
   align-self: flex-start;
@@ -479,13 +546,62 @@ nav.tabs {
 }
 
 body.dark-theme nav.tabs {
-  background: #0a1628;
-  border-color: #17324c;
+  background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
+}
+
+/* شعار العلامة أعلى الشريط الجانبي (FTC2 Terminal) */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 12px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.nav-brand img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--navy) 55%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--navy) 30%, transparent);
+  flex: none;
+}
+.nav-brand b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.4px;
+  color: var(--text);
+}
+.nav-brand span {
+  display: block;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.nav-brand span em {
+  font-style: normal;
+  color: var(--navy);
 }
 
 nav.tabs.collapsed {
-  width: 56px;
-  padding: 12px 6px;
+  width: 60px;
+  padding: 14px 6px;
+}
+
+nav.tabs.collapsed .nav-brand {
+  justify-content: center;
+  padding: 4px 0 12px;
+  margin-bottom: 10px;
+}
+nav.tabs.collapsed .nav-brand b,
+nav.tabs.collapsed .nav-brand span {
+  display: none;
 }
 
 .nav-collapse-toggle {
@@ -494,25 +610,28 @@ nav.tabs.collapsed {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  border: none;
+  border: 1px solid var(--border);
   background: transparent;
-  padding: 9px 14px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
   font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  margin-bottom: 4px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  margin-bottom: 6px;
 }
 
 .nav-collapse-toggle:hover {
   background: var(--surface-alt);
-  color: var(--text);
+  color: var(--navy);
+  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
 }
 
 .nav-collapse-toggle svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   flex: none;
   stroke: currentColor;
   transition: transform 0.2s ease;
@@ -539,31 +658,31 @@ nav.tabs.collapsed .nav-flyout-row {
 nav.tabs button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
   flex: none;
   border: none;
   background: transparent;
-  padding: 9px 14px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   color: var(--text-muted);
   text-align: right;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
   position: relative;
   z-index: 1;
 }
 
 nav.tabs button svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   flex: none;
   stroke: currentColor;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, filter 0.2s ease;
   will-change: transform;
 }
 
@@ -574,11 +693,23 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: var(--surface-alt);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--navy) 16%, transparent), color-mix(in srgb, var(--gold) 9%, transparent));
   color: var(--navy);
   font-weight: 700;
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--navy) 32%, transparent), 0 0 18px -6px color-mix(in srgb, var(--navy) 50%, transparent);
   animation: navPop 0.25s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+nav.tabs button.active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--navy);
+  box-shadow: 0 0 10px var(--navy);
 }
 
 nav.tabs button:not(.active):hover {
@@ -588,6 +719,7 @@ nav.tabs button:not(.active):hover {
 
 nav.tabs button:hover svg {
   transform: scale(1.1);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
 }
 
 @media(max-width: 900px) {
@@ -603,11 +735,28 @@ nav.tabs button:hover svg {
     max-height: none;
     overflow-x: auto;
     overflow-y: visible;
-    direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً بدل أي سلوك متضارب بين المتصفحات */
+    direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً */
+    padding: 8px;
+    border-radius: 14px;
+  }
+
+  nav.tabs .nav-brand {
+    display: none;
   }
 
   nav.tabs button {
     width: auto;
+    flex: none;
+  }
+
+  nav.tabs button.active::before {
+    inset-inline-start: auto;
+    top: auto;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    width: auto;
+    height: 2px;
   }
 
   .nav-section-label {
@@ -625,20 +774,19 @@ nav.tabs button:hover svg {
   }
 
   nav.tabs button svg {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
   }
 }
 
-/* فاصل بصري رفيع بين مجموعات التبويبات (بدل التسمية النصية القديمة) — في الوضع الجانبي الافتراضي
-   يفصل أفقياً بين المجموعة السابقة والتالية، وفي شريط الجوال الأفقي يتحول لفاصل رأسي (انظر الوسائط أعلاه). */
+/* فاصل بصري رفيع بين مجموعات التبويبات */
 .nav-section-label {
   flex: none;
   align-self: stretch;
   width: auto;
   height: 1px;
-  margin: 6px 4px;
-  background: var(--border);
+  margin: 7px 4px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--navy) 40%, transparent), transparent);
   font-size: 0;
   line-height: 0;
   overflow: hidden;
@@ -670,7 +818,7 @@ nav.tabs button:hover svg {
   margin-inline-start: -6px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 7px;
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
@@ -703,10 +851,12 @@ nav.tabs button:hover svg {
   max-width: 260px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-hover);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
   padding: 6px;
   flex-direction: column;
   gap: 2px;
@@ -723,7 +873,7 @@ nav.tabs button:hover svg {
   border: none;
   background: transparent;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 13px;
   color: var(--text);
@@ -758,7 +908,7 @@ select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 22%, transparent);
   border-radius: var(--radius);
 }
 
@@ -770,7 +920,7 @@ nav.tabs button:focus-visible {
 .toolbar select:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 16%, transparent), 0 0 14px -4px color-mix(in srgb, var(--navy) 50%, transparent);
 }
 
 /* ============= USER PILL ============= */
@@ -780,10 +930,12 @@ nav.tabs button:focus-visible {
   gap: 6px;
   font-size: 12.5px;
   color: var(--text-muted);
-  background: var(--surface-alt);
+  background: color-mix(in srgb, var(--surface-alt) 75%, transparent);
   border: 1px solid var(--border);
   padding: 5px 12px;
   border-radius: 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .user-pill b {
@@ -822,41 +974,45 @@ section.view.active {
 
 .card {
   position: relative;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border-radius: var(--radius);
   padding: 16px 18px 16px 20px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
   border-inline-start: 3px solid var(--gold);
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
   will-change: transform, box-shadow;
 }
 
 .card:hover {
   box-shadow: var(--shadow-hover);
-  border-color: var(--gold);
+  border-color: color-mix(in srgb, var(--navy) 45%, var(--border));
   transform: translateY(-2px);
 }
 
 .card .k {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
-  margin-bottom: 7px;
+  margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 1px;
   font-weight: 600;
+  font-family: var(--font-mono);
 }
 
 .card .v {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 23px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--navy);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--navy) 40%, transparent);
   transition: color 0.2s ease;
 }
 
 .card .v.gold {
-  color: var(--gold-dark);
+  color: var(--gold-soft);
 }
 
 .card .v.red {
@@ -879,25 +1035,29 @@ section.view.active {
   border-inline-start-color: var(--teal);
 }
 
-/* ============= PANELS ============= */
+/* ============= PANELS (بطاقات زجاجية) ============= */
 .panel {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-radius: 16px;
+  box-shadow: var(--shadow), 0 20px 50px -30px rgba(34, 211, 238, 0.18);
   border: 1px solid var(--border);
   padding: 18px 20px;
-  margin-bottom: 18px;
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  margin-bottom: 16px;
+  transition: box-shadow 0.2s ease;
   will-change: transform;
 }
 
 .panel h3 {
   margin: 0 0 14px;
-  font-size: 17px;
-  color: var(--navy);
+  font-size: 14.5px;
+  color: var(--text);
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
+  border-inline-start: 3px solid var(--navy);
+  padding-inline-start: 10px;
 }
 
 @media(max-width: 600px) {
@@ -910,7 +1070,7 @@ section.view.active {
   }
 }
 
-/* ============= لوحة النظرة التنفيذية (Close Overview) — عصرية بطابع مشابه للوحات إقفال الحسابات ============= */
+/* ============= لوحة النظرة التنفيذية (Close Overview) ============= */
 .close-overview {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -926,7 +1086,7 @@ section.view.active {
   justify-content: center;
   padding: 26px 20px;
   border-inline-end: 1px solid var(--border);
-  background: var(--surface-alt);
+  background: color-mix(in srgb, var(--surface-alt) 60%, transparent);
 }
 
 .close-ring-wrap {
@@ -943,33 +1103,35 @@ section.view.active {
 .close-ring-fill { fill: none; stroke-width: 10; stroke-linecap: round; transition: stroke-dasharray 0.5s ease; }
 
 .close-ring-center { position: absolute; text-align: center; }
-.close-ring-pct { font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; }
+.close-ring-pct { font-family: var(--font-mono); font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; text-shadow: 0 0 20px color-mix(in srgb, var(--navy) 35%, transparent); }
 .close-ring-pct span { font-size: 16px; }
-.close-ring-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight: 600; }
+.close-ring-label { font-size: 10px; color: var(--text-muted); margin-top: 4px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; }
 
 .close-status-chip {
   margin-top: 14px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   padding: 4px 14px;
   border-radius: 20px;
   letter-spacing: 0.3px;
+  border: 1px solid transparent;
 }
-.close-status-chip.done { background: rgba(47,168,79,0.12); color: var(--teal); }
-.close-status-chip.pending { background: rgba(232,117,44,0.12); color: var(--gold-dark); }
+.close-status-chip.done { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); border-color: color-mix(in srgb, var(--teal) 30%, transparent); }
+.close-status-chip.pending { background: color-mix(in srgb, var(--gold) 14%, transparent); color: var(--gold-soft); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
 
 .close-target { font-size: 11px; color: var(--text-muted); margin-top: 12px; text-align: center; }
 .close-remaining { font-size: 12px; color: var(--text); margin-top: 6px; text-align: center; }
-.close-remaining b { font-family: 'IBM Plex Mono', monospace; color: var(--navy); font-size: 15px; }
+.close-remaining b { font-family: var(--font-mono); color: var(--navy); font-size: 15px; text-shadow: 0 0 12px color-mix(in srgb, var(--navy) 40%, transparent); }
 
 .close-body { padding: 20px 22px; }
 
 .close-section-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 1px;
   font-weight: 700;
+  font-family: var(--font-mono);
   margin-bottom: 10px;
 }
 
@@ -982,12 +1144,12 @@ section.view.active {
   border-bottom: 1px solid var(--border);
 }
 .close-status-item { display: flex; align-items: center; gap: 8px; }
-.close-status-item .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.close-status-item .n { font-family: 'IBM Plex Mono', monospace; font-size: 19px; font-weight: 700; color: var(--text); }
+.close-status-item .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 8px currentColor; }
+.close-status-item .n { font-family: var(--font-mono); font-size: 19px; font-weight: 700; color: var(--text); }
 .close-status-item .l { font-size: 12px; color: var(--text-muted); }
-.close-status-item.navy .dot { background: var(--navy); }
-.close-status-item.gold .dot { background: var(--gold); }
-.close-status-item.teal .dot { background: var(--teal); }
+.close-status-item.navy .dot { background: var(--navy); color: var(--navy); }
+.close-status-item.gold .dot { background: var(--gold); color: var(--gold); }
+.close-status-item.teal .dot { background: var(--teal); color: var(--teal); }
 
 .close-metrics-grid {
   display: grid;
@@ -1003,8 +1165,8 @@ section.view.active {
   margin-bottom: 6px;
 }
 .close-metric-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.close-metric-tag { font-size: 11px; font-weight: 700; color: var(--gold-dark); }
-.close-metric-num { font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 700; color: var(--text); }
+.close-metric-tag { font-size: 11px; font-weight: 700; color: var(--gold-soft); }
+.close-metric-num { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--text); }
 .close-metric-track {
   height: 6px;
   background: var(--surface-alt);
@@ -1012,7 +1174,7 @@ section.view.active {
   overflow: hidden;
   margin-top: 6px;
 }
-.close-metric-fill { height: 100%; border-radius: 4px; background: var(--teal); }
+.close-metric-fill { height: 100%; border-radius: 4px; background: var(--teal); box-shadow: 0 0 10px color-mix(in srgb, var(--teal) 60%, transparent); }
 .close-metric-fill.warn { background: var(--gold); }
 .close-metric-frac { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
@@ -1031,7 +1193,7 @@ section.view.active {
 @media(max-width: 480px){ .close-entities-grid { grid-template-columns: 1fr; } }
 
 .close-entity-card {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 66%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
@@ -1039,10 +1201,15 @@ section.view.active {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.close-entity-card:hover {
+  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
+  box-shadow: 0 8px 24px -12px rgba(34, 211, 238, 0.25);
 }
 .close-entity-info .l { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-.close-entity-info .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.close-entity-info .n { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); }
+.close-entity-info .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 7px currentColor; }
+.close-entity-info .n { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--text); }
 .close-entity-info .of { font-size: 11px; color: var(--text-muted); }
 .close-entity-ring { width: 44px; height: 44px; flex: none; position: relative; }
 .close-entity-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -1050,7 +1217,7 @@ section.view.active {
 .close-entity-ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; }
 .close-entity-ring-txt {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);
 }
 
 /* ============= BAR ROWS ============= */
@@ -1082,7 +1249,8 @@ section.view.active {
 .bar-row .fill {
   height: 100%;
   border-radius: 6px;
-  background: var(--navy);
+  background: linear-gradient(90deg, var(--navy), var(--teal));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--navy) 45%, transparent);
   will-change: width;
 }
 
@@ -1090,7 +1258,7 @@ section.view.active {
   width: 64px;
   flex: none;
   text-align: left;
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text);
 }
@@ -1098,76 +1266,80 @@ section.view.active {
 /* ============= BUTTONS ============= */
 .btn {
   border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
+  border-radius: 10px;
+  padding: 9px 16px;
   font-family: inherit;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
+  letter-spacing: 0.2px;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, filter 0.12s ease;
   position: relative;
   overflow: hidden;
   will-change: transform, box-shadow;
 }
 
 .btn:hover {
-  filter: brightness(0.96);
+  filter: brightness(1.05);
 }
 
 .btn:active {
   transform: translateY(0);
   box-shadow: none;
-  filter: brightness(0.96);
+  filter: brightness(0.97);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
+  background: linear-gradient(135deg, var(--navy) 0%, color-mix(in srgb, var(--gold) 65%, var(--navy)) 100%);
   color: var(--on-accent-text);
   font-weight: 700;
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--navy) 25%, transparent);
+  box-shadow: 0 4px 18px -4px color-mix(in srgb, var(--navy) 55%, transparent);
 }
 
 .btn-primary:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--navy) 35%, transparent);
+  filter: brightness(1.1);
+  box-shadow: 0 8px 26px -6px color-mix(in srgb, var(--navy) 65%, transparent);
 }
 
 .btn-gold {
-  background: var(--gold);
+  background: linear-gradient(135deg, var(--gold) 0%, color-mix(in srgb, var(--gold) 70%, #4f46e5) 100%);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 4px 18px -6px color-mix(in srgb, var(--gold) 55%, transparent);
 }
 
 .btn-gold:hover {
-  background: var(--gold-dark);
+  background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold) 100%);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--gold) 60%, transparent);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--navy);
+  color: var(--navy-dark);
   border: 1px solid var(--border);
 }
 
 .btn-ghost:hover {
   background: var(--surface-alt);
+  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
+  box-shadow: 0 0 14px -6px color-mix(in srgb, var(--navy) 45%, transparent);
 }
 
 .btn-danger {
   background: transparent;
   color: var(--red);
-  border: 1px solid rgba(248,113,113,0.35);
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
 }
 
 .btn-danger:hover {
-  background: rgba(248,113,113,0.12);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  box-shadow: 0 0 14px -6px color-mix(in srgb, var(--red) 45%, transparent);
 }
 
 .btn-sm {
-  padding: 6px 10px;
-  font-size: 12px;
-  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  border-radius: 8px;
 }
 
 .btn:disabled {
@@ -1201,10 +1373,40 @@ section.view.active {
   background: var(--surface-alt);
   border-color: var(--navy);
   color: var(--navy);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--navy) 50%, transparent);
 }
 
 .topbar-user .icon-btn span {
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* زر البحث الشامل — يأخذ مظهر حقل بحث تيرمينال (⌘K) */
+#btn-global-search {
+  min-width: 190px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface-alt) 55%, transparent);
+  border-color: var(--border);
+}
+#btn-global-search::after {
+  content: '⌘K';
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-inline-start: auto;
+  opacity: 0.75;
+  letter-spacing: 0.5px;
+}
+#btn-global-search:hover::after {
+  color: var(--navy);
+}
+#btn-global-search svg {
+  width: 16px;
+  height: 16px;
 }
 
 #btn-sound-toggle.muted svg path:last-child {
@@ -1227,11 +1429,11 @@ section.view.active {
 .toolbar input,
 .toolbar select {
   font-family: inherit;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 13.5px;
-  background: var(--surface);
+  border-radius: 10px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
   color: var(--text);
   box-shadow: var(--shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -1275,7 +1477,7 @@ table {
   overflow-y: auto;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   will-change: contents;
 }
 
@@ -1308,15 +1510,15 @@ table {
 .table-scroll thead th {
   position: sticky;
   top: 0;
-  background: var(--surface);
+  background: var(--surface-solid);
   z-index: 1;
   box-shadow: 0 1px 0 var(--border);
 }
 
-/* أعمدة ثابتة (تحديد + الاسم) تفضل ظاهرة جنب بعض أثناء السكرول الأفقي للجداول العريضة */
+/* أعمدة ثابتة (تحديد + الاسم) */
 .sticky-col {
   position: sticky;
-  background: var(--surface);
+  background: var(--surface-solid);
 }
 
 .sticky-col-1 {
@@ -1336,16 +1538,16 @@ table {
 
 thead th.sticky-col {
   z-index: 4;
-  background: var(--surface);
+  background: var(--surface-solid);
 }
 
 tbody tr:hover .sticky-col {
-  background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+  background: color-mix(in srgb, var(--navy) 8%, var(--surface-solid));
 }
 
 tbody tr.owe .sticky-col,
 tbody tr.paid .sticky-col {
-  background: var(--surface);
+  background: var(--surface-solid);
 }
 
 @media (max-width: 900px) {
@@ -1357,24 +1559,25 @@ tbody tr.paid .sticky-col {
 
 thead th {
   text-align: right;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.7px;
   padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   text-transform: uppercase;
+  font-family: var(--font-mono);
 }
 
 tbody td {
-  padding: 10px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 9px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   vertical-align: middle;
 }
 
 body.density-compact thead th {
   padding: 5px 8px;
-  font-size: 10.5px;
+  font-size: 9.5px;
 }
 
 body.density-compact tbody td {
@@ -1394,28 +1597,33 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+  background: color-mix(in srgb, var(--navy) 7%, transparent);
 }
 
 .stamp {
   display: inline-block;
-  border: none;
-  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent);
+  background: color-mix(in srgb, var(--teal) 13%, transparent);
   color: var(--teal);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
   white-space: nowrap;
+  font-family: var(--font-mono);
+  letter-spacing: 0.4px;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--teal) 40%, transparent);
 }
 
 .stamp.owe {
-  background: color-mix(in srgb, var(--red) 14%, transparent);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  background: color-mix(in srgb, var(--red) 13%, transparent);
   color: var(--red);
 }
 
 .stamp.paid {
-  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  border-color: color-mix(in srgb, var(--teal) 30%, transparent);
+  background: color-mix(in srgb, var(--teal) 13%, transparent);
   color: var(--teal);
 }
 
@@ -1443,10 +1651,12 @@ tbody tr:hover {
   z-index: 55;
   min-width: 168px;
   max-width: 240px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-hover);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
   padding: 6px;
   flex-direction: column;
   gap: 3px;
@@ -1479,7 +1689,9 @@ tbody tr:hover {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(13, 33, 56, 0.55);
+  background: rgba(3, 8, 18, 0.58);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: none;
   align-items: center;
   justify-content: center;
@@ -1492,22 +1704,28 @@ tbody tr:hover {
 }
 
 .modal {
-  background: var(--surface);
-  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
+  backdrop-filter: blur(24px) saturate(1.25);
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+  border: 1px solid var(--border);
+  border-radius: 18px;
   width: 100%;
   max-width: 640px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 30px 70px -30px rgba(34, 211, 238, 0.3);
   padding: 22px 26px;
 }
 
 .modal h2 {
   margin: 0 0 16px;
-  font-size: 18px;
-  color: var(--navy);
+  font-size: 16px;
+  color: var(--text);
   font-family: var(--font-display);
   font-weight: 700;
+  letter-spacing: 0.3px;
+  border-inline-start: 3px solid var(--navy);
+  padding-inline-start: 10px;
 }
 
 .formgrid {
@@ -1541,7 +1759,7 @@ tbody tr:hover {
   }
 
   .modal h2 {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .modal-actions {
@@ -1555,22 +1773,24 @@ tbody tr:hover {
 
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-muted);
   margin-bottom: 4px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  padding: 9px 11px;
+  padding: 8px 11px;
   border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 10px;
   font-family: inherit;
-  font-size: 13.5px;
-  background: var(--surface);
+  font-size: 13px;
+  background: var(--surface-solid);
+  color: var(--text);
   box-shadow: var(--shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1580,7 +1800,7 @@ tbody tr:hover {
 .field textarea:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 15%, transparent), 0 0 14px -4px color-mix(in srgb, var(--navy) 45%, transparent);
 }
 
 .modal-actions {
@@ -1589,12 +1809,12 @@ tbody tr:hover {
   gap: 10px;
   margin-top: 18px;
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: 15px;
 }
 
 .computed {
-  background: var(--surface-alt);
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-alt) 65%, transparent);
+  border-radius: 10px;
   padding: 10px 12px;
   display: flex;
   justify-content: space-between;
@@ -1603,7 +1823,7 @@ tbody tr:hover {
 }
 
 .computed b {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   color: var(--navy);
 }
 
@@ -1625,7 +1845,7 @@ tbody tr:hover {
   }
 }
 
-/* ============= LOGIN (ثيم كحلي غامق / سايان متوهج) ============= */
+/* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
   --auth-bg-deep: #060e1c;
@@ -1797,7 +2017,7 @@ tbody tr:hover {
 }
 
 .login-error {
-  color: #f87171;
+  color: #ff5470;
   font-size: 12.5px;
   text-align: center;
   margin-top: 10px;
@@ -1830,16 +2050,18 @@ tbody tr:hover {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: 9px;
   padding: 5px 10px;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .topbar-user button:hover {
   background: var(--surface-alt);
+  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
+  color: var(--navy);
 }
 
 /* ============= TAGS & LISTS ============= */
@@ -1851,13 +2073,14 @@ tbody tr:hover {
 }
 
 .tag {
-  background: var(--surface-alt);
+  background: color-mix(in srgb, var(--surface-alt) 70%, transparent);
   border-radius: 20px;
   padding: 6px 12px;
   font-size: 12.5px;
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 1px solid var(--border);
 }
 
 .tag button {
@@ -1879,13 +2102,12 @@ tbody tr:hover {
 }
 
 /* ============= TABLE INPUTS (bulk / import forms) ============= */
-/* يغطي كل حقول الإدخال داخل الجداول (فورمات الاستيراد الجماعي) */
 td input,
 td select,
 td textarea {
   border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  border-radius: 9px;
+  background: var(--surface-solid);
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
@@ -1899,7 +2121,7 @@ td select:focus,
 td textarea:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), 0 0 10px -4px color-mix(in srgb, var(--navy) 40%, transparent);
 }
 
 td input:hover:not(:focus),
@@ -1915,11 +2137,12 @@ td select:hover:not(:focus) {
   transform: translateX(-50%) translateY(8px);
   background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
   color: var(--on-accent-text);
-  font-weight: 600;
+  font-weight: 700;
   padding: 11px 22px;
-  border-radius: 10px;
-  font-size: 13.5px;
-  box-shadow: var(--shadow);
+  border-radius: 12px;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 12px 34px -8px color-mix(in srgb, var(--navy) 55%, transparent);
   opacity: 0;
   transition: opacity 0.3s ease, transform 0.3s ease;
   backdrop-filter: blur(2px);
@@ -1938,7 +2161,7 @@ td select:hover:not(:focus) {
 }
 
 .toast.error {
-  background: var(--red);
+  background: linear-gradient(135deg, var(--red) 0%, color-mix(in srgb, var(--red) 60%, #b91c1c) 100%);
 }
 
 @media(max-width: 600px) {
@@ -1965,8 +2188,6 @@ td select:hover:not(:focus) {
 }
 
 /* ============= CFO DASHBOARD ============= */
-/* تخطيط Masonry بعمود CSS (بدل Grid ثابت الصفوف): كل لوحة تتدفق لأقصر عمود متاح مباشرة،
-   فلا يبقى فراغ كبير أسفل لوحة قصيرة بجانب لوحة طويلة، ولا تظهر لوحة وحيدة معزولة فى صف منفصل. */
 .cfo-grid {
   column-count: 3;
   column-gap: 16px;
@@ -1986,9 +2207,11 @@ td select:hover:not(:focus) {
 }
 
 .cfo-panel {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 16px;
   display: flex;
@@ -1999,12 +2222,15 @@ td select:hover:not(:focus) {
 
 .cfo-panel-title {
   margin: 0 0 12px;
-  font-size: 14.5px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--navy-dark);
+  color: var(--navy);
   text-align: center;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
 .cfo-kpis {
@@ -2019,26 +2245,27 @@ td select:hover:not(:focus) {
 }
 
 .cfo-kpi {
-  background: var(--surface-alt);
-  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-alt) 60%, transparent);
+  border-radius: 10px;
   padding: 10px;
   display: flex;
   align-items: flex-start;
   gap: 9px;
   min-width: 0;
+  border: 1px solid var(--border);
 }
 
 .cfo-kpi-icon {
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 7px;
-  background: var(--surface);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gold-dark);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  color: var(--gold-soft);
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 
 .cfo-kpi-icon svg {
@@ -2051,17 +2278,19 @@ td select:hover:not(:focus) {
 }
 
 .cfo-kpi-label {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .cfo-kpi-value {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 15.5px;
+  font-size: 15px;
   color: var(--navy-dark);
   white-space: nowrap;
   overflow: hidden;
@@ -2084,12 +2313,12 @@ td select:hover:not(:focus) {
 
 .cfo-deltas b.up {
   color: var(--teal);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .cfo-deltas b.down {
   color: var(--red);
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .cfo-caption {
@@ -2115,25 +2344,22 @@ td select:hover:not(:focus) {
 }
 
 /* ============= HINT / INSTRUCTIONAL TEXT ============= */
-/* إخفاء كل نصوص الشرح التوضيحية الثابتة أسفل عناوين الأقسام في كل أنحاء البرنامج
-   (بناءً على طلب صريح) — تبقى في الـ HTML لكن لا تُعرض، حتى لا يتكرر حذفها يدوياً
-   من كل شاشة على حدة، وحتى تبقى الواجهة مختصرة وهادئة. */
+/* إخفاء كل نصوص الشرح التوضيحية الثابتة أسفل عناوين الأقسام */
 .hint-info {
   display: none !important;
 }
 
-/* ============= شيت العملاء — تصميم مخصص (مُقيَّد بـ #view-clients فقط، لا يؤثر على أي شاشة أخرى) ============= */
-
-/* بطاقة أدوات علوية (بحث + فلاتر + أزرار) بدل الشريط المسطّح */
+/* ============= شيت العملاء — تصميم مخصص ============= */
 #view-clients .toolbar-card {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 14px 16px;
   box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-/* بطاقات إحصائية (مطابق للفلتر / إجمالي العملاء) بدل السطر النصي */
 #view-clients .client-stats {
   display: flex;
   gap: 10px;
@@ -2141,7 +2367,7 @@ td select:hover:not(:focus) {
 }
 
 #view-clients .client-stats .stat {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 16px;
@@ -2154,6 +2380,7 @@ td select:hover:not(:focus) {
 
 #view-clients .client-stats .stat b {
   font-size: 18px;
+  font-family: var(--font-mono);
 }
 
 #view-clients .client-stats .stat span {
@@ -2161,24 +2388,24 @@ td select:hover:not(:focus) {
   color: var(--text-muted);
 }
 
-/* رأس الجدول بتينت أزرق فاتح (نفس روح لون القائمة الجانبية) */
+/* رأس جدول العملاء */
 #view-clients thead th {
-  background: #0e1d34;
+  background: color-mix(in srgb, var(--surface-solid) 85%, transparent);
   color: var(--navy-dark);
 }
 
 body.dark-theme #view-clients thead th {
-  background: #0a1628;
+  background: var(--surface-solid);
   color: var(--text);
 }
 
-/* شريط لون رفيع على يمين كل صف — لون موحّد لكل الصفوف بدل التفريق بين أحمر/أخضر */
+/* شريط لون رفيع على كل صف */
 #view-clients tbody tr.owe,
 #view-clients tbody tr.paid {
   box-shadow: inset 3px 0 0 var(--navy);
 }
 
-/* ================= زرار الإضافة السريعة العائم (حركة خزنة) — مرحلة 1 من تطوير شيت الحركات المالية ================= */
+/* ================= زرار الإضافة السريعة العائم ================= */
 .fab-quickadd {
   position: fixed;
   bottom: 24px;
@@ -2186,13 +2413,13 @@ body.dark-theme #view-clients thead th {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--gold);
-  color: var(--navy-dark);
+  background: linear-gradient(135deg, var(--gold) 0%, #4f46e5 100%);
+  color: #fff;
   font-size: 30px;
   font-weight: 700;
   line-height: 1;
   border: none;
-  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 24px -6px color-mix(in srgb, var(--gold) 60%, transparent);
   cursor: pointer;
   z-index: 40;
   display: flex;
@@ -2200,15 +2427,13 @@ body.dark-theme #view-clients thead th {
   justify-content: center;
   transition: transform .15s ease, box-shadow .15s ease;
 }
-.fab-quickadd:hover { transform: scale(1.08); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.fab-quickadd:hover { transform: scale(1.08); box-shadow: 0 6px 18px rgba(0,0,0,.4), 0 0 30px -6px color-mix(in srgb, var(--gold) 70%, transparent); }
 .fab-quickadd:active { transform: scale(0.95); }
 @media (max-width: 720px) {
   .fab-quickadd { bottom: 78px; left: 16px; width: 50px; height: 50px; font-size: 26px; }
 }
 
-/* ============= صناديق/بطاقات الجوال — تحويل كل جداول البرنامج (كل الشاشات) لصناديق مرتبة بدل التمرير الأفقي =============
-   يعتمد على data-label و card-full الموجودتين مسبقاً في كل جدول (JS) لكنهما كانتا بلا تنسيق CSS فعلي.
-   لأن كل جدول تقريباً في البرنامج مغلّف بـ .table-scroll، هذا القسم الواحد يوحّد شكل كل الصناديق فى كل البرنامج دفعة واحدة. */
+/* ============= صناديق/بطاقات الجوال — كل الجداول تتحول لصناديق مرتبة ============= */
 @media (max-width: 680px) {
   .table-scroll {
     max-height: none;
@@ -2235,9 +2460,9 @@ body.dark-theme #view-clients thead th {
   .table-scroll tbody tr {
     display: block;
     position: relative;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 14px;
     box-shadow: var(--shadow);
     padding: 6px 14px;
     margin-bottom: 10px;
@@ -2248,7 +2473,7 @@ body.dark-theme #view-clients thead th {
   }
 
   .table-scroll tbody tr:hover {
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface-solid) 80%, transparent);
   }
 
   .table-scroll tbody td {
@@ -2271,14 +2496,14 @@ body.dark-theme #view-clients thead th {
   .table-scroll tbody td::before {
     content: attr(data-label);
     flex: none;
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.4px;
+    font-family: var(--font-mono);
   }
 
-  /* عمود اسم العميل (card-full بلابل): يظهر كعنوان كامل العرض بارز أعلى الصندوق بدل سطر جنب سطر */
   .table-scroll tbody td.card-full:not([data-label=""]) {
     display: block;
   }
@@ -2295,7 +2520,6 @@ body.dark-theme #view-clients thead th {
     padding-top: 2px;
   }
 
-  /* أعمدة بلا لابل (أزرار الإجراءات، أو أي حقل كامل العرض): صف سفلي كامل العرض بدل سطر جنب سطر */
   .table-scroll tbody td[data-label=""] {
     display: block;
     padding-top: 10px;
@@ -2305,9 +2529,6 @@ body.dark-theme #view-clients thead th {
     display: none;
   }
 
-  /* خانة التحديد (checkbox) فقط تُثبَّت في الزاوية العلوية اليمنى للصندوق بدل أن تشغل سطراً كاملاً.
-     أي عمود آخر بكلاس sticky-col-1 لكن يحمل بيانات فعلية (مثال: اسم العميل فى شيت الفواتير،
-     أو رقم الهوية فى شيت حوالات الشركات) يبقى صفاً عادياً ولا يُثبَّت، حتى لا يتراكب فوق العمود التالي. */
   .table-scroll tbody td.sticky-col-1[data-label=""] {
     position: absolute;
     top: 8px;
@@ -2321,8 +2542,6 @@ body.dark-theme #view-clients thead th {
     display: none;
   }
 
-  /* عمود sticky-col-1 ببيانات فعلية بلا data-label نهائياً (مثال: شيت حوالات الشركات) —
-     يظهر كسطر عادي فقط بدون تسمية بدل أن يختفي أو يتراكب */
   .table-scroll tbody td.sticky-col-1:not([data-label]) {
     display: block;
     font-weight: 700;
@@ -2336,7 +2555,7 @@ body.dark-theme #view-clients thead th {
   position: relative;
 }
 #vault-table-body td.editable-cell:hover {
-  background: rgba(196, 154, 74, .12);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
   outline: 1px dashed var(--gold-dark);
   outline-offset: -2px;
 }
@@ -2351,7 +2570,8 @@ body.dark-theme #view-clients thead th {
 }
 .inline-edit-input {
   border: 1px solid var(--gold-dark);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-mono);
 }
