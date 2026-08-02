@@ -165,18 +165,8 @@ window.addEventListener('appinstalled', ()=>{
 })();
 // يحاول رفع كل التعديلات المعلّقة محلياً إلى السيرفر — يُستدعى عند استعادة الاتصال (حدث online)،
 // وأيضاً بشكل دوري احتياطاً (بعض الأجهزة لا تُطلق حدث online بدقة، خصوصاً على الجوال).
-// عند وصول 429 (طلبات كثيرة جداً) من storageLimiter على السيرفر، نوقف كل محاولات المزامنة
-// (سجلات وقيم عادية) لمدة تهدئة قصيرة بدل الاستمرار فى محاولة باقي الطابور فوراً — الاستمرار
-// كان يعني: كل عنصر متبقٍّ فى طابور كبير (مئات السجلات) يُرسَل ويُرفض بـ429 تباعاً كل جولة كل
-// 20 ثانية، وهو ما يُغرق الشبكة ويُجمّد التبويب فعلياً (شاشة سوداء) بدل مجرد رسالة تحذير.
-let _ftcRateLimitCooldownUntil = 0;
-function _ftcRateLimited(){
-  _ftcRateLimitCooldownUntil = Date.now() + 30000; // تهدئة 30 ثانية قبل أي محاولة مزامنة جديدة
-  updateOfflineIndicator();
-}
 async function flushPendingWrites(){
   if(_ftcSyncInFlight) return;
-  if(Date.now() < _ftcRateLimitCooldownUntil) return; // لسه فى فترة تهدئة بعد 429 — لا نحاول الآن
   const pending = await _pendingReadAll();
   if(!pending.length){ markOnline(); return; }
   _ftcSyncInFlight = true;
@@ -217,12 +207,6 @@ async function flushPendingWrites(){
           showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
           continue;
         }
-        if(res.status === 429){
-          // السيرفر رفض الطلب لتجاوز حد معدل الحفظ — نوقف الجولة كاملة فوراً بدل الاستمرار
-          // فى قصف باقي عناصر الطابور بنفس الرفض، وندخل فترة تهدئة قبل أي محاولة قادمة.
-          _ftcRateLimited();
-          break;
-        }
         if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
         const data = await res.json();
         _kvVersions[item.key] = data.version || 0;
@@ -251,7 +235,6 @@ let _ftcRecordSyncInFlight = false;
 // حتى لا يُقرأ السيرفر وكأنه "الحقيقة الكاملة" بينما فيه تعديلات محلية لسه فى طريقها إليه.
 async function flushPendingRecordWrites(){
   if(_ftcRecordSyncInFlight) return;
-  if(Date.now() < _ftcRateLimitCooldownUntil) return; // لسه فى فترة تهدئة بعد 429 — لا نحاول الآن
   const pending = await _pendingRecordReadAll();
   if(!pending.length) return;
   _ftcRecordSyncInFlight = true;
@@ -277,12 +260,6 @@ async function flushPendingRecordWrites(){
           await _pendingRecordDelete(item.collection, item.id);
           showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
           continue;
-        }
-        if(res.status === 429){
-          // نفس معاملة flushPendingWrites: نوقف الجولة كاملة فوراً بدل قصف باقي طابور السجلات
-          // (اللي ممكن يكون فيه مئات العناصر) بنفس الرفض، وندخل فترة تهدئة قبل أي محاولة قادمة.
-          _ftcRateLimited();
-          break;
         }
         if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
         if(item.op === 'delete'){
@@ -824,18 +801,29 @@ async function checkAllRecordsChanged(){
   }catch(e){ return false; }
 }
 
-// يجلب فقط أرقام هوية العملاء الموجودة بالفعل فى كل النظام (بلا أي بيانات أخرى)، لفحص التكرار قبل
-// الحفظ — يعمل حتى لمستخدم الاستقبال المعزول عادةً عن رؤية باقي بيانات العملاء، لأن هذه النقطة
-// تحديداً مصمَّمة لترجع الأرقام فقط بغض النظر عن origin/status/created_by (راجع تعليق الخادم).
-// يرجع Map من رقم الهوية -> معرّف السجل (id) الداخلي، لتمييز "نفس العميل الذي أعدّله الآن" عن
-// "عميل آخر يملك نفس الرقم فعلاً".
+// بصمة SHA-256 (hex) لنص ما — تُستخدم لمطابقة أرقام الهوية المرسلة كبصمات فقط من الخادم (بدل
+// استقبال النص الصريح لأرقام كل عملاء الشركة لكل مستخدم مصادق). نفس الخوارزمية المستخدمة على
+// الخادم بالضبط. تعتمد على crypto.subtle المتاح في السياقات الآمنة (https أو file://) — لو غير
+// متاح (http على شبكة محلية مثلاً) تُرمى لتسقط منطقيًا إلى الفحص المحلي فقط كخط رجعة آمن.
+async function sha256Hex(str){
+  if(!crypto?.subtle) throw new Error('crypto.subtle غير متاح');
+  const buf = new TextEncoder().encode(str);
+  const d = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// يجلب فقط بصمات أرقام هوية العملاء الموجودة بالفعل فى كل النظام (بدل الأرقام النصية الصريحة،
+// لمُنع نسخ البيانات الشخصية) لفحص التكرار قبل الحفظ — يعمل حتى لمستخدم الاستقبال المعزول عادةً
+// عن رؤية باقي بيانات العملاء، لأن هذه النقطة تحديداً مصمَّمة لترجع البصمات بغض النظر عن
+// origin/status/created_by (راجع تعليق الخادم). يرجع Map من بصمة رقم الهوية -> معرّف السجل (id)
+// الداخلي، لتمييز "نفس العميل الذي أعدّله الآن" عن "عميل آخر يملك نفس الرقم فعلاً".
 async function fetchAllClientIds(){
   try{
     const res = await serverFetch('/api/client-records/ids');
     if(!res.ok) return null; // تعذّر السؤال عن الخادم — المستدعي يقرر خط الرجعة (فحص محلي فقط)
     const data = await res.json();
     const map = new Map();
-    (data.ids||[]).forEach(row=>{ if(row.clientId) map.set(row.clientId, row.id); });
+    (data.ids||[]).forEach(row=>{ if(row.clientIdHash) map.set(row.clientIdHash, row.id); });
     return map;
   }catch(e){ return null; }
 }
