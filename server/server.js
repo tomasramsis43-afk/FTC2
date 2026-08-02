@@ -1037,7 +1037,11 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
       clientId: (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null
     })));
     await client.query('BEGIN');
-    await client.query(
+    const step = async (label, sql, params) => {
+      try { return await client.query(sql, params); }
+      catch (e) { e.message = `[${label}] ` + e.message; throw e; }
+    };
+    await step('inc',
       `CREATE TEMP TABLE _inc ON COMMIT DROP AS
        SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version,
               (t->>'clientId')::text AS client_id
@@ -1045,7 +1049,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
       [payload]
     );
     // التعارضات = صفوف موجودة فعلاً تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
-    await client.query(
+    await step('conf',
       `CREATE TEMP TABLE _conf ON COMMIT DROP AS
        SELECT cr.id, cr.version AS current_version
        FROM _inc i
@@ -1054,7 +1058,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
       [req.user.username, req.user.username, req.user.role]
     );
     // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
-    await client.query(
+    await step('upsert',
       `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
        SELECT i.id, i.enc, 1, $1, $2, $3, $1, i.client_id
        FROM _inc i
@@ -1065,7 +1069,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
          updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id`,
       [req.user.username, newOrigin, newStatus]
     );
-    const confRows = await client.query('SELECT id, current_version FROM _conf');
+    const confRows = await step('conf-read', 'SELECT id, current_version FROM _conf');
     const migrated = records.length - confRows.rows.length;
     await client.query('COMMIT');
     res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
