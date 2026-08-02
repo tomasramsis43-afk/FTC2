@@ -708,7 +708,7 @@ async function deleteOneRecordGeneric(collection, id){
 // المطلوب حذفها كبير (نفس فكرة bulkUploadRecordsGeneric بالضبط لكن للحذف)، لتفادي ضرب سقف
 // storageLimiter بإرسال عشرات/مئات الطلبات المتتالية فى ثوانٍ قليلة (كان بيرجع 429 لمعظمها).
 async function bulkDeleteRecordsGeneric(collection, ids){
-  const CHUNK = 300;
+  const CHUNK = 1000;
   const failedIds = [];
   for(let i=0;i<ids.length;i+=CHUNK){
     const chunk = ids.slice(i, i+CHUNK);
@@ -737,7 +737,7 @@ async function bulkDeleteRecordsGeneric(collection, ids){
 }
 
 async function bulkUploadRecordsGeneric(collection, list){
-  const CHUNK = 300;
+  const CHUNK = 1000;
   if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
   const versions = _recordVersions[collection];
   const allConflictIds = [];
@@ -1080,7 +1080,7 @@ async function deleteOneClientRecord(id){
 // حذف عدة عملاء دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل عميل — نفس فكرة
 // bulkDeleteRecordsGeneric بالضبط لكن لسجلات العملاء، لتفادي ضرب سقف storageLimiter.
 async function bulkDeleteClientRecords(ids){
-  const CHUNK = 300;
+  const CHUNK = 1000;
   const failedIds = [];
   for(let i=0;i<ids.length;i+=CHUNK){
     const chunk = ids.slice(i, i+CHUNK);
@@ -1122,7 +1122,7 @@ async function approveClientRecord(id){
 // رفع مُجمَّع (حتى 300 عميل فى الطلب الواحد) — يُستخدم فى الترحيل لمرة واحدة من التخزين القديم،
 // وفى العمليات الضخمة دفعة واحدة (استيراد، تحديث شامل) بدل طلب منفصل لكل عميل.
 async function bulkUploadClientRecords(clientsList){
-  const CHUNK = 300;
+  const CHUNK = 1000;
   const allConflictIds = [];
   for(let i=0;i<clientsList.length;i+=CHUNK){
     const chunk = clientsList.slice(i, i+CHUNK);
