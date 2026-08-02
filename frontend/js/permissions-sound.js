@@ -201,14 +201,28 @@ async function loadData(cacheOnly){
     }
   }));
   // مساعد مشترك لتحميل أي تصنيف مُوصَّل بنظام السجلات المستقلة (collection_records) — يحدّث
-  // _collectionSyncBaseline[collection] تلقائياً، ويرجع مصفوفة فارغة بأمان لو تعذّر الوصول
-  // (بدل تفريغ الشاشة بخطأ قاتل)، تماماً بنفس منطق تحميل العملاء أعلاه.
+  // _collectionSyncBaseline[collection] تلقائياً. خطأ فك التشفير لا يُبتلع أبداً هنا (كان يُرجع
+  // [] بصمت فيعرض التصنيف فارغاً وكأنه غير موجود، وأي حفظ لاحق من هذا الجهاز — إضافة/تعديل/
+  // ترحيل تلقائي — كان يكتب فوق البيانات الحقيقية المشفَّرة ويمحوها، تماماً نفس خطر تحميل
+  // العملاء الموثّق أعلى الملف): نرمي خطأ موسوماً isDecryptFailure فيوقفه المتصلون
+  // (backgroundSyncCheck/startApp) بالشاشة القاتلة. أي خطأ آخر (انقطاع اتصال عابر) يبقى
+  // خط رجعة آمناً بإرجاع مصفوفة فارغة.
   async function loadGeneric(collection){
     try{
       const { list, baseline } = await loadCollectionGeneric(collection, cacheOnly);
       _collectionSyncBaseline[collection] = baseline;
       return list;
-    }catch(e){ _collectionSyncBaseline[collection] = null; return []; }
+    }catch(e){
+      if(e && e.isDecryptFailure){
+        decryptFailedKeys.push(collection);
+        const err = new Error('تعذّر فك تشفير البيانات المحفوظة (' + collection + ') على هذا الجهاز');
+        err.isDecryptFailure = true;
+        err.failedKeys = [collection];
+        throw err;
+      }
+      _collectionSyncBaseline[collection] = null;
+      return [];
+    }
   }
 
   // ---- تحميل العملاء: عملاء كسجلات مستقلة (client_records) بدل كتلة واحدة ----
@@ -494,7 +508,16 @@ async function loadData(cacheOnly){
     const { list, baseline } = await loadCollectionGeneric('auditLog', cacheOnly);
     auditLog = list;
     _collectionSyncBaseline['auditLog'] = baseline;
-  }catch(e){ auditLog = []; _collectionSyncBaseline['auditLog'] = null; }
+  }catch(e){
+    if(e && e.isDecryptFailure){
+      decryptFailedKeys.push('auditLog');
+      const err = new Error('تعذّر فك تشفير البيانات المحفوظة (auditLog) على هذا الجهاز');
+      err.isDecryptFailure = true;
+      err.failedKeys = ['auditLog'];
+      throw err;
+    }
+    auditLog = []; _collectionSyncBaseline['auditLog'] = null;
+  }
   companies = await loadGeneric('companies');
   companyTransfers = await loadGeneric('companyTransfers');
   {

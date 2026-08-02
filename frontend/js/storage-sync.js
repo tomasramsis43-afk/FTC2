@@ -102,6 +102,7 @@ async function updateOfflineIndicator(){
   }catch(e){ console.error('[StorageSync] updateOfflineIndicator error:', e); }
 }
 let _ftcSyncInFlight = false;
+let _ftcSyncPromise = null; // وعد الفلاش الجاري (single-flight) — أي استدعاء متزامن ينتظره بدل التكرار
 // عدّاد لعدد طلبات حفظ/حذف سجل فردي (عميل أو سطر شيت) الجارية الآن فعلياً (لسه منتظرة رد
 // السيرفر ولم تفشل بعد، فلم تُسجَّل فى طابور "السجلات المعلّقة" أصلاً). دونه، لو المستخدم عمل
 // ريفرش أو قفل الصفحة فى نفس اللحظة اللي طلب الحفظ لسه طاير فى الشبكة، مفيش أي وسيلة تمنعه أو
@@ -166,124 +167,139 @@ window.addEventListener('appinstalled', ()=>{
 // يحاول رفع كل التعديلات المعلّقة محلياً إلى السيرفر — يُستدعى عند استعادة الاتصال (حدث online)،
 // وأيضاً بشكل دوري احتياطاً (بعض الأجهزة لا تُطلق حدث online بدقة، خصوصاً على الجوال).
 async function flushPendingWrites(){
-  if(_ftcSyncInFlight) return;
-  const pending = await _pendingReadAll();
-  if(!pending.length){ markOnline(); return; }
+  // حارس single-flight يُضبط قبل أي await: حدث online والموقّت الدوري (20 ثانية) والاستدعاء من
+  // backgroundSyncCheck قد يشغّلون هذه الدالة في نفس اللحظة. سابقاً كانت القيمة تُضبط فقط بعد
+  // await _pendingReadAll، فكان الاستدعاء الثاني يرى الحارس فارغاً ويدخل أيضاً في نفس حلقة الرفع —
+  // فيُرسل نفس التعديل المعلّق مرتين متوازيتين، والثانية ترسل نسخة قديمة فيُرفضها السيرفر بـ409
+  // ويُسقط التعديل من الطابور مع إشعار خاطئ رغم أن الأولى كانت ستنفذه بنجاح. الآن أي استدعاء
+  // متزامن ينتظر نفس الوعد بدل تكرار العمل.
+  if(_ftcSyncInFlight) return _ftcSyncPromise;
   _ftcSyncInFlight = true;
-  try{
-    // تحضير أرقام النسخ الحقيقية للمفاتيح المعلَّقة التي لا تملك _kvVersions معروفة لهذه الجلسة
-    // (مثال: انقطع الاتصال من أول لحظة فتح البرنامج قبل نجاح أي GET، فـ_kvVersions[key] بيفضل
-    // undefined طول الوقت). بدون هذه الخطوة، كل هذه المفاتيح كانت ستُرسَل بـ version:0 دائماً
-    // (افتراض "مفتاح جديد" وهو خاطئ)، فيرفضها السيرفر بـ409 "تعارض" كاذب رغم عدم وجود أي تعديل
-    // فعلي من جهاز آخر — فقط لأن هذا الجهاز لم يكن يعرف رقم النسخة الحقيقي أصلاً. لا نلمس أي مفتاح
-    // له _kvVersions معروفة بالفعل هذه الجلسة (تلك تمثل النسخة التي بُني عليها التعديل فعلياً،
-    // وتترك لآلية 409 العادية لتكتشف أي تعارض حقيقي كما كانت).
-    const unknownKeys = pending.map(p => p.key).filter(k => !(k in _kvVersions));
-    if(unknownKeys.length){
-      try{
-        const versionsRes = await serverFetch('/api/storage-versions');
-        if(versionsRes.ok){
-          const versionsData = await versionsRes.json();
-          const serverVersions = versionsData.versions || {};
-          for(const k of unknownKeys){
-            if(k in serverVersions) _kvVersions[k] = serverVersions[k];
+  _ftcSyncPromise = (async () => {
+    try{
+      const pending = await _pendingReadAll();
+      if(!pending.length){ markOnline(); return; }
+      // تحضير أرقام النسخ الحقيقية للمفاتيح المعلَّقة التي لا تملك _kvVersions معروفة لهذه الجلسة
+      // (مثال: انقطع الاتصال من أول لحظة فتح البرنامج قبل نجاح أي GET، فـ_kvVersions[key] بيفضل
+      // undefined طول الوقت). بدون هذه الخطوة، كل هذه المفاتيح كانت ستُرسَل بـ version:0 دائماً
+      // (افتراض "مفتاح جديد" وهو خاطئ)، فيرفضها السيرفر بـ409 "تعارض" كاذب رغم عدم وجود أي تعديل
+      // فعلي من جهاز آخر — فقط لأن هذا الجهاز لم يكن يعرف رقم النسخة الحقيقي أصلاً. لا نلمس أي مفتاح
+      // له _kvVersions معروفة بالفعل هذه الجلسة (تلك تمثل النسخة التي بُني عليها التعديل فعلياً،
+      // وتترك لآلية 409 العادية لتكتشف أي تعارض حقيقي كما كانت).
+      const unknownKeys = pending.map(p => p.key).filter(k => !(k in _kvVersions));
+      if(unknownKeys.length){
+        try{
+          const versionsRes = await serverFetch('/api/storage-versions');
+          if(versionsRes.ok){
+            const versionsData = await versionsRes.json();
+            const serverVersions = versionsData.versions || {};
+            for(const k of unknownKeys){
+              if(k in serverVersions) _kvVersions[k] = serverVersions[k];
+            }
           }
-        }
-      }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) — سيُكمل بالمنطق القديم أدناه كخط رجعة */ }
-    }
-    for(const item of pending){
-      try{
-        const res = await serverFetch(`/api/storage/${encodeURIComponent(item.key)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ value: item.value, version: _kvVersions[item.key] || 0 }),
-        });
-        if(res.status === 409){
-          // تعارض حقيقي: عُدِّلت نفس البيانات من جهاز/جلسة أخرى أثناء انقطاعنا — لا نستطيع
-          // حسم هذا تلقائياً بأمان، فنتخلى عن هذا التعديل المعلّق تحديداً وننبّه المستخدم
-          // بدل تكرار محاولة فاشلة إلى ما لا نهاية، ونطلب منه مراجعة البيانات بعد تحديث الصفحة.
-          const conflict = await res.json().catch(()=>({}));
-          _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
-          await _pendingDelete(item.key);
-          showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
-          continue;
-        }
-        if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
-        const data = await res.json();
-        _kvVersions[item.key] = data.version || 0;
-        await _kvCacheWrite(item.key, data.version || 0, item.value);
-        await _pendingDelete(item.key);
-      }catch(e){
-        // لا يزال بدون اتصال — نوقف المحاولة لباقي العناصر هذه الجولة ونعيدها كلها لاحقاً
-        markOffline();
-        break;
+        }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) — سيُكمل بالمنطق القديم أدناه كخط رجعة */ }
       }
+      for(const item of pending){
+        try{
+          const res = await serverFetch(`/api/storage/${encodeURIComponent(item.key)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ value: item.value, version: _kvVersions[item.key] || 0 }),
+          });
+          if(res.status === 409){
+            // تعارض حقيقي: عُدِّلت نفس البيانات من جهاز/جلسة أخرى أثناء انقطاعنا — لا نستطيع
+            // حسم هذا تلقائياً بأمان، فنتخلى عن هذا التعديل المعلّق تحديداً وننبّه المستخدم
+            // بدل تكرار محاولة فاشلة إلى ما لا نهاية، ونطلب منه مراجعة البيانات بعد تحديث الصفحة.
+            const conflict = await res.json().catch(()=>({}));
+            _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
+            await _pendingDelete(item.key);
+            showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+            continue;
+          }
+          if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
+          const data = await res.json();
+          _kvVersions[item.key] = data.version || 0;
+          await _kvCacheWrite(item.key, data.version || 0, item.value);
+          await _pendingDelete(item.key);
+        }catch(e){
+          // لا يزال بدون اتصال — نوقف المحاولة لباقي العناصر هذه الجولة ونعيدها كلها لاحقاً
+          markOffline();
+          break;
+        }
+      }
+    } finally {
+      _ftcSyncInFlight = false;
+      _ftcSyncPromise = null;
+      const remaining = await _pendingCount();
+      if(remaining === 0) markOnline(); else updateOfflineIndicator();
     }
-  } finally {
-    _ftcSyncInFlight = false;
-    const remaining = await _pendingCount();
-    if(remaining === 0) markOnline(); else updateOfflineIndicator();
-  }
+  })();
+  return _ftcSyncPromise;
 }
 window.addEventListener('online', ()=>{ flushPendingWrites(); flushPendingRecordWrites(); });
 window.addEventListener('offline', ()=>{ markOffline(); });
 // محاولة دورية احتياطية (كل 20 ثانية) بجانب حدث online، ولا تُكلّف شيئاً لو الطابور فارغ بالفعل
 setInterval(()=>{ flushPendingWrites().catch(()=>{}); flushPendingRecordWrites().catch(()=>{}); }, 20000);
 let _ftcRecordSyncInFlight = false;
-// نفس فكرة flushPendingWrites بالضبط لكن لطابور "السجلات الفردية المعلّقة" (عملاء/سطور شيتات فشل
-// رفعها أو حذفها فعلياً — راجع _pendingRecordPut). تُستدعى عند استعادة الاتصال، دورياً، وأيضاً فى
-// بداية كل تحميل بيانات (loadData/loadCollectionGeneric) قبل اعتبار ما يرجعه السيرفر بيانات نهائية،
-// حتى لا يُقرأ السيرفر وكأنه "الحقيقة الكاملة" بينما فيه تعديلات محلية لسه فى طريقها إليه.
+let _ftcRecordSyncPromise = null; // وعد الفلاش الجاري (single-flight) — أي استدعاء متزامن ينتظره بدل التكرار
+// نفس الفكرة والتصحيح بالضبط كما في flushPendingWrites: الحارس يُضبط قبل أي await حتى لا يتجاوزه
+// استدعاء متزامن (حدث online + الموقّت الدوري + بداية loadData/loadCollectionGeneric كلها تستدعي
+// هذه الدالة في نفس اللحظة)، فيُرسل نفس التعديلات المعلّقة مرتين متوازيتين — والثانية ترسل نسخة
+// قديمة فيرفضها السيرفر بـ409 ويُسقط التعديل من الطابور مع إشعار خاطئ رغم أن الأولى كانت ستنفذه.
 async function flushPendingRecordWrites(){
-  if(_ftcRecordSyncInFlight) return;
-  const pending = await _pendingRecordReadAll();
-  if(!pending.length) return;
+  if(_ftcRecordSyncInFlight) return _ftcRecordSyncPromise;
   _ftcRecordSyncInFlight = true;
-  try{
-    for(const item of pending){
-      try{
-        const isClient = item.collection === 'clients';
-        const url = isClient ? `/api/client-records/${encodeURIComponent(item.id)}` : `/api/records/${encodeURIComponent(item.collection)}/${encodeURIComponent(item.id)}`;
-        let res;
-        if(item.op === 'delete'){
-          res = await serverFetch(url, { method: 'DELETE' });
-        }else{
-          const knownVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
-          const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '' } : { enc: item.enc, version: knownVersion };
-          res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
-        }
-        if(res.status === 409){
-          // تعارض حقيقي — نفس معاملة flushPendingWrites: نتخلى عن هذا التعديل المعلّق تحديداً
-          // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم بدل محاولة لا نهائية.
-          const conflict = await res.json().catch(()=>({}));
-          if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
-          else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
-          await _pendingRecordDelete(item.collection, item.id);
-          showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
-          continue;
-        }
-        if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
-        if(item.op === 'delete'){
-          if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
-          else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
-        }else{
-          const data = await res.json().catch(()=>({}));
-          if(isClient){
-            _clientRecordVersions[item.id] = data.version || 0;
-            if(data.origin && data.status) clientRecordMeta[item.id] = { origin: data.origin, status: data.status };
+  _ftcRecordSyncPromise = (async () => {
+    try{
+      const pending = await _pendingRecordReadAll();
+      if(!pending.length) return;
+      for(const item of pending){
+        try{
+          const isClient = item.collection === 'clients';
+          const url = isClient ? `/api/client-records/${encodeURIComponent(item.id)}` : `/api/records/${encodeURIComponent(item.collection)}/${encodeURIComponent(item.id)}`;
+          let res;
+          if(item.op === 'delete'){
+            res = await serverFetch(url, { method: 'DELETE' });
           }else{
-            if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
-            _recordVersions[item.collection].set(item.id, data.version || 0);
+            const knownVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
+            const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '' } : { enc: item.enc, version: knownVersion };
+            res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
           }
+          if(res.status === 409){
+            // تعارض حقيقي — نفس معاملة flushPendingWrites: نتخلى عن هذا التعديل المعلّق تحديداً
+            // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم بدل محاولة لا نهائية.
+            const conflict = await res.json().catch(()=>({}));
+            if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
+            else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
+            await _pendingRecordDelete(item.collection, item.id);
+            showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+            continue;
+          }
+          if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+          if(item.op === 'delete'){
+            if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
+            else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
+          }else{
+            const data = await res.json().catch(()=>({}));
+            if(isClient){
+              _clientRecordVersions[item.id] = data.version || 0;
+              if(data.origin && data.status) clientRecordMeta[item.id] = { origin: data.origin, status: data.status };
+            }else{
+              if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
+              _recordVersions[item.collection].set(item.id, data.version || 0);
+            }
+          }
+          await _pendingRecordDelete(item.collection, item.id);
+        }catch(e){
+          // لا يزال بدون اتصال فعلياً — نوقف هذه الجولة (باقي العناصر تفضل فى الطابور لمحاولة قادمة)
+          break;
         }
-        await _pendingRecordDelete(item.collection, item.id);
-      }catch(e){
-        // لا يزال بدون اتصال فعلياً — نوقف هذه الجولة (باقي العناصر تفضل فى الطابور لمحاولة قادمة)
-        break;
       }
+    } finally {
+      _ftcRecordSyncInFlight = false;
+      _ftcRecordSyncPromise = null;
     }
-  } finally {
-    _ftcRecordSyncInFlight = false;
-  }
+  })();
+  return _ftcRecordSyncPromise;
 }
 
 async function serverFetch(path, options = {}) {
@@ -450,6 +466,11 @@ window.storage = {
         await serverFetch(`/api/storage/${encodeURIComponent(key)}`, { method: 'DELETE' });
         delete _kvVersions[key];
         _kvCacheDelete(key).catch(()=>{});
+        // نُزيل أي تعديل معلّق لنفس المفتاح من طابور الرفع (لو كان الحذف لاحقاً لأحدها): بدون
+        // هذا، لو كان المفتاح لديه تعديل محلي فشل رفعه أثناء انقطاع (طابور pending) ثم حُذف الآن،
+        // كان الفلاش التالي يعيد رفع ذلك التعديل القديم فيُحيي البيانات المحذوفة من جديد كأن شيئاً
+        // لم يكن — بيانات "مُحيا بعد حذفها" تصلح لإرباك المزامنة وإعادة بيانات حذفها المستخدم.
+        await _pendingDelete(key);
         return { key, deleted: true, shared: !!shared };
       }catch(e){ return null; }
     },
