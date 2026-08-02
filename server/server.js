@@ -76,7 +76,7 @@ const licenseLimiter = rateLimit({
 
 const storageLimiter = rateLimit({
   windowMs: 60 * 1000, // نافذة دقيقة واحدة
-  max: 60,             // 60 عملية حفظ كحد أقصى لكل IP في الدقيقة
+  max: 120,            // 120 عملية حفظ كحد أقصى لكل IP في الدقيقة — يكفي دفعات "مسح + رفع استعادة" كاملة
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'طلبات حفظ كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
@@ -1016,7 +1016,7 @@ app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req,
 // بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts ليعيد المستدعي معالجته بمسار الحفظ الفردي المعتاد.
 app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
-  if (!records.length || records.length > 1000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 1000 لكل طلب)' });
+  if (!records.length || records.length > 5000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 5000 لكل طلب)' });
   const client = await pool.connect();
   try {
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
@@ -1186,7 +1186,7 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
 // آخر أثناء نفس العملية، يُتجاهَل هذا السجل تحديداً بدل الكتابة فوقه صامتاً، ويُرجَع ضمن conflicts.
 app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   const records = Array.isArray(req.body?.records) ? req.body.records : [];
-  if (!records.length || records.length > 1000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 1000 لكل طلب)' });
+  if (!records.length || records.length > 5000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 5000 لكل طلب)' });
   const client = await pool.connect();
   try {
     const conflicts = [];
