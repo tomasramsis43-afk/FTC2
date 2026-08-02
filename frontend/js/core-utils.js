@@ -265,26 +265,6 @@ async function _pendingRecordReadAll(){
 async function _pendingRecordCount(){
   try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
 }
-
-// تنظيف شامل لجميع مفاتيح localStorage القديمة (ftc2-kv-cache:*) — يُستدعى مرة واحدة
-// عند بدء تشغيل البرنامج لتحرير مساحة كانت تُستهلك قبل إصلاح _kvCacheWrite.
-async function cleanupLegacyLocalStorage(){
-  try{
-    const keysToRemove = [];
-    for(let i=0; i<localStorage.length; i++){
-      const k = localStorage.key(i);
-      if(k && k.startsWith(KV_CACHE_PREFIX)) keysToRemove.push(k);
-    }
-    for(const k of keysToRemove){
-      try{ localStorage.removeItem(k); }catch(e){}
-    }
-    if(keysToRemove.length){
-      console.log('[Core] Cleaned up ' + keysToRemove.length + ' legacy localStorage cache entries (' + (keysToRemove.length > 100 ? '~' + Math.round(keysToRemove.length/100)*100 : keysToRemove.length) + ' keys)');
-    }
-  }catch(e){ console.error('[Core] cleanupLegacyLocalStorage failed:', e); }
-}
-// تشغيل التنظيف بعد تحميل الصفحة بقليل (لا نؤخر بدء التشغيل)
-setTimeout(()=>{ cleanupLegacyLocalStorage().catch(()=>{}); }, 3000);
 async function _kvCacheRead(key){
   try{
     const db = await _openKvIdb();
@@ -297,8 +277,7 @@ async function _kvCacheRead(key){
           req.onerror = ()=> resolve(null);
         }catch(e){ resolve(null); }
       });
-      if(fromIdb && fromIdb.value !== null && fromIdb.value !== undefined) return { version: fromIdb.version, value: fromIdb.value };
-      if(fromIdb && (fromIdb.value === null || fromIdb.value === undefined)) return null; // مفتاح مخزّن بقيمة فارغة عن قصد
+      if(fromIdb) return { version: fromIdb.version, value: fromIdb.value };
       // لا شيء في IndexedDB — تحقّق من وجود نسخة قديمة بـ localStorage وانقلها مرة واحدة
       const legacy = _kvCacheReadLegacyLS(key);
       if(legacy){ _kvCacheWrite(key, legacy.version, legacy.value).catch((e)=>{ console.error('[Core] Failed to migrate legacy cache to IDB:', e); }); try{ localStorage.removeItem(KV_CACHE_PREFIX + key); }catch(e){ console.error('[Core] Failed to remove legacy LS cache:', e); } return legacy; }
@@ -334,7 +313,6 @@ async function _kvCacheWrite(key, version, value){
       });
       if(stored) return;
     }
-    // IndexedDB فشل أو غير متاح — نستخدم localStorage كخط رجعة
     try{
       localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
       stored = true;
