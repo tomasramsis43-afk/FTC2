@@ -224,12 +224,19 @@ function renderGeneralLedgerDE(){
   const acc = chartOfAccounts.find(a=>a.id===accountId);
   if(!acc){ tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">أضف حساباً لدليل الحسابات لعرض حركته</td></tr>`; return; }
   const normal = accountNormalBalance(acc.type);
+  // الرصيد الافتتاحي (carried forward): عند الفلترة بفترة تبدأ بعد البداية، يجب أن يبدأ الرصيد
+  // المعروض من الرصيد المتراكم حتى اليوم السابق للفترة، وإلا ظهر حساب برصيد صفري (أو خاطئ)
+  // رغم وجود حركات سابقة عليه — كان balance يبدأ دائماً من صفر فيعرض رصيداً ناقصاً.
+  const openingBalance = (from)
+    ? journalDE.filter(e=> e.date && e.date < from).reduce((s,e)=> s + (e.lines||[]).reduce((sl,l)=> sl + (l.accountId===accountId ? (normal==='debit' ? num(l.debit)-num(l.credit) : num(l.credit)-num(l.debit)) : 0), 0), 0)
+    : 0;
   let rows = [];
   journalDE.forEach(entry=> (entry.lines||[]).forEach(l=>{
     if(l.accountId===accountId) rows.push({ date: entry.date, description: entry.description, debit: num(l.debit), credit: num(l.credit) });
   }));
   rows = rows.filter(r=> inRange(r.date, from, to)).sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
-  let balance = 0;
+  let balance = openingBalance;
+  const header = from ? `<tr><td class="mono" style="color:var(--text-muted);">${escapeHtml(formatDateDisplay(addDaysISO(from, -1))||'')}</td><td style="color:var(--text-muted);">رصيد افتتاحي (مرحّل من قبل الفترة)</td><td></td><td></td><td class="mono" style="font-weight:700;">${fmt(balance)}</td></tr>` : '';
   const body = rows.map(r=>{
     balance += normal==='debit' ? (r.debit - r.credit) : (r.credit - r.debit);
     return `<tr>
@@ -240,7 +247,7 @@ function renderGeneralLedgerDE(){
       <td class="mono" style="font-weight:700;">${fmt(balance)}</td>
     </tr>`;
   }).join('');
-  tbody.innerHTML = body || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد حركات على هذا الحساب ضمن الفترة المحددة</td></tr>`;
+  tbody.innerHTML = header + body || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد حركات على هذا الحساب ضمن الفترة المحددة</td></tr>`;
 }
 ['#gl-account','#gl-from','#gl-to'].forEach(sel=> $(sel)?.addEventListener('change', renderGeneralLedgerDE));
 function renderTrialBalanceDE2(){

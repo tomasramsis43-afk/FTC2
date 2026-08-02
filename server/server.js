@@ -864,7 +864,17 @@ const APPROVAL_GATED_COLLECTIONS = ['vaultTx', 'bagStock', 'courseSessions'];
 app.get('/api/client-records', requireAuth, async (req, res) => {
   try {
     const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
-    const r = await pool.query(`SELECT id, enc, version, origin, status FROM client_records ${where}`, params);
+    // ترقيم اختياري (page/pageSize) لمنع القراءات غير المقيدة دون كسر المزامنة الحالية:
+    // الافتراضي (بدون page) يعيد كل السجلات كما كان، لتبقى مزامنة الواجهة بدون اتصال تعمل.
+    const page = parseInt(req.query.page, 10);
+    const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
+    let sql = `SELECT id, enc, version, origin, status FROM client_records ${where}`;
+    const sqlParams = [...params];
+    if (Number.isInteger(page) && page >= 1) {
+      sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
+      sqlParams.push(pageSize, (page - 1) * pageSize);
+    }
+    const r = await pool.query(sql, sqlParams);
     res.json({ records: r.rows });
   } catch (e) {
     console.error(e);
@@ -1199,10 +1209,17 @@ app.get('/api/records/:collection', requireAuth, requireValidCollection, async (
     // فلترة عزل الاستقبال على مستوى السيرفر (نفس clientRecordsVisibilitySql): لا يمكن لأي دور
     // رؤية سجلات لا تخصه حتى عبر طلب مباشر، والسجلات المعلّقة لا تظهر لغير صاحبها/الأدمن.
     const vis = recordsVisibilitySql(req.user.role, req.user.username);
-    const r = await pool.query(
-      `SELECT id, enc, version, origin, status FROM collection_records WHERE collection = $1 ${vis.where}`,
-      [req.params.collection, ...vis.params]
-    );
+    // ترقيم اختياري (page/pageSize) لمنع القراءات غير المقيدة دون كسر المزامنة: الافتراضي
+    // (بدون page) يعيد كل السجلات كما كان.
+    const page = parseInt(req.query.page, 10);
+    const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
+    let sql = `SELECT id, enc, version, origin, status FROM collection_records WHERE collection = $1 ${vis.where}`;
+    const sqlParams = [req.params.collection, ...vis.params];
+    if (Number.isInteger(page) && page >= 1) {
+      sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
+      sqlParams.push(pageSize, (page - 1) * pageSize);
+    }
+    const r = await pool.query(sql, sqlParams);
     res.json({ records: r.rows });
   } catch (e) {
     console.error(e);
