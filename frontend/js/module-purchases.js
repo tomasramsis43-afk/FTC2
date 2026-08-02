@@ -555,6 +555,12 @@ document.addEventListener('click', async e=>{
     }
     purchases = purchases.filter(x=>x.id!==id);
     await savePurchases();
+    // حذف القيد المزدوج المُرحَّل لهذه الفاتورة تلقائياً (لو وُجد) — بدل تركه يتيماً يظهر
+    // في دليل الحسابات كأثر وحيد لوثيقة محذوفة. راجع cleanupOrphanedJournalDE في module-accounting.js.
+    if(typeof saveJournalDE==='function' && journalDE.some(e=>e.sourcePurchaseId===id)){
+      journalDE = journalDE.filter(e=>e.sourcePurchaseId!==id);
+      await saveJournalDE();
+    }
     if(p.attachment){ try{ await window.storage.delete('purchase-attachment:'+id, false); }catch(err){ console.error('[Purchases] Failed to delete attachment on purchase delete:', err); } }
     await logAudit('delete','المشتريات', `حذف فاتورة شراء: ${p.invoiceNo||'—'} — ${p.supplierName}`);
     renderPurchases();

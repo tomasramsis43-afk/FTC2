@@ -384,6 +384,12 @@ document.getElementById('zt-sales-body')?.addEventListener('click', async (e)=>{
     if(!(await customConfirm('هل تريد حذف فاتورة المبيعات اليدوية هذه؟ لا يمكن التراجع عن هذا الإجراء.'))) return;
     manualSalesInvoices = manualSalesInvoices.filter(x=>x.id!==id);
     await saveManualSalesInvoices();
+    // حذف القيد المزدوج المُرحَّل لهذه الفاتورة تلقائياً (لو وُجد) — بدل تركه يتيماً يظهر
+    // في دليل الحسابات كأثر وحيد لوثيقة محذوفة (راجع cleanupOrphanedJournalDE في module-accounting.js).
+    if(typeof saveJournalDE==='function' && journalDE.some(e=>e.sourceManualSalesId===id)){
+      journalDE = journalDE.filter(e=>e.sourceManualSalesId!==id);
+      await saveJournalDE();
+    }
     await logAudit('delete','الفوترة الضريبية والزكاة', 'تم حذف فاتورة مبيعات يدوية');
     showToast('تم حذف الفاتورة');
     renderZatca();

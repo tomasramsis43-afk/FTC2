@@ -5,7 +5,18 @@
 function allocVaultSeq(destination){
   const dest = (destination && ['vault','bank','network','other'].includes(destination)) ? destination : 'vault';
   if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, other:1 };
-  const s = settings.nextVaultSeqByDest[dest] || 1;
+  let s = settings.nextVaultSeqByDest[dest] || 1;
+  // حماية من إعادة استخدام رقم تسلسلي رسمي قيد الاستخدام: العداد (nextVaultSeqByDest) كان قد
+  // يصبح أقل من أعلى رقم موجود فعلاً لنفس الوجهة — بعد استعادة نسخة احتياطية قديمة، أو عند
+  // تحميل حركات من جهاز/جلسة لم تُحفظ معها أحدث قيم settings، أو عند أي تآزر بين إعادة ترقيم
+  // والعداد. دون ذلك كانت الحركة الجديدة تستخدم رقماً موجوداً أصلاً (في vaultTx أو الحركات
+  // الملغاة deletedVaultTx التي تُبقي أرقامها دائماً بموجب مبدأ "لا يُعاد استخدام الرقم الرسمي")
+  // فيُصبح رقمان متطابقان في سجل حركات واحد — تزوير مالي بصري في المستندات الرسمية. نبدأ من
+  // أول رقم حرّ بعد كل الأرقام المستخدمة فعلياً، مع الإبقاء على العداد متقدماً كالمعتاد.
+  const used = new Set();
+  vaultTx.forEach(t=>{ if((t.destination||'vault')===dest && typeof t.seq==='number') used.add(t.seq); });
+  deletedVaultTx.forEach(t=>{ if((t.destination||'vault')===dest && typeof t.seq==='number') used.add(t.seq); });
+  while(used.has(s)) s++;
   settings.nextVaultSeqByDest[dest] = s + 1;
   return s;
 }

@@ -339,6 +339,39 @@ $('#btn-migrate-legacy')?.addEventListener('click', async ()=>{
   renderAccounting();
 });
 
+/* تنظيف القيود اليومية اليتيمة: قيد يومية بترحيل تلقائي (isAuto) مرتبط بمصدر لم يعد موجوداً —
+   فاتورة شراء/مبيعات يدوية/قيد يدوي/فاتورة دورة حُذفت دون حذف قيدها المرتبط — كان يبقى إلى
+   الأبد في القيد المزدوج كأثر وحيد للوثيقة المحذوفة: يظهر في دليل الحسابات وتقارير القيود
+   اليومية بمبالغ لا أصل لها، وأي قيد/فاتورة جديدة بنفس الحسابات تخالف توازن الدفاتر. تُحذف
+   هنا تلقائياً عند كل تحميل، مع مسح مؤشرات المصادر التي لا تزال حية لكن قيدها اختفى (حُذف
+   يدوياً مثلاً) حتى يعيد الترحيل التلقائي إنشاءه عند الحاجة بدل بقاء الوثيقة "مُرحَّلة" رغم
+   غياب قيدها الفعلي. آمنة للتكرار (تعمل على الحالة الحالية ولا تفترض شيئاً عن الجلسات السابقة). */
+function cleanupOrphanedJournalDE(){
+  const liveSourceIds = new Set();
+  journalEntries.forEach(j=> liveSourceIds.add(j.id));
+  purchases.forEach(p=> liveSourceIds.add(p.id));
+  manualSalesInvoices.forEach(m=> liveSourceIds.add(m.id));
+  if(typeof courseInvoiceClients==='function') courseInvoiceClients().forEach(c=> liveSourceIds.add(c.id));
+  const before = journalDE.length;
+  const liveDeIds = new Set();
+  journalDE = journalDE.filter(e=>{
+    const hasSource = !!(e.sourceJournalEntryId || e.sourcePurchaseId || e.sourceManualSalesId || e.sourceClientId);
+    if(!hasSource) return true; // قيد يدوي بلا مصدر — يُحذف فقط من واجهته
+    const live = e.sourceJournalEntryId ? liveSourceIds.has(e.sourceJournalEntryId)
+      : e.sourcePurchaseId ? liveSourceIds.has(e.sourcePurchaseId)
+      : e.sourceManualSalesId ? liveSourceIds.has(e.sourceManualSalesId)
+      : liveSourceIds.has(e.sourceClientId);
+    if(live) liveDeIds.add(e.id);
+    return live;
+  });
+  const removed = before - journalDE.length;
+  let pointersFixed = 0;
+  journalEntries.forEach(j=>{ if(j.linkedDEId && !liveDeIds.has(j.linkedDEId)){ delete j.linkedDEId; pointersFixed++; } });
+  if(typeof courseInvoiceClients==='function') courseInvoiceClients().forEach(c=>{ if(c.courseInvoiceDEId && !liveDeIds.has(c.courseInvoiceDEId)){ delete c.courseInvoiceDEId; pointersFixed++; } });
+  if(removed>0 || pointersFixed>0) return { removed, pointersFixed };
+  return null;
+}
+
 /* ---- ترحيل تلقائي لفواتير المشتريات ---- */
 function buildDELinesForPurchase(p){
   const expenseAcc = accountByCode('5000'), vatAcc = accountByCode('2100'), cashAcc = accountByCode('1000'), payableAcc = accountByCode('2000');
