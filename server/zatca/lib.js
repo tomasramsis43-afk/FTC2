@@ -284,18 +284,37 @@ async function submitSimplifiedInvoice(params) {
     });
 
     const { signed_invoice_string, invoice_hash, qr } = egs.signInvoice(invoice);
+    const uuid = invoice.getXML().get('Invoice/cbc:UUID')?.[0]?.text || crypto.randomUUID();
+    const invoiceUuid = `${invoice_serial_number}-${uuid}`;
 
+    // 1) نكتب سجل الفاتورة داخل المعاملة بحالة 'pending' قبل أي اتصال بالهيئة — هذا هو المطلوب
+    //    لضمان سلامة سلسلة التجزئة: لو أُرسلت الفاتورة للهيئة ثم فشلت الكتابة بعدها (كما كان
+    //    الوضع سابقاً) تبقى الفاتورة عند الهيئة بلا أي أثر محلي، ويُعاد استخدام نفس الـ counter
+    //    والـ previous_hash للفاتورة التالية فتنكسر السلسلة. هنا الصف موجود وقابل للاستعلام حتى
+    //    لو انقطع التنفيذ بعد هذه النقطة (يبقى بحالة pending).
+    await client.query(
+      `INSERT INTO zatca_invoice_log
+        (invoice_uuid, invoice_type, document_type, source_ref, invoice_counter, previous_hash, invoice_hash, xml, signed_xml, qr_base64, status, zatca_response, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [invoiceUuid, 'simplified', documentType, sourceRef, counter, previousHash, invoice_hash,
+       null, signed_invoice_string, qr, 'pending', null, createdBy || null]
+    );
+
+    // نخرج من المعاملة (COMMIT يتم داخل withChainLock) — صف السجل أصبح ثابتاً، ثم نُرسل للهيئة
+    // خارج أي قفل صف/معاملة: أي فشل لاحق (شبكة، تحديث) لا يمكن أن يمحي السجل الملتزم أصلاً.
+    return { invoiceUuid, signed_invoice_string, invoice_hash, qr, invoice_serial_number };
+  }).then(async (prepared) => {
     let status = 'pending';
     let zatcaResponse = null;
     try {
       if (info.production_certificate) {
         // شهادة إنتاج (PCSID) موجودة → إرسال فعلي (تقرير الفاتورة)
-        zatcaResponse = await egs.reportInvoice(signed_invoice_string, invoice_hash);
+        zatcaResponse = await egs.reportInvoice(prepared.signed_invoice_string, prepared.invoice_hash);
         status = zatcaResponse?.reportingStatus === 'REPORTED' ? 'reported'
           : (zatcaResponse?.warningMessages?.length ? 'warning' : 'reported');
       } else {
         // لسه ما فيه شهادة إنتاج → وضع فحص التوافق (يُستخدم أثناء التسجيل فقط)
-        zatcaResponse = await egs.checkInvoiceCompliance(signed_invoice_string, invoice_hash);
+        zatcaResponse = await egs.checkInvoiceCompliance(prepared.signed_invoice_string, prepared.invoice_hash);
         status = 'compliance_check';
       }
     } catch (e) {
@@ -303,18 +322,13 @@ async function submitSimplifiedInvoice(params) {
       zatcaResponse = { error: e.message || String(e) };
     }
 
-    const uuid = invoice.getXML().get('Invoice/cbc:UUID')?.[0]?.text || crypto.randomUUID();
-    await client.query(
-      `INSERT INTO zatca_invoice_log
-        (invoice_uuid, invoice_type, document_type, source_ref, invoice_counter, previous_hash, invoice_hash, xml, signed_xml, qr_base64, status, zatca_response, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [
-        `${invoice_serial_number}-${uuid}`, 'simplified', documentType, sourceRef, counter, previousHash, invoice_hash,
-        null, signed_invoice_string, qr, status, JSON.stringify(zatcaResponse), createdBy || null,
-      ]
+    // 2) تحديث نفس الصف بالنتيجة النهائية — السجل موجود مسبقاً ومضمون مهما كانت النتيجة.
+    await pool.query(
+      'UPDATE zatca_invoice_log SET status = $2, zatca_response = $3 WHERE invoice_uuid = $1',
+      [prepared.invoiceUuid, status, JSON.stringify(zatcaResponse)]
     );
 
-    return { status, qr, invoiceHash: invoice_hash, invoiceSerialNumber: invoice_serial_number, zatcaResponse };
+    return { status, qr: prepared.qr, invoiceHash: prepared.invoice_hash, invoiceSerialNumber: prepared.invoice_serial_number, zatcaResponse };
   });
 }
 
