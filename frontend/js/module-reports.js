@@ -556,6 +556,7 @@ function renderReports(){
   renderAgingReport();
   renderYoY();
   renderBreakeven();
+  renderPnL($('#rp-from').value, $('#rp-to').value);
   const rows = periodFilteredVaultTx();
   const income = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
   const expense = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
@@ -1133,6 +1134,67 @@ function renderIncomeStatementTable(from, to){
   $('#acc-income-table tbody').innerHTML = html;
   return { netRevenue, totalExpense: totalExpense+dep+acc, netIncome, grossRevenue };
 }
+
+/* ---- قائمة الدخل (الأرباح والخسائر) في شاشة التقارير، حسب فلتر الفترة rp-from/rp-to ----
+   مبنية على نفس دوال قائمة الدخل المحاسبية (أساس الاستحقاق)، لكنها مستقلة عن شاشة
+   المحاسبة لتظهر مباشرة في تبويب التقارير بالفلتر المحدد أعلاه. */
+function pnlData(from, to){
+  const revB = revenueBreakdown(from, to);
+  const returns = salesReturnsTotal(from, to);
+  const grossRevenue = Object.values(revB).reduce((a,b)=>a+b,0);
+  const netRevenue = grossRevenue - returns;
+  const expB = expenseBreakdown(from, to);
+  const totalExpense = Object.values(expB).reduce((a,b)=>a+b,0);
+  const dep = journalInRange(from,to).filter(j=>j.type==='depreciation').reduce((s,j)=>s+num(j.amount),0);
+  const acc = journalInRange(from,to).filter(j=>j.type==='accrued').reduce((s,j)=>s+num(j.amount),0);
+  const rj  = journalInRange(from,to).filter(j=>j.type==='readj').reduce((s,j)=>s+num(j.amount),0);
+  const netIncome = netRevenue - totalExpense - dep - acc + rj;
+  return { revB, returns, grossRevenue, netRevenue, expB, totalExpense, dep, acc, rj, netIncome };
+}
+function renderPnL(from, to){
+  const tbody = $('#pnl-body');
+  if(!tbody) return;
+  const d = pnlData(from, to);
+  const periodLabel = `${from ? from : 'البداية'} ← ${to ? to : 'الآن'}`;
+  let html = accHeaderRow(`الإيرادات (حسب نوع الدورة) — الفترة: ${periodLabel}`);
+  Object.entries(d.revB).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{ html += accRow(k, v, {indent:true}); });
+  html += accRow('إجمالي الإيرادات', d.grossRevenue);
+  if(d.returns>0) html += accRow('يُخصم: مردودات مبيعات', -d.returns, {indent:true});
+  html += accRow('صافي الإيرادات', d.netRevenue, {total:true});
+
+  html += accHeaderRow('المصروفات التشغيلية (حسب التصنيف)');
+  Object.entries(d.expB).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{ html += accRow(k, v, {indent:true}); });
+  if(d.dep>0) html += accRow('مصروف الإهلاك (قيد يدوي)', d.dep, {indent:true});
+  if(d.acc>0) html += accRow('مصروف مستحق (قيد يدوي)', d.acc, {indent:true});
+  html += accRow('إجمالي المصروفات', d.totalExpense + d.dep + d.acc, {total:true});
+
+  if(d.rj) html += accRow('تسويات أخرى على الأرباح (قيد يدوي)', d.rj);
+  html += accHeaderRow('');
+  html += accRow('صافي الربح / (الخسارة) عن الفترة', d.netIncome, {total:true});
+  tbody.innerHTML = html;
+}
+$('#btn-export-pnl')?.addEventListener('click', ()=>{
+  const from = $('#rp-from').value || 'البداية';
+  const to = $('#rp-to').value || 'الآن';
+  const d = pnlData($('#rp-from').value, $('#rp-to').value);
+  const lines = [['بند','القيمة (ر.س)']];
+  Object.entries(d.revB).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=> lines.push([`إيرادات: ${k}`, v]));
+  lines.push(['إجمالي الإيرادات', d.grossRevenue]);
+  if(d.returns>0) lines.push(['مردودات مبيعات (خصم)', -d.returns]);
+  lines.push(['صافي الإيرادات', d.netRevenue]);
+  Object.entries(d.expB).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=> lines.push([`مصروف: ${k}`, v]));
+  if(d.dep>0) lines.push(['مصروف الإهلاك (قيد يدوي)', d.dep]);
+  if(d.acc>0) lines.push(['مصروف مستحق (قيد يدوي)', d.acc]);
+  lines.push(['إجمالي المصروفات', d.totalExpense + d.dep + d.acc]);
+  if(d.rj) lines.push(['تسويات أخرى (قيد يدوي)', d.rj]);
+  lines.push(['صافي الربح / (الخسارة)', d.netIncome]);
+  const csv = '\uFEFF'+[['قائمة الدخل حسب الفترة', `من ${from} إلى ${to}`], [], ...lines].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `قائمة_الدخل_${from}_${to}.csv`;
+  a.click();
+});
 
 function renderBalanceSheetTable(asOf, bs){
   let html = accHeaderRow('الأصول المتداولة');

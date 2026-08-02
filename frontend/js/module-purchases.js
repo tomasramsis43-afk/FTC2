@@ -603,6 +603,7 @@ async function renderAllViewsAfterLoad(){
   try{ await cleanupDuplicatePaymentMethods(); }catch(e){ console.error('renderAllViewsAfterLoad: فشلت خطوة "cleanupDuplicatePaymentMethods"', e); }
   safeStep(()=>refreshFilterOptions(), 'refreshFilterOptions');
   safeStep(()=>renderTable(), 'renderTable');
+  safeStep(()=>{ if(typeof renderApprovalNoticesBanner==='function') renderApprovalNoticesBanner(); }, 'renderApprovalNoticesBanner');
   safeStep(()=>renderDashboard(), 'renderDashboard');
   safeStep(()=>renderSettings(), 'renderSettings');
   safeStep(()=>renderBags(), 'renderBags');

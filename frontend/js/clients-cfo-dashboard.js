@@ -54,6 +54,18 @@ function monthlyPurchasesTrend(n=12){
   const vals = keys.map(k=> Math.round(purchases.filter(p=>(p.date||'').slice(0,7)===k).reduce((s,p)=>s+num(p.total),0)*100)/100);
   return { labels: keys.map(monthLabelAr), series:[{name:'المشتريات شهرياً', color:'var(--red)', values:vals}] };
 }
+/* اتجاه شهري لتمويل مخزون الحقائب (كمية مضاف إليها + مصروف الحقائب) لآخر n شهر.
+   يشمل كل سجلات تمويل المخزون (إضافات/شراء) عدا سجلات الصرف للمنشآت (type==='issue')
+   وسجلات قيد الاعتماد التي لم يعتمدها الأدمن بعد — فتصور مصروف الحقيبة الحقيقي الفعلي. */
+function monthlyBagTrend(n=12){
+  const keys = lastNMonthKeys(n);
+  const qty = keys.map(k=> Math.round(bagStock.filter(b=>!isBagStockRecordPending(b) && b.type!=='issue' && (b.date||'').slice(0,7)===k).reduce((s,b)=>s+num(b.qty),0)*100)/100);
+  const spent = keys.map(k=> Math.round(bagStock.filter(b=>!isBagStockRecordPending(b) && b.type!=='issue' && (b.date||'').slice(0,7)===k).reduce((s,b)=>s+num(b.qty)*num(b.unitPrice),0)*100)/100);
+  return { labels: keys.map(monthLabelAr), series:[
+    {name:'تمويل المخزون (كمية)', color:'var(--navy)', values:qty},
+    {name:'مصروف الحقائب (ر.س)', color:'var(--red)', values:spent},
+  ]};
+}
 /* إجمالي المستحق (غير المدفوع) لكل مورد */
 function supplierUnpaidTotals(){
   const map = {};
@@ -89,6 +101,8 @@ function renderCfoDashboard(){
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
   const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth()+1).padStart(2,'0')}`;
+  /* نطاق الرسوم البيانية: يُقرأ من المحدد #cfo-range في لوحة التحكم (آخر 12/6/3 شهراً) */
+  const rangeN = Math.min(Math.max(parseInt($('#cfo-range')?.value, 10) || 12, 1), 60);
 
   const activeClients = clients.filter(c=>!c.cancelled);
   const sumWhere = (yearOrMonth, keyType) => activeClients
@@ -101,7 +115,7 @@ function renderCfoDashboard(){
   const netLastYear = sumWhere(lastYear,'year');
   const netThisMonth = sumWhere(thisMonthKey,'month');
   const netLastMonth = sumWhere(lastMonthKey,'month');
-  const incomeTrend = monthlyCourseIncomeTrend(12);
+  const incomeTrend = monthlyCourseIncomeTrend(rangeN);
 
   // === لوحة 2: التحصيل والمتبقي ===
   const collectedYear = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(thisYear)).reduce((s,t)=>s+num(t.amount),0);
@@ -109,7 +123,7 @@ function renderCfoDashboard(){
   const collectedThisMonth = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,7)===thisMonthKey).reduce((s,t)=>s+num(t.amount),0);
   const collectedLastMonth = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,7)===lastMonthKey).reduce((s,t)=>s+num(t.amount),0);
   const totalRemainingNow = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
-  const collectTrend = monthlyCollectedTrend(12);
+  const collectTrend = monthlyCollectedTrend(rangeN);
   const remainBars = remainingByCourseType();
 
   // === لوحة 3: الخزنة والبنك ===
@@ -118,7 +132,7 @@ function renderCfoDashboard(){
   const netFlowLastYear = vaultTx.filter(t=>String(t.date||'').slice(0,4)===String(lastYear)).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
   const netFlowThisMonth = vaultTx.filter(t=>String(t.date||'').slice(0,7)===thisMonthKey).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
   const netFlowLastMonth = vaultTx.filter(t=>String(t.date||'').slice(0,7)===lastMonthKey).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
-  const cashFlowTrend = monthlyFinancialTrend(12);
+  const cashFlowTrend = monthlyFinancialTrend(rangeN);
 
   // === لوحة 4: المشتريات المستحقة (الموردون) ===
   const unpaidPurchases = purchases.filter(p=>p.status==='unpaid');
@@ -127,8 +141,11 @@ function renderCfoDashboard(){
   const purchasesLastYear = purchases.filter(p=>String(p.date||'').slice(0,4)===String(lastYear)).reduce((s,p)=>s+num(p.total),0);
   const purchasesThisMonth = purchases.filter(p=>String(p.date||'').slice(0,7)===thisMonthKey).reduce((s,p)=>s+num(p.total),0);
   const purchasesLastMonth = purchases.filter(p=>String(p.date||'').slice(0,7)===lastMonthKey).reduce((s,p)=>s+num(p.total),0);
-  const purchasesTrend = monthlyPurchasesTrend(12);
+  const purchasesTrend = monthlyPurchasesTrend(rangeN);
   const apBars = supplierUnpaidTotals();
+
+  // === لوحة 6: تمويل مخزون الحقائب ===
+  const bagTrend = monthlyBagTrend(rangeN);
 
   // === لوحة 5: أعمار الذمم المدينة (AR Aging) — نفس منطق buildARAging فى شاشة المحاسبة، معروضة
   // هنا كملخص سريع فى الداشبورد الرئيسي بدل الحاجة للدخول لشاشة منفصلة كل مرة.
@@ -194,6 +211,16 @@ function renderCfoDashboard(){
       ${arBars.length ? `<div class="cfo-visual cfo-bars" id="cfo-bars-ar"></div>` : `<div class="cfo-caption" style="color:var(--text-muted);">لا توجد ذمم مدينة حالياً</div>`}
     </div>
 
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">تمويل مخزون الحقائب (اتجاه شهري)</h3>
+      <div class="cfo-kpis">
+        ${cfoKpi('truck','مصروف الحقائب (آخر '+rangeN+' شهر)', fmt(bagTrend.series[1].values.reduce((a,b)=>a+b,0))+' ﷼')}
+        ${cfoKpi('sales','كمية التمويل (آخر '+rangeN+' شهر)', fmt(bagTrend.series[0].values.reduce((a,b)=>a+b,0))+' حقيبة')}
+      </div>
+      <div class="cfo-caption">تمويل المخزون من الموردين (إضافات) مقابل المصروف الفعلي على الحقائب شهرياً — السجلات قيد الاعتماد مستبعدة</div>
+      <div class="cfo-visual" id="cfo-trend-bags"></div>
+    </div>
+
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -202,6 +229,7 @@ function renderCfoDashboard(){
   else { drawLineChart('#cfo-trend-purchases', purchasesTrend.labels, purchasesTrend.series); }
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
   if(arBars.length){ drawBars('#cfo-bars-ar', arBars, 4, v=>fmt(v)+' ﷼'); }
+  drawLineChart('#cfo-trend-bags', bagTrend.labels, bagTrend.series);
 }
 function groupCount(list, field){
   const map = {};
@@ -662,3 +690,9 @@ let tableCurrentPage = 1;
 let tableLastFilterSig = '';
 let showSuspendedOnly = false;
 let showUnpurchasedBagsOnly = false;
+
+/* تغيير نطاق الرسوم البيانية في لوحة التحكم يعيد رسم اللوحة فوراً (فقط لو كانت لوحة
+   التحكم هي الشاشة الظاهرة حالياً) دون إعادة تحميل الصفحة. */
+$('#cfo-range')?.addEventListener('change', ()=>{
+  if(isViewActive('dashboard')) renderCfoDashboard();
+});

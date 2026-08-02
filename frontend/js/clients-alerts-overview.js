@@ -30,6 +30,51 @@ function renderDashboard(){
 let pendingApprovals = [];
 const PENDING_COLLECTION_LABELS = { vaultTx: 'الحركات المالية (الخزنة)', bagStock: 'مخزون الحقائب', courseSessions: 'الدورات' };
 function pendingCollectionLabel(c){ return PENDING_COLLECTION_LABELS[c] || c; }
+
+/* ============ إشعارات موظفي الاستقبال بنتيجة اعتماد/رفض عملياتهم ============
+   عند اعتماد أو رفض الأدمن لأي عملية سجّلها الاستقبال، تُحفظ إشعارات موجزة في
+   settings.approvalNotices (تُزامن عبر الأجهزة تلقائياً). تظهر لموظف الاستقبال
+   في شريط أعلى شاشة العملاء (الشاشة الوحيدة المتاحة لدور الاستقبال) فور مزامنة
+   جهازه، مع زر إخفاء. */
+function addApprovalNotice(createdBy, decision, collection, desc){
+  try{
+    if(!settings.approvalNotices || !Array.isArray(settings.approvalNotices)) settings.approvalNotices = [];
+    settings.approvalNotices.push({ id: uid(), createdBy: createdBy || 'غير معروف', decision, collection, desc, at: new Date().toISOString() });
+    if(settings.approvalNotices.length > 50) settings.approvalNotices.splice(0, settings.approvalNotices.length - 50);
+    saveSettings();
+  }catch(e){ /* تجاهل أخطاء الحفظ المؤقتة — الإشعار غير حرج */ }
+}
+function renderApprovalNoticesBanner(){
+  const el = $('#approval-notices-banner');
+  if(!el) return;
+  const notices = (settings.approvalNotices || []).filter(n=> n.createdBy === currentUser);
+  if(!notices.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--navy); margin-bottom:10px;">
+    <h3 style="margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+      <span>🔔 نتائج اعتماد عملياتك</span>
+      <button class="btn btn-ghost btn-sm" id="btn-approval-notices-clear" title="إخفاء كل هذه الإشعارات">إخفاء الكل</button>
+    </h3>
+    <div>${notices.map(n=> `
+      <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:16px;">${n.decision==='approved' ? '✅' : '⛔'}</span>
+        <span style="font-size:13px; color:${n.decision==='approved' ? 'var(--teal)' : 'var(--red)'};">
+          ${n.decision==='approved' ? 'تم اعتماد عمليتك' : 'تم رفض وحذف عمليتك'} (${escapeHtml(pendingCollectionLabel(n.collection))}): ${escapeHtml(n.desc||'')}
+        </span>
+        <button class="btn btn-ghost btn-sm" data-approval-notice-dismiss="${escapeHtml(n.id)}" title="إخفاء هذا الإشعار">✕</button>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+$('#approval-notices-banner')?.addEventListener('click', e=>{
+  const dismissBtn = e.target.closest('[data-approval-notice-dismiss]');
+  const clearBtn = e.target.closest('#btn-approval-notices-clear');
+  if(!dismissBtn && !clearBtn) return;
+  const notices = (settings.approvalNotices || []).filter(n=> n.createdBy === currentUser);
+  const removeIds = clearBtn ? new Set(notices.map(n=>n.id)) : new Set([dismissBtn.dataset.approvalNoticeDismiss]);
+  settings.approvalNotices = (settings.approvalNotices || []).filter(n=> !removeIds.has(n.id));
+  saveSettings();
+  renderApprovalNoticesBanner();
+});
 // وصف موجز قابل للعرض لمحتوى سجل معلّق (بعد فك تشفيره محلياً) — بدون كشف بيانات غير ذات صلة.
 function pendingRecordSummary(item){
   const o = item.obj;
@@ -81,6 +126,10 @@ function renderPendingApprovalsPanel(){
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
     <h3 style="margin:0 0 10px;">🛂 عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${pendingApprovals.length})</button>
+      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع">✖ رفض الكل (${pendingApprovals.length})</button>
+    </div>
     <div class="table-scroll cards-mobile">
     <table>
       <thead><tr><th>الشاشة</th><th>العملية</th><th>سجّلها</th><th>التاريخ</th><th></th></tr></thead>
@@ -102,7 +151,38 @@ function renderPendingApprovalsPanel(){
 $('#pending-approvals-panel')?.addEventListener('click', async e=>{
   const approveBtn = e.target.closest('[data-pa-approve]');
   const rejectBtn = e.target.closest('[data-pa-reject]');
-  if(!approveBtn && !rejectBtn) return;
+  const approveAllBtn = e.target.closest('#btn-pa-approve-all');
+  const rejectAllBtn = e.target.closest('#btn-pa-reject-all');
+  if(!approveBtn && !rejectBtn && !approveAllBtn && !rejectAllBtn) return;
+
+  // === اعتماد / رفض جماعي لكل العمليات المعلّقة دفعة واحدة ===
+  if(approveAllBtn || rejectAllBtn){
+    const isApprove = !!approveAllBtn;
+    const count = pendingApprovals.length;
+    if(!count) return;
+    if(!await customConfirm(isApprove
+      ? `اعتماد كل العمليات المعلّقة (${count}) دفعة واحدة؟ ستدخل فوراً في الحسابات والتقارير كباقي البيانات.`
+      : `رفض وحذف كل العمليات المعلّقة (${count}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+    let ok = 0, fail = 0;
+    const bulkLabel = isApprove ? 'اعتماد جماعي' : 'رفض جماعي';
+    for(const item of pendingApprovals){
+      const desc = item.obj ? pendingRecordSummary(item) : item.id;
+      const res = isApprove ? await approveRecordGeneric(item.collection, item.id) : await deleteOneRecordGeneric(item.collection, item.id);
+      if(isApprove ? res : res!==false){
+        ok++;
+        addApprovalNotice(item.createdBy, isApprove ? 'approved' : 'rejected', item.collection, desc);
+      }else{ fail++; }
+    }
+    if(ok>0){
+      await logAudit(isApprove ? 'edit' : 'delete', 'عمليات الاستقبال', `تم ${bulkLabel}: اعتماد/رفض ${ok} عملية معلّقة ${fail>0 ? ` (فشل ${fail})` : ''}`);
+    }
+    if(fail===0) showToast(`✅ تم ${isApprove ? 'اعتماد' : 'رفض'} كل العمليات (${ok})`);
+    else showToast(`⚠️ تم ${isApprove ? 'اعتماد' : 'رفض'} ${ok} عملية — فشل ${fail} عملية (تحقق من الاتصال)`);
+    refreshEverything();
+    refreshPendingApprovals();
+    return;
+  }
+
   const collection = (approveBtn||rejectBtn).dataset.paCollection;
   const id = (approveBtn||rejectBtn).dataset.paId;
   const item = pendingApprovals.find(x=>x.collection===collection && x.id===id);
@@ -112,6 +192,7 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
     const ok = await approveRecordGeneric(collection, id);
     if(ok){
       await logAudit('edit', pendingCollectionLabel(collection), `تم اعتماد عملية الاستقبال: ${desc}`);
+      addApprovalNotice(item && item.createdBy, 'approved', collection, desc);
       refreshEverything();
       showToast('✅ تم اعتماد العملية');
     }else{
@@ -122,6 +203,7 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
     const ok = await deleteOneRecordGeneric(collection, id);
     if(ok!==false){
       await logAudit('delete', pendingCollectionLabel(collection), `تم رفض وحذف عملية الاستقبال المعلّقة: ${desc}`);
+      addApprovalNotice(item && item.createdBy, 'rejected', collection, desc);
       refreshEverything();
       showToast('تم رفض العملية وحذفها');
     }else{
