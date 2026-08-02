@@ -293,7 +293,6 @@ function _kvCacheReadLegacyLS(key){
   }catch(e){ return null; }
 }
 async function _kvCacheWrite(key, version, value){
-  let stored = false;
   try{
     const db = await _openKvIdb();
     if(db){
@@ -301,30 +300,14 @@ async function _kvCacheWrite(key, version, value){
         try{
           const tx = db.transaction(KV_IDB_STORE, 'readwrite');
           tx.objectStore(KV_IDB_STORE).put({ key, version, value });
-          tx.oncomplete = ()=>{ stored = true; resolve(); };
-          tx.onerror = ()=>{
-            console.error('[Core] IDB write tx error for key:', key);
-            resolve();
-          };
-        }catch(e){
-          console.error('[Core] IDB write exception for key:', key, e);
-          resolve();
-        }
+          tx.oncomplete = ()=> resolve();
+          tx.onerror = ()=> resolve();
+        }catch(e){ resolve(); }
       });
-      if(stored) return;
+      return;
     }
-    try{
-      localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
-      stored = true;
-    }catch(lsErr){
-      console.error('[Core] localStorage write failed for key:', key, lsErr);
-    }
-  }catch(e){
-    console.error('[Core] _kvCacheWrite failed:', e);
-  }
-  if(!stored && typeof showToast === 'function'){
-    showToast('⚠️ مساحة التخزين المحلية ممتلئة — قد تفقد التعديلات غير المحفوظة. يرجى تحرير مساحة.');
-  }
+    localStorage.setItem(KV_CACHE_PREFIX + key, JSON.stringify({ version, value }));
+  }catch(e){ console.error('[Core] _kvCacheWrite failed:', e); /* تجاهل امتلاء المساحة أو أي خطأ تخزين */ }
 }
 async function _kvCacheDelete(key){
   try{
