@@ -51,6 +51,50 @@ body.dark-theme textarea {
   color-scheme: dark;
 }
 
+/* ============= ثيم "Stitch — فيريديان فلو" (فاتح، طاقة أخضر ومياه أزرق) =============
+   طقم ثيم إضافي مأخوذ من تصميم Google Stitch (Veridian Flow / EcoSync)، يُختار من
+   لوحة الإعدادات كبديل كامل للثيم الأصلي أعلاه — بدون حذف أو تعديل الثيم الأصلي إطلاقاً.
+   يُفعَّل عبر إضافة الكلاس theme-stitch على body (انظر applyColorScheme في theme-settings.js). */
+body.theme-stitch {
+  --bg: #f8f9ff;
+  --surface: #ffffff;
+  --surface-alt: #eff4ff;
+  --bg-soft: #e5eeff;
+  --navy: #006d32;
+  --navy-dark: #005224;
+  --gold: #0059bb;
+  --gold-dark: #004493;
+  --gold-soft: #adc7ff;
+  --teal: #00d166;
+  --success: #00d166;
+  --red: #ba1a1a;
+  --danger: #ba1a1a;
+  --text: #0b1c30;
+  --text-muted: #3c4a3d;
+  --border: rgba(187, 203, 185, 0.35);
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
+  --shadow-hover: 0 8px 28px rgba(11, 28, 48, 0.10);
+  color-scheme: light;
+}
+body.theme-stitch select,
+body.theme-stitch input,
+body.theme-stitch textarea {
+  color-scheme: light;
+}
+
+/* بطاقات اختيار مظهر الواجهة في الإعدادات */
+.theme-scheme-card {
+  transition: border-color 0.15s, transform 0.1s;
+}
+.theme-scheme-card:hover {
+  transform: translateY(-2px);
+}
+.theme-scheme-card.active {
+  border-color: var(--navy) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 25%, transparent);
+}
+
 /* native <select> popup lists follow OS rendering by default;
    force theme colors so dropdowns (year filters, etc.) stay on-brand */
 select {

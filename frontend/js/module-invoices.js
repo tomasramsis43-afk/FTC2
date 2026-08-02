@@ -749,6 +749,7 @@ function renderSettings(){
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
+  renderThemeSchemePanel();
   renderUsersList();
   renderServerSyncPanel();
   renderPinLockPanel();
