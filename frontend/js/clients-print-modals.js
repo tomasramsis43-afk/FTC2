@@ -145,6 +145,8 @@ $('#filter-company').addEventListener('change', renderTable);
 $('#filter-invoice').addEventListener('change', renderTable);
 $('#filter-coursenum').addEventListener('change', renderTable);
 $('#filter-refnum').addEventListener('change', renderTable);
+$('#filter-bag-own').addEventListener('change', renderTable);
+$('#filter-bag-stock').addEventListener('change', renderTable);
 $('#cl-date-from').addEventListener('input', renderTable);
 $('#cl-date-to').addEventListener('input', renderTable);
 $('#cl-paid-min').addEventListener('input', renderTable);
@@ -154,7 +156,7 @@ $('#cl-paid-max').addEventListener('input', renderTable);
    الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
    معالجات renderTable المرتبطة بها أعلاه — فقط نُخفي/نُظهر الحاوية الأم، ونضيف
    عدّاداً صغيراً يوضّح كم فلتراً متقدماً مفعّلاً حالياً حتى لو كانت القائمة مطوية. */
-const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
+const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','filter-bag-own','filter-bag-stock','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
 function updateAdvancedFiltersBadge(){
   const badge = $('#advanced-filters-count');
   if(!badge) return;

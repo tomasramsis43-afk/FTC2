@@ -53,6 +53,8 @@ function clientsQueryIsSimple(){
   if($('#filter-invoice')?.value) return false;
   if($('#filter-coursenum')?.value) return false;
   if($('#filter-refnum')?.value) return false;
+  if($('#filter-bag-own')?.value) return false;
+  if($('#filter-bag-stock')?.value) return false;
   if(($('#cl-paid-min')?.value||'') !== '' || ($('#cl-paid-max')?.value||'') !== '') return false;
   if($('#filter-status')?.value) return false; // مدين/مسدد يحتاج حساب المتبقي الكامل (خصومات، دفعات...)
   if(clientsSortState.key && !SERVER_SORTABLE_CLIENT_COLS[clientsSortState.key]) return false;
@@ -63,7 +65,8 @@ async function renderTable(){
   const filterSig = JSON.stringify([
     $('#search')?.value, $('#filter-course')?.value, $('#filter-nat')?.value, $('#filter-status')?.value,
     $('#filter-company')?.value, $('#filter-invoice')?.value, $('#filter-coursenum')?.value, $('#filter-refnum')?.value, $('#cl-date-from')?.value, $('#cl-date-to')?.value,
-    $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly
+    $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly,
+    $('#filter-bag-own')?.value, $('#filter-bag-stock')?.value
   ]);
   if(filterSig !== tableLastFilterSig){ tableCurrentPage = 1; tableLastFilterSig = filterSig; }
   const pageSize = currentTablePageSize();
