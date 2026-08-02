@@ -89,7 +89,17 @@ self.addEventListener('fetch', event => {
     }
     // للـ API requests - استخدم Network First مع Fallback
     else if (url.pathname.includes('/api/')) {
-      event.respondWith(networkWithCacheFallback(request));
+      // طلبات مصادق عليها (تحمل رأس Authorization) لا تُخزَّن أبداً في كاش الخدمة المشترك ولا
+      // تُقرأ منه: كاش الـ Service Worker مشترك على مستوى المتصفح/الجهاز ولا يفرّق بين المستخدمين
+      // (المطابقة في caches.match تتم بالرابط وطريقة الطلب فقط وليس بترويسات Authorization) —
+      // فكانت استجابة GET محفوظة لحساب أدمن تُقدَّم لاحقاً لأي مستخدم آخر يسجّل دخوله على نفس
+      // المتصفح/الجهاز: تسريب كامل لبيانات المستخدمين عبر الكاش المشترك. تُنفَّذ هذه الطلبات
+      // شبكةً فقط (بدون أي نسخة محفوظة أو استرجاع من الكاش) — سلامة البيانات قبل أي اعتبار أوفلاين.
+      if (request.headers.get('authorization')) {
+        event.respondWith(fetch(request));
+      } else {
+        event.respondWith(networkWithCacheFallback(request));
+      }
     }
     // للباقي - استخدم Stale While Revalidate
     else {
@@ -216,103 +226,6 @@ async function staleWhileRevalidate(request) {
 }
 
 /**
- * Background Sync - مزامنة الخلفية
- * تحديث البيانات عند العودة للاتصال
- */
-self.addEventListener('sync', event => {
-  console.log('[ServiceWorker] Background sync:', event.tag);
-  
-  if (event.tag === 'sync-data') {
-    event.waitUntil(syncData());
-  }
-});
-
-async function syncData() {
-  try {
-    // جلب البيانات المعلقة من IndexedDB
-    const pendingData = await getPendingSync();
-    
-    // إرسالها إلى الخادم
-    const response = await fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pendingData)
-    });
-
-    if (response.ok) {
-      // حذف البيانات المعلقة
-      await clearPendingSync();
-      
-      // إخطار الـ Clients بنجاح المزامنة
-      const clients = await self.clients.matchAll();
-      clients.forEach(client => {
-        client.postMessage({
-          type: 'SYNC_SUCCESS',
-          data: pendingData
-        });
-      });
-    }
-  } catch (error) {
-    console.error('[ServiceWorker] Sync failed:', error);
-    throw error;
-  }
-}
-
-const SW_IDB_NAME = 'ftc2-kv-cache-db';
-const SW_IDB_PENDING_STORE = 'pending';
-
-function _swOpenDb(){
-  return new Promise((resolve)=>{
-    try{
-      if(!self.indexedDB){ resolve(null); return; }
-      const req = indexedDB.open(SW_IDB_NAME, 2);
-      req.onupgradeneeded = ()=>{
-        try{
-          const db = req.result;
-          if(!db.objectStoreNames.contains(SW_IDB_PENDING_STORE)){
-            db.createObjectStore(SW_IDB_PENDING_STORE, { keyPath: 'key' });
-          }
-        }catch(e){ console.error('[ServiceWorker] IDB upgrade error:', e); }
-      };
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> { console.error('[ServiceWorker] IDB open error:', req.error); resolve(null); };
-    }catch(e){ console.error('[ServiceWorker] IDB open exception:', e); resolve(null); }
-  });
-}
-
-async function getPendingSync(){
-  try{
-    const db = await _swOpenDb();
-    if(!db) return [];
-    return await new Promise((resolve)=>{
-      try{
-        const tx = db.transaction(SW_IDB_PENDING_STORE, 'readonly');
-        const store = tx.objectStore(SW_IDB_PENDING_STORE);
-        const req = store.getAll();
-        req.onsuccess = ()=> resolve(req.result || []);
-        req.onerror = ()=> { console.error('[ServiceWorker] getPendingSync read error:', req.error); resolve([]); };
-      }catch(e){ console.error('[ServiceWorker] getPendingSync exception:', e); resolve([]); }
-    });
-  }catch(e){ console.error('[ServiceWorker] getPendingSync outer exception:', e); return []; }
-}
-
-async function clearPendingSync(){
-  try{
-    const db = await _swOpenDb();
-    if(!db) return;
-    await new Promise((resolve)=>{
-      try{
-        const tx = db.transaction(SW_IDB_PENDING_STORE, 'readwrite');
-        const store = tx.objectStore(SW_IDB_PENDING_STORE);
-        store.clear();
-        tx.oncomplete = ()=> resolve();
-        tx.onerror = ()=> { console.error('[ServiceWorker] clearPendingSync error:', tx.error); resolve(); };
-      }catch(e){ console.error('[ServiceWorker] clearPendingSync exception:', e); resolve(); }
-    });
-  }catch(e){ console.error('[ServiceWorker] clearPendingSync outer exception:', e); }
-}
-
-/**
  * Push Notifications
  */
 self.addEventListener('push', event => {
@@ -409,11 +322,11 @@ async function getCacheSize() {
  */
 self.addEventListener('online', () => {
   console.log('[ServiceWorker] Online');
-  
-  // محاولة مزامنة البيانات
-  if (self.registration.sync) {
-    self.registration.sync.register('sync-data');
-  }
+  // ملاحظة: المزامنة الفعلية للبيانات المعلّقة تتم بالكامل داخل الصفحة نفسها
+  // (flushPendingWrites/flushPendingRecordWrites + backgroundSyncCheck كل دقيقتين)، وليس عبر
+  // الـ Service Worker — كان هنا مسار Background Sync قديم يرفع طابور pending المشترك
+  // وينشره على /api/sync (نقطة نهاية أُزيلت من السيرفر)، فكان إما يفشل بلا فائدة أو يمسح
+  // الطابور من تحت أقدام الصفحة وهي تستخدمه. أُزيل نهائياً.
 });
 
 self.addEventListener('offline', () => {

@@ -47,6 +47,20 @@ async function _pendingCount(){
   try{ return (await _pendingReadAll()).length; }catch(e){ return 0; }
 }
 
+// ---- إعادة تحميل تلقائية بعد تعارض 409 ----
+// تعارض 409 يعني أن نسخة البيانات في ذاكرة هذه الصفحة أقدم من نسخة السيرفر (عُدِّل نفس السجل من
+// جهاز/جلسة أخرى بينما هذه الصفحة كانت تعمل على نسخة قديمة). البقاء بلا تحميل يُبقي البرنامج في
+// حالة تناقض دائم: أي حفظ لاحق لهذا السجل سيفشل بنفس 409 لأن النسخة المحلية قديمة كذلك. نعيد
+// تحميل الصفحة تلقائياً (مرة واحدة فقط، بحارس) بعد مهلة قصيرة تمنح المستخدم رؤية رسالة التنبيه
+// ثم يستلم أحدث البيانات — بدل طلب "يرجى تحديث الصفحة" يدوياً الذي كان يُسقط تعديل المستخدم ويتركه
+// على بيانات قديمة حتى يتذكر إغلاق البرنامج وإعادة فتحه.
+let _conflictReloadScheduled = false;
+function _scheduleReloadAfterConflict(){
+  if(_conflictReloadScheduled) return;
+  _conflictReloadScheduled = true;
+  setTimeout(()=>{ try{ window.location.reload(); }catch(e){ /* لا شيء */ } }, 2500);
+}
+
 // ---------------- مؤشّر حالة الاتصال/المزامنة أعلى البرنامج ----------------
 // isOffline: آخر حالة معروفة لاتصال السيرفر (وليس فقط navigator.onLine، لأنه قد يكون
 // المتصفح متصل بشبكة محلية بينما السيرفر نفسه لا يستجيب — نعتمد نجاح/فشل الطلبات الفعلية).
@@ -207,12 +221,13 @@ async function flushPendingWrites(){
           });
           if(res.status === 409){
             // تعارض حقيقي: عُدِّلت نفس البيانات من جهاز/جلسة أخرى أثناء انقطاعنا — لا نستطيع
-            // حسم هذا تلقائياً بأمان، فنتخلى عن هذا التعديل المعلّق تحديداً وننبّه المستخدم
-            // بدل تكرار محاولة فاشلة إلى ما لا نهاية، ونطلب منه مراجعة البيانات بعد تحديث الصفحة.
+            // حسم هذا تلقائياً بأمان، فنتخلى عن هذا التعديل المعلّق تحديداً وننبّه المستخدم، ثم
+            // نعيد تحميل الصفحة تلقائياً ليعمل من أحدث نسخة على السيرفر (راجع _scheduleReloadAfterConflict).
             const conflict = await res.json().catch(()=>({}));
             _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
             await _pendingDelete(item.key);
-            showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+            showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — سيتم تحديث الصفحة تلقائياً لمراجعتها`);
+            _scheduleReloadAfterConflict();
             continue;
           }
           if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
@@ -266,12 +281,14 @@ async function flushPendingRecordWrites(){
           }
           if(res.status === 409){
             // تعارض حقيقي — نفس معاملة flushPendingWrites: نتخلى عن هذا التعديل المعلّق تحديداً
-            // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم بدل محاولة لا نهائية.
+            // (بياناته أقدم من نسخة السيرفر الحالية) وننبّه المستخدم، ثم نعيد تحميل الصفحة
+            // تلقائياً ليعمل من أحدث نسخة (راجع _scheduleReloadAfterConflict).
             const conflict = await res.json().catch(()=>({}));
             if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
             else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
             await _pendingRecordDelete(item.collection, item.id);
-            showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+            showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — سيتم تحديث الصفحة تلقائياً لمراجعتها`);
+            _scheduleReloadAfterConflict();
             continue;
           }
           if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
@@ -431,7 +448,8 @@ window.storage = {
         if(res.status === 409){
           const conflict = await res.json();
           _kvVersions[key] = conflict.currentVersion || _kvVersions[key];
-          showToast('⚠️ ' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات، يرجى تحديث الصفحة وإعادة المحاولة'));
+          showToast('⚠️ ' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات — سيتم تحديث الصفحة تلقائياً'));
+          _scheduleReloadAfterConflict();
           return null;
         }
         if(res.status === 422){
@@ -575,7 +593,8 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
-      showToast('⚠️ ' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة'));
+      showToast('⚠️ ' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — سيتم تحديث الصفحة تلقائياً'));
+      _scheduleReloadAfterConflict();
       return false;
     }
     if(!res.ok){
@@ -737,12 +756,21 @@ async function loadCollectionGeneric(collection, cacheOnly){
     }
     return { list: [], baseline: new Map() };
   }catch(e){
+    // لو الفشل فك تشفير حقيقي (السجلات على السيرفر مشفَّرة فعلاً بمفتاح لا يفكّه هذا الجهاز) —
+    // لا يجوز معاملته كأنه "لا توجد بيانات": أي قيمة فارغة تُستخدم لاحقاً كأساس لأي عملية حفظ
+    // فتُكتب فوق بيانات السيرفر الحقيقية وتمحوها لكل المستخدمين (نفس خطر _decryptOrFail أعلاه).
+    // نرمي الخطأ (موسوماً isDecryptFailure) ليتعامل معه loadData/loadGeneric بالشاشة القاتلة.
+    if(e && e.isDecryptFailure) throw e;
     // تعذّر الوصول لنظام السجلات الجديد فعلياً (انقطاع اتصال) — نرجع لآخر نسخة محفوظة محلياً.
     try{
       const r = await window.storage.get(collection, false, true);
       const list = (r && r.value) ? JSON.parse(r.value) : [];
       return { list: Array.isArray(list) ? list : [], baseline: null };
-    }catch(e2){ return { list: [], baseline: null }; }
+    }catch(e2){
+      // خط الرجعة نفسه فشل بفك تشفير حقيقي أيضاً — لا يُبتلع لنفس السبب الحرج تماماً.
+      if(e2 && e2.isDecryptFailure) throw e2;
+      return { list: [], baseline: null };
+    }
   }
 }
 
@@ -915,7 +943,8 @@ async function saveOneClientRecord(client, plainJson){
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _clientRecordVersions[client.id] = conflict.currentVersion || _clientRecordVersions[client.id];
-      showToast(`⚠️ تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة`);
+      showToast(`⚠️ تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — سيتم تحديث الصفحة تلقائياً`);
+      _scheduleReloadAfterConflict();
       return false;
     }
     if(!res.ok){
