@@ -85,12 +85,21 @@ const RESTORE_OLD_SNAPSHOT_KEY = 'ftcPreRestoreSnapshotEnc';
    resyncRestoredDataWithServer وcheckPendingRestoreResync أسفل).
    ============================================================================ */
 async function wipeServerDataForFreshRestore(){
+  const failures = [];
   try{
-    await serverFetch('/api/client-records', { method: 'DELETE' });
-    for(const c of ALLOWED_COLLECTIONS_LOCAL){
-      await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
-    }
-  }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر مسح بيانات السيرفر', e); throw e; }
+    const r = await serverFetch('/api/client-records', { method: 'DELETE' });
+    if(!r.ok) failures.push('client-records');
+  }catch(e){ failures.push('client-records'); }
+  for(const c of ALLOWED_COLLECTIONS_LOCAL){
+    try{
+      const r = await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
+      if(!r.ok) failures.push(c);
+    }catch(e){ failures.push(c); }
+  }
+  // تصفير تتبع المزامنة المحلي دائماً، مهما كانت نتيجة المسح: أي انحراف ناتج عن مسح جزئي
+  // (بعض التصنيفات لم تُمسح فعلياً وبقيت بنسخها القديمة، أو مسحت فصارت 0) يُعالَج تلقائياً
+  // أثناء إعادة الرفع بعدها — bulkUploadRecordsGeneric/bulkUploadClientRecords تعيد رفع أي
+  // تعارض نسخ بالنسخة الحالية من السيرفر (currentVersion) فيلتئم كل شيء بدون تعارضات دائمة.
   Object.keys(_clientRecordVersions).forEach(k=> delete _clientRecordVersions[k]);
   clientRecordMeta = {};
   _clientRecordsAggVersion = null;
@@ -106,6 +115,9 @@ async function wipeServerDataForFreshRestore(){
       window.storage.primeKeyVersion('zakatAdjustments'),
     ]);
   }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر تحديث أرقام نسخ settings/users/zakatAdjustments', e); }
+  if(failures.length){
+    console.warn('wipeServerDataForFreshRestore: فشل مسح بعض التصنيفات على السيرفر — ستُعالج تلقائياً بإعادة محاولة التعارضات أثناء الرفع:', failures);
+  }
 }
 // يرفع كل بيانات البرنامج الحالية (الموجودة فعلاً فى متغيرات الذاكرة الآن) للسيرفر من جديد —
 // تُستدعى بعد wipeServerDataForFreshRestore مباشرة، سواء وقت الاستعادة نفسها (متصل) أو لاحقاً
