@@ -107,12 +107,17 @@ let _ftcSyncInFlight = false;
 // ريفرش أو قفل الصفحة فى نفس اللحظة اللي طلب الحفظ لسه طاير فى الشبكة، مفيش أي وسيلة تمنعه أو
 // حتى تنبّهه — راجع beforeunload أسفل.
 let _activeRecordSaves = 0;
+// نفس الفكرة تماماً لطلبات الحفظ الكامل (window.storage.set) الجارية الآن فعلياً على الشبكة ولم
+// تُسجَّل بعد في طابور "التعديلات المعلّقة" (لأنها لم تفشل — نجاحها يُحسم فقط عند رد السيرفر).
+// لو أُغلق البرنامج في هذه اللحظة الضيقة قبل اكتمال الرد، يُفقد التعديل نهائياً دون أي أثر —
+// فنجعل beforeunload يحذّر أيضاً عند وجود أي منها.
+let _activeKvSaves = 0;
 window.addEventListener('beforeunload', (e)=>{
   // لا ننتظر أي Promise هنا (المتصفح لا يسمح بذلك فى beforeunload) — فقط نتحقق من العدّاد
   // الحالي فى الذاكرة (طلبات حفظ لسه جارية) بشكل متزامن. طابور IndexedDB نفسه (تعديلات
   // فشلت فعلاً ومسجّلة) لا يحتاج تحذيراً هنا لأنه أصلاً هيُعاد رفعه تلقائياً عند فتح البرنامج
   // من جديد أو عودة الاتصال — التحذير هنا فقط لمنع فقدان تعديل لسه "فى الهواء" لم يُحسم بعد.
-  if(_activeRecordSaves > 0){
+  if(_activeRecordSaves > 0 || _activeKvSaves > 0){
     e.preventDefault();
     e.returnValue = 'فيه تعديلات لسه بتتحفظ على السيرفر — لو غادرت الصفحة دلوقتي ممكن تفقد آخر تعديل. متأكد إنك عايز تكمل؟';
     return e.returnValue;
@@ -387,7 +392,13 @@ window.storage = {
       }
       const data = await res.json();
       _kvVersions[key] = data.version || 0;
-      _kvCacheWrite(key, data.version || 0, data.value ?? null);
+      // لا نكتب أبداً null فوق آخر نسخة محلية صحيحة: قيمة السيرفر null تعني أن هذا المفتاح غير
+      // موجود على السحابة (مثال: حُذف، أو جهاز آخر استعاد بيانات قبل وجوده) — كتابتها في الكاش
+      // كانت تدمر آخر نسخة محلية سليمة نهائياً، فيُفتح البرنامج لاحقاً من الكاش بشاشة فارغة لا
+      // يمكن استردادها (والنسخة الصحيحة الوحيدة على السيرفر أيضاً). نكتفي بتحديث رقم النسخة فقط.
+      if(data.value !== null && data.value !== undefined){
+        _kvCacheWrite(key, data.version || 0, data.value);
+      }
       markOnline();
       if(data.value === null || data.value === undefined) return null;
       const value = await _decryptOrFail(data.value);
@@ -395,6 +406,7 @@ window.storage = {
     },
     async set(key, value, shared, meta){
       const toStore = await encryptValue(value);
+      _activeKvSaves++; // يُخفض دائماً في finally أدناه — يحمي من فقدان تعديل يُحسم فقط عند رد السيرفر
       try{
         const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, {
           method: 'PUT',
@@ -429,6 +441,8 @@ window.storage = {
         await _pendingWrite(key, toStore);
         markOffline();
         return { key, value, shared: !!shared, offline: true };
+      }finally{
+        _activeKvSaves--;
       }
     },
     async delete(key, shared){
