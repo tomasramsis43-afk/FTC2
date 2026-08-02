@@ -65,7 +65,11 @@ async function applyStateSnapshot(entry){
   users = entry.users;
   companies = entry.companies || [];
   companyTransfers = entry.companyTransfers || [];
-  await saveClients(true);
+  // عمداً saveClients(false) وليس saveClients(true): اللقطة المخزَّنة في مكدس التراجع التُقطت من
+  // ذاكرة هذا الجهاز في لحظة سابقة، وقد تكون قديمة عن أي عملاء أضافهم مستخدمون آخرون على أجهزتهم
+  // منذ ذلك الحين. allowDrop=true كان يمرّر allowLargeDrop لخط الرجعة القديم فيتخطّى حماية السيرفر
+  // من "الحذف المفاجئ الكبير" — فيمكن للتراجع أن يمسح عملاء لم يقم هذا المستخدم بحذفهم أبداً.
+  await saveClients(false);
   await saveVaultTx();
   await saveBagStock();
   await saveCourseSessions();
