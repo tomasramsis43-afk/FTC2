@@ -715,7 +715,7 @@ $('#client-form').addEventListener('submit', async e=>{
   // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً.
   const allIds = await fetchAllClientIds();
   if(allIds){
-    const existingRecordId = allIds.get(data.clientId);
+    const existingRecordId = allIds.get(await sha256Hex(data.clientId));
     if(existingRecordId && existingRecordId !== editingId){
       showToast('رقم الهوية مستخدم بالفعل لعميل آخر فى النظام'); return;
     }
