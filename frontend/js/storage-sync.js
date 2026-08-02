@@ -664,11 +664,15 @@ async function bulkUploadRecordsGeneric(collection, list){
 // تتم لاحقاً فى الخلفية (نفس فكرة تحميل العملاء بالضبط).
 async function loadCollectionGeneric(collection, cacheOnly){
   if(cacheOnly){
-    try{
-      const r = await window.storage.get(collection, false, true);
-      const list = (r && r.value) ? JSON.parse(r.value) : [];
-      return { list: Array.isArray(list) ? list : [], baseline: null };
-    }catch(e){ return { list: [], baseline: null }; }
+    // لا نقرأ أبداً من كاش kv القديم في هذا الوضع: هذه التصنيفات تُحفظ في نظام السجلات المستقلة
+    // (collection_records)، فلا توجد نسخة محلية "مؤكدة" منها — أي كاش kv قديم تحت هذا الاسم هو
+    // إما بيانات ما قبل الترحيل أو ناتج خط رجعة كامل قديم (saveCollectionGeneric مع baseline null).
+    // عرضها كأنها الحقيقة يعرض المستخدم لتعديل بيانات قديمة/ناقصة تُكتب لاحقاً ككتلة كاملة عبر خط
+    // الرجعة (baseline null)، ثم تُسحق بالكامل عند أول تحميل حقيقي من السحابة (loadData(false)
+    // عبر backgroundSyncCheck) — فيبدو وكأن التعديل "فُقد" رغم أنه كان ظاهراً للمستخدم. نبدأ
+    // فارغاً (baseline null) ونترك التحميل الحقيقي — الذي يحدث فوراً بعد فتح البرنامج بفضل
+    // backgroundSyncCheck — يملأ الشاشة بالبيانات الصحيحة من السجلات المستقلة.
+    return { list: [], baseline: null };
   }
   try{
     const { list, baseline } = await fetchAllRecordsGeneric(collection);
