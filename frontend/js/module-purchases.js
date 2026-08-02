@@ -25,8 +25,10 @@ function supplierTotalsMap(){
   return map;
 }
 function renderPurchaseCards(){
+  // الشهر الحالي بالتوقيت المحلي — toISOString() كان يزيحه لـ UTC (+3 بالسعودية) فيُخطئ
+  // تصنيف مشتريات أول ساعات الشهر إلى الشهر السابق.
   const now = new Date();
-  const ym = now.toISOString().slice(0,7);
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const thisMonth = purchases.filter(p=>(p.date||'').slice(0,7)===ym).reduce((s,p)=>s+num(p.total),0);
   const unpaid = purchases.filter(p=>p.status==='unpaid');
   const unpaidTotal = unpaid.reduce((s,p)=>s+num(p.total),0);
