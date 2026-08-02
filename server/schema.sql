@@ -93,6 +93,16 @@ CREATE TABLE IF NOT EXISTS zatca_invoice_log (
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter ON zatca_invoice_log(invoice_counter);
 -- قيد تفرد على رقم الفاتورة (ICV): طبقة حماية أخيرة ضد تكرار الرقم في بداية السلسلة أو أي
 -- سباق آخر — يمنع إدراج فاتورتين بنفس الرقم مهما تزامن الطلبات (يكمل القفل التنبيهي في lib.js).
+-- ملاحظة ترحيل (إصلاح فشل النشر): قواعد بيانات قديمة قد تحتوي صفوفاً مكررة invoice_counter
+-- من قبل هذا القيد، ولو تُرك قيد فريد على بيانات مكررة فسيفشل CREATE UNIQUE INDEX ويفشل معه
+-- تجهيز قاعدة البيانات بالكامل عند الإقلاع. لذلك نُبقي أحدث صف فقط لكل رقم تسلسلي (نفس
+-- الرقم المتكرر غالباً صف قديم أُعيد إدراجه بمعلومة أحدث/أو صف تجريبي من بيئة التدريب)،
+-- ثم ننشئ الفهرس الفريد. هذه العملية آمنة وقابلة للإعادة (لا تتأثر بوجود الفهرس من قبل).
+DELETE FROM zatca_invoice_log a
+USING zatca_invoice_log b
+WHERE a.invoice_counter = b.invoice_counter
+  AND a.id <> b.id
+  AND (a.created_at < b.created_at OR (a.created_at = b.created_at AND a.id < b.id));
 CREATE UNIQUE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter_uniq ON zatca_invoice_log(invoice_counter);
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_source ON zatca_invoice_log(source_ref);
 
