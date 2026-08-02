@@ -576,6 +576,23 @@ let _clientRecordsAggVersion = null; // آخر "مجموع نسخ" معروف �
 // وتُستخدم حصراً لعرض شارة "قيد اعتماد الأدمن" وزر الاعتماد فى شاشة العملاء.
 let clientRecordMeta = {}; // id -> { origin: 'general'|'reception', status: 'confirmed'|'pending' }
 
+// نفس فكرة clientRecordMeta لكن للسجلات العامة (collection_records): تتبع حالة كل سجل
+// (origin/status) لكل تصنيف — تُستخدم لعرض شارة "⏳ قيد الاعتماد" وأزرار اعتماد/رفض الأدمن
+// في شاشات الخزنة/المخزون/الدورات. تُعبَّأ من استجابات السيرفر (GET/PUT/bulk) ولا تدخل في enc.
+let recordMeta = {}; // collection -> { id: { origin: 'general'|'reception', status: 'confirmed'|'pending' } }
+// التصنيفات التشغيلية الخاضعة لاعتماد الأدمن (مطابقة APPROVAL_GATED_COLLECTIONS في server.js):
+// سجل الاستقبال فيها يبدأ pending بانتظار اعتماد الأدمن.
+const APPROVAL_GATED_COLLECTIONS_LOCAL = ['vaultTx', 'bagStock', 'courseSessions'];
+// يعيّن حالة سجل محلياً حسب دور المستخدم الحالي — يُستخدم بعد نجاح الرفع المجمّع (استجابته
+// لا تحمل origin/status لكل سجل، والاشتقاق هنا مطابق تماماً لمنطق السيرفر).
+function _setRecordMetaLocal(collection, id){
+  if(!recordMeta[collection]) recordMeta[collection] = {};
+  recordMeta[collection][id] = {
+    origin: SERVER_AUTH_ROLE === 'reception' ? 'reception' : 'general',
+    status: (SERVER_AUTH_ROLE === 'reception' && APPROVAL_GATED_COLLECTIONS_LOCAL.includes(collection)) ? 'pending' : 'confirmed',
+  };
+}
+
 // ============================================================
 // نظام تخزين عام للسجلات المستقلة (Generic Collection Records) — نفس فكرة نظام العملاء
 // (client_records) أعلاه لكن قابلة لإعادة الاستخدام لأي شيت آخر (الخزنة، المخزون، المحاسبة،
@@ -683,8 +700,10 @@ async function fetchAllRecordsGeneric(collection){
   const list = [];
   const baseline = new Map();
   const versions = new Map();
+  const metaMap = {};
   for(const r of (data.records||[])){
     versions.set(r.id, r.version);
+    metaMap[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
     let plain;
     try{ plain = await _decryptOrFail(r.enc); }
     catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل، وليس تجاهلاً صامتاً
@@ -695,6 +714,7 @@ async function fetchAllRecordsGeneric(collection){
     }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل التصنيف */ }
   }
   _recordVersions[collection] = versions;
+  recordMeta[collection] = metaMap;
   // نفس خط الأمان الموجود فى fetchAllClientRecords بالضبط: أي سطر لسه معلّق فعلياً (بدون اتصال
   // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً فى الذاكرة بدل اختفائه فجأة من الشاشة.
   await _mergePendingRecordsIntoList(collection, list);
@@ -732,6 +752,10 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     }
     const data = await res.json();
     _recordVersions[collection].set(id, data.version || 0);
+    if(data.origin && data.status){
+      if(!recordMeta[collection]) recordMeta[collection] = {};
+      recordMeta[collection][id] = { origin: data.origin, status: data.status };
+    }
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
@@ -756,6 +780,7 @@ async function deleteOneRecordGeneric(collection, id){
       return null;
     }
     if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+    if(recordMeta[collection]) delete recordMeta[collection][id];
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
@@ -784,6 +809,7 @@ async function bulkDeleteRecordsGeneric(collection, ids){
       }
       for(const id of chunk){
         if(_recordVersions[collection]) _recordVersions[collection].delete(id);
+        if(recordMeta[collection]) delete recordMeta[collection][id];
         await _pendingRecordDelete(collection, id);
       }
     }catch(e){
@@ -834,6 +860,7 @@ async function bulkUploadRecordsGeneric(collection, list){
     for(const item of chunk){
       if(!conflictIdSet.has(item.id)){
         versions.set(item.id, (versions.get(item.id)||0) + 1);
+        _setRecordMetaLocal(collection, item.id);
         await _pendingRecordDelete(collection, item.id);
       }
     }
@@ -861,6 +888,7 @@ async function bulkUploadRecordsGeneric(collection, list){
             stillConflictIds.push(r.id);
           }else{
             versions.set(r.id, (r.version||0) + 1);
+            _setRecordMetaLocal(collection, r.id);
             await _pendingRecordDelete(collection, r.id);
           }
         }
@@ -1209,6 +1237,22 @@ async function approveClientRecord(id){
     const data = await res.json();
     _clientRecordVersions[id] = data.version || _clientRecordVersions[id];
     clientRecordMeta[id] = { origin: 'reception', status: 'confirmed' };
+    return true;
+  }catch(e){ return false; }
+}
+
+// اعتماد الأدمن لسجل عام (vaultTx/bagStock/courseSessions...) سجّله الاستقبال (pending ->
+// confirmed). لا حاجة لفك/إعادة تشفير — فقط عمود status يتغيّر على السيرفر (POST approve).
+// يرجع true لو نجح.
+async function approveRecordGeneric(collection, id){
+  try{
+    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+    if(!res.ok) return false;
+    const data = await res.json();
+    if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+    _recordVersions[collection].set(id, data.version || (_recordVersions[collection].get(id) || 0));
+    if(!recordMeta[collection]) recordMeta[collection] = {};
+    recordMeta[collection][id] = { origin: 'reception', status: 'confirmed' };
     return true;
   }catch(e){ return false; }
 }

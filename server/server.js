@@ -569,6 +569,13 @@ app.get('/api/clients', requireAuth, async (req, res) => {
     const where = [];
     const params = [];
     let i = 1;
+    // نسخة clients_rows مفهرسة من كتلة kv القديمة ولا تحمل عزل origin/status، فتُستبعد صراحةً
+    // سجلات الاستقبال المعلّقة (origin='reception' AND status='pending') لكل الدور غير الأدمن —
+    // وإلا كشفت هذه النقطة عملاء مسودات الاستقبال لأي دور آخر عبر طلب مباشر (نفس إصلاح
+    // التسريب بالمعرّف في مسارات client-records). الأدمن يرى كل شيء كما كان دائماً.
+    if (req.user.role !== 'admin') {
+      where.push(`NOT EXISTS (SELECT 1 FROM client_records cr WHERE cr.id = clients_rows.id AND cr.origin = 'reception' AND cr.status = 'pending')`);
+    }
     if (req.query.search) {
       where.push(`(name ILIKE $${i} OR client_id ILIKE $${i} OR refer_num ILIKE $${i} OR invoice_no ILIKE $${i})`);
       params.push('%' + req.query.search + '%'); i++;
@@ -830,6 +837,23 @@ function clientRecordsVisibilitySql(role, username) {
   if (role === 'reception') return { where: 'WHERE origin = $1 AND created_by = $2', params: ['reception', username] };
   return { where: 'WHERE status = $1', params: ['confirmed'] };
 }
+
+// نفس عزل العملاء تماماً لكن للتصنيفات العامة (collection_records): الأدمن يرى كل شيء
+// (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال يرى سجلاته هو شخصياً فقط
+// (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول حتى عن بقية مستخدمي
+// الاستقبال. وأي دور آخر (staff/accountant) يرى فقط السجلات المعتمدة status='confirmed'
+// (نفس السلوك القديم تماماً بالنسبة له). الصيغة بصيغة AND عمداً (لا تبدأ بـ WHERE) لأن
+// كل مسارات السجلات العامة تضيفها لشرط collection موجود أصلاً.
+function recordsVisibilitySql(role, username) {
+  if (role === 'admin') return { where: '', params: [] };
+  if (role === 'reception') return { where: 'AND origin = $2 AND created_by = $3', params: ['reception', username] };
+  return { where: 'AND status = $1', params: ['confirmed'] };
+}
+// التصنيفات التشغيلية التي تكتبها شاشات الاستقبال فعلاً (العملاء/الخزنة/المخزون/الدورات):
+// سجلاتها المضافة من دور 'reception' تبدأ معلّقة (pending) بانتظار اعتماد الأدمن. بقية
+// التصنيفات (سجلات تاريخية/إعدادات) لا تدخل نظام الاعتماد إطلاقاً حتى لا تُقيَّد عمليات
+// نظامية جانبية (سجل التدقيق، سجل الإلغاءات...) بموافقات منفصلة بلا معنى.
+const APPROVAL_GATED_COLLECTIONS = ['vaultTx', 'bagStock', 'courseSessions'];
 
 app.get('/api/client-records', requireAuth, async (req, res) => {
   try {
@@ -1144,9 +1168,34 @@ function requireValidCollection(req, res, next) {
   next();
 }
 
+app.get('/api/records/pending', requireAuth, async (req, res) => {
+  // كل سجلات الاستقبال المعلّقة (pending) من كل التصنيفات دفعة واحدة — للأدمن فقط، تُستخدم في
+  // لوحة التحكم: شاشة "قيد الاعتماد" + عداد الإشعار. الـ enc يمر كما هو (السيرفر لا يملك المفتاح
+  // ولا يفك تشفيراً أبداً) ويعرضه المتصفح.
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير متاح لهذا الدور' });
+  try {
+    const r = await pool.query(
+      `SELECT collection, id, enc, version, origin, status, created_by, updated_by, updated_at
+       FROM collection_records
+       WHERE origin = 'reception' AND status = 'pending'
+       ORDER BY updated_at DESC`
+    );
+    res.json({ records: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب العمليات المعلّقة' });
+  }
+});
+
 app.get('/api/records/:collection', requireAuth, requireValidCollection, async (req, res) => {
   try {
-    const r = await pool.query('SELECT id, enc, version FROM collection_records WHERE collection = $1', [req.params.collection]);
+    // فلترة عزل الاستقبال على مستوى السيرفر (نفس clientRecordsVisibilitySql): لا يمكن لأي دور
+    // رؤية سجلات لا تخصه حتى عبر طلب مباشر، والسجلات المعلّقة لا تظهر لغير صاحبها/الأدمن.
+    const vis = recordsVisibilitySql(req.user.role, req.user.username);
+    const r = await pool.query(
+      `SELECT id, enc, version, origin, status FROM collection_records WHERE collection = $1 ${vis.where}`,
+      [req.params.collection, ...vis.params]
+    );
     res.json({ records: r.rows });
   } catch (e) {
     console.error(e);
@@ -1158,7 +1207,20 @@ app.get('/api/records/:collection', requireAuth, requireValidCollection, async (
 // /api/storage-versions، تستخدمه المزامنة الدورية الخلفية للتحقق السريع من وجود تعديلات جديدة.
 app.get('/api/records-versions', requireAuth, async (req, res) => {
   try {
-    const r = await pool.query('SELECT collection, COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM collection_records GROUP BY collection');
+    // نفس فلترة الرؤية الخاصة بـ GET /api/records/:collection بالضبط (راجع recordsVisibilitySql)،
+    // وإلا يظهر للمستخدم إشعار "يوجد تحديث" عن سجلات لا يحق له رؤيتها أصلاً، وتدخل المزامنة
+    // الدورية في حلقة إعادة جلب لا نهائية (عدد/مجموع السيرفر لا يطابقان ما يراه هذا المستخدم).
+    let sql = 'SELECT collection, COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM collection_records';
+    const params = [];
+    if (req.user.role === 'reception') {
+      sql += ' WHERE origin = $1 AND created_by = $2';
+      params.push('reception', req.user.username);
+    } else if (req.user.role !== 'admin') {
+      sql += ' WHERE status = $1';
+      params.push('confirmed');
+    }
+    sql += ' GROUP BY collection';
+    const r = await pool.query(sql, params);
     const out = {};
     r.rows.forEach(row => {
       if (!collectionRoleAllowed(req.user.role, row.collection)) return;
@@ -1176,17 +1238,46 @@ app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireVali
   if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات غير صحيحة' });
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
   try {
+    // حماية عزل بيانات الاستقبال في السجلات العامة (نفس منطق /api/client-records/:id حرفياً):
+    // كل مستخدم استقبال يلمس فقط سجلاته (origin='reception' AND created_by = هو نفسه) — معزول
+    // حتى عن بقية مستخدمي الاستقبال، وأي دور آخر (staff/accountant) يعدّل السجلات المعتمدة
+    // status='confirmed' فقط — فلا يمكن عبر طلب مباشر بمعرّف معروف لمس مسودات/سجلات استقبال
+    // معلّقة لا يملك رؤيتها أصلاً. الأدمن بلا قيود كما كان دائماً.
+    if (req.user.role === 'reception') {
+      const existing = await pool.query(
+        'SELECT origin, created_by FROM collection_records WHERE collection = $1 AND id = $2',
+        [req.params.collection, req.params.id]
+      );
+      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+        return res.status(403).json({ error: 'ليست لديك صلاحية تعديل هذه البيانات' });
+      }
+    } else if (req.user.role !== 'admin') {
+      const existing = await pool.query(
+        'SELECT status FROM collection_records WHERE collection = $1 AND id = $2',
+        [req.params.collection, req.params.id]
+      );
+      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
+        return res.status(403).json({ error: 'ليست لديك صلاحية تعديل هذه البيانات' });
+      }
+    }
+    // السجلات التي يسجّلها الاستقبال في التصنيفات التشغيلية تبدأ معلّقة (pending) بانتظار
+    // اعتماد الأدمن. origin/status يُثبَّتان عند الإنشاء فقط ولا يتغيّران عند التعديل (نفس نمط
+    // client_records): تعديل الاستقبال لسجل معتمد خاص به يبقيه معتمداً — "عند تسجيل عملية جديدة
+    // فقط" يحتاج اعتماداً كما طلب المستخدم.
+    const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
+    const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
+    const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
     const upsert = await pool.query(
-      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
-       VALUES ($1, $2, $3, 1, $4)
+      `INSERT INTO collection_records (collection, id, enc, version, updated_by, origin, status, created_by)
+       VALUES ($1, $2, $3, 1, $4, $5, $6, $4)
        ON CONFLICT (collection, id) DO UPDATE SET
          enc = EXCLUDED.enc, version = collection_records.version + 1,
          updated_at = now(), updated_by = EXCLUDED.updated_by
-       WHERE collection_records.version = $5
-       RETURNING version`,
-      [req.params.collection, req.params.id, enc, req.user.username, knownVersion]
+       WHERE collection_records.version = $7
+       RETURNING version, origin, status`,
+      [req.params.collection, req.params.id, enc, req.user.username, newOrigin, newStatus, knownVersion]
     );
-    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version });
+    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     const current = await pool.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
@@ -1200,11 +1291,46 @@ app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireVali
 
 app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   try {
-    await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+    // نفس حماية عزل الاستقبال في مسار الحذف (كان الحذف بلا أي فحص — أي مستخدم مصادق يقدر
+    // يحذف أي سجل يعرف معرّفه): الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون
+    // المعتمد فقط، والأدمن بلا قيود.
+    if (req.user.role === 'reception') {
+      await pool.query(
+        'DELETE FROM collection_records WHERE collection = $1 AND id = $2 AND origin = $3 AND created_by = $4',
+        [req.params.collection, req.params.id, 'reception', req.user.username]
+      );
+    } else if (req.user.role === 'admin') {
+      await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+    } else {
+      await pool.query(
+        'DELETE FROM collection_records WHERE collection = $1 AND id = $2 AND status = $3',
+        [req.params.collection, req.params.id, 'confirmed']
+      );
+    }
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر الحذف' });
+  }
+});
+
+// اعتماد سجل عام سجّله الاستقبال (pending -> confirmed): للأدمن فقط. لا يحتاج فك أي تشفير —
+// enc يبقى كما هو تماماً (السيرفر لا يملك المفتاح)، فقط عمود status يتغيّر، فيصبح السجل ظاهراً
+// فوراً لكل الأدوار الأخرى (staff/accountant) وداخلاً في مزامناتهم وحساباتهم، مع بقاء
+// origin='reception' كسجل تاريخي فقط لمن سجّله أصلاً.
+app.post('/api/records/:collection/:id/approve', requireAuth, requireRole('admin'), requireValidCollection, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE collection_records SET status = 'confirmed', version = version + 1, updated_at = now()
+       WHERE collection = $1 AND id = $2 AND origin = 'reception' AND status = 'pending'
+       RETURNING id, version`,
+      [req.params.collection, req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'confirmed' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر اعتماد السجل' });
   }
 });
 
@@ -1232,6 +1358,18 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
     // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
     // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
     // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
+    // السجلات المرفوعة من الاستقبال في التصنيفات التشغيلية تبدأ معلّقة (نفس منطق PUT الفردي)،
+    // مع حماية العزل حسب الدور في التعارضات (نفس guard الخاص بـ client-records/bulk-migrate):
+    // الاستقبال يلمس سجلاته الشخصية فقط، staff/accountant يلمسون المعتمد فقط، والأدمن بلا قيود.
+    const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
+    const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
+    const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
+    const esc = s => String(s).replace(/'/g, "''");
+    const guard = req.user.role === 'reception'
+      ? `('${esc(req.user.role)}' = 'reception' AND cr.origin = 'reception' AND cr.created_by = '${esc(req.user.username)}')`
+      : req.user.role === 'admin'
+      ? `'${esc(req.user.role)}' = 'admin'`
+      : `cr.status = 'confirmed'`;
     const payload = JSON.stringify(records.map(r => ({ id: String(r.id), enc: String(r.enc), version: Number.isInteger(r.version) ? r.version : 0 })));
     await client.query('BEGIN');
     await client.query(
@@ -1240,26 +1378,26 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
        FROM jsonb_array_elements($1::jsonb) AS t`,
       [payload]
     );
-    // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة
+    // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
     await client.query(
       `CREATE TEMP TABLE _conf ON COMMIT DROP AS
        SELECT cr.id, cr.version AS current_version
        FROM _inc i
        JOIN collection_records cr ON cr.collection = $1 AND cr.id = i.id
-       WHERE cr.version <> i.known_version`,
+       WHERE cr.version <> i.known_version OR NOT (${guard})`,
       [req.params.collection]
     );
     // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
     await client.query(
-      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
-       SELECT $1, i.id, i.enc, 1, $2
+      `INSERT INTO collection_records (collection, id, enc, version, updated_by, origin, status, created_by)
+       SELECT $1, i.id, i.enc, 1, $2, $3, $4, $2
        FROM _inc i
        WHERE NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
        ORDER BY i.id
        ON CONFLICT (collection, id) DO UPDATE SET
          enc = EXCLUDED.enc, version = collection_records.version + 1,
          updated_at = now(), updated_by = EXCLUDED.updated_by`,
-      [req.params.collection, req.user.username]
+      [req.params.collection, req.user.username, newOrigin, newStatus]
     );
     const confRows = await client.query('SELECT id, current_version FROM _conf');
     const migrated = records.length - confRows.rows.length;
@@ -1281,7 +1419,21 @@ app.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter, re
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
   if (!ids.length || ids.length > 1000) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   try {
-    await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])', [req.params.collection, ids]);
+    // نفس حماية عزل الاستقبال في الحذف الفردي (كان الحذف المجمّع بلا أي فحص ملكية إطلاقاً):
+    // الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون المعتمد فقط، والأدمن بلا قيود.
+    if (req.user.role === 'reception') {
+      await pool.query(
+        'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[]) AND origin = $3 AND created_by = $4',
+        [req.params.collection, ids, 'reception', req.user.username]
+      );
+    } else if (req.user.role === 'admin') {
+      await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])', [req.params.collection, ids]);
+    } else {
+      await pool.query(
+        'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[]) AND status = $3',
+        [req.params.collection, ids, 'confirmed']
+      );
+    }
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);

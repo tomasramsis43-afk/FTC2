@@ -181,6 +181,19 @@ CREATE TABLE IF NOT EXISTS collection_records (
 -- فى الإندكس المركّب)، فأي إندكس إضافي عليه وحده تكرار بلا فائدة حقيقية.
 DROP INDEX IF EXISTS idx_collection_records_collection;
 
+-- عزل بيانات الاستقبال في السجلات العامة: نفس نمط client_records تماماً. أي سجل يسجّله
+-- مستخدم بدور 'reception' في تصنيفات التشغيل (الخزنة/المخزون/الدورات) يُوسَم origin='reception'
+-- ويبدأ status='pending' (مسودة معلّقة لا تظهر لغير صاحبه/الأدمن ولا تدخل أي مزامنة أو حساب
+-- أو تقرير لأي دور آخر) حتى يعتمدها الأدمن (status -> confirmed). السجلات العامة كلها تبقى
+-- confirmed تماماً كما كانت — بلا أي تغيير في سلوكها الحالي.
+ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'general';
+ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
+ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS created_by TEXT;
+-- created_by يُسجَّل مرة واحدة عند إنشاء السجل ولا يتغيّر لاحقاً (عزل مستخدمي الاستقبال عن
+-- بعضهم مهما عُدِّل السجل أو اُعتمد) — القيم القديمة تُملأ من آخر من حدّث السجل كما هو متاح.
+UPDATE collection_records SET created_by = updated_by WHERE created_by IS NULL;
+CREATE INDEX IF NOT EXISTS idx_collection_records_origin_status ON collection_records(origin, status);
+
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
 CREATE TABLE IF NOT EXISTS login_history (

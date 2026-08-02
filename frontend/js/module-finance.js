@@ -894,6 +894,11 @@ function renderVault(){
   $('#vault-table-body').innerHTML = pageRows.map(t=>{
     const isDup = !!(t.clientId && dupIdsForHighlight.has(t.clientId));
     const isAnomaly = anomalyIdsForHighlight.has(t.id);
+    const vMeta = (typeof recordMeta==='object' && recordMeta && recordMeta.vaultTx) ? recordMeta.vaultTx[t.id] : null;
+    const isVPending = !!(vMeta && vMeta.status==='pending');
+    const vApproveBtns = (isVPending && currentUserRole==='admin')
+      ? ` <button class="btn btn-gold btn-sm" data-vapprove="${t.id}" title="اعتماد هذه العملية لتدخل في الرصيد والحسابات والتقارير كباقي الحركات">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-vreject="${t.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>`
+      : '';
     return `
     <tr>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
@@ -907,10 +912,10 @@ function renderVault(){
       <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
-      <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
+      <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isVPending ? ` <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تدخل رصيد/حسابات/تقارير الأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
       <td class="${vaultInlineEditable(t)?'editable-cell':''}" data-label="ملاحظات"${vaultInlineEditable(t)?` data-inline-field="notes" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
-        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>` : (t.type==='in' && t.companyTransferId) ? `
+        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>${vApproveBtns}` : (t.type==='in' && t.companyTransferId) ? `
         <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button>` : `
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
@@ -918,6 +923,7 @@ function renderVault(){
             <button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>
             ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
             ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
+            ${vApproveBtns}
             <button class="btn btn-danger btn-sm" data-vdel="${t.id}">${tr('delete')}</button>
           </div>
         </div>`}
@@ -1510,6 +1516,39 @@ document.addEventListener('click', async e=>{
   if(e.target.dataset.vedit) openVaultModal(e.target.dataset.vedit);
   if(e.target.dataset.vprintreturn) await printReturnInvoice(e.target.dataset.vprintreturn);
   if(e.target.dataset.vvoucher) await printExpenseVoucher(e.target.dataset.vvoucher);
+  if(e.target.dataset.vapprove){
+    const id = e.target.dataset.vapprove;
+    const t = vaultTx.find(x=>x.id===id);
+    const desc = t ? `${t.type==='in'?'وارد':'صادر'} ${fmt(num(t.amount))} ﷼ — ${t.clientName||t.manual||t.category||''}` : id;
+    if(await customConfirm(`اعتماد عملية الاستقبال "${desc}"؟ ستدخل فوراً في الرصيد والحسابات والتقارير كباقي الحركات.`)){
+      const ok = await approveRecordGeneric('vaultTx', id);
+      if(ok){
+        await logAudit('edit','الحركات المالية', `تم اعتماد عملية الاستقبال: ${desc}`);
+        refreshEverything();
+        showToast('✅ تم اعتماد العملية');
+      }else{
+        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
+  if(e.target.dataset.vreject){
+    const id = e.target.dataset.vreject;
+    const t = vaultTx.find(x=>x.id===id);
+    const desc = t ? `${t.type==='in'?'وارد':'صادر'} ${fmt(num(t.amount))} ﷼ — ${t.clientName||t.manual||t.category||''}` : id;
+    if(await customConfirm(`رفض وحذف تسجيل الاستقبال المعلّق "${desc}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)){
+      const ok = await deleteOneRecordGeneric('vaultTx', id);
+      if(ok!==false){
+        vaultTx = vaultTx.filter(x=>x.id!==id);
+        await logAudit('delete','الحركات المالية', `تم رفض وحذف تسجيل الاستقبال المعلّق: ${desc}`);
+        refreshEverything();
+        showToast('تم رفض التسجيل وحذفه');
+      }else{
+        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+      }
+    }
+    return;
+  }
   if(e.target.dataset.vdel){
     const id = e.target.dataset.vdel;
     const target = vaultTx.find(t=>t.id===id);

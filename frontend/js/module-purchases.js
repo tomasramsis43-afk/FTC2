@@ -655,6 +655,9 @@ async function backgroundSyncCheck(){
     if(!res.ok){ markOffline(); return; }
     const data = await res.json();
     markOnline();
+    // تحديث دوري لعداد "عمليات قيد الاعتماد" لدى الأدمن (كل دقيقتين) — لو ظهرت إضافات جديدة
+    // من موظفي الاستقبال أثناء وجوده في أي شاشة، يظهر الإشعار في لوحة التحكم تلقائياً.
+    if(currentUserRole==='admin' && typeof refreshPendingApprovals==='function') refreshPendingApprovals();
     const serverVersions = data.versions || {};
     // نتجاهل مفتاح 'clients' القديم هنا عمداً: أصبح غير مُحدَّث (لم يعد يُكتَب إليه فى المسار
     // السريع الجديد)، والمصدر الصحيح لمعرفة تغيّر العملاء الآن هو checkClientRecordsChanged أعلاه.
