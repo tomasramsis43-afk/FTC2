@@ -1,12 +1,22 @@
 /* ---------------- Bags / Inventory ---------------- */
+/* سجل "قيد الاعتماد" (سجّله موظف الاستقبال بانتظار اعتماد الأدمن) لا يدخل إجماليات
+   المخزون/الرصيد/المصروف حتى يُعتمد — نفس مبدأ الخزنة والدورات. هذه الحالة تُخزَّن في
+   recordMeta.bagStock (لا داخل سجل bagStock نفسه)، وتُستعاد أيضاً من اللقطة المحلية عند
+   إعادة فتح البرنامج (cacheOnly). */
+function isBagStockRecordPending(b){
+  const m = (typeof recordMeta==='object' && recordMeta && recordMeta.bagStock) ? recordMeta.bagStock[b && b.id] : null;
+  return !!(m && m.status === 'pending');
+}
 /* إعادة احتساب دفتر تمويل مخزون الحقائب بالكامل من البداية، بحيث تبقى النتائج صحيحة
    حتى لو تم حذف عملية قديمة من المنتصف. السجلات القديمة (بدون type) تُعامل كإضافة
-   كمية ثابتة يدوياً كما كانت سابقاً، دون التأثير على الرصيد. */
+   كمية ثابتة يدوياً كما كانت سابقاً، دون التأثير على الرصيد. سجلات "قيد الاعتماد" لا
+   تُحتسب إطلاقاً في دفتر التمويل (لا في الرصيد ولا في عدد الحقائب) حتى يعتمدها الأدمن. */
 function recalcBagFundLedger(){
   const price = num(settings.bagPrice) || DEFAULT_SETTINGS.bagPrice;
   let bags = 0, balance = 0;
   const sorted = bagStock.slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
   sorted.forEach(entry=>{
+    if(isBagStockRecordPending(entry)) return;
     if(!entry.type){
       bags += num(entry.qty);
       entry.balanceBefore = balance;
@@ -63,8 +73,8 @@ function bagStockTotals(){
   // السجل تلقائياً، بغض النظر عن الشاشة أو الاستيراد الذي سجّل عملية الشراء (شيت العملاء، شيت الدورات
   // عبر خانة الشراء السريعة، الاستيراد الجماعي لبيانات العملاء، استيراد متدربين حوالة شركة... أو أي شاشة مستقبلية)،
   // دون الحاجة لأي مزامنة يدوية أو سجل وسيط.
-  const fundingQty = bagStock.reduce((s,x)=> x.type==='issue' ? s : s+num(x.qty), 0);
-  const spentBulk = bagStock.reduce((s,x)=> x.type==='issue' ? s : s+num(x.qty)*num(x.unitPrice), 0);
+  const fundingQty = bagStock.reduce((s,x)=> (x.type==='issue' || isBagStockRecordPending(x)) ? s : s+num(x.qty), 0);
+  const spentBulk = bagStock.reduce((s,x)=> (x.type==='issue' || isBagStockRecordPending(x)) ? s : s+num(x.qty)*num(x.unitPrice), 0);
   const issuedToClients = clients.filter(c=>c.bagSource==='stock' && !c.suspended).length;
   const purchasedQty = fundingQty - issuedToClients;
   return {purchasedQty, spentBulk, fundingQty, issuedToClients};
@@ -225,7 +235,7 @@ function renderBags(){
 
   const bagStockRows = bagStockFiltered().slice().reverse();
   if($('#bagstock-period-deposit-total')){
-    const periodNetQty = bagStockFiltered().reduce((s,b)=>s+num(b.qty),0);
+    const periodNetQty = bagStockFiltered().reduce((s,b)=> isBagStockRecordPending(b) ? s : s+num(b.qty), 0);
     $('#bagstock-period-deposit-total').textContent = periodNetQty;
   }
   const bagStockPageRows = applyGenericPagination('bagstock', bagStockRows, bagStockPageState, [
@@ -256,7 +266,7 @@ function renderBags(){
   }).join('') : `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد عمليات تمويل مسجّلة</td></tr>`;
 
   const methodTotals = {};
-  bagStock.forEach(b=>{ const k=b.method||'غير محدد'; methodTotals[k]=(methodTotals[k]||0)+num(b.qty)*num(b.unitPrice); });
+  bagStock.forEach(b=>{ if(isBagStockRecordPending(b)) return; const k=b.method||'غير محدد'; methodTotals[k]=(methodTotals[k]||0)+num(b.qty)*num(b.unitPrice); });
   purchasedBuy.forEach(c=>{ const k=c.bagPaymentMethod||'غير محدد'; methodTotals[k]=(methodTotals[k]||0)+num(c.bagPrice); });
   drawBars('#chart-bag-method', Object.entries(methodTotals).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k, Math.round(v*100)/100]));
 
@@ -891,6 +901,11 @@ document.addEventListener('click', async e=>{
       const ok = await approveRecordGeneric('bagStock', id);
       if(ok){
         await logAudit('edit','مخزون الحقائب', 'تم اعتماد عملية الاستقبال في مخزون الحقائب');
+        // العملية أصبحت معتمدة — تعيد احتساب دفتر التمويل بالكامل لتشملها الآن (كانت مستبعدة
+        // أثناء كونها "قيد الاعتماد")، ثم تحفظ حتى تبقى قيم qty/balanceAfter مخزّنة صحيحة.
+        recalcBagFundLedger();
+        await saveBagStock();
+        await saveSettings();
         refreshEverything();
         showToast('✅ تم اعتماد العملية');
       }else{

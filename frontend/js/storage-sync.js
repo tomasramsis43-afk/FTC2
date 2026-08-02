@@ -635,14 +635,16 @@ async function _mergePendingRecordsIntoList(collection, list){
 // ---- لقطات محلية مشفّرة (راجع core-utils.js: RECORDS_SNAP_PREFIX/CLIENTS_SNAP_PREFIX) ----
 // الهدف المزدوج: (أ) فتح سريع من آخر بيانات مؤكدة بدل شاشة فارغة، و(ب) إغلاق نافذة "التعديل
 // قبل اكتمال المزامنة الخلفية" التي كانت تُبنى على مصفوفة فارغة فتُكتب فوق البيانات الحقيقية.
-async function _persistRecordsSnap(collection, list, baseline, versions){
+async function _persistRecordsSnap(collection, list, baseline, versions, meta){
   try{
     const items = Array.isArray(list) ? list.filter(x=>x && x.id) : [];
     const baselinePairs = [];
     if(baseline) for(const [id, json] of baseline) baselinePairs.push([id, json]);
     const versionPairs = [];
     if(versions) for(const [id, v] of versions) versionPairs.push([id, v]);
-    await _recordsSnapWrite(RECORDS_SNAP_PREFIX + collection, items, baselinePairs, versionPairs);
+    const metaPairs = [];
+    if(meta) for(const [id, m] of Object.entries(meta)) metaPairs.push([id, m]);
+    await _recordsSnapWrite(RECORDS_SNAP_PREFIX + collection, items, baselinePairs, versionPairs, metaPairs);
   }catch(e){ console.error('[StorageSync] _persistRecordsSnap failed:', collection, e); }
 }
 // حفظ مؤجّل (debounce) للقطة — تُستدعى بعد الحفظ على السيرفر. تمرير الدوال بدل القيم المباشرة
@@ -654,20 +656,22 @@ function _scheduleRecordsSnapPersist(collection, getList, getBaseline, getVersio
   clearTimeout(_snapPersistTimers[timerKey]);
   _snapPersistTimers[timerKey] = setTimeout(()=>{
     _snapPersistTimers[timerKey] = null;
-    try{ _persistRecordsSnap(collection, getList(), getBaseline(), getVersions()); }catch(e){ console.error('[StorageSync] scheduled records snap persist failed:', collection, e); }
+    try{ _persistRecordsSnap(collection, getList(), getBaseline(), getVersions(), recordMeta[collection]); }catch(e){ console.error('[StorageSync] scheduled records snap persist failed:', collection, e); }
   }, 1200);
 }
 function _clientsSnapKey(){
   return CLIENTS_SNAP_PREFIX + (currentUser || SERVER_AUTH_USERNAME || 'غير معروف');
 }
-async function _persistClientsSnap(list, baseline, versions){
+async function _persistClientsSnap(list, baseline, versions, meta){
   try{
     const items = Array.isArray(list) ? list.filter(c=>c && c.id) : [];
     const baselinePairs = [];
     if(baseline) for(const [id, json] of baseline) baselinePairs.push([id, json]);
     const versionPairs = [];
     if(versions){ for(const id of Object.keys(versions)) versionPairs.push([id, versions[id]]); }
-    await _recordsSnapWrite(_clientsSnapKey(), items, baselinePairs, versionPairs);
+    const metaPairs = [];
+    if(meta) for(const [id, m] of Object.entries(meta)) metaPairs.push([id, m]);
+    await _recordsSnapWrite(_clientsSnapKey(), items, baselinePairs, versionPairs, metaPairs);
   }catch(e){ console.error('[StorageSync] _persistClientsSnap failed:', e); }
 }
 function _scheduleClientsSnapPersist(){
@@ -675,20 +679,20 @@ function _scheduleClientsSnapPersist(){
   clearTimeout(_snapPersistTimers[timerKey]);
   _snapPersistTimers[timerKey] = setTimeout(()=>{
     _snapPersistTimers[timerKey] = null;
-    try{ _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions); }catch(e){ console.error('[StorageSync] scheduled clients snap persist failed:', e); }
+    try{ _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions, clientRecordMeta); }catch(e){ console.error('[StorageSync] scheduled clients snap persist failed:', e); }
   }, 1200);
 }
 // بعد تحميل كامل ناجح من السحابة: تحديث كل اللقطات دفعة واحدة حتى يبدأ أي فتح تالٍ (cacheOnly)
 // من آخر حالة مؤكدة. القائمة في اللقطة تُبنى من الـ baseline (آخر ما تأكّد على السيرفر) وليس من
 // مصفوفة الذاكرة، حتى لا تُحفظ عناصر بلا id لا يمكن تتبّعها فعلياً.
 async function _persistAllSnapshotsAfterLoad(){
-  try{ await _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions); }catch(e){}
+  try{ await _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions, clientRecordMeta); }catch(e){}
   for(const c of ALLOWED_COLLECTIONS_LOCAL){
     const baseline = _collectionSyncBaseline[c];
     if(!baseline) continue;
     const list = [];
     for(const json of baseline.values()){ try{ const obj = JSON.parse(json); if(obj && obj.id) list.push(obj); }catch(e){} }
-    try{ await _persistRecordsSnap(c, list, baseline, _recordVersions[c]); }catch(e){}
+    try{ await _persistRecordsSnap(c, list, baseline, _recordVersions[c], recordMeta[c]); }catch(e){}
   }
 }
 
@@ -719,7 +723,7 @@ async function fetchAllRecordsGeneric(collection){
   // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً فى الذاكرة بدل اختفائه فجأة من الشاشة.
   await _mergePendingRecordsIntoList(collection, list);
   // تحديث اللقطة المحلية حتى يبدأ أي فتح تالٍ (cacheOnly) من هذه الحالة المؤكدة + الـ baseline
-  await _persistRecordsSnap(collection, list, baseline, versions);
+  await _persistRecordsSnap(collection, list, baseline, versions, metaMap);
   return { list, baseline };
 }
 
@@ -925,6 +929,12 @@ async function loadCollectionGeneric(collection, cacheOnly){
       for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length === 2) baseline.set(pair[0], pair[1]); }
       if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
       for(const pair of (snap.versionPairs||[])){ if(pair && pair.length === 2) _recordVersions[collection].set(pair[0], pair[1]); }
+      // استعادة الحالات (origin/status) لكل سجل من اللقطة — حتى تبقى سجلات "قيد الاعتماد"
+      // مستبعدة من إجماليات الشاشات (الخزنة/المخزون/الدورات) بعد إعادة فتح البرنامج أيضاً،
+      // وليس فقط أثناء الجلسة الحية، فبدونها تُحسب كل سجلات الاستقبال المعلّقة كمعتمدة فيبدأ
+      // المخزون/الرصيد يظهر أعلى من الحقيقي بعد إعادة التحميل.
+      if(snap.metaPairs && !recordMeta[collection]) recordMeta[collection] = {};
+      for(const pair of (snap.metaPairs||[])){ if(pair && pair.length === 2 && pair[0] && pair[1] && pair[1].status) recordMeta[collection][pair[0]] = { origin: pair[1].origin || 'general', status: pair[1].status }; }
       // أي تعديلات ما زالت معلّقة محلياً (لم تُرفع بعد) يجب أن تظهر أيضاً في هذه الشاشة
       await _mergePendingRecordsIntoList(collection, list);
       return { list, baseline };
@@ -1130,7 +1140,7 @@ async function fetchAllClientRecords(){
   // (يظل كما جاء من السيرفر أو غير موجود)، حتى يكتشف saveClients الفرق ويعيد محاولة الحفظ لاحقاً.
   await _mergePendingRecordsIntoList('clients', list);
   // تحديث اللقطة المحلية الخاصة بهذا المستخدم (حتى يبدأ أي فتح تالٍ من آخر حالة مؤكدة له)
-  await _persistClientsSnap(list, baseline, _clientRecordVersions);
+  await _persistClientsSnap(list, baseline, _clientRecordVersions, clientRecordMeta);
   return { list, baseline };
 }
 

@@ -410,9 +410,9 @@ async function _kvCacheClearKv(){
 const RECORDS_SNAP_PREFIX = 'recordsSnap::';
 const CLIENTS_SNAP_PREFIX = 'clientRecordsSnap::';
 
-async function _recordsSnapWrite(key, list, baselinePairs, versionPairs){
+async function _recordsSnapWrite(key, list, baselinePairs, versionPairs, metaPairs){
   try{
-    const payload = JSON.stringify({ t: 1, list, baselinePairs, versionPairs, savedAt: Date.now() });
+    const payload = JSON.stringify({ t: 1, list, baselinePairs, versionPairs, metaPairs: metaPairs || [], savedAt: Date.now() });
     const enc = await encryptValue(payload);
     return await _kvCacheWrite(key, 0, enc);
   }catch(e){ console.error('[Core] _recordsSnapWrite failed:', key, e); return false; }
