@@ -1021,44 +1021,54 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
   try {
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
-    const conflicts = [];
-    let migrated = 0;
-    // نفس تصحيح bulk-migrate الخاص بـ collection_records بالضبط: ترتيب ثابت حسب id يمنع تعارض
-    // الأقفال الدائري (deadlock) بين طلبين متزامنين يعدّلون سجلات عملاء مشتركة بترتيب مختلف.
-    const sortedRecords = records.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
+    // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
+    // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
+    // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
+    const guard = req.user.role === 'reception'
+      ? `($3 = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2)`
+      : req.user.role === 'admin'
+      ? `$3 = 'admin'`
+      : `cr.status = 'confirmed'`;
+    const payload = JSON.stringify(records.map(r => ({
+      id: String(r.id),
+      enc: String(r.enc),
+      version: Number.isInteger(r.version) ? r.version : 0,
+      clientId: (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null
+    })));
     await client.query('BEGIN');
-    for (const r of sortedRecords) {
-      const id = String(r.id);
-      const enc = String(r.enc);
-      const knownVersion = Number.isInteger(r.version) ? r.version : 0;
-      const plainClientId = (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null;
-      // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
-      // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود —
-      // كل ذلك مع فحص التعارض بالنسخة المعروفة. (السجلات الجديدة التي لا يوجد لها صف أصلاً لا
-      // تمر على هذا الشرط إطلاقاً فتُدرج بوجهة/حالة الدور العادية).
-      const conflictGuard = req.user.role === 'reception'
-        ? `($7 = 'reception' AND client_records.origin = 'reception' AND client_records.created_by = $3)`
-        : req.user.role === 'admin'
-        ? `$7 = 'admin'`
-        : `client_records.status = 'confirmed'`;
-      const upsert = await client.query(
-        `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
-         VALUES ($1, $2, 1, $3, $4, $5, $3, $6)
-         ON CONFLICT (id) DO UPDATE SET
-           enc = EXCLUDED.enc, version = client_records.version + 1,
-           updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
-         -- حماية عزل بيانات الاستقبال (كالسابق تماماً) + فحص التعارض بالنسخة المعروفة
-         WHERE ${conflictGuard} AND client_records.version = $8
-         RETURNING version`,
-        [id, enc, req.user.username, newOrigin, newStatus, plainClientId, req.user.role, knownVersion]
-      );
-      if (upsert.rows[0]) { migrated++; continue; }
-      // لم يتحدّث الصف: إما تعارض حقيقي فى النسخة، أو رفض عزل الاستقبال — نفرّق بينهما بجلب الحالة الحالية
-      const current = await client.query('SELECT version FROM client_records WHERE id = $1', [id]);
-      conflicts.push({ id, currentVersion: current.rows[0] ? current.rows[0].version : 0 });
-    }
+    await client.query(
+      `CREATE TEMP TABLE _inc ON COMMIT DROP AS
+       SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version,
+              (t->>'clientId')::text AS client_id
+       FROM jsonb_array_elements($1::jsonb) AS t`,
+      [payload]
+    );
+    // التعارضات = صفوف موجودة فعلاً تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
+    await client.query(
+      `CREATE TEMP TABLE _conf ON COMMIT DROP AS
+       SELECT cr.id, cr.version AS current_version
+       FROM _inc i
+       JOIN client_records cr ON cr.id = i.id
+       WHERE cr.version <> i.known_version OR NOT (${guard})`,
+      [req.user.username, req.user.username, req.user.role]
+    );
+    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
+    await client.query(
+      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
+       SELECT i.id, i.enc, 1, $1, $2, $3, $1, i.client_id
+       FROM _inc i
+       WHERE NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
+       ORDER BY i.id
+       ON CONFLICT (id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = client_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id`,
+      [req.user.username, newOrigin, newStatus]
+    );
+    const confRows = await client.query('SELECT id, current_version FROM _conf');
+    const migrated = records.length - confRows.rows.length;
     await client.query('COMMIT');
-    res.json({ migrated, conflicts });
+    res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(e);
@@ -1189,34 +1199,43 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
   if (!records.length || records.length > 5000) return res.status(400).json({ error: 'عدد السجلات المرسلة غير صحيح (الحد الأقصى 5000 لكل طلب)' });
   const client = await pool.connect();
   try {
-    const conflicts = [];
-    let migrated = 0;
-    // نرتّب السجلات حسب الـ id قبل التعديل: لو طلبين bulk-migrate اشتغلوا فى نفس اللحظة على نفس
-    // التصنيف بسجلات مشتركة، وكل واحد بيعدّلها بترتيب مختلف، كل طلب بيقفل صف وينتظر التاني يفكّ
-    // قفل صف هو ماسكه (deadlock دائري — كود 40P01). ترتيب ثابت لكل الطلبات يضمن أخذ الأقفال
-    // بنفس الترتيب دايماً، فيمنع هذا التعارض الدائري من الأساس.
-    const sortedRecords = records.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
+    // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
+    // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
+    // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
+    const payload = JSON.stringify(records.map(r => ({ id: String(r.id), enc: String(r.enc), version: Number.isInteger(r.version) ? r.version : 0 })));
     await client.query('BEGIN');
-    for (const r of sortedRecords) {
-      const id = String(r.id);
-      const enc = String(r.enc);
-      const knownVersion = Number.isInteger(r.version) ? r.version : 0;
-      const upsert = await client.query(
-        `INSERT INTO collection_records (collection, id, enc, version, updated_by)
-         VALUES ($1, $2, $3, 1, $4)
-         ON CONFLICT (collection, id) DO UPDATE SET
-           enc = EXCLUDED.enc, version = collection_records.version + 1,
-           updated_at = now(), updated_by = EXCLUDED.updated_by
-         WHERE collection_records.version = $5
-         RETURNING version`,
-        [req.params.collection, id, enc, req.user.username, knownVersion]
-      );
-      if (upsert.rows[0]) { migrated++; continue; }
-      const current = await client.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, id]);
-      conflicts.push({ id, currentVersion: current.rows[0] ? current.rows[0].version : 0 });
-    }
+    await client.query(
+      `CREATE TEMP TABLE _inc ON COMMIT DROP AS
+       SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version
+       FROM jsonb_array_elements($1::jsonb) AS t`,
+      [payload]
+    );
+    // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة
+    await client.query(
+      `CREATE TEMP TABLE _conf ON COMMIT DROP AS
+       SELECT cr.id, cr.version AS current_version
+       FROM _inc i
+       JOIN collection_records cr ON cr.collection = $1 AND cr.id = i.id
+       WHERE cr.version <> i.known_version`,
+      [req.params.collection]
+    );
+    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
+    await client.query(
+      `INSERT INTO collection_records (collection, id, enc, version, updated_by)
+       SELECT $1, i.id, i.enc, 1, $2
+       FROM _inc i
+       WHERE NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
+       ORDER BY i.id
+       ON CONFLICT (collection, id) DO UPDATE SET
+         enc = EXCLUDED.enc, version = collection_records.version + 1,
+         updated_at = now(), updated_by = EXCLUDED.updated_by`,
+      [req.params.collection, req.user.username]
+    );
+    const confRows = await client.query('SELECT id, current_version FROM _conf');
+    const migrated = records.length - confRows.rows.length;
     await client.query('COMMIT');
-    res.json({ migrated, conflicts });
+    res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(e);
