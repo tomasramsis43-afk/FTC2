@@ -141,7 +141,8 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   // محلياً (نفس سبب الفحص المضاف فى النموذج الفردي أعلاه — مهم خصوصاً لمستخدم الاستقبال المعزول).
   const allIdsBulk = await fetchAllClientIds();
   if(allIdsBulk){
-    const dupRows = toAdd.filter(c=>allIdsBulk.has(c.clientId));
+    const hashes = await Promise.all(toAdd.map(c=>sha256Hex(c.clientId).catch(()=>null)));
+    const dupRows = toAdd.filter((c,i)=>hashes[i] && allIdsBulk.has(hashes[i]));
     if(dupRows.length){
       showToast(`رقم الهوية مستخدم بالفعل فى النظام: ${dupRows.map(c=>c.clientId).join('، ')}`);
       return;
