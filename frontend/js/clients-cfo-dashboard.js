@@ -581,6 +581,8 @@ function filteredClients(){
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
   const frecep = $('#filter-reception') ? $('#filter-reception').value : '';
+  const fbagOwn = $('#filter-bag-own') ? $('#filter-bag-own').value : '';
+  const fbagStock = $('#filter-bag-stock') ? $('#filter-bag-stock').value : '';
   const rows = clients.filter(c=>{
     // عزل البيانات: دور 'reception' مستثنى من isOwnRecord الفردية هنا تحديداً، لأن السيرفر
     // أصلاً لا يُرجع له إلا تخزينه الخاص (origin='reception' — مساحة واحدة مشتركة بين كل
@@ -603,6 +605,11 @@ function filteredClients(){
     if(fcn==='yes' && !(c.courseNumber && String(c.courseNumber).trim())) return false;
     if(frn==='no' && c.referNum && String(c.referNum).trim()) return false;
     if(frn==='yes' && !(c.referNum && String(c.referNum).trim())) return false;
+    // فلاتر الحقيبة (شيت العملاء): حقيبة خاصة بالعميل (own) ومن المخزون (stock) — خياران مستقلان
+    if(fbagOwn==='yes' && c.bagSource!=='own') return false;
+    if(fbagOwn==='no' && c.bagSource==='own') return false;
+    if(fbagStock==='yes' && c.bagSource!=='stock') return false;
+    if(fbagStock==='no' && c.bagSource==='stock') return false;
     if(dfrom && (!c.date || c.date<dfrom)) return false;
     if(dto && (!c.date || c.date>dto)) return false;
     if(paidMin!==null && paidTotal(c)<paidMin) return false;
