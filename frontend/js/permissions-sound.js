@@ -264,6 +264,11 @@ async function loadData(cacheOnly){
       _clientsSyncBaseline = new Map();
       for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length === 2) _clientsSyncBaseline.set(pair[0], pair[1]); }
       for(const pair of (snap.versionPairs||[])){ if(pair && pair.length === 2) _clientRecordVersions[pair[0]] = pair[1]; }
+      // استعادة حالات العملاء (origin/status) من اللقطة — حتى تبقى شارة "قيد الاعتماد" وأزرار
+      // الاعتماد/الرفض لدى الأدمن ظاهرة بعد إعادة فتح البرنامج أيضاً (لا تُحفظ في enc ولا في
+      // المصفوفة نفسها، وتضيع كانت أثناء الجلسة الحية فقط لو لم نستعدها هنا).
+      if(snap.metaPairs && typeof clientRecordMeta==='object') clientRecordMeta = {};
+      for(const pair of (snap.metaPairs||[])){ if(pair && pair.length === 2 && pair[0] && pair[1] && pair[1].status) clientRecordMeta[pair[0]] = { origin: pair[1].origin || 'general', status: pair[1].status }; }
       await _mergePendingRecordsIntoList('clients', clients);
     } else {
       // لا توجد لقطة مؤكدة بعد على هذا الجهاز/المستخدم (أول فتح) — نبدأ بآخر نسخة قديمة إن
