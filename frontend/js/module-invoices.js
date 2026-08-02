@@ -1047,9 +1047,9 @@ if($('#login-history-list')) $('#login-history-list').addEventListener('click', 
 });
 /* ---------------- إعادة ضبط البرنامج بالكامل (حذف كل البيانات) ---------------- */
 $('#btn-reset-app').addEventListener('click', async ()=>{
-  const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، القيود والحسابات المحاسبية، الموازنة، الموردين، المشتريات، فواتير المبيعات اليدوية، تعديلات الزكاة، الإعدادات، المستخدمين، وسجل المراجعة) ولن يمكن التراجع عن ذلك.\n\nهل أنت متأكد أنك تريد المتابعة؟');
+  const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، القيود والحسابات المحاسبية، الموازنة، الموردين، المشتريات، فواتير المبيعات اليدوية، تعديلات الزكاة، المستخدمين، وسجل المراجعة) من الجهاز ومن السيرفر، وستُحذف أيضاً كل النسخ الاحتياطية المحفوظة على السيرفر — ولن يمكن التراجع عن ذلك بأي شكل.\n\nالإعدادات فقط ستبقى كما هي دون أي تغيير.\n\nهل أنت متأكد أنك تريد المتابعة؟');
   if(!firstConfirm) return;
-  const secondConfirm = await customConfirm('تأكيد أخير: سيتم الحذف فوراً بمجرد الضغط على "موافق" ولن تتمكن من التراجع.\n\nهل تريد المتابعة والحذف الآن؟');
+  const secondConfirm = await customConfirm('تأكيد أخير: سيتم الحذف فوراً بمجرد الضغط على "موافق" ولن تتمكن من التراجع — لا توجد أي طريقة لاسترجاع البيانات بعد ذلك.\n\nهل تريد المتابعة والحذف الآن؟');
   if(!secondConfirm){
     alert('تم إلغاء العملية — لم يُحذف أي شيء.');
     return;
@@ -1059,7 +1059,8 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
   statusEl.textContent = 'جارٍ إعادة ضبط المصنع...';
   try{
     // 1) حذف كل مفاتيح البيانات المحفوظة (بلوكات kv_store القديمة/المتبقية + zakatAdjustments الذي لا يزال عليها فعلياً)
-    const keys = ['clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers',
+    //    — بدون لمس مفتاح "settings" إطلاقاً (يُحتفظ بالإعدادات كما هي محلياً وعلى السيرفر).
+    const keys = ['clients','bagStock','vaultTx','courseSessions','users','auditLog','companies','companyTransfers',
       'bankStatementRows','vaultDenomTx','deletedInvoices','journalEntries','chartOfAccounts','journalDE','budgetEntries',
       'suppliers','purchases','manualSalesInvoices','zakatAdjustments'];
     const deleteErrors = [];
@@ -1093,7 +1094,24 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     _clientRecordsAggVersion = null;
     _clientsSyncBaseline = new Map();
 
-    // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً
+    // 1.5) "بدون رجعة": حذف كل النسخ الاحتياطية الكاملة المخزنة على السيرفر (يدوية + تلقائية)
+    //      — أي مسار لاسترجاع البيانات القديمة يُغلق نهائياً.
+    try{
+      const backupsList = await listServerBackups();
+      for(const b of backupsList){
+        try{ await deleteServerBackup(b.id); }catch(e){ deleteErrors.push(`نسخة سيرفر ${b.id}: ${e.message||e}`); }
+      }
+    }catch(e){ deleteErrors.push('قائمة نسخ السيرفر: ' + (e.message||e)); }
+    // مسح كل الآثار المحلية القابلة لإعادة إنشاء البيانات: لقطات الفتح السريع، طوابير
+    // التعديلات المعلّقة (قد تحوي نسخاً قديمة تُرفع لاحقاً فوق البيانات الممسوحة)، وعلامات
+    // إعادة المزامنة المعلّقة من استعادة سابقة.
+    try{ await _recordsSnapClearAll(); }catch(e){ deleteErrors.push('اللقطات المحلية: ' + (e.message||e)); }
+    try{ await _pendingRecordClearAll(); }catch(e){ deleteErrors.push('طابور المعلّقات: ' + (e.message||e)); }
+    try{ await _pendingClearAll(); }catch(e){ deleteErrors.push('طابور المعلّقات: ' + (e.message||e)); }
+    try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
+    try{ localStorage.removeItem(RESTORE_OLD_SNAPSHOT_KEY); }catch(e){}
+
+    // 2) إعادة كل متغيرات البرنامج في الذاكرة إلى حالتها الافتراضية فوراً — الإعدادات تبقى كما هي
     //    (حتى تنعكس إعادة الضبط على كل الشيتات/التبويبات مباشرة دون انتظار إعادة التشغيل)
     clients = [];
     bagStock = [];
@@ -1115,7 +1133,6 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     purchases = [];
     manualSalesInvoices = [];
     zakatAdjustments = {};
-    settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     users = [{username:'admin', password:'admin123', role:'admin', createdAt:Date.now()}];
     undoStack = [];
     redoStack = [];
@@ -1123,7 +1140,7 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
 
     const saveErrors = [];
     const saveResults = await Promise.allSettled([
-      saveClients(), saveSettings(), saveBagStock(), saveVaultTx(), saveDeletedVaultTx(), saveVaultDenomTx(),
+      saveClients(), saveBagStock(), saveVaultTx(), saveDeletedVaultTx(), saveVaultDenomTx(),
       saveCourseSessions(), saveCompanies(), saveCompanyTransfers(),
       saveUsers(), saveAuditLog(), saveBankStatementRows(), saveDeletedInvoices(),
       saveJournalEntries(), saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(),
@@ -1163,7 +1180,7 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     }
 
     statusEl.textContent = `تمت إعادة ضبط المصنع بنجاح ✅ — ${verifyMsg}`;
-    alert(`تم حذف جميع البيانات بنجاح ✅\n${verifyMsg}\n\nسيُعاد تشغيل البرنامج الآن.`);
+    alert(`تم حذف جميع البيانات نهائياً (بدون إمكانية الرجوع) ✅ — الإعدادات بقيت كما هي.\n${verifyMsg}\n\nسيُعاد تشغيل البرنامج الآن.`);
     // 4) إعادة تحميل كاملة كإجراء احتياطي إضافي حتى لو تعذّر تحديث أي جزء من الواجهة أعلاه
     location.reload();
   }catch(err){
