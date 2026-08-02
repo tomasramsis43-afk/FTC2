@@ -618,12 +618,15 @@ async function backgroundSyncCheck(){
   if(_bgSyncInFlight) return;
   _bgSyncInFlight = true;
   try{
-    // لو كان هناك استعادة نسخة احتياطية كاملة تمت أصلاً بدون اتصال وما زالت بانتظار مزامنة كاملة
-    // مع السيرفر (راجع restoreFullBackup فى backup-restore.js)، نُتِمّها أولاً قبل أي مزامنة عادية —
-    // هذه الدالة تُستدعى بعد اكتمال تحميل بيانات البرنامج فعلياً فى الذاكرة، فالتوقيت آمن.
-    if(typeof checkPendingRestoreResync==='function') await checkPendingRestoreResync();
+    // نرفع أي تعديل محلي معلّق أولاً (لأن إكمال استعادة النسخة الاحتياطية أدناه يمسح السيرفر ثم
+    // يرفع بيانات الذاكرة الحالية كاملة — لو بقي تعديل معلّق لم يُرفع قبل ذلك، سيُرفع لاحقاً
+    // بنسخة قديمة فيُرفض 409 خطأً رغم وجود بياناته ضمن الرفع الكامل).
     await flushPendingWrites(); // ارفع أي تعديل محلي معلّق أولاً قبل مقارنة النسخ مع السحابة
     await flushPendingRecordWrites(); // نفس الشيء لطابور السجلات الفردية المعلّقة (عملاء/شيتات)
+    // لو كان هناك استعادة نسخة احتياطية كاملة تمت أصلاً بدون اتصال وما زالت بانتظار مزامنة كاملة
+    // مع السيرفر (راجع restoreFullBackup فى backup-restore.js)، نُتِمّها الآن — هذه الدالة تُستدعى
+    // بعد اكتمال تحميل بيانات البرنامج فعلياً فى الذاكرة، فالتوقيت آمن.
+    if(typeof checkPendingRestoreResync==='function') await checkPendingRestoreResync();
     // لو فُتح البرنامج من النسخة المحلية فقط (cacheOnly) أو فشلت مزامنة سابقة، تكون كل baselines
     // الجلسة الحالية null أو بعضها — أي أنه لا يوجد أساس مؤكد للمقارنة مع السحابة. الفحوصات أدناه
     // كانت تتجاهل التصنيفات ذات baseline null (checkAllRecordsChanged) وتستبعدها checkClientRecordsChanged

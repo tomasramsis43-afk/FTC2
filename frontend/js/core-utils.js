@@ -352,3 +352,71 @@ async function _kvCacheClearKv(){
   }catch(e){ console.error('[Core] _kvCacheClearKv failed:', e); }
 }
 
+/* ============================================================================
+   لقطات محلية مشفّرة لحالة التصنيفات المخزّنة كسجلات مستقلة (collection_records /
+   client_records) — تُخزَّن في نفس مخزن kv في IndexedDB لكن بمفاتيح خاصة.
+   الهدف: في وضع الفتح السريع (cacheOnly) نعرض آخر بيانات مؤكدة + الـ baseline وأرقام
+   النسخ الصحيحة بدل شاشة فارغة (كانت الفارغة تُبنى عليها تعديلات تُكتب لاحقاً فوق
+   البيانات الحقيقية — مسار فقدان البيانات الأصلي عند الغلق والفتح). تُحدَّث اللقطة
+   عند كل تحميل كامل ناجح وبعد كل حفظ ناجح (مؤجَّل قليلاً لتجنّب تشفير التصنيف كاملاً
+   عند كل حفظ سطر واحد).
+   ============================================================================ */
+const RECORDS_SNAP_PREFIX = 'recordsSnap::';
+const CLIENTS_SNAP_PREFIX = 'clientRecordsSnap::';
+
+async function _recordsSnapWrite(key, list, baselinePairs, versionPairs){
+  try{
+    const payload = JSON.stringify({ t: 1, list, baselinePairs, versionPairs, savedAt: Date.now() });
+    const enc = await encryptValue(payload);
+    return await _kvCacheWrite(key, 0, enc);
+  }catch(e){ console.error('[Core] _recordsSnapWrite failed:', key, e); return false; }
+}
+// يرجع كائن اللقطة { list, baselinePairs, versionPairs } أو null عند عدم وجودها/تلفها
+async function _recordsSnapRead(key){
+  try{
+    const cached = await _kvCacheRead(key);
+    if(!cached || cached.value === null || cached.value === undefined) return null;
+    const plain = await decryptValue(cached.value);
+    const obj = JSON.parse(plain);
+    if(!obj || obj.t !== 1 || !Array.isArray(obj.list)) return null;
+    if(!Array.isArray(obj.baselinePairs)) obj.baselinePairs = [];
+    if(!Array.isArray(obj.versionPairs)) obj.versionPairs = [];
+    return obj;
+  }catch(e){ console.error('[Core] _recordsSnapRead failed:', key, e); return null; }
+}
+async function _recordsSnapDelete(key){
+  try{ await _kvCacheDelete(key); }catch(e){ console.error('[Core] _recordsSnapDelete failed:', key, e); }
+}
+// يمسح كل لقطات التصنيفات (لا يمسّ بيانات kv العادية ولا طوابير المعلّقات) — يُستخدم عند
+// اكتمال استعادة كاملة موثوقة قبل إعادة فتح البرنامج، حتى لا تبقى لقطة قديمة تُعرض لاحقاً.
+async function _recordsSnapClearAll(){
+  const keys = [];
+  try{
+    const db = await _openKvIdb();
+    if(db){
+      await new Promise((resolve)=>{
+        try{
+          const tx = db.transaction(KV_IDB_STORE, 'readonly');
+          const req = tx.objectStore(KV_IDB_STORE).openCursor();
+          req.onsuccess = (e)=>{
+            const cur = e.target.result;
+            if(cur){
+              const k = String(cur.key);
+              if(k.startsWith(RECORDS_SNAP_PREFIX) || k.startsWith(CLIENTS_SNAP_PREFIX)) keys.push(cur.key);
+              cur.continue();
+            }
+          };
+          req.onerror = ()=> resolve();
+          tx.oncomplete = ()=> resolve();
+        }catch(e){ resolve(); }
+      });
+    }
+  }catch(e){ console.error('[Core] _recordsSnapClearAll cursor failed:', e); }
+  for(const k of keys) await _kvCacheDelete(k);
+  try{
+    const lsKeys = [];
+    for(let i=0;i<localStorage.length;i++){ const k = localStorage.key(i); if(k && (k.startsWith(KV_CACHE_PREFIX + RECORDS_SNAP_PREFIX) || k.startsWith(KV_CACHE_PREFIX + CLIENTS_SNAP_PREFIX))) lsKeys.push(k); }
+    lsKeys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  }catch(e){}
+}
+

@@ -255,18 +255,32 @@ async function loadData(cacheOnly){
     try{ const enc = await encryptValue(JSON.stringify(list)); await _kvCacheWrite(receptionOwnCacheKey, 0, enc); }catch(e){}
   }
   if(cacheOnly){
-    if(isReceptionSession){
-      clients = await readReceptionOwnCache();
+    // العرض الفوري يبدأ من آخر لقطة محلية مؤكدة (مشفّرة) خاصة بهذا المستخدم — تحمل القائمة +
+    // الـ baseline + أرقام النسخ، فيُبنى أي تعديل في نافذة ما قبل المزامنة الخلفية على آخر حالة
+    // حقيقية عبر نظام العملاء كسجلات مستقلة (لا على مصفوفة فارغة/قديمة تُكتب فوق الحقيقة).
+    const snap = await _recordsSnapRead(_clientsSnapKey());
+    if(snap && Array.isArray(snap.list)){
+      clients = snap.list;
+      _clientsSyncBaseline = new Map();
+      for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length === 2) _clientsSyncBaseline.set(pair[0], pair[1]); }
+      for(const pair of (snap.versionPairs||[])){ if(pair && pair.length === 2) _clientRecordVersions[pair[0]] = pair[1]; }
+      await _mergePendingRecordsIntoList('clients', clients);
     } else {
-      try{
-        const r = await window.storage.get('clients', false, true);
-        clients = r && r.value ? JSON.parse(r.value) : [];
-      }catch(e){
-        if(e && e.isDecryptFailure) clientsDecryptFailed = true;
-        clients = [];
+      // لا توجد لقطة مؤكدة بعد على هذا الجهاز/المستخدم (أول فتح) — نبدأ بآخر نسخة قديمة إن
+      // وُجدت كبداية فورية، مع baseline غير مؤكد، وتُبنى اللقطة عند أول تحميل حقيقي ناجح.
+      if(isReceptionSession){
+        clients = await readReceptionOwnCache();
+      } else {
+        try{
+          const r = await window.storage.get('clients', false, true);
+          clients = r && r.value ? JSON.parse(r.value) : [];
+        }catch(e){
+          if(e && e.isDecryptFailure) clientsDecryptFailed = true;
+          clients = [];
+        }
       }
+      _clientsSyncBaseline = null;
     }
-    _clientsSyncBaseline = null;
   } else {
     try{
       const { list, baseline } = await fetchAllClientRecords();
@@ -274,10 +288,9 @@ async function loadData(cacheOnly){
       if(list.length){
         clients = list;
         _clientsSyncBaseline = baseline;
-        // نجهّز رقم النسخة الحالي لمفتاح 'clients' القديم فى الخلفية (بدون انتظار): خط الرجعة
-        // فى saveClients (عند فشل الشبكة) يحفظ عبر window.storage.set('clients', ...) الذي يرسل
-        // _kvVersions['clients']، وهذا يبقى صفراً افتراضياً طالما لم يُستدعَ get()/primeKeyVersion
-        // لهذا المفتاح — فيُرفض الحفظ دائماً بخطأ 409 (تعارض) رغم عدم وجود أي تعارض حقيقي.
+        // مفتاح 'clients' القديم لم يعد يُكتب إطلاقاً في مسار الحفظ الجديد (عملاء كسجلات مستقلة —
+        // راجع saveClients). يبقى قراءته فقط كآخر خيار عند أول فتح بلا لقطة محلية، فندعّمه برقم
+        // النسخة الحقيقي احتياطاً حتى لا يُرفض بأي حفظ رجعة قديم بخطأ 409 وهمي.
         window.storage.primeKeyVersion('clients').catch(()=>{});
         if(isReceptionSession) await writeReceptionOwnCache(list);
       }else if(isReceptionSession){
@@ -583,6 +596,11 @@ async function loadData(cacheOnly){
   // الترحيل اليدوية. يعمل تلقائياً في كل تحميل للبيانات (بداية التشغيل والمزامنة الخلفية)، وهو
   // آمن للتكرار لأن كل دالة autoPost* تتحقق أولاً من عدم وجود ترحيل سابق لنفس السجل.
   try{ await autoPostAllPendingDoubleEntries(); }catch(e){ /* لا نوقف تحميل البيانات بسبب فشل الترحيل */ }
+  if(!cacheOnly && typeof _persistAllSnapshotsAfterLoad==='function'){
+    // بعد اكتمال تحميل حقيقي كامل: تحديث كل اللقطات المحلية حتى يبدأ أي فتح تالٍ (cacheOnly)
+    // من آخر حالة مؤكدة مع baseline/أرقام نسخ صحيحة بدل شاشة فارغة ونافذة فقدان محتملة.
+    _persistAllSnapshotsAfterLoad().catch(()=>{});
+  }
 }
 async function saveUsers(){
   try{ await window.storage.set('users', JSON.stringify(users), false); }catch(e){ showToast('تعذر حفظ بيانات المستخدمين'); }
@@ -653,17 +671,34 @@ async function saveClients(allowDrop){
         }
       }
       if(anyNetworkFailure){
-        // تعذّر الوصول للسيرفر أثناء رفع بعض التعديلات (انقطاع اتصال على الأرجح) — خط رجعة آمن:
-        // نحفظ كل شيء بالطريقة القديمة الكاملة حتى لا تُفقد أي بيانات، ونُبطل الـ baseline لإعادة
-        // المزامنة الكاملة مع النظام الجديد تلقائياً فى المرة القادمة online (عبر loadData).
+        // فشل اتصال فعلي أثناء رفع بعض العملاء — كل دالة حفظ عميل (فردية/مجمّعة) سجّلت ما فشل
+        // في طابور pendingRecords قبل إرجاع الفشل، فلا حاجة لأي "خط رجعة كتلة قديمة" في kv_store
+        // (مخزن لا يُقرأ من جديد — السبب الجذري لفقدان البيانات عند إعادة الفتح). نُبطل الـ
+        // baseline فقط لإعادة مزامنة كاملة آمنة عند أول اتصال ناجح.
         _clientsSyncBaseline = null;
-        await window.storage.set('clients', JSON.stringify(clients), false, allowDrop ? { allowLargeDrop: true } : undefined);
       }
+      _scheduleClientsSnapPersist();
       return;
     }
-    // خط الرجعة: المزامنة مع النظام الجديد لم تتأكد بعد هذه الجلسة (أول تحميل، أو انقطع الاتصال
-    // أثناء آخر محاولة) — نحفظ بالطريقة القديمة الكاملة كما كانت دائماً، آمنة 100% فى كل الحالات.
-    await window.storage.set('clients', JSON.stringify(clients), false, allowDrop ? { allowLargeDrop: true } : undefined);
+    // خط الرجعة: المزامنة مع نظام "عملاء كسجلات مستقلة" لم تتأكد بعد هذه الجلسة (أول تحميل، أو
+    // انقطاع أثناء آخر محاولة). بدل "الكتلة القديمة" في kv_store (مخزن لا يُقرأ لاحقاً — سبب
+    // فقدان البيانات)، نرفع كل العملاء عبر نظام السجلات نفسه ونُثبّت الـ baseline من النتيجة.
+    const clientsToUpload = clients.filter(c=>c && c.id);
+    try{
+      const conflictIds = await bulkUploadClientRecords(clientsToUpload);
+      const conflictSet = new Set(conflictIds);
+      const newBaseline = new Map();
+      for(const c of clientsToUpload){
+        const json = JSON.stringify(c);
+        if(!conflictSet.has(c.id)) newBaseline.set(c.id, json);
+      }
+      _clientsSyncBaseline = newBaseline;
+    }catch(e){
+      // فشل اتصال فعلي — سُجّل العملاء في طابور pendingRecords داخل bulkUploadClientRecords،
+      // ويبقى الـ baseline null لتُعاد المزامنة الكاملة عند أول اتصال ناجح.
+      _clientsSyncBaseline = null;
+    }
+    _scheduleClientsSnapPersist();
   }catch(e){ showToast('تعذر حفظ البيانات'); }
 }
 async function saveSettings(){

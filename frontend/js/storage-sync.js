@@ -534,6 +534,88 @@ const ALLOWED_COLLECTIONS_LOCAL = [
 const _recordVersions = {}; // collection -> Map(id -> version)
 const _collectionSyncBaseline = {}; // collection -> Map(id -> json) | null (لسه غير مؤكدة هذه الجلسة)
 
+// يدمج أي تعديلات سجلات لا تزال معلّقة محلياً (سُجّلت أثناء انقطاع اتصال ولم تُرفع بعد) في
+// القائمة المعروضة — حتى تظل ظاهرة فوراً ولا تختفي من الشاشة بينما الاتصال غير مستقر. عمداً
+// لا نلمس baseline ولا أرقام النسخ لهذه الـids (يبقى الحال كما على السيرفر أو غير موجود)، حتى
+// يكتشف مسار الحفظ الفرق ويعيد محاولة الرفع لاحقاً.
+async function _mergePendingRecordsIntoList(collection, list){
+  const stillPending = (await _pendingRecordReadAll()).filter(p=>p.collection===collection);
+  for(const p of stillPending){
+    if(p.op === 'delete'){
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list.splice(idx,1);
+      continue;
+    }
+    try{
+      const plain = await _decryptOrFail(p.enc);
+      const obj = JSON.parse(plain);
+      const idx = list.findIndex(x=>x.id===p.id);
+      if(idx>=0) list[idx] = obj; else list.push(obj);
+    }catch(e){ /* تعذّر فك تشفير تعديل معلّق تالف محلياً */ }
+  }
+  return list;
+}
+
+// ---- لقطات محلية مشفّرة (راجع core-utils.js: RECORDS_SNAP_PREFIX/CLIENTS_SNAP_PREFIX) ----
+// الهدف المزدوج: (أ) فتح سريع من آخر بيانات مؤكدة بدل شاشة فارغة، و(ب) إغلاق نافذة "التعديل
+// قبل اكتمال المزامنة الخلفية" التي كانت تُبنى على مصفوفة فارغة فتُكتب فوق البيانات الحقيقية.
+async function _persistRecordsSnap(collection, list, baseline, versions){
+  try{
+    const items = Array.isArray(list) ? list.filter(x=>x && x.id) : [];
+    const baselinePairs = [];
+    if(baseline) for(const [id, json] of baseline) baselinePairs.push([id, json]);
+    const versionPairs = [];
+    if(versions) for(const [id, v] of versions) versionPairs.push([id, v]);
+    await _recordsSnapWrite(RECORDS_SNAP_PREFIX + collection, items, baselinePairs, versionPairs);
+  }catch(e){ console.error('[StorageSync] _persistRecordsSnap failed:', collection, e); }
+}
+// حفظ مؤجّل (debounce) للقطة — تُستدعى بعد الحفظ على السيرفر. تمرير الدوال بدل القيم المباشرة
+// حتى تُقرأ أحدث حالة لحظة التنفيذ الفعلي (بعد أي تعديلات لاحقة)، مع تجنّب تشفير التصنيف كاملاً
+// عند كل حفظ سطر واحد.
+const _snapPersistTimers = {};
+function _scheduleRecordsSnapPersist(collection, getList, getBaseline, getVersions){
+  const timerKey = RECORDS_SNAP_PREFIX + collection;
+  clearTimeout(_snapPersistTimers[timerKey]);
+  _snapPersistTimers[timerKey] = setTimeout(()=>{
+    _snapPersistTimers[timerKey] = null;
+    try{ _persistRecordsSnap(collection, getList(), getBaseline(), getVersions()); }catch(e){ console.error('[StorageSync] scheduled records snap persist failed:', collection, e); }
+  }, 1200);
+}
+function _clientsSnapKey(){
+  return CLIENTS_SNAP_PREFIX + (currentUser || SERVER_AUTH_USERNAME || 'غير معروف');
+}
+async function _persistClientsSnap(list, baseline, versions){
+  try{
+    const items = Array.isArray(list) ? list.filter(c=>c && c.id) : [];
+    const baselinePairs = [];
+    if(baseline) for(const [id, json] of baseline) baselinePairs.push([id, json]);
+    const versionPairs = [];
+    if(versions){ for(const id of Object.keys(versions)) versionPairs.push([id, versions[id]]); }
+    await _recordsSnapWrite(_clientsSnapKey(), items, baselinePairs, versionPairs);
+  }catch(e){ console.error('[StorageSync] _persistClientsSnap failed:', e); }
+}
+function _scheduleClientsSnapPersist(){
+  const timerKey = CLIENTS_SNAP_PREFIX + 'clients';
+  clearTimeout(_snapPersistTimers[timerKey]);
+  _snapPersistTimers[timerKey] = setTimeout(()=>{
+    _snapPersistTimers[timerKey] = null;
+    try{ _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions); }catch(e){ console.error('[StorageSync] scheduled clients snap persist failed:', e); }
+  }, 1200);
+}
+// بعد تحميل كامل ناجح من السحابة: تحديث كل اللقطات دفعة واحدة حتى يبدأ أي فتح تالٍ (cacheOnly)
+// من آخر حالة مؤكدة. القائمة في اللقطة تُبنى من الـ baseline (آخر ما تأكّد على السيرفر) وليس من
+// مصفوفة الذاكرة، حتى لا تُحفظ عناصر بلا id لا يمكن تتبّعها فعلياً.
+async function _persistAllSnapshotsAfterLoad(){
+  try{ await _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions); }catch(e){}
+  for(const c of ALLOWED_COLLECTIONS_LOCAL){
+    const baseline = _collectionSyncBaseline[c];
+    if(!baseline) continue;
+    const list = [];
+    for(const json of baseline.values()){ try{ const obj = JSON.parse(json); if(obj && obj.id) list.push(obj); }catch(e){} }
+    try{ await _persistRecordsSnap(c, list, baseline, _recordVersions[c]); }catch(e){}
+  }
+}
+
 async function fetchAllRecordsGeneric(collection){
   await flushPendingRecordWrites().catch(()=>{});
   const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}`);
@@ -556,20 +638,9 @@ async function fetchAllRecordsGeneric(collection){
   _recordVersions[collection] = versions;
   // نفس خط الأمان الموجود فى fetchAllClientRecords بالضبط: أي سطر لسه معلّق فعلياً (بدون اتصال
   // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً فى الذاكرة بدل اختفائه فجأة من الشاشة.
-  const stillPending = (await _pendingRecordReadAll()).filter(p=>p.collection===collection);
-  for(const p of stillPending){
-    if(p.op === 'delete'){
-      const idx = list.findIndex(x=>x.id===p.id);
-      if(idx>=0) list.splice(idx,1);
-      continue;
-    }
-    try{
-      const plain = await _decryptOrFail(p.enc);
-      const obj = JSON.parse(plain);
-      const idx = list.findIndex(x=>x.id===p.id);
-      if(idx>=0) list[idx] = obj; else list.push(obj);
-    }catch(e){ /* تعذّر فك تشفير تعديل معلّق تالف محلياً */ }
-  }
+  await _mergePendingRecordsIntoList(collection, list);
+  // تحديث اللقطة المحلية حتى يبدأ أي فتح تالٍ (cacheOnly) من هذه الحالة المؤكدة + الـ baseline
+  await _persistRecordsSnap(collection, list, baseline, versions);
   return { list, baseline };
 }
 
@@ -718,14 +789,23 @@ async function bulkUploadRecordsGeneric(collection, list){
 // تتم لاحقاً فى الخلفية (نفس فكرة تحميل العملاء بالضبط).
 async function loadCollectionGeneric(collection, cacheOnly){
   if(cacheOnly){
-    // لا نقرأ أبداً من كاش kv القديم في هذا الوضع: هذه التصنيفات تُحفظ في نظام السجلات المستقلة
-    // (collection_records)، فلا توجد نسخة محلية "مؤكدة" منها — أي كاش kv قديم تحت هذا الاسم هو
-    // إما بيانات ما قبل الترحيل أو ناتج خط رجعة كامل قديم (saveCollectionGeneric مع baseline null).
-    // عرضها كأنها الحقيقة يعرض المستخدم لتعديل بيانات قديمة/ناقصة تُكتب لاحقاً ككتلة كاملة عبر خط
-    // الرجعة (baseline null)، ثم تُسحق بالكامل عند أول تحميل حقيقي من السحابة (loadData(false)
-    // عبر backgroundSyncCheck) — فيبدو وكأن التعديل "فُقد" رغم أنه كان ظاهراً للمستخدم. نبدأ
-    // فارغاً (baseline null) ونترك التحميل الحقيقي — الذي يحدث فوراً بعد فتح البرنامج بفضل
-    // backgroundSyncCheck — يملأ الشاشة بالبيانات الصحيحة من السجلات المستقلة.
+    // عرض فوري من آخر لقطة محلية مؤكدة (نظام السجلات المستقلة) بدل شاشة فارغة. اللقطة تحمل
+    // أيضاً الـ baseline وأرقام النسخ، فيُبنى أي تعديل لاحق (قبل اكتمال المزامنة الخلفية) على
+    // آخر حالة حقيقية عبر نفس نظام السجلات المستقلة — لا على مصفوفة فارغة عبر خط رجعة "كتلة
+    // قديمة" في kv_store (مخزن لا يُقرأ لاحقاً، وكان التعديل المبنى عليه يبدو وكأنه "فُقد" عند
+    // أول تحميل حقيقي من السحابة بعد إعادة الفتح). لو لا توجد لقطة بعد (أول فتح على هذا الجهاز)
+    // نبدأ فارغاً (baseline null) ونترك backgroundSyncCheck يملأ الشاشة بالبيانات الصحيحة فوراً.
+    const snap = await _recordsSnapRead(RECORDS_SNAP_PREFIX + collection);
+    if(snap){
+      const list = Array.isArray(snap.list) ? snap.list : [];
+      const baseline = new Map();
+      for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length === 2) baseline.set(pair[0], pair[1]); }
+      if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+      for(const pair of (snap.versionPairs||[])){ if(pair && pair.length === 2) _recordVersions[collection].set(pair[0], pair[1]); }
+      // أي تعديلات ما زالت معلّقة محلياً (لم تُرفع بعد) يجب أن تظهر أيضاً في هذه الشاشة
+      await _mergePendingRecordsIntoList(collection, list);
+      return { list, baseline };
+    }
     return { list: [], baseline: null };
   }
   try{
@@ -821,13 +901,35 @@ async function saveCollectionGeneric(collection, arr){
         }
       }
       if(anyNetworkFailure){
+        // فشل اتصال فعلي أثناء رفع بعض السجلات. كل دالة حفظ سجل (فردية/مجمّعة) سجّلت ما فشل
+        // في طابور pendingRecords قبل إرجاع الفشل، فلا حاجة لأي "خط رجعة كتلة قديمة" في kv_store
+        // إطلاقاً — ذلك المسار كان يكتب في مخزن لا يُقرأ من جديد (أي سجلات تبقى على السيرفر في
+        // نظام السجلات المستقلة تُحجب الكتلة القديمة)، وهو السبب الجذري لفقدان البيانات عند
+        // إعادة الفتح. نُبطل الـ baseline لإعادة مزامنة كاملة آمنة عند أول اتصال ناجح.
         _collectionSyncBaseline[collection] = null;
-        await window.storage.set(collection, JSON.stringify(arr), false);
       }
+      _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
       return;
     }
-    // خط الرجعة: المزامنة مع النظام الجديد لم تتأكد بعد هذه الجلسة — نحفظ بالطريقة القديمة الكاملة.
-    await window.storage.set(collection, JSON.stringify(arr), false);
+    // خط الرجعة: المزامنة مع نظام السجلات المستقلة لم تتأكد بعد هذه الجلسة (أول تحميل فاشل، أو
+    // انقطاع أثناء آخر محاولة). بدل "الكتلة القديمة" في kv_store (مخزن لا يُقرأ لاحقاً — سبب
+    // فقدان البيانات)، نرفع كل العناصر عبر نظام السجلات نفسه ونُثبّت الـ baseline من النتيجة.
+    const listToUpload = arr.filter(x=>x && x.id);
+    try{
+      const conflictIds = await bulkUploadRecordsGeneric(collection, listToUpload);
+      const conflictSet = new Set(conflictIds);
+      const newBaseline = new Map();
+      for(const item of listToUpload){
+        const json = JSON.stringify(item);
+        if(!conflictSet.has(item.id)) newBaseline.set(item.id, json);
+      }
+      _collectionSyncBaseline[collection] = newBaseline;
+    }catch(e){
+      // فشل اتصال فعلي — سجّلت السجلات في طابور pendingRecords داخل bulkUploadRecordsGeneric،
+      // ويبقى الـ baseline null لتُعاد المزامنة الكاملة عند أول اتصال ناجح.
+      _collectionSyncBaseline[collection] = null;
+    }
+    _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
   }catch(e){ showToast('تعذر حفظ البيانات'); }
 }
 
@@ -903,20 +1005,9 @@ async function fetchAllClientRecords(){
   // حقيقي) لازم يظل ظاهراً فى الذاكرة رغم عدم تأكيده على السيرفر بعد — وإلا هيختفي من الشاشة فوراً
   // رغم إنه محفوظ بأمان محلياً وهيُرفع تلقائياً أول ما الاتصال يرجع. عمداً لا نلمس baseline لهذا الـid
   // (يظل كما جاء من السيرفر أو غير موجود)، حتى يكتشف saveClients الفرق ويعيد محاولة الحفظ لاحقاً.
-  const stillPending = (await _pendingRecordReadAll()).filter(p=>p.collection==='clients');
-  for(const p of stillPending){
-    if(p.op === 'delete'){
-      const idx = list.findIndex(x=>x.id===p.id);
-      if(idx>=0) list.splice(idx,1);
-      continue;
-    }
-    try{
-      const plain = await _decryptOrFail(p.enc);
-      const obj = JSON.parse(plain);
-      const idx = list.findIndex(x=>x.id===p.id);
-      if(idx>=0) list[idx] = obj; else list.push(obj);
-    }catch(e){ /* تعذّر فك تشفير تعديل معلّق تالف محلياً — نتجاهله بدل تعطيل التحميل كله */ }
-  }
+  await _mergePendingRecordsIntoList('clients', list);
+  // تحديث اللقطة المحلية الخاصة بهذا المستخدم (حتى يبدأ أي فتح تالٍ من آخر حالة مؤكدة له)
+  await _persistClientsSnap(list, baseline, _clientRecordVersions);
   return { list, baseline };
 }
 
