@@ -1072,7 +1072,7 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(e);
-    res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
+    res.status(500).json({ error: 'تعذّر ترحيل السجلات', detail: e && e.message });
   } finally {
     client.release();
   }
