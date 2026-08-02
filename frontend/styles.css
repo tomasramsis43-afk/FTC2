@@ -20,6 +20,7 @@
   --font-display: 'Tajawal', 'Markazi Text', sans-serif;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.16);
+  --on-accent-text: #04101f;
   color-scheme: dark;
 }
 
@@ -42,6 +43,7 @@ body.dark-theme {
   --border: rgba(56, 189, 238, 0.22);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-hover: 0 4px 18px rgba(34, 211, 238, 0.22);
+  --on-accent-text: #04101f;
   color-scheme: dark;
 }
 
@@ -75,6 +77,7 @@ body.theme-stitch {
   --radius: 10px;
   --shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
   --shadow-hover: 0 8px 28px rgba(11, 28, 48, 0.10);
+  --on-accent-text: #ffffff;
   color-scheme: light;
 }
 body.theme-stitch select,
@@ -111,7 +114,7 @@ select option:checked,
 select option:hover,
 select option:focus {
   background-color: var(--navy) !important;
-  color: #04101f !important;
+  color: var(--on-accent-text) !important;
 }
 
 /* ============= GLOBAL STYLES ============= */
@@ -698,7 +701,7 @@ select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 18%, transparent);
   border-radius: var(--radius);
 }
 
@@ -710,7 +713,7 @@ nav.tabs button:focus-visible {
 .toolbar select:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
 }
 
 /* ============= USER PILL ============= */
@@ -775,6 +778,7 @@ section.view.active {
 .card:hover {
   box-shadow: var(--shadow-hover);
   border-color: var(--gold);
+  transform: translateY(-2px);
 }
 
 .card .k {
@@ -1061,14 +1065,14 @@ section.view.active {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
-  color: #04101f;
+  color: var(--on-accent-text);
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--navy) 25%, transparent);
 }
 
 .btn-primary:hover {
   filter: brightness(1.08);
-  box-shadow: 0 6px 20px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--navy) 35%, transparent);
 }
 
 .btn-gold {
@@ -1519,7 +1523,7 @@ tbody tr:hover {
 .field textarea:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
 }
 
 .modal-actions {
@@ -1838,7 +1842,7 @@ td select:focus,
 td textarea:focus {
   outline: none;
   border-color: var(--navy);
-  box-shadow: 0 0 0 3px rgba(25, 82, 122, 0.14), var(--shadow);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), var(--shadow);
 }
 
 td input:hover:not(:focus),
@@ -1853,7 +1857,7 @@ td select:hover:not(:focus) {
   left: 50%;
   transform: translateX(-50%) translateY(8px);
   background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
-  color: #04101f;
+  color: var(--on-accent-text);
   font-weight: 600;
   padding: 11px 22px;
   border-radius: 10px;
