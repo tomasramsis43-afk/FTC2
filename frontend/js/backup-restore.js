@@ -372,6 +372,82 @@ async function restoreFullBackup(file){
    - السجلات المرتبطة (vaultTx.bagStockRef وصرف الحقائب للعملاء type=issue في شيت
      العملاء) لا تتغير — فلذلك يُنصح بنسخة حديثة كفاية حتى لا يختل تطابق الأعداد.
    ============================================================================ */
+/* ==========================================================================
+   معاينة استعادة النسخة الاحتياطية قبل تنفيذها (فرق لكل شيت)
+   تعرض في نافذة داخل الصفحة: لكل شيت موجود في الملف العدد الحالي مقابل الموجود
+   في الملف والفرق (+إضافة/حذف)، مع ملاحظات تحذيرية مخصصة. لا يُنفَّذ أي مسح أو
+   استبدال قبل ضغط المستخدم "متابعة التنفيذ" — الغرض منع المسح غير المقصود.
+   ========================================================================== */
+let _restorePreviewResolve = null;
+function showRestorePreview({ title, subtitle, rows, notes }){
+  return new Promise(resolve=>{
+    _restorePreviewResolve = v=> resolve(!!v);
+    $('#restore-preview-title').textContent = title || 'معاينة الاستعادة';
+    $('#restore-preview-sub').textContent = subtitle || '';
+    $('#restore-preview-notes').textContent = notes || '';
+    const body = $('#restore-preview-body');
+    body.innerHTML = rows.map(r=>{
+      const cur = r.current, file = r.file;
+      const isInfo = (r.current === '' && r.file === '');
+      const diff = (typeof cur === 'number' && typeof file === 'number') ? file - cur : null;
+      const diffTxt = diff===null ? '—' : (diff===0 ? 'لا تغيير' : (diff>0 ? `+${diff} إضافة` : `${diff} حذف`));
+      const diffColor = diff===null ? 'var(--text-muted)' : (diff===0 ? 'var(--text-muted)' : (diff>0 ? 'var(--teal)' : 'var(--red)'));
+      return `<tr>
+        <td data-label="الشيت">${escapeHtml(r.label)}</td>
+        <td class="mono" data-label="الحالي">${isInfo ? '' : (cur??'')}</td>
+        <td class="mono" data-label="الموجود في الملف">${isInfo ? '' : (file??'')}</td>
+        <td class="mono" data-label="الفرق" style="color:${diffColor}; font-weight:600;">${diffTxt}</td>
+        <td data-label="">${r.extra || ''}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد شيتات في الملف لعرضها</td></tr>`;
+    $('#restore-preview-overlay').classList.add('show');
+    $('#restore-preview-ok').focus();
+  });
+}
+$('#restore-preview-cancel')?.addEventListener('click', ()=>{
+  $('#restore-preview-overlay').classList.remove('show');
+  const r = _restorePreviewResolve; _restorePreviewResolve = null; if(r) r(false);
+});
+$('#restore-preview-ok')?.addEventListener('click', ()=>{
+  $('#restore-preview-overlay').classList.remove('show');
+  const r = _restorePreviewResolve; _restorePreviewResolve = null; if(r) r(true);
+});
+$('#restore-preview-overlay')?.addEventListener('click', e=>{
+  if(e.target.id==='restore-preview-overlay'){
+    $('#restore-preview-overlay').classList.remove('show');
+    const r = _restorePreviewResolve; _restorePreviewResolve = null; if(r) r(false);
+  }
+});
+/* ملخص فرق سجل تمويل الحقائب (bagStock) بين الوضع الحالي والملف — لمعاينة الاستعادة:
+   عدد السجلات، الكميات، إجمالي المصروف، توزيع الأنواع، وأقدم/أحدث تاريخ في الملف. */
+function bagStockRestorePreviewRows(fileList){
+  const curList = (bagStock||[]).filter(b=> b && b.id);
+  const fileList2 = (fileList||[]).filter(b=> b && b.id);
+  const agg = list => {
+    const qty = list.reduce((s,b)=> s + num(b.qty), 0);
+    const amt = list.reduce((s,b)=> s + num(b.qty)*num(b.unitPrice), 0);
+    return {
+      qty, amt,
+      deposit: list.filter(b=>b.type==='deposit').length,
+      withdraw: list.filter(b=>b.type==='withdraw').length,
+      issue: list.filter(b=>b.type==='issue').length,
+      legacy: list.filter(b=>!b.type).length,
+      dates: list.map(b=>b.date||'').filter(Boolean).sort()
+    };
+  };
+  const a = agg(curList), b2 = agg(fileList2);
+  return [
+    { label:'سجلات تمويل الحقائب (bagStock)', current: curList.length, file: fileList2.length, extra:'' },
+    { label:'إجمالي الكمية', current: Math.round(a.qty*100)/100, file: Math.round(b2.qty*100)/100, extra:'' },
+    { label:'إجمالي مصروف الحقائب (ر.س)', current: Math.round(a.amt), file: Math.round(b2.amt), extra:'' },
+    { label:'إيداعات (deposit)', current: a.deposit, file: b2.deposit, extra:'' },
+    { label:'سحوبات (withdraw)', current: a.withdraw, file: b2.withdraw, extra:'' },
+    { label:'صرف للعملاء/المنشآت (issue)', current: a.issue, file: b2.issue, extra:'' },
+    { label:'سجلات قديمة (بدون نوع)', current: a.legacy, file: b2.legacy, extra:'' },
+    { label:'أقدم تاريخ في الملف', current: '', file: '', extra: b2.dates[0] || '—' },
+    { label:'أحدث تاريخ في الملف', current: '', file: '', extra: b2.dates[b2.dates.length-1] || '—' },
+  ];
+}
 async function restoreBagStockOnly(file){
   let data;
   try{
@@ -390,15 +466,20 @@ async function restoreBagStockOnly(file){
   const fromFile = (data.bagStock||[]).filter(b=> b && b.id).length;
   const current = (bagStock||[]).filter(b=> b && b.id).length;
   const backupDate = data._createdAt ? new Date(data._createdAt).toLocaleString('ar-EG', { dateStyle:'short', timeStyle:'short' }) : 'غير معروف';
-  const confirmMsg =
-    'سيتم استبدال سجل تمويل مخزون الحقائب الحالي بالكامل بما في ملف النسخة الاحتياطية (تاريخ النسخة: ' + backupDate + ').\n\n' +
-    'عدد السجلات حالياً: ' + current + ' — عدد السجلات في الملف: ' + fromFile + '\n\n' +
-    'تنبيهات مهمة:\n' +
+  // معاينة الاستعادة قبل التنفيذ: جدول فرق لكل شيت + ملاحظات تحذيرية — لا يُمسح شيء قبل التأكيد.
+  const previewNotes =
+    'تنبيهات مهمة قبل المتابعة:\n' +
+    '• سيُمسح سجل تمويل مخزون الحقائب الحالي بالكامل ويُستبدل بما في ملف النسخة (تاريخ النسخة: ' + backupDate + ').\n' +
     '• أي عمليات تمويل/اعتماد/صرف تمت بعد تاريخ النسخة ستُحذف.\n' +
     '• جميع السجلات المستعادة ستُعامل كمعتمَدة (حالة "قيد الاعتماد" لا تُحفظ في النسخ).\n' +
-    '• سجلات الخزنة المرتبطة وصرف الحقائب للعملاء لا تتغير — تأكد أن النسخة حديثة كفاية.\n\n' +
-    'ستُحفَظ نسخة من الوضع الحالي (قبل الاستبدال) محلياً وعلى السيرفر للرجوع إليها عند الحاجة. هل تريد المتابعة؟';
-  if(!await customConfirm(confirmMsg, 'استعادة سجلات تمويل الحقائب فقط')){
+    '• سجلات الخزنة المرتبطة وصرف الحقائب للعملاء لا تتغير — تأكد أن النسخة حديثة كفاية.\n' +
+    '• ستُحفَظ نسخة من الوضع الحالي (قبل الاستبدال) محلياً وعلى السيرفر للرجوع إليها عند الحاجة.';
+  if(!await showRestorePreview({
+    title: 'استعادة سجلات تمويل الحقائب فقط',
+    subtitle: `عدد السجلات حالياً: ${current} — عدد السجلات في الملف: ${fromFile}`,
+    rows: bagStockRestorePreviewRows(data.bagStock),
+    notes: previewNotes,
+  })){
     return;
   }
   // نسخة احتياطية من الوضع الحالي قبل الاستبدال (محلياً + على السيرفر) للتراجع عند الحاجة

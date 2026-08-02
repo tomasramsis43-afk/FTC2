@@ -462,6 +462,7 @@ function openModal(id){
   editingPaymentTxId = null;
   addingClientPayment = false;
   renderClientPaymentsPanel();
+  renderClientTimeline();
   $('#overlay').classList.add('show'); SoundFX.open();
   $('#f-name').focus();
 }
@@ -571,6 +572,57 @@ function renderClientPaymentsPanel(){
 
   list.innerHTML = rowsHtml || '<div class="hint" style="margin:0;">لا توجد أي دفعة مسجّلة لهذا العميل بعد.</div>';
 }
+
+/* ---------------- الملف الزمني الكامل للعميل (عرض فقط) ----------------
+   يجمع كل الأحداث المرتبطة بالعميل بترتيب زمني تصاعدي: التسجيل، الدفعات،
+   صرف الحقيبة من المخزون، فواتير المبيعات اليدوية، وجلسات دورته (حسب رقم الدورة). */
+const TIMELINE_COLORS = { reg:'var(--navy)', pay:'var(--teal)', bag:'var(--gold-dark)', invoice:'var(--red)', session:'#8B5CF6' };
+const TIMELINE_TYPE_LABELS = { reg:'التسجيل', pay:'دفعة', bag:'حقيبة', invoice:'فاتورة', session:'جلسة دورة' };
+function clientTimelineEvents(c){
+  const events = [];
+  if(c.date) events.push({ date: c.date, seq2: 0, type: 'reg',
+    title: 'تسجيل العميل',
+    text: `نوع الدورة: ${escapeHtml(c.courseType||'—')} · رقم الدورة: ${escapeHtml(c.courseNumber||'—')} · الحالة: ${escapeHtml(c.stage||'—')}${c.cancelled?' · ملغي (كنسل)':''}` });
+  vaultTx.filter(t=>t.clientId===c.clientId).forEach(t=> events.push({ date: t.date||'', seq2: num(t.seq)||0, type: 'pay',
+    title: `دفعة ${t.seq ? '#'+t.seq : ''}`.trim(),
+    text: `<b>${fmt(num(t.amount))}</b> ﷼ · ${escapeHtml(t.method||'—')} (${destLabel(t.destination||'vault')})${t.autoClientId?' · دفعة التسجيل':''}` }));
+  bagStock.filter(b=>b.type==='issue' && b.issuedClientId===c.id).forEach(b=> events.push({ date: b.date||'', seq2: num(b.createdAt)||0, type: 'bag',
+    title: 'صرف حقيبة من المخزون',
+    text: `الكمية: ${num(b.qty)} · سعر الوحدة: ${fmt(num(b.unitPrice))} ﷼${b.notes?' · '+escapeHtml(b.notes):''}` }));
+  manualSalesInvoices.filter(m=>m.clientId===c.clientId).forEach(m=> events.push({ date: m.date||'', seq2: num(m.createdAt)||0, type: 'invoice',
+    title: `فاتورة مبيعات يدوية ${m.invoiceNo ? '#'+m.invoiceNo : ''}`.trim(),
+    text: `<b>${fmt(num(m.total))}</b> ﷼${m.description?' · '+escapeHtml(m.description):''}` }));
+  if(c.courseNumber){
+    courseSessions.filter(s=>s.courseNumber===c.courseNumber).forEach(s=> events.push({ date: s.date||'', seq2: num(s.createdAt)||0, type: 'session',
+      title: `جلسة دورة ${escapeHtml(s.courseNumber||'')}`,
+      text: `${escapeHtml(s.courseType||'')}${s.capacity?' · السعة: '+s.capacity:''}${s.notes?' · '+escapeHtml(s.notes):''}` }));
+  }
+  return events.sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (num(a.seq2)-num(b.seq2)));
+}
+function renderClientTimeline(){
+  const wrap = $('#wrap-client-timeline');
+  if(!wrap) return;
+  const c = editingId ? clients.find(x=>x.id===editingId) : null;
+  if(!c || !c.clientId){ wrap.style.display='none'; $('#client-timeline-list').innerHTML=''; return; }
+  wrap.style.display = '';
+  const events = clientTimelineEvents(c);
+  const list = $('#client-timeline-list');
+  if(!events.length){ list.innerHTML = '<div class="hint" style="margin:0;">لا توجد أحداث مسجّلة لهذا العميل بعد.</div>'; return; }
+  list.innerHTML = events.map(e=>{
+    const color = TIMELINE_COLORS[e.type] || 'var(--text-muted)';
+    return `
+    <div style="position:relative; padding:0 16px 14px 0; margin-right:6px; border-right:2px solid var(--border);">
+      <span style="position:absolute; right:-6px; top:3px; width:10px; height:10px; border-radius:50%; background:${color}; border:2px solid var(--bg);"></span>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:700; color:${color};">${e.title}</span>
+        <span class="hint" style="margin:0; font-size:11px;">${escapeHtml(TIMELINE_TYPE_LABELS[e.type]||e.type)}</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin:2px 0;">${escapeHtml(e.date||'بدون تاريخ')}</div>
+      <div style="font-size:13px; color:var(--text);">${e.text}</div>
+    </div>`;
+  }).join('');
+}
+
 
 $('#btn-add').addEventListener('click', ()=>openModal(null));
 /* زر تحديث لكامل شيت العملاء: يعيد مزامنة حركات الدفع التلقائية لكل عميل مع بياناته الحالية،

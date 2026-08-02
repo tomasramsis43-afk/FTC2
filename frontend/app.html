@@ -133,11 +133,21 @@
       <h3 data-i18n="closeEntitiesTitle">الدورات النشطة حسب حالة الاكتمال</h3>
       <div class="close-entities-grid" id="close-entities-grid"></div>
     </div>
+    <div class="toolbar toolbar-card" style="margin-bottom:10px; align-items:center;">
+      <span style="font-size:13px; color:var(--text-muted);">نطاق الرسوم البيانية:</span>
+      <select id="cfo-range" style="max-width:150px;">
+        <option value="12">آخر 12 شهر</option>
+        <option value="6">آخر 6 أشهر</option>
+        <option value="3">آخر 3 أشهر</option>
+      </select>
+      <span class="hint hint-info" style="margin:0;">الرسوم البيانية في لوحة التحكم تُعرض على آخر 12 شهراً افتراضياً — يمكنك تضييق النطاق إلى 6 أو 3 أشهر.</span>
+    </div>
     <div class="cfo-grid" id="cfo-grid"></div>
   </section>
 
   <!-- CLIENTS -->
   <section class="view" id="view-clients">
+    <div id="approval-notices-banner"></div>
     <div class="toolbar toolbar-card">
       <button class="btn btn-ghost btn-sm" id="btn-filter-suspended" title="عرض العملاء الموقوفين فقط" data-i18n="filterSuspended" data-i18n-title="titleFilterSuspended">الموقوفين</button>
       <button class="btn btn-ghost btn-sm" id="btn-filter-unpurchased-bags" title="عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد" data-i18n="filterUnpBags" data-i18n-title="titleFilterUnpBags">الحقائب غير المشتراة</button>
@@ -3041,6 +3051,19 @@
       <div class="hint hint-info">اترك الحقلين فارغين لعرض كل البيانات منذ البداية. الإيرادات والمصروفات محسوبة من تاريخ الحركة في "الحركات المالية"، وعدد العملاء محسوب من تاريخ تسجيل العميل.</div>
     </div>
     <div class="grid-cards" id="period-cards"></div>
+    <div class="panel" style="border-right:4px solid var(--gold);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+        <h3 style="margin:0;">📊 قائمة الدخل (الأرباح والخسائر) حسب الفترة</h3>
+        <button class="btn btn-ghost btn-sm" id="btn-export-pnl">تصدير قائمة الدخل CSV</button>
+      </div>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">مبنية على أساس الاستحقاق (حسب تاريخ تسجيل العميل للدورة وتاريخ الحركات) — الإيرادات حسب نوع الدورة، والمصروفات حسب التصنيف من الحركات المالية الصادرة، مع خصم مردودات المبيعات وإدراج القيود اليدوية (إهلاك/مستحقات/تسويات) داخل الفترة.</p>
+      <div class="table-scroll" style="max-height:60vh;">
+        <table>
+          <thead><tr><th>البند</th><th style="text-align:left;">القيمة (ر.س)</th></tr></thead>
+          <tbody id="pnl-body"></tbody>
+        </table>
+      </div>
+    </div>
     <div class="panel">
       <h3>مقارنة بالفترة السابقة (بنفس عدد الأيام)</h3>
       <div class="hint hint-info" id="period-compare-hint" style="margin-top:0;">مقارنة بالفترة من 01/01/2025 إلى 31/12/2025</div>
@@ -3974,6 +3997,13 @@
           <div class="hint hint-info" style="margin:4px 0 8px;">هذا سجل للعرض فقط. أي إضافة أو تعديل أو حذف لدفعات هذا العميل يتم حصرياً من تبويب "الحركات المالية" (وليس من هنا)، وينعكس تلقائياً في هذه القائمة.</div>
           <div id="client-payments-list"></div>
         </div>
+        <div class="field full" id="wrap-client-timeline" style="border-top:1px dashed var(--border); padding-top:10px; display:none;">
+          <label style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span>الملف الزمني الكامل لهذا العميل (كل ما يتعلق به بالترتيب الزمني)</span>
+          </label>
+          <div class="hint hint-info" style="margin:4px 0 8px;">سجل زمني للعرض فقط يُجمع تلقائياً: التسجيل، الدفعات، صرف الحقيبة من المخزون، فواتير المبيعات اليدوية، وجلسات الدورة المرتبطة برقم الدورة.</div>
+          <div id="client-timeline-list"></div>
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="btn-cancel">إلغاء</button>
@@ -4664,6 +4694,26 @@
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" id="custom-dialog-cancel">إلغاء</button>
       <button type="button" class="btn btn-primary" id="custom-dialog-ok">موافق</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة معاينة استعادة النسخة الاحتياطية قبل تنفيذها: تعرض فرقاً لكل شيت (العدد الحالي مقابل
+     الموجود في الملف) مع ملاحظات تحذيرية، ويقرّر المستخدم بعد رؤيتها — لا يُنفَّذ أي مسح قبل التأكيد. -->
+<div class="overlay" id="restore-preview-overlay" style="z-index:200;">
+  <div class="modal" style="max-width:860px;">
+    <h2 id="restore-preview-title">معاينة الاستعادة</h2>
+    <div id="restore-preview-sub" style="font-size:12.5px; color:var(--text-muted); margin-bottom:10px;"></div>
+    <div class="table-scroll cards-mobile" style="max-height:44vh;" id="restore-preview-scroll">
+      <table>
+        <thead><tr><th>الشيت</th><th>الحالي</th><th>الموجود في الملف</th><th>الفرق</th><th></th></tr></thead>
+        <tbody id="restore-preview-body"></tbody>
+      </table>
+    </div>
+    <div id="restore-preview-notes" style="margin-top:10px; font-size:12.5px; color:var(--text-muted); white-space:pre-line;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="restore-preview-cancel">تراجع</button>
+      <button type="button" class="btn btn-primary" id="restore-preview-ok">متابعة التنفيذ</button>
     </div>
   </div>
 </div>
