@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
+const { centralErrorHandler } = require('./errors');
 const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('./auth');
 
@@ -1557,6 +1558,10 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+// شبكة أمان مركزية — تمسك أي خطأ يفلت من الـ routes (خصوصاً الجديدة/المُهاجَرة اللي
+// بتستخدم asyncHandler من errors.js). لا تُغيّر سلوك أي route قديم عنده try/catch خاص به.
+app.use(centralErrorHandler);
+
 ensureSchema()
   .then(async () => {
     // مزامنة عند بدء التشغيل: لو عدد صفوف clients_rows لا يطابق عدد عملاء kv_store الفعلي
