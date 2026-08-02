@@ -165,8 +165,18 @@ window.addEventListener('appinstalled', ()=>{
 })();
 // يحاول رفع كل التعديلات المعلّقة محلياً إلى السيرفر — يُستدعى عند استعادة الاتصال (حدث online)،
 // وأيضاً بشكل دوري احتياطاً (بعض الأجهزة لا تُطلق حدث online بدقة، خصوصاً على الجوال).
+// عند وصول 429 (طلبات كثيرة جداً) من storageLimiter على السيرفر، نوقف كل محاولات المزامنة
+// (سجلات وقيم عادية) لمدة تهدئة قصيرة بدل الاستمرار فى محاولة باقي الطابور فوراً — الاستمرار
+// كان يعني: كل عنصر متبقٍّ فى طابور كبير (مئات السجلات) يُرسَل ويُرفض بـ429 تباعاً كل جولة كل
+// 20 ثانية، وهو ما يُغرق الشبكة ويُجمّد التبويب فعلياً (شاشة سوداء) بدل مجرد رسالة تحذير.
+let _ftcRateLimitCooldownUntil = 0;
+function _ftcRateLimited(){
+  _ftcRateLimitCooldownUntil = Date.now() + 30000; // تهدئة 30 ثانية قبل أي محاولة مزامنة جديدة
+  updateOfflineIndicator();
+}
 async function flushPendingWrites(){
   if(_ftcSyncInFlight) return;
+  if(Date.now() < _ftcRateLimitCooldownUntil) return; // لسه فى فترة تهدئة بعد 429 — لا نحاول الآن
   const pending = await _pendingReadAll();
   if(!pending.length){ markOnline(); return; }
   _ftcSyncInFlight = true;
@@ -207,6 +217,12 @@ async function flushPendingWrites(){
           showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
           continue;
         }
+        if(res.status === 429){
+          // السيرفر رفض الطلب لتجاوز حد معدل الحفظ — نوقف الجولة كاملة فوراً بدل الاستمرار
+          // فى قصف باقي عناصر الطابور بنفس الرفض، وندخل فترة تهدئة قبل أي محاولة قادمة.
+          _ftcRateLimited();
+          break;
+        }
         if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
         const data = await res.json();
         _kvVersions[item.key] = data.version || 0;
@@ -235,6 +251,7 @@ let _ftcRecordSyncInFlight = false;
 // حتى لا يُقرأ السيرفر وكأنه "الحقيقة الكاملة" بينما فيه تعديلات محلية لسه فى طريقها إليه.
 async function flushPendingRecordWrites(){
   if(_ftcRecordSyncInFlight) return;
+  if(Date.now() < _ftcRateLimitCooldownUntil) return; // لسه فى فترة تهدئة بعد 429 — لا نحاول الآن
   const pending = await _pendingRecordReadAll();
   if(!pending.length) return;
   _ftcRecordSyncInFlight = true;
@@ -260,6 +277,12 @@ async function flushPendingRecordWrites(){
           await _pendingRecordDelete(item.collection, item.id);
           showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
           continue;
+        }
+        if(res.status === 429){
+          // نفس معاملة flushPendingWrites: نوقف الجولة كاملة فوراً بدل قصف باقي طابور السجلات
+          // (اللي ممكن يكون فيه مئات العناصر) بنفس الرفض، وندخل فترة تهدئة قبل أي محاولة قادمة.
+          _ftcRateLimited();
+          break;
         }
         if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
         if(item.op === 'delete'){
