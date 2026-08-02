@@ -109,14 +109,16 @@ async function performRedo(){
   updateUndoRedoButtons();
   showToast(`تم التقدم إلى: ${entry.label}`);
 }
-document.addEventListener('DOMContentLoaded', ()=>{
-  const ub=$('#btn-undo'); if(ub) ub.addEventListener('click', performUndo);
-  const rb=$('#btn-redo'); if(rb) rb.addEventListener('click', performRedo);
-});
-if(document.readyState!=='loading'){
+function bindUndoRedoButtons(){
   const ub=$('#btn-undo'); if(ub) ub.addEventListener('click', performUndo);
   const rb=$('#btn-redo'); if(rb) rb.addEventListener('click', performRedo);
 }
+// يُربَط مرة واحدة فقط: لو بدأ التحميل (loading) ننتظر DOMContentLoaded، وإلا (interactive/complete)
+// نربط مباشرة. النسخة السابقة كانت تستخدم addEventListener ثم فرع readyState معاً، فيُضاف المستمع
+// مرتين حين يكون readyState='interactive' لحظة تنفيذ الكود (مرة من الحدث ومرة من الفرع) — فيتراجع
+// أو يتقدم إجراءان مع كل نقرة واحدة.
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindUndoRedoButtons);
+else bindUndoRedoButtons();
 
 /* ---------------- اختصارات لوحة المفاتيح ---------------- */
 /* خريطة كل نافذة منبثقة (overlay) بمعرّف زر الإلغاء/الإغلاق الخاص بها، لإعادة استخدام منطق الإغلاق

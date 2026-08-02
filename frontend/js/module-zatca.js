@@ -41,13 +41,13 @@ function buildZatcaSalesRows(from, to){
   }));
   const manualRows = manualSalesInvoices.filter(m=> m.date && m.date>=from && m.date<=to).map(m=>({
     refId: m.id, source:'manual', date: m.date, name: m.name || '—',
-    invoiceNo: formatManualSalesInvoiceNo(m.invoiceNo||0), totalInclVat: num(m.total), vat: num(m.total) - (num(m.total)/1.15)
+    invoiceNo: formatManualSalesInvoiceNo(m.invoiceNo||0), totalInclVat: num(m.total), vat: vatFromGross(m.total)
   }));
   return courseRows.concat(manualRows).sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
 }
 function buildZatcaReturnsRows(from, to){
   return vaultTx.filter(t=>t.type==='out' && t.isReturn && inRange(t.date, from, to))
-    .map(t=>({ id:t.id, date:t.date, name:t.clientName||t.clientId||'—', amount:num(t.amount), vat: num(t.amount)-(num(t.amount)/1.15) }))
+    .map(t=>({ id:t.id, date:t.date, name:t.clientName||t.clientId||'—', amount:num(t.amount), vat: vatFromGross(t.amount) }))
     .sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
 }
 function buildZatcaPurchaseRows(from, to){
@@ -339,6 +339,14 @@ $('#ms-save')?.addEventListener('click', async ()=>{
         clientTax: $('#ms-clienttax').value.trim(), description: $('#ms-desc').value.trim(),
         date, total, notes: $('#ms-notes').value.trim()
       });
+      // تعديل فاتورة موجودة: القيد المزدوج المرحَّل سابقاً أصبح قديماً (الإجمالي/التاريخ تغيّرا) —
+      // نحذفه ونعيد ترحيله من القيم الجديدة بدل تركه يعرض المبلغ القديم في دفتر الأستاذ.
+      if(typeof saveJournalDE==='function' && journalDE.some(e=>e.sourceManualSalesId===m.id)){
+        journalDE = journalDE.filter(e=>e.sourceManualSalesId!==m.id);
+        m.linkedDEId = null;
+      }
+      autoPostManualSale(m);
+      await saveJournalDE();
     }
     await logAudit('edit','الفوترة الضريبية والزكاة', `تم تعديل فاتورة مبيعات يدوية رقم ${formatManualSalesInvoiceNo(m?.invoiceNo||0)}`);
   } else {
@@ -409,7 +417,7 @@ async function printManualSalesInvoice(id){
 
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const totalInclVat = num(m.total);
-  const vat = totalInclVat - (totalInclVat/1.15);
+  const vat = vatFromGross(totalInclVat);
   const net = totalInclVat - vat;
   const today = new Date().toLocaleDateString('ar-SA');
 

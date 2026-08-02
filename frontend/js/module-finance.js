@@ -453,8 +453,7 @@ function vaultTxCountsTowardBalance(t){
    كلما زاد عدد الأيام التي فيها بيانات فعلية كلما كان المتوسط أدق. */
 function projectedBalance(dest){
   const today = todayISO();
-  const from = new Date(today); from.setDate(from.getDate()-30);
-  const fromISO = from.toISOString().slice(0,10);
+  const fromISO = addDaysISO(today, -30);
   const recent = vaultTx.filter(t=>(t.destination||'vault')===dest && t.date>=fromISO && t.date<=today && vaultTxCountsTowardBalance(t));
   if(!recent.length) return { current: balanceOf(dest), endOfDay: balanceOf(dest), endOfWeek: balanceOf(dest), daysOfData: 0 };
   const daysSet = new Set(recent.map(t=>t.date));
@@ -513,7 +512,7 @@ function renderCashFlowForecastChart(dest){
   const HIST_DAYS = 21, FUT_DAYS = 7;
   const today = todayISO();
   const histDates = [];
-  for(let i=HIST_DAYS-1;i>=0;i--){ const d=new Date(today+'T00:00:00'); d.setDate(d.getDate()-i); histDates.push(d.toISOString().slice(0,10)); }
+  for(let i=HIST_DAYS-1;i>=0;i--){ histDates.push(addDaysISO(today, -i)); }
   const netByDay = {};
   histDates.forEach(d=>netByDay[d]=0);
   vaultTx.forEach(t=>{
@@ -532,8 +531,7 @@ function renderCashFlowForecastChart(dest){
   const futBalances = [];
   let running = currentBal;
   for(let i=1;i<=FUT_DAYS;i++){
-    const d = new Date(today+'T00:00:00'); d.setDate(d.getDate()+i);
-    futDates.push(d.toISOString().slice(0,10));
+    futDates.push(addDaysISO(today, i));
     running += (p.avgDailyNet||0);
     futBalances.push(Math.round(running*100)/100);
   }
@@ -1097,7 +1095,11 @@ function renderDenomHistory(){
     });
   });
 }
-['#v-from','#v-to','#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); el?.addEventListener('change', renderVault); });
+// ربط فلاتر الخزنة: نربط input فقط لحقول النص/التاريخ، وchange فقط للقوائم/المقاييس — ربط
+// الاثنين معاً لكل عنصر كان يستدعي renderVault مرتين لبعض العناصر (input ثم change) فيُعاد رسم
+// الجدول الكبير مرتين لكل تفاعل، ويزيد بشكل ملحوظ مع كثرة البيانات.
+['#v-from','#v-to'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); });
+['#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
 onSearchInput('#v-search', renderVault);
 $('#vault-page-size')?.addEventListener('change', ()=>{ vaultCurrentPage = 1; renderVault(); });
 $('#vault-page-first')?.addEventListener('click', ()=>{ vaultCurrentPage = 1; renderVault(); });

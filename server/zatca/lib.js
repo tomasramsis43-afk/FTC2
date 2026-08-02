@@ -166,9 +166,15 @@ async function issueProductionCsid({ environment, complianceRequestId }) {
 const FIRST_INVOICE_PIH = Buffer.from('0').toString('base64'); // "MA==" — قيمة ثابتة تشترطها الهيئة لأول فاتورة
 
 async function withChainLock(fn) {
-  const client = await pool.connect();
+  let client = null;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
+    // قفل تنبيهي على مستوى قاعدة البيانات حتى في بداية السلسلة (لا صفوف بعد): PostgreSQL لا
+    // يقفل شيئاً في SELECT..FOR UPDATE على جدول فارغ، فكانت فاتورتان أوليتان متزامنتان
+    // تحصلان على نفس الرقم التسلسلي ونفس الـ PIH وتكسران السلسلة. القفل التنبيهي
+    // (advisory lock) يجعل الطلب الثاني ينتظر حتى يُدرج الأول سجلَه ويثبّت عدّاده.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('zatca_invoice_chain'))`);
     const r = await client.query(
       `SELECT invoice_counter, invoice_hash FROM zatca_invoice_log
        ORDER BY invoice_counter DESC LIMIT 1 FOR UPDATE`
@@ -179,10 +185,10 @@ async function withChainLock(fn) {
     await client.query('COMMIT');
     return result;
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK').catch(() => {});
     throw e;
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -310,8 +316,16 @@ async function submitSimplifiedInvoice(params) {
       if (info.production_certificate) {
         // شهادة إنتاج (PCSID) موجودة → إرسال فعلي (تقرير الفاتورة)
         zatcaResponse = await egs.reportInvoice(prepared.signed_invoice_string, prepared.invoice_hash);
-        status = zatcaResponse?.reportingStatus === 'REPORTED' ? 'reported'
-          : (zatcaResponse?.warningMessages?.length ? 'warning' : 'reported');
+        const reportingStatus = zatcaResponse?.reportingStatus;
+        if (reportingStatus === 'REPORTED') {
+          status = 'reported';
+        } else if (zatcaResponse?.warningMessages?.length && reportingStatus === 'REPORTED') {
+          status = 'warning';
+        } else {
+          // أي حالة غير REPORTED (مرفوضة/مرفوضة بتحذيرات) يجب ألا تُسجَّل كمبلَّغ عنها —
+          // كانت تُخزَّن "reported" فتظهر الفاتورة معتمدة رغم رفض الهيئة لها (خطأ امتثال).
+          status = 'error';
+        }
       } else {
         // لسه ما فيه شهادة إنتاج → وضع فحص التوافق (يُستخدم أثناء التسجيل فقط)
         zatcaResponse = await egs.checkInvoiceCompliance(prepared.signed_invoice_string, prepared.invoice_hash);

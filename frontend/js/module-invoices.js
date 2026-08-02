@@ -1,7 +1,7 @@
 /* ---------------- شيت فواتير الدورات (مطابقة الفواتير مع الإيصالات) ---------------- */
 /* المبالغ المُدخلة (القيمة الفعلية بالإيصال / قيمة الدورة بالنظام) شاملة ضريبة القيمة المضافة أصلاً،
    لذلك تُستخرج الضريبة من داخل المبلغ (÷1.15) وليس تُضاف فوقه، اتساقاً مع باقي حسابات النظام */
-function courseInvoiceVat(value){ const v = num(value); return v - (v/1.15); }
+function courseInvoiceVat(value){ return vatFromGross(value); }
 function courseInvoiceClients(){
   return clients.filter(c=> !c.suspended && String(c.invoice||'').trim());
 }
@@ -316,10 +316,13 @@ $('#ci-ai-upload-input')?.addEventListener('change', async e=>{
 function formatInvoiceNo(n){ return 'INV-' + String(n).padStart(6,'0'); }
 async function assignInvoiceNumber(client){
   if(client.taxInvoiceNo) return client.taxInvoiceNo;
-  const n = settings.nextInvoiceNo || 1;
+  // نضمن ألا يتكرر الرقم حتى لو كان settings.nextInvoiceNo متأخراً عن أرقام مستخدمة فعلاً
+  // (استيراد بيانات قديمة أو مزامنة من جهاز آخر لم يُحدِّث العداد): نأخذ أعلى رقم مستخدم +1.
+  const maxUsed = clients.reduce((mx,c)=> Math.max(mx, num(c.taxInvoiceNo)||0), 0);
+  const n = Math.max(settings.nextInvoiceNo || 1, maxUsed + 1);
   client.taxInvoiceNo = n;
   client.taxInvoiceDate = client.taxInvoiceDate || todayISO();
-  settings.nextInvoiceNo = n + 1;
+  settings.nextInvoiceNo = Math.max(n + 1, settings.nextInvoiceNo || 1);
   const idx = clients.findIndex(c=>c.id===client.id);
   if(idx>-1) clients[idx] = client;
   await saveClients();
@@ -355,10 +358,25 @@ function softDeleteClientInvoice(clientId, reason){
    (توليد وعرض فقط — لا يشمل هذا الربط المرحلة الثانية "فاتورة" التي تتطلب توقيعاً رقمياً وخادماً خلفياً). */
 function zatcaTlvField(tag, value){
   const bytes = new TextEncoder().encode(String(value||''));
-  const out = new Uint8Array(2 + bytes.length);
-  out[0] = tag;
-  out[1] = bytes.length;
-  out.set(bytes, 2);
+  // ترميز BER-TLV وفق مواصفة ZATCA: لو الطول <= 127 نكتبه في بايت واحد. لو تجاوز 127
+  // (اسم بائع/طابع زمني طويل) يجب الترميز الممتد: بايت يشير لعدد بايتات الطول (0x80|n)
+  // ثم n بايتات بالترتيب الكبير (big-endian) — النسخة السابقة كانت تضع الطول دائماً في
+  // بايت واحد فيلتف (wraps) ويتلف الحقل لأي قيمة أطول من 255 بايت.
+  const len = bytes.length;
+  let header;
+  if(len < 128){
+    header = new Uint8Array([tag, len]);
+  }else{
+    let nb = 0, tmp = len;
+    while(tmp > 0){ tmp >>= 8; nb++; }
+    header = new Uint8Array(2 + nb);
+    header[0] = tag;
+    header[1] = 0x80 | nb;
+    for(let i=0;i<nb;i++){ header[2 + i] = (len >> (8*(nb-1-i))) & 0xFF; }
+  }
+  const out = new Uint8Array(header.length + len);
+  out.set(header, 0);
+  out.set(bytes, header.length);
   return out;
 }
 function zatcaBuildQrBase64({sellerName, vatNumber, timestampISO, total, vatAmount}){
@@ -408,7 +426,7 @@ async function zatcaSubmit(path, body){
   }catch(e){ return null; }
 }
 function zatcaLineItem(nameLabel, taxExclusivePrice){
-  return { id:'1', name: nameLabel, quantity:1, tax_exclusive_price: Math.max(0, taxExclusivePrice), VAT_percent: 0.15 };
+  return { id:'1', name: nameLabel, quantity:1, tax_exclusive_price: Math.max(0, taxExclusivePrice), VAT_percent: VAT_RATE };
 }
 /* شارة صغيرة تُدرَج أسفل الفاتورة المطبوعة توضّح حالة الإرسال للهيئة — لا تظهر إطلاقاً
    إن لم تتم أي محاولة إرسال بعد (قبل جهوزية الشهادة)، حتى لا نربك المستخدم بشيء غير مفعّل. */
@@ -444,7 +462,7 @@ async function printInvoice(id){
   // المبالغ المدخلة في النظام (سعر الدورة/الحقيبة) شاملة ضريبة القيمة المضافة أصلاً
   // لذلك يتم استخراج الضريبة من الإجمالي (فك التضمين) وليس إضافتها فوقه لتجنب احتساب 30%
   const totalInclVat = income + (bagShown ? bag : 0);
-  const vat = totalInclVat - (totalInclVat / 1.15);
+  const vat = vatFromGross(totalInclVat);
   const grand = totalInclVat - vat; // القيمة الفعلية بدون الضريبة
   const today = new Date().toLocaleDateString('ar-SA');
 
@@ -535,8 +553,10 @@ async function printReturnInvoice(id){
   const tx = vaultTx.find(x=>x.id===id);
   if(!tx || !tx.isReturn){ showToast('تعذر إيجاد بيانات المردود'); return; }
   if(!tx.returnInvoiceNo){
-    tx.returnInvoiceNo = settings.nextReturnInvoiceNo || 1;
-    settings.nextReturnInvoiceNo = tx.returnInvoiceNo + 1;
+    // نفس حماية تكرار الأرقام: نأخذ أعلى رقم مردود مستخدم فعلاً +1 (مزامنة/استيراد قديم)
+    const maxUsed = vaultTx.reduce((mx,t)=> Math.max(mx, num(t.returnInvoiceNo)||0), 0);
+    tx.returnInvoiceNo = Math.max(settings.nextReturnInvoiceNo || 1, maxUsed + 1);
+    settings.nextReturnInvoiceNo = Math.max(tx.returnInvoiceNo + 1, settings.nextReturnInvoiceNo || 1);
     await saveVaultTx();
     await saveSettings();
   }
@@ -546,13 +566,13 @@ async function printReturnInvoice(id){
 
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA');
-  const returnAmountExclVat = num(tx.amount) - (num(tx.amount)/1.15);
+  const returnNet = netFromGross(num(tx.amount));
 
   const zatcaResult = await zatcaSubmit('/api/zatca/return', {
     environment: 'sandbox',
     clientType: client?.clientType==='company' ? 'company' : 'individual',
     sourceRef: String(tx.id),
-    lineItems: [ zatcaLineItem('مردود مبيعات', returnAmountExclVat) ],
+    lineItems: [ zatcaLineItem('مردود مبيعات', returnNet) ],
     issueDate: tx.date || (typeof todayISO==='function' ? todayISO() : new Date().toISOString().slice(0,10)),
     issueTime: new Date().toTimeString().slice(0,8),
     canceledInvoiceNumber: client?.taxInvoiceNo ? formatInvoiceNo(client.taxInvoiceNo) : '',
@@ -574,7 +594,7 @@ async function printReturnInvoice(id){
           </div>
         </div>
       </div>
-      ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, num(tx.amount), num(tx.amount) - returnAmountExclVat, tx.date || today)}
+      ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, num(tx.amount), num(tx.amount) - returnNet, tx.date || today)}
       <div class="inv-title">
         <h2>فاتورة استرجاع مبلغ</h2>
         <div class="no">${invNoLabel}</div>

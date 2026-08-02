@@ -234,9 +234,9 @@ function drawBars(sel, entries, limit=20, formatter){
   const max = Math.max(...entries.map(e=>e[1]));
   el.innerHTML = entries.map(([k,v])=>`
     <div class="bar-row">
-      <div class="label">${k}</div>
+      <div class="label">${escapeHtml(String(k))}</div>
       <div class="track"><div class="fill" style="width:${(v/max*100).toFixed(1)}%"></div></div>
-      <div class="val">${formatter ? formatter(v) : v}</div>
+      <div class="val">${formatter ? formatter(v) : escapeHtml(String(v))}</div>
     </div>`).join('');
 }
 
@@ -513,7 +513,7 @@ function changeBadgeNegative(pct){
 
 /* ---------------- Clients table ---------------- */
 function populateSelect(sel, values, withEmpty){
-  sel.innerHTML = (withEmpty?'<option value="">—</option>':'') + values.map(v=>`<option value="${v}">${v}</option>`).join('');
+  sel.innerHTML = (withEmpty?'<option value="">—</option>':'') + values.map(v=>`<option value="${escapeHtml(String(v))}">${escapeHtml(String(v))}</option>`).join('');
 }
 /* ---------------- فلتر "موظفي الاستقبال" (شيت العملاء + شيت الحركات المالية) ----------------
    يتيح للمدير/المحاسب اختيار موظف استقبال بعينه من قائمة منسدلة ورؤية عملياته هو فقط
