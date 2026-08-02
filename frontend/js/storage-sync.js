@@ -372,6 +372,10 @@ async function serverFetch(path, options = {}) {
 // أو مثقل، أو عند أول فتح كامل بعد استعادة نسخة احتياطية). تُخفى عند ظهور الواجهة الفعلية
 // (autoSignInLocalUser) أو عند الشاشة القاتلة (showFatalDecryptErrorScreen).
 let _appLoadingOverlay = null;
+let _appLoadingOverlayLabel = null;
+function setAppLoadingOverlayText(text){
+  try{ if(_appLoadingOverlayLabel) _appLoadingOverlayLabel.textContent = text; }catch(e){}
+}
 function showAppLoadingOverlay(){
   try{
     if(_appLoadingOverlay) return;
@@ -383,6 +387,7 @@ function showAppLoadingOverlay(){
     const label = document.createElement('div');
     label.style.cssText = 'font-size:15px;opacity:.9;';
     label.textContent = 'جاري تحميل البيانات...';
+    _appLoadingOverlayLabel = label;
     _appLoadingOverlay.appendChild(spinner);
     _appLoadingOverlay.appendChild(label);
     if(!document.getElementById('appSpinKeyframes')){
@@ -1295,5 +1300,66 @@ async function checkClientRecordsChanged(){
     _clientRecordsAggVersion = data.version;
     return changed;
   }catch(e){ return false; }
+}
+
+// ================= رفع سريع بسيط بعد مسح كامل للسيرفر (استعادة نسخة احتياطية) =================
+// يُستخدم فقط بعد wipeServerDataForFreshRestore حيث السيرفر فارغ فعلياً: كل سجل يُرسَل برقم
+// نسخة 0 فيُدرجه السيرفر فوراً برقم 1 بلا أي تعارض ممكن، بدون طابور معلّقات، بدون إعادة محاولة
+// تعارضات، وبدون لمس الـ baseline — طلبات أقل بكثير ورفع أسرع بمراحل من المسار المعتاد.
+async function fastUploadCollection(collection, list){
+  const CHUNK = 4000;
+  if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+  const versions = _recordVersions[collection];
+  for(let i=0;i<list.length;i+=CHUNK){
+    const chunk = list.slice(i, i+CHUNK);
+    const records = [];
+    for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: 0 });
+    let res = null;
+    for(let attempt=0; attempt<4; attempt++){
+      try{
+        res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
+          method: 'POST',
+          body: JSON.stringify({ records }),
+        });
+      }catch(e){ res = null; }
+      if(res && (res.ok || res.status === 409)) break;
+      await new Promise(r=>setTimeout(r, 2500*(attempt+1)));
+    }
+    if(!res || !res.ok) throw new Error('تعذّر رفع بيانات ' + collection + ' — ستعاد المحاولة تلقائياً عند استقرار الاتصال');
+    const data = await res.json().catch(()=>({}));
+    for(const item of chunk) versions.set(item.id, 1);
+    for(const c of (data.conflicts||[])) versions.set(c.id, c.currentVersion || 0);
+  }
+  // إعادة بناء baseline التصنيف كاملاً — أي تعديل لاحق يُبنى على البيانات المرفوعة للتو بدل
+  // اعتبار كل شيء "تغيّر" وإعادة رفع كل الشيت عند أول حفظ لاحق.
+  const baseline = _collectionSyncBaseline[collection] || (_collectionSyncBaseline[collection] = new Map());
+  baseline.clear();
+  for(const item of list) baseline.set(item.id, JSON.stringify(item));
+}
+
+async function fastUploadClients(clientsList){
+  const CHUNK = 4000;
+  for(let i=0;i<clientsList.length;i+=CHUNK){
+    const chunk = clientsList.slice(i, i+CHUNK);
+    const records = [];
+    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: 0 });
+    let res = null;
+    for(let attempt=0; attempt<4; attempt++){
+      try{
+        res = await serverFetch('/api/client-records/bulk-migrate', {
+          method: 'POST',
+          body: JSON.stringify({ records }),
+        });
+      }catch(e){ res = null; }
+      if(res && (res.ok || res.status === 409)) break;
+      await new Promise(r=>setTimeout(r, 2500*(attempt+1)));
+    }
+    if(!res || !res.ok) throw new Error('تعذّر رفع بيانات العملاء — ستعاد المحاولة تلقائياً عند استقرار الاتصال');
+    const data = await res.json().catch(()=>({}));
+    for(const c of chunk) _clientRecordVersions[c.id] = 1;
+    for(const c of (data.conflicts||[])) _clientRecordVersions[c.id] = c.currentVersion || 0;
+  }
+  _clientsSyncBaseline = new Map();
+  for(const c of clientsList) _clientsSyncBaseline.set(c.id, JSON.stringify(c));
 }
 

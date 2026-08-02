@@ -115,6 +115,10 @@ async function wipeServerDataForFreshRestore(){
       window.storage.primeKeyVersion('zakatAdjustments'),
     ]);
   }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر تحديث أرقام نسخ settings/users/zakatAdjustments', e); }
+  // مسح طابور التعديلات المعلّقة محلياً: أي تعديلات كانت معلّقة قبل الاستعادة لم تعد صالحة بعد
+  // مسح السيرفر ورفع نسخة الاستعادة من جديد — إبقاؤها كان يعني إعادة رفعها لاحقاً (خلال أول
+  // flush تلقائي) فوق البيانات المستعادة وفسادها ببيانات قديمة.
+  try{ await _pendingRecordClearAll(); }catch(e){ console.error('wipeServerDataForFreshRestore: تعذّر مسح طابور المعلّقات', e); }
   if(failures.length){
     console.warn('wipeServerDataForFreshRestore: فشل مسح بعض التصنيفات على السيرفر — ستُعالج تلقائياً بإعادة محاولة التعارضات أثناء الرفع:', failures);
   }
@@ -122,13 +126,39 @@ async function wipeServerDataForFreshRestore(){
 // يرفع كل بيانات البرنامج الحالية (الموجودة فعلاً فى متغيرات الذاكرة الآن) للسيرفر من جديد —
 // تُستدعى بعد wipeServerDataForFreshRestore مباشرة، سواء وقت الاستعادة نفسها (متصل) أو لاحقاً
 // عند عودة الاتصال لو تمت الاستعادة أصلاً بدون اتصال.
+// يرفع كل بيانات البرنامج الحالية (الموجودة فعلاً فى متغيرات الذاكرة الآن) للسيرفر من جديد —
+// تُستدعى بعد wipeServerDataForFreshRestore مباشرة، سواء وقت الاستعادة نفسها (متصل) أو لاحقاً
+// عند عودة الاتصال لو تمت الاستعادة أصلاً بدون اتصال.
+// الطريقة الجديدة: رفع سريع بسيط بدل 19 دالة save* متوازية (كل واحدة برفع مُجمَّع خاص بها وطابور
+// معلّقات وإعادة محاولة تعارضات). بعد المسح الكامل السيرفر فارغ، فكل سجل يُرسَل برقم نسخة 0
+// فيُدرج فوراً بلا أي تعارض — بضع طلبات فقط بدل عشرات، وبلا أي آليات معقدة.
 async function pushCurrentDataToServer(){
-  await Promise.allSettled([
-    saveClients(true), saveSettings(), saveBagStock(), saveVaultTx(),
-    saveCourseSessions(), saveUsers(), saveAuditLog(), saveCompanies(), saveCompanyTransfers(), saveJournalEntries(), saveBankStatementRows(),
-    saveSuppliers(), savePurchases(), saveVaultDenomTx(), saveManualSalesInvoices(), saveZakatAdjustments(),
-    saveChartOfAccounts(), saveJournalDE(), saveBudgetEntries(), saveScheduledVaultTx()
-  ]);
+  if(isCurrentlyOffline()) return; // بدون اتصال تُؤجَّل كاملة (راجع RESTORE_RESYNC_FLAG_KEY)
+  const collections = [
+    ['bagStock', bagStock], ['vaultTx', vaultTx], ['vaultDenomTx', vaultDenomTx], ['bankStatementRows', bankStatementRows],
+    ['courseSessions', courseSessions], ['auditLog', auditLog], ['companies', companies], ['companyTransfers', companyTransfers],
+    ['journalEntries', journalEntries], ['chartOfAccounts', chartOfAccounts], ['journalDE', journalDE], ['budgetEntries', budgetEntries],
+    ['suppliers', suppliers], ['purchases', purchases], ['manualSalesInvoices', manualSalesInvoices], ['scheduledVaultTx', scheduledVaultTx],
+  ];
+  const active = collections.filter(([, arr])=> (arr||[]).some(x=> x && x.id));
+  showAppLoadingOverlay();
+  try{
+    let done = 0;
+    for(const [name, arr] of active){
+      setAppLoadingOverlayText(`جاري رفع البيانات إلى السيرفر... ${done+1} من ${active.length}`);
+      await fastUploadCollection(name, arr.filter(x=> x && x.id));
+      done++;
+    }
+    const cl = (clients||[]).filter(c=> c && c.id);
+    if(cl.length){
+      setAppLoadingOverlayText('جاري رفع البيانات إلى السيرفر... العملاء');
+      await fastUploadClients(cl);
+    }
+    setAppLoadingOverlayText('جاري حفظ الإعدادات...');
+    await Promise.allSettled([saveSettings(), saveUsers(), saveZakatAdjustments()]);
+  }finally{
+    hideAppLoadingOverlay();
+  }
 }
 function isCurrentlyOffline(){ return manualOfflineMode || _ftcIsOffline; }
 
@@ -270,10 +300,13 @@ async function restoreFullBackup(file){
   seedChartOfAccountsIfEmpty();
   journalDE = data.journalDE || [];
   budgetEntries = data.budgetEntries || [];
-  // يُطبَّق دائماً على الذاكرة والكاش المحلي فوراً بغضّ النظر عن الاتصال؛ كل دالة save* هنا تتعامل
-  // بالفعل مع انقطاع الاتصال بحفظ محلي + طابور رفع تلقائي (راجع window.storage.set وsaveOneRecordGeneric)،
-  // فتُطبَّق الاستعادة محلياً فوراً حتى بدون سيرفر، وتُرفَع لاحقاً تلقائياً عند توفر الاتصال.
-  await pushCurrentDataToServer();
+  // يُطبَّق دائماً على الذاكرة والكاش المحلي فوراً بغضّ النظر عن الاتصال؛ الرفع الجديد السريع
+  // (pushCurrentDataToServer) يتحقق من الاتصال بنفسه، ولو تعذّر يُبلَّغ المستخدم ويُكتمل لاحقاً
+  // تلقائياً عند عودة الاتصال (راجع RESTORE_RESYNC_FLAG_KEY وresyncRestoredDataWithServer أدناه).
+  await pushCurrentDataToServer().catch(e=>{
+    console.error('restoreFullBackup: تعذّر رفع البيانات للسيرفر', e);
+    showToast('⚠️ تعذّر رفع البيانات إلى السيرفر حالياً — ستُحفَظ محلياً وتُرفع تلقائياً عند استقرار الاتصال');
+  });
 
   if(wasOffline){
     // نسجّل أن هناك استعادة كاملة بانتظار مزامنتها الحقيقية مع السيرفر (مسح + رفع نظيف بلا تعارض)
@@ -340,7 +373,10 @@ async function resyncRestoredDataWithServer(){
       // لو فشل الرفع، نترك المفتاح كما هو ليُعاد المحاولة فى المرة القادمة التي تنجح فيها هذه الدالة
     }
     await wipeServerDataForFreshRestore();
-    await pushCurrentDataToServer();
+  await pushCurrentDataToServer().catch(e=>{
+    console.error('restoreFullBackup: تعذّر رفع البيانات للسيرفر', e);
+    showToast('⚠️ تعذّر رفع البيانات إلى السيرفر حالياً — ستُحفَظ محلياً وتُرفع تلقائياً عند استقرار الاتصال');
+  });
     // لا نعتبر المزامنة مكتملة إلا بعد التحقق من ظهور كل البيانات المستعادة على السيرفر بأعدادها
     // الكاملة — دون ذلك نُبقي العلامة ليُعاد المحاولة تلقائياً بدل فتح البرنامج على بيانات ناقصة.
     const verified = await verifyRestoredDataOnServer();

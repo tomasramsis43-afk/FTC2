@@ -262,6 +262,23 @@ async function _pendingRecordReadAll(){
     });
   }catch(e){ return []; }
 }
+// يمسح طابور التعديلات المعلّقة بالكامل (عملية واحدة) — يُستخدم بعد "مسح كامل للسيرفر" أثناء
+// الاستعادة: أي تعديلات قديمة كانت معلّقة قبل الاستعادة لم تعد صالحة إطلاقاً بعد استبدال كل
+// البيانات، فإبقاؤها يعني إعادة رفعها لاحقاً فوق بيانات النسخة المستعادة وفسادها.
+async function _pendingRecordClearAll(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
+        tx.objectStore(RECORD_PENDING_STORE).clear();
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){ console.error('[Core] _pendingRecordClearAll failed:', e); }
+}
 async function _pendingRecordCount(){
   try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
 }
