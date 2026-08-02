@@ -120,6 +120,79 @@ async function pushCurrentDataToServer(){
 }
 function isCurrentlyOffline(){ return manualOfflineMode || _ftcIsOffline; }
 
+/* ============================================================================
+   التحقق من اكتمال رفع الاستعادة إلى السيرفر قبل أي "مسح كاش + إعادة فتح".
+   كان إعادة الفتح تتم بعد مهلة ثابتة بدون تحقق، فلو تعثّر جزء من الرفع (دفعة سقطت /
+   rate limit) بقي السيرفر ناقصاً وأعاد البرنامج فتح نفسه على بيانات ناقصة كما لو كانت
+   كاملة — وهو نفس مسار "الملف لا يُحمَّل بالكامل" الذي أبلغ عنه المستخدم.
+   ============================================================================ */
+// التصنيفات (سجلات مستقلة) التي تُستعاد فعلياً من ملف النسخة الاحتياطية في restoreFullBackup —
+// تُستخدم حصراً للتحقق، وتستثني deletedVaultTx/deletedInvoices التي ليست جزءاً من ملف النسخة
+// إطلاقاً (تختفي من السيرفر بعد المسح عمداً لأنها مجرد سجل حذف).
+const RESTORED_RECORD_COLLECTIONS = [
+  'bagStock','vaultTx','vaultDenomTx','bankStatementRows','courseSessions','auditLog',
+  'companies','companyTransfers','journalEntries','chartOfAccounts','journalDE','budgetEntries',
+  'suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
+];
+function _currentCollectionArray(c){
+  switch(c){
+    case 'bagStock': return bagStock;
+    case 'vaultTx': return vaultTx;
+    case 'vaultDenomTx': return vaultDenomTx;
+    case 'bankStatementRows': return bankStatementRows;
+    case 'courseSessions': return courseSessions;
+    case 'auditLog': return auditLog;
+    case 'companies': return companies;
+    case 'companyTransfers': return companyTransfers;
+    case 'journalEntries': return journalEntries;
+    case 'chartOfAccounts': return chartOfAccounts;
+    case 'journalDE': return journalDE;
+    case 'budgetEntries': return budgetEntries;
+    case 'suppliers': return suppliers;
+    case 'purchases': return purchases;
+    case 'manualSalesInvoices': return manualSalesInvoices;
+    case 'scheduledVaultTx': return scheduledVaultTx;
+    default: return null;
+  }
+}
+// يرجع true فقط لو كل البيانات المستعادة ظهرت فعلياً على السيرفر بأعدادها الكاملة.
+async function verifyRestoredDataOnServer(){
+  try{
+    const wantUsers = normalizeRole(SERVER_AUTH_ROLE) === 'admin';
+    // 1) السجلات المستقلة لكل تصنيف مستعاد — مقارنة العدد المرفوع (ذات id) بعدد السيرفر
+    const recRes = await serverFetch('/api/records-versions');
+    if(!recRes.ok) return false;
+    const recData = await recRes.json();
+    const serverRec = recData.versions || {};
+    for(const c of RESTORED_RECORD_COLLECTIONS){
+      const arr = _currentCollectionArray(c);
+      const expected = arr ? arr.filter(x=>x && x.id).length : 0;
+      if(expected === 0) continue;
+      const sv = serverRec[c];
+      if(!sv || sv.count !== expected) return false;
+    }
+    // 2) العملاء — عدد سجلات العملاء على السيرفر يساوي عدد العملاء المرفوعين (الأدمن يرى الكل)
+    const clRes = await serverFetch('/api/client-records');
+    if(!clRes.ok) return false;
+    const clData = await clRes.json();
+    const clientsExpected = clients.filter(c=>c && c.id).length;
+    if(clientsExpected !== (clData.records||[]).length) return false;
+    // 3) مفاتيح kv القديمة المتبقية (settings/zakatAdjustments/users) — تطابق أرقام النسخ بعد الحفظ
+    const vRes = await serverFetch('/api/storage-versions');
+    if(!vRes.ok) return false;
+    const vData = await vRes.json();
+    const versions = vData.versions || {};
+    const kvKeys = ['settings','zakatAdjustments'].concat(wantUsers ? ['users'] : []);
+    for(const k of kvKeys){
+      if((_kvVersions[k] || 0) !== (versions[k] || 0)) return false;
+    }
+    return true;
+  }catch(e){
+    console.error('verifyRestoredDataOnServer:', e);
+    return false;
+  }
+}
+
 async function restoreFullBackup(file){
   let data;
   try{
@@ -150,6 +223,11 @@ async function restoreFullBackup(file){
       localStorage.setItem(RESTORE_OLD_SNAPSHOT_KEY, oldSnapshotEnc);
     }catch(e){ console.error('restoreFullBackup: تعذّر حفظ نسخة البيانات القديمة محلياً لرفعها لاحقاً', e); }
   }
+
+  // restoreVerified: هل اكتمل رفع كل البيانات المستعادة للسيرفر فعلاً؟ (أدمن متصل)
+  // shouldReload: يُفعَّل فقط عند الاكتمال — إعادة فتح البرنامج من السيرفر بالبيانات الجديدة
+  let restoreVerified = false;
+  let shouldReload = false;
 
   // مسح فعلي لبيانات السيرفر وتصفير تتبّع المزامنة يحدث الآن فقط لو متصلين فعلاً؛ لو غير متصلين
   // نؤجّله بالكامل حتى عودة الاتصال (راجع resyncRestoredDataWithServer وcheckPendingRestoreResync
@@ -190,14 +268,22 @@ async function restoreFullBackup(file){
     // بمجرد عودة الاتصال، بدل الاكتفاء بالمزامنة الجزئية العادية لطابور "التعديلات المعلَّقة".
     try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
   }else{
-    // متصلون والاستعادة رُفعت للسيرفر فعلاً — نمسح الكاش المحلي القديم (بيانات ما قبل الاستعادة)
-    // ونعيد فتح البرنامج بالكامل من السيرفر. بدون هذا، لو بقي الكاش القديم، أي فتح تالٍ من الكاش
-    // (hasLocalCache → loadData(cacheOnly)) كان يُظهر بيانات الاستعادة القديمة وكأنها ما زالت موجودة،
-    // وأي تعديل لاحق يبني على تلك البيانات يُكتب فوق الجديد بشكل خاطئ — وهو نفس مسار فقدان البيانات
-    // الذي تسبب به الكاش المتقادم. إعادة الفتح (location.reload) تضمن أن كل ما يعمل به البرنامج بعد
-    // الاستعادة هو بالضبط ما وُضع على السيرفر، مع تحميل حقيقي كامل (لأن الكاش أصبح فارغاً).
-    try{ await _kvCacheClearKv(); }catch(e){ console.error('restoreFullBackup: تعذّر مسح الكاش المحلي', e); }
-    setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1500);
+    // متصلون: نُسجّل علامة إعادة المزامنة قبل الرفع — أي انقطاع أثناءه يُكمل تلقائياً لاحقاً
+    // (راجع resyncRestoredDataWithServer)، ثم نتحقق من اكتمال رفع كل البيانات المستعادة إلى
+    // السيرفر قبل أي "مسح كاش + إعادة فتح". فقط عند الاكتمال نمسح الكاش المحلي القديم (بيانات
+    // ما قبل الاستعادة) ونعيد فتح البرنامج من السيرفر؛ لو بقيت بيانات الاستعادة القديمة في الكاش،
+    // أي فتح تالٍ من الكاش (hasLocalCache → loadData(cacheOnly)) كان يُظهرها وكأنها ما زالت موجودة.
+    try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
+    restoreVerified = await verifyRestoredDataOnServer();
+    if(restoreVerified){
+      try{ await _kvCacheClearKv(); }catch(e){ console.error('restoreFullBackup: تعذّر مسح الكاش المحلي', e); }
+      try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){ console.error(e); }
+      shouldReload = true;
+    }else{
+      // الرفع لم يكتمل (اتصال غير مستقر): نُبقي الكاش والعلامة (تُكمل تلقائياً عند استقرار الاتصال)
+      // ولا نعيد الفتح حتى لا يُعرض بيانات ناقصة. بيانات الذاكرة الحالية هي نسخة الاستعادة السليمة.
+      showToast('⛔ لم يكتمل رفع النسخة المستعادة للسيرفر بالكامل (الاتصال غير مستقر) — البيانات محفوظة في البرنامج الآن وستُرفع تلقائياً عند استقرار الاتصال. لا تغلق البرنامج الآن.');
+    }
   }
 
   await logAudit('edit','الإعدادات', wasOffline
@@ -220,7 +306,10 @@ async function restoreFullBackup(file){
   applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'original'); applySoundIcon(); applyThemeColors();
   showToast(wasOffline
     ? 'تمت استعادة البيانات محلياً بنجاح ✅ — سيتم رفعها ومزامنتها مع السيرفر تلقائياً عند عودة الاتصال'
-    : 'تمت استعادة البيانات بنجاح، ورُفعت للسيرفر ✅ — سيُعاد فتح البرنامج الآن بالبيانات الجديدة (تم حفظ نسخة من البيانات القديمة على السيرفر يمكن الرجوع إليها من "النسخ المحفوظة على السيرفر")');
+    : (restoreVerified
+        ? 'تمت استعادة البيانات بنجاح، ورُفعت للسيرفر ✅ — سيُعاد فتح البرنامج الآن بالبيانات الجديدة (تم حفظ نسخة من البيانات القديمة على السيرفر يمكن الرجوع إليها من "النسخ المحفوظة على السيرفر")'
+        : 'تم استرجاع البيانات في ذاكرة البرنامج، وسيُكتمل رفعها للسيرفر تلقائياً عند استقرار الاتصال — لا تغلق البرنامج الآن'));
+  if(shouldReload) setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1500);
 }
 
 // يكمل مزامنة استعادة تمت أصلاً بدون اتصال (راجع علامة RESTORE_RESYNC_FLAG_KEY فى restoreFullBackup
@@ -240,8 +329,17 @@ async function resyncRestoredDataWithServer(){
     }
     await wipeServerDataForFreshRestore();
     await pushCurrentDataToServer();
+    // لا نعتبر المزامنة مكتملة إلا بعد التحقق من ظهور كل البيانات المستعادة على السيرفر بأعدادها
+    // الكاملة — دون ذلك نُبقي العلامة ليُعاد المحاولة تلقائياً بدل فتح البرنامج على بيانات ناقصة.
+    const verified = await verifyRestoredDataOnServer();
+    if(!verified){
+      showToast('⛔ لم يكتمل رفع نسخة الاستعادة للسيرفر بالكامل — ستُعاد المحاولة تلقائياً عند استقرار الاتصال');
+      return;
+    }
     localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY);
-    showToast('تمت مزامنة نسخة الاستعادة المحلية مع السيرفر بنجاح ✅ مع الاحتفاظ بنسخة من البيانات القديمة');
+    try{ await _kvCacheClearKv(); }catch(e){ console.error('resyncRestoredDataWithServer: تعذّر مسح الكاش المحلي', e); }
+    showToast('تمت مزامنة نسخة الاستعادة المحلية مع السيرفر بنجاح ✅ — سيُعاد فتح البرنامج الآن بالبيانات الجديدة');
+    setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1200);
   }catch(e){
     // تعذّر إتمام المزامنة رغم عودة الاتصال (خطأ عابر) — نترك العلامة موجودة ليُعاد المحاولة
     // تلقائياً عند محاولة الاتصال التالية، بدل فقد فرصة المزامنة الكاملة بصمت.
