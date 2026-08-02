@@ -1771,6 +1771,26 @@ $('#btn-sound-toggle').addEventListener('click', async ()=>{
 });
 $('#btn-logout').addEventListener('click', async ()=>{
   if(await customConfirm('تأكيد تسجيل الخروج؟')){
+    // التأكد من رفع كل البيانات قبل تسجيل الخروج: ننتظر اكتمال الحفظ الجاري، ونرفع أي
+    // تعديلات معلّقة، ونتحقق ألا يتبقى شيء غير مرفوع. لو بقي شيء (انقطاع اتصال مثلاً)
+    // نُعلم المستخدم ونترك له القرار — البيانات محفوظة على الجهاز وستُرفع تلقائياً لاحقاً.
+    showAppLoadingOverlay();
+    setAppLoadingOverlayText('جاري التأكد من رفع كل البيانات إلى السيرفر...');
+    let verdict = null;
+    try{ verdict = await verifyAllDataUploadedBeforeLogout(); }catch(e){ console.error('[Finance] فشل فحص المزامنة قبل تسجيل الخروج', e); }
+    hideAppLoadingOverlay();
+    if(verdict && !verdict.allSynced){
+      const count = (verdict.kvPending||0) + (verdict.recPending||0);
+      const offlineMsg = verdict.offline ? ' (لا يوجد اتصال بالسيرفر حالياً)' : '';
+      const inFlightMsg = verdict.stillInFlight ? ' (هناك حفظ جارٍ لم يكتمل)' : '';
+      const warnMsg = 'لا تزال هناك بيانات لم تُرفع إلى السيرفر بعد' + offlineMsg + inFlightMsg +
+        (count > 0 ? ' — عدد التعديلات المعلّقة: ' + count : '') + '.' +
+        '\n\nهذه البيانات محفوظة على هذا الجهاز وستُرفع تلقائياً عند عودة الاتصال أو تسجيل الدخول من جديد — لكنها لن تكون متاحة من أجهزة أخرى حتى اكتمال الرفع.' +
+        '\n\nهل تريد تسجيل الخروج الآن على أي حال؟';
+      if(!await customConfirm(warnMsg, 'تعديلات لم تُرفع بعد')){
+        return; // المستخدم اختار البقاء حتى اكتمال الرفع
+      }
+    }
     try{
       await fetch(API_BASE + '/api/auth/logout', {
         method: 'POST',

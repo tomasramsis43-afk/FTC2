@@ -330,6 +330,39 @@ async function flushPendingRecordWrites(){
   return _ftcRecordSyncPromise;
 }
 
+/* ============================================================================
+   التحقق قبل تسجيل الخروج: يتأكد أن كل البيانات مرفوعة فعلاً للسيرفر ولا يوجد
+   أي شيء معلّق. الخطوات: (1) ننتظر اكتمال أي طلبات حفظ جارية فعلياً الآن على
+   الشبكة (لسه بانتظار رد السيرفر ولم تُسجَّل بعد في طابور المعلّقات)، (2) نحاول
+   رفع كل التعديلات المعلّقة (kv + السجلات/العملاء)، (3) نعيد قراءة الطوابير
+   ونحكم هل كل شيء متزامن أم لا. يُستدعى من زر تسجيل الخروج.
+   ============================================================================ */
+async function verifyAllDataUploadedBeforeLogout(){
+  // 1) انتظار اكتمال الطلبات الجارية (بحد أقصى 8 ثوانٍ) حتى تُحسم قبل أي فحص نهائي
+  const settleDeadline = Date.now() + 8000;
+  while(Date.now() < settleDeadline && (_activeRecordSaves > 0 || _activeKvSaves > 0 || _ftcSyncInFlight || _ftcRecordSyncInFlight)){
+    await new Promise(r=>setTimeout(r, 150));
+  }
+  // 2) رفع كل المعلّقات (single-flight: أي محاولة دورية متزامنة تشارك نفس الوعد فلا يتكرر العمل).
+  //    مهلة قصوى شاملة حتى لا يعلق تسجيل الخروج على سيرفر غير مستجيب.
+  const FLUSH_CAP = 25000;
+  await Promise.race([
+    (async()=>{
+      try{ await flushPendingWrites(); }catch(e){}
+      try{ await flushPendingRecordWrites(); }catch(e){}
+    })(),
+    new Promise(r=>setTimeout(r, FLUSH_CAP)),
+  ]);
+  // 3) التقييم النهائي
+  const kvPending = await _pendingCount();
+  const recPending = await _pendingRecordCount();
+  const stillInFlight = (_activeRecordSaves > 0) || (_activeKvSaves > 0) || _ftcSyncInFlight || _ftcRecordSyncInFlight;
+  let restorePending = false;
+  try{ restorePending = localStorage.getItem('ftcPendingFullResyncAfterRestore') === '1'; }catch(e){}
+  const allSynced = !stillInFlight && kvPending === 0 && recPending === 0 && !restorePending;
+  return { allSynced, kvPending, recPending, stillInFlight, offline: (_ftcIsOffline || manualOfflineMode), restorePending };
+}
+
 async function serverFetch(path, options = {}) {
   if(manualOfflineMode){
     // وضع العمل من الجهاز فقط مفعَّل يدوياً — نرفض الاتصال بالسيرفر من أول خطوة، فتتعامل كل
