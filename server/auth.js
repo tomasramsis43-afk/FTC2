@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const otplib = require('otplib');
+const crypto = require('crypto');
 const { pool } = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -146,10 +147,11 @@ function verifyTotpToken(token, secret) {
 }
 // أكواد احتياطية أحادية الاستخدام (10 أكواد، 8 أرقام لكل كود) — لحالة فقدان جهاز المصادقة.
 // تُخزَّن كـ bcrypt hash فقط، وتُستهلك (تُحذف) فور استخدام أي كود منها مرة واحدة.
+// أرقام عشوائية آمنة تشفيرياً (crypto.randomInt بدل Math.random — الأخير غير آمن لأكواد المصادقة).
 function generateBackupCodes(count = 10) {
   const codes = [];
   for (let i = 0; i < count; i++) {
-    codes.push(String(Math.floor(10000000 + Math.random() * 90000000)));
+    codes.push(String(crypto.randomInt(10000000, 100000000)));
   }
   return codes;
 }
