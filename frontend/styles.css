@@ -1,11 +1,13 @@
 /* ============================================================================
-   FTC2 — TERMINAL DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
-   مأخوذ من تصميم Stitch "FTC2 Terminal v2.4.0": داكن زجاجي (سياں/نعناعي/بنفسجي)
-   + ثيم فاتح (Space Grotesk / أزرق). كل المحددات الأصلية محفوظة كما هي حتى لا
-   يتأثر أي كود جافاسكربت — أعيد بناء المظهر فقط.
+   FTC2 â€” TERMINAL DESIGN SYSTEM (ط¥ط¹ط§ط¯ط© ط¨ظ†ط§ط، ظƒط§ظ…ظ„ط© ظ„ظ„ظˆط§ط¬ظ‡ط©)
+   ظ…ط£ط®ظˆط° ظ…ظ† طھطµظ…ظٹظ… Stitch "FTC2 Terminal v2.4.0": ط¯ط§ظƒظ† ط²ط¬ط§ط¬ظٹ (ط³ظٹط§ع؛/ظ†ط¹ظ†ط§ط¹ظٹ/ط¨ظ†ظپط³ط¬ظٹ)
+   + ط«ظٹظ… ظپط§طھط­ (Space Grotesk / ط£ط²ط±ظ‚). ظƒظ„ ط§ظ„ظ…ط­ط¯ط¯ط§طھ ط§ظ„ط£طµظ„ظٹط© ظ…ط­ظپظˆط¸ط© ظƒظ…ط§ ظ‡ظٹ ط­طھظ‰ ظ„ط§
+   ظٹطھط£ط«ط± ط£ظٹ ظƒظˆط¯ ط¬ط§ظپط§ط³ظƒط±ط¨طھ â€” ط£ط¹ظٹط¯ ط¨ظ†ط§ط، ط§ظ„ظ…ط¸ظ‡ط± ظپظ‚ط·.
    ============================================================================ */
 
-/* ============= CSS VARIABLES & ROOT — Terminal Dark (الافتراضي) ============= */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+/* ============= CSS VARIABLES & ROOT â€” Terminal Dark (ط§ظ„ط§ظپطھط±ط§ط¶ظٹ) ============= */
 :root {
   --bg: #060e1c;
   --surface: rgba(15, 28, 50, 0.74);
@@ -63,8 +65,8 @@ body.dark-theme textarea {
   color-scheme: dark;
 }
 
-/* ============= ثيم "Stitch — فيريديان فلو" (فاتح، طاقة أخضر ومياه أزرق) =============
-   ثيم بديل يُختار من لوحة الإعدادات — بدون تعديل منطق theme-settings.js. */
+/* ============= ط«ظٹظ… "Stitch â€” ظپظٹط±ظٹط¯ظٹط§ظ† ظپظ„ظˆ" (ظپط§طھط­طŒ ط·ط§ظ‚ط© ط£ط®ط¶ط± ظˆظ…ظٹط§ظ‡ ط£ط²ط±ظ‚) =============
+   ط«ظٹظ… ط¨ط¯ظٹظ„ ظٹظڈط®طھط§ط± ظ…ظ† ظ„ظˆط­ط© ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ â€” ط¨ط¯ظˆظ† طھط¹ط¯ظٹظ„ ظ…ظ†ط·ظ‚ theme-settings.js. */
 body.theme-stitch {
   --bg: #f4f8f5;
   --surface: #ffffff;
@@ -97,9 +99,9 @@ body.theme-stitch textarea {
   color-scheme: light;
 }
 
-/* ============= ثيم "Obsidian Light" → مقلوب إلى التصميم الفاتح من Stitch =============
-   خلفية فاتحة #f4f7fb، لوحات بيضاء، أزرق #2563eb أساسي، خط Space Grotesk.
-   (الاسم محفوظ كما هو في الإعدادات والكود — القيم أعيد بناؤها). */
+/* ============= ط«ظٹظ… "Obsidian Light" â†’ ظ…ظ‚ظ„ظˆط¨ ط¥ظ„ظ‰ ط§ظ„طھطµظ…ظٹظ… ط§ظ„ظپط§طھط­ ظ…ظ† Stitch =============
+   ط®ظ„ظپظٹط© ظپط§طھط­ط© #f4f7fbطŒ ظ„ظˆط­ط§طھ ط¨ظٹط¶ط§ط،طŒ ط£ط²ط±ظ‚ #2563eb ط£ط³ط§ط³ظٹطŒ ط®ط· Space Grotesk.
+   (ط§ظ„ط§ط³ظ… ظ…ط­ظپظˆط¸ ظƒظ…ط§ ظ‡ظˆ ظپظٹ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ ظˆط§ظ„ظƒظˆط¯ â€” ط§ظ„ظ‚ظٹظ… ط£ط¹ظٹط¯ ط¨ظ†ط§ط¤ظ‡ط§). */
 body.theme-obsidian {
   --bg: #f4f7fb;
   --surface: #ffffff;
@@ -164,10 +166,10 @@ body.theme-obsidian .table-scroll thead th {
   background: #ffffff;
 }
 
-/* ============= ثيم "Neon Amethyst Cybernetic" (داكن، نيون بنفسجي/فوشيا) =============
-   مأخوذ من طقم Stitch الثالث: خلفية #131318، أساسي فوشيا/بنفسجي #ecb2ff، ثانوي
-   سايان نيون #00eefc للتباين، خط Space Grotesk. طقم داكن بديل تماماً عن الأصلي
-   (سايان/بنفسجي فاتح) بهوية لونية أكثر جرأة. */
+/* ============= ط«ظٹظ… "Neon Amethyst Cybernetic" (ط¯ط§ظƒظ†طŒ ظ†ظٹظˆظ† ط¨ظ†ظپط³ط¬ظٹ/ظپظˆط´ظٹط§) =============
+   ظ…ط£ط®ظˆط° ظ…ظ† ط·ظ‚ظ… Stitch ط§ظ„ط«ط§ظ„ط«: ط®ظ„ظپظٹط© #131318طŒ ط£ط³ط§ط³ظٹ ظپظˆط´ظٹط§/ط¨ظ†ظپط³ط¬ظٹ #ecb2ffطŒ ط«ط§ظ†ظˆظٹ
+   ط³ط§ظٹط§ظ† ظ†ظٹظˆظ† #00eefc ظ„ظ„طھط¨ط§ظٹظ†طŒ ط®ط· Space Grotesk. ط·ظ‚ظ… ط¯ط§ظƒظ† ط¨ط¯ظٹظ„ طھظ…ط§ظ…ط§ظ‹ ط¹ظ† ط§ظ„ط£طµظ„ظٹ
+   (ط³ط§ظٹط§ظ†/ط¨ظ†ظپط³ط¬ظٹ ظپط§طھط­) ط¨ظ‡ظˆظٹط© ظ„ظˆظ†ظٹط© ط£ظƒط«ط± ط¬ط±ط£ط©. */
 body.theme-amethyst {
   --bg: #131318;
   --surface: rgba(31, 31, 37, 0.76);
@@ -232,7 +234,7 @@ body.theme-amethyst .table-scroll thead th {
   background: #1b1b20;
 }
 
-/* بطاقات اختيار مظهر الواجهة في الإعدادات */
+/* ط¨ط·ط§ظ‚ط§طھ ط§ط®طھظٹط§ط± ظ…ط¸ظ‡ط± ط§ظ„ظˆط§ط¬ظ‡ط© ظپظٹ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ */
 .theme-scheme-card {
   transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
   backdrop-filter: blur(12px);
@@ -301,9 +303,10 @@ body {
     radial-gradient(1100px 500px at 85% -10%, rgba(34, 211, 238, 0.07), transparent 60%),
     radial-gradient(900px 460px at -10% 20%, rgba(139, 92, 246, 0.06), transparent 60%),
     radial-gradient(700px 400px at 50% 110%, rgba(97, 246, 185, 0.045), transparent 60%),
-    repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.025) 0 1px, transparent 1px 44px),
-    repeating-linear-gradient(90deg, rgba(34, 211, 238, 0.025) 0 1px, transparent 1px 44px),
+    linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px),
     var(--bg);
+  background-size: auto, auto, auto, 40px 40px, 40px 40px, auto;
   background-attachment: fixed;
   color: var(--text);
   font-family: 'Inter', 'Tajawal', system-ui, sans-serif;
@@ -388,7 +391,7 @@ section.view.active {
   }
 }
 
-/* ============= HEADER (Top Bar زجاجي) ============= */
+/* ============= HEADER (Top Bar ط²ط¬ط§ط¬ظٹ) ============= */
 header.top {
   position: sticky;
   top: 12px;
@@ -619,7 +622,7 @@ header.top p {
   min-width: 0;
 }
 
-/* ============= NAVIGATION (الشريط الجانبي 224px — Terminal) ============= */
+/* ============= NAVIGATION (ط§ظ„ط´ط±ظٹط· ط§ظ„ط¬ط§ظ†ط¨ظٹ 224px â€” Terminal) ============= */
 nav.tabs {
   flex: none;
   width: 224px;
@@ -648,7 +651,7 @@ body.dark-theme nav.tabs {
   background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
 }
 
-/* شعار العلامة أعلى الشريط الجانبي (FTC2 Terminal) */
+/* ط´ط¹ط§ط± ط§ظ„ط¹ظ„ط§ظ…ط© ط£ط¹ظ„ظ‰ ط§ظ„ط´ط±ظٹط· ط§ظ„ط¬ط§ظ†ط¨ظٹ (FTC2 Terminal) */
 .nav-brand {
   display: flex;
   align-items: center;
@@ -821,6 +824,41 @@ nav.tabs button:hover svg {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
 }
 
+/* ============= ط£ظٹظ‚ظˆظ†ط§طھ Material Symbols (ط¨ط¯ظ„ SVG) â€” طھط·ط§ط¨ظ‚ ط§ظ„ظ…ط±ط¬ط¹ ============= */
+nav.tabs button[data-view] svg {
+  display: none;
+}
+
+nav.tabs button[data-view]::before {
+  font-family: 'Material Symbols Outlined';
+  font-weight: 400;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-size: 21px;
+  line-height: 1;
+  width: 21px;
+  flex: none;
+  text-align: center;
+}
+
+nav.tabs button[data-view="dashboard"]::before { content: "dashboard"; }
+nav.tabs button[data-view="clients"]::before { content: "groups"; }
+nav.tabs button[data-view="companies"]::before { content: "corporate_fare"; }
+nav.tabs button[data-view="courses"]::before { content: "menu_book"; }
+nav.tabs button[data-view="courseinvoices"]::before { content: "receipt_long"; }
+nav.tabs button[data-view="vault"]::before { content: "payments"; }
+nav.tabs button[data-view="bags"]::before { content: "inventory_2"; }
+nav.tabs button[data-view="purchases"]::before { content: "shopping_cart"; }
+nav.tabs button[data-view="zatca"]::before { content: "qr_code_2"; }
+nav.tabs button[data-view="reports"]::before { content: "monitoring"; }
+nav.tabs button[data-view="accounting"]::before { content: "account_balance"; }
+nav.tabs button[data-view="budget"]::before { content: "savings"; }
+nav.tabs button[data-view="audit"]::before { content: "fact_check"; }
+
+nav.tabs button[data-view]:not(.active):hover::before {
+  color: var(--navy);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
+}
+
 @media(max-width: 900px) {
   .layout {
     flex-direction: column;
@@ -834,7 +872,7 @@ nav.tabs button:hover svg {
     max-height: none;
     overflow-x: auto;
     overflow-y: visible;
-    direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً */
+    direction: rtl; /* ظٹط¶ظ…ظ† ط£ظ† ظˆط¶ط¹ ط§ظ„طھظ…ط±ظٹط± ط§ظ„ط§ظپطھط±ط§ط¶ظٹ (scrollLeft=0) ظٹط¨ط¯ط£ ظ…ظ† ط£ظ‚طµظ‰ ط§ظ„ظٹظ…ظٹظ† ط¯ط§ط¦ظ…ط§ظ‹ */
     padding: 8px;
     border-radius: 14px;
   }
@@ -878,7 +916,7 @@ nav.tabs button:hover svg {
   }
 }
 
-/* فاصل بصري رفيع بين مجموعات التبويبات */
+/* ظپط§طµظ„ ط¨طµط±ظٹ ط±ظپظٹط¹ ط¨ظٹظ† ظ…ط¬ظ…ظˆط¹ط§طھ ط§ظ„طھط¨ظˆظٹط¨ط§طھ */
 .nav-section-label {
   flex: none;
   align-self: stretch;
@@ -892,7 +930,7 @@ nav.tabs button:hover svg {
   color: transparent;
 }
 
-/* ============= NAV FLYOUT (قائمة "العملاء" المنسدلة لأنواع الدورات) ============= */
+/* ============= NAV FLYOUT (ظ‚ط§ط¦ظ…ط© "ط§ظ„ط¹ظ…ظ„ط§ط،" ط§ظ„ظ…ظ†ط³ط¯ظ„ط© ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¯ظˆط±ط§طھ) ============= */
 .nav-flyout-wrap {
   position: relative;
   flex: none;
@@ -1134,14 +1172,14 @@ section.view.active {
   border-inline-start-color: var(--teal);
 }
 
-/* ============= PANELS (بطاقات زجاجية) ============= */
+/* ============= PANELS (ط¨ط·ط§ظ‚ط§طھ ط²ط¬ط§ط¬ظٹط©) ============= */
 .panel {
   background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
   border-radius: 16px;
   box-shadow: var(--shadow), 0 20px 50px -30px rgba(34, 211, 238, 0.18);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(34, 211, 238, 0.16);
   padding: 18px 20px;
   margin-bottom: 16px;
   transition: box-shadow 0.2s ease;
@@ -1162,8 +1200,8 @@ section.view.active {
   gap: 8px;
 }
 
-/* صندوق أيقونة موحّد لعناوين البانلز — يلف الإيموجي الموجود أصلاً بنفس شكل صناديق
-   الأيقونات المستخدمة في بطاقات KPI وشريط الإحصائيات، بدل ما يفضل الإيموجي عاري */
+/* طµظ†ط¯ظˆظ‚ ط£ظٹظ‚ظˆظ†ط© ظ…ظˆط­ظ‘ط¯ ظ„ط¹ظ†ط§ظˆظٹظ† ط§ظ„ط¨ط§ظ†ظ„ط² â€” ظٹظ„ظپ ط§ظ„ط¥ظٹظ…ظˆط¬ظٹ ط§ظ„ظ…ظˆط¬ظˆط¯ ط£طµظ„ط§ظ‹ ط¨ظ†ظپط³ ط´ظƒظ„ طµظ†ط§ط¯ظٹظ‚
+   ط§ظ„ط£ظٹظ‚ظˆظ†ط§طھ ط§ظ„ظ…ط³طھط®ط¯ظ…ط© ظپظٹ ط¨ط·ط§ظ‚ط§طھ KPI ظˆط´ط±ظٹط· ط§ظ„ط¥ط­طµط§ط¦ظٹط§طھطŒ ط¨ط¯ظ„ ظ…ط§ ظٹظپط¶ظ„ ط§ظ„ط¥ظٹظ…ظˆط¬ظٹ ط¹ط§ط±ظٹ */
 .panel-icon {
   display: inline-flex;
   align-items: center;
@@ -1193,7 +1231,7 @@ section.view.active {
   }
 }
 
-/* ============= لوحة النظرة التنفيذية (Close Overview) ============= */
+/* ============= ظ„ظˆط­ط© ط§ظ„ظ†ط¸ط±ط© ط§ظ„طھظ†ظپظٹط°ظٹط© (Close Overview) ============= */
 .close-overview {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -1306,7 +1344,7 @@ section.view.active {
   .close-ring-col { border-inline-end: none; border-bottom: 1px solid var(--border); }
 }
 
-/* ---- الدورات/الكيانات حسب الحالة ---- */
+/* ---- ط§ظ„ط¯ظˆط±ط§طھ/ط§ظ„ظƒظٹط§ظ†ط§طھ ط­ط³ط¨ ط§ظ„ط­ط§ظ„ط© ---- */
 .close-entities-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1413,10 +1451,10 @@ section.view.active {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--navy) 0%, color-mix(in srgb, var(--gold) 65%, var(--navy)) 100%);
-  color: var(--on-accent-text);
+  background: linear-gradient(135deg, #22d3ee 0%, #d0bcff 100%);
+  color: #04101f;
   font-weight: 700;
-  box-shadow: 0 4px 18px -4px color-mix(in srgb, var(--navy) 55%, transparent);
+  box-shadow: 0 4px 18px -4px rgba(34, 211, 238, 0.45);
 }
 
 .btn-primary:hover {
@@ -1504,7 +1542,7 @@ section.view.active {
   font-weight: 600;
 }
 
-/* زر البحث الشامل — يأخذ مظهر حقل بحث تيرمينال (⌘K) */
+/* ط²ط± ط§ظ„ط¨ط­ط« ط§ظ„ط´ط§ظ…ظ„ â€” ظٹط£ط®ط° ظ…ط¸ظ‡ط± ط­ظ‚ظ„ ط¨ط­ط« طھظٹط±ظ…ظٹظ†ط§ظ„ (âŒکK) */
 #btn-global-search {
   min-width: 190px;
   justify-content: flex-start;
@@ -1516,7 +1554,7 @@ section.view.active {
   border-color: var(--border);
 }
 #btn-global-search::after {
-  content: '⌘K';
+  content: 'âŒکK';
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
@@ -1638,7 +1676,7 @@ table {
   box-shadow: 0 1px 0 var(--border);
 }
 
-/* أعمدة ثابتة (تحديد + الاسم) */
+/* ط£ط¹ظ…ط¯ط© ط«ط§ط¨طھط© (طھط­ط¯ظٹط¯ + ط§ظ„ط§ط³ظ…) */
 .sticky-col {
   position: sticky;
   background: var(--surface-solid);
@@ -1692,7 +1730,7 @@ thead th {
   font-family: var(--font-mono);
 }
 
-/* ============= رؤوس أعمدة قابلة للفرز (.sortable) ============= */
+/* ============= ط±ط¤ظˆط³ ط£ط¹ظ…ط¯ط© ظ‚ط§ط¨ظ„ط© ظ„ظ„ظپط±ط² (.sortable) ============= */
 thead th.sortable {
   cursor: pointer;
   user-select: none;
@@ -1803,7 +1841,7 @@ tbody tr:hover {
   color: var(--teal);
 }
 
-/* ============= بادج عداد الفلاتر النشطة (بجانب زر "فلاتر متقدمة") ============= */
+/* ============= ط¨ط§ط¯ط¬ ط¹ط¯ط§ط¯ ط§ظ„ظپظ„ط§طھط± ط§ظ„ظ†ط´ط·ط© (ط¨ط¬ط§ظ†ط¨ ط²ط± "ظپظ„ط§طھط± ظ…طھظ‚ط¯ظ…ط©") ============= */
 .filters-count-badge {
   display: inline-flex;
   align-items: center;
@@ -1822,7 +1860,7 @@ tbody tr:hover {
   box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 60%, transparent);
 }
 
-/* ============= ROW ACTIONS MENU (⋮) ============= */
+/* ============= ROW ACTIONS MENU (â‹®) ============= */
 .row-menu {
   position: relative;
   display: inline-block;
@@ -2040,7 +2078,7 @@ tbody tr:hover {
   }
 }
 
-/* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
+/* ============= LOGIN (ط´ط§ط´ط§طھ ط§ظ„طھظپط¹ظٹظ„ ظˆطھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„) ============= */
 #license-screen,
 #server-login-screen {
   --auth-bg-deep: #060e1c;
@@ -2539,12 +2577,12 @@ td select:hover:not(:focus) {
 }
 
 /* ============= HINT / INSTRUCTIONAL TEXT ============= */
-/* إخفاء كل نصوص الشرح التوضيحية الثابتة أسفل عناوين الأقسام */
+/* ط¥ط®ظپط§ط، ظƒظ„ ظ†طµظˆطµ ط§ظ„ط´ط±ط­ ط§ظ„طھظˆط¶ظٹط­ظٹط© ط§ظ„ط«ط§ط¨طھط© ط£ط³ظپظ„ ط¹ظ†ط§ظˆظٹظ† ط§ظ„ط£ظ‚ط³ط§ظ… */
 .hint-info {
   display: none !important;
 }
 
-/* تنبيه تحذيري ظاهر (يُستخدم لتحذيرات الاستعادة) */
+/* طھظ†ط¨ظٹظ‡ طھط­ط°ظٹط±ظٹ ط¸ط§ظ‡ط± (ظٹظڈط³طھط®ط¯ظ… ظ„طھط­ط°ظٹط±ط§طھ ط§ظ„ط§ط³طھط¹ط§ط¯ط©) */
 .hint-warn {
   font-size: 12px;
   line-height: 1.7;
@@ -2560,7 +2598,7 @@ body.dark-theme .hint-warn {
   border-color: rgba(251, 191, 36, 0.4);
 }
 
-/* ============= شيت العملاء — تصميم مخصص ============= */
+/* ============= ط´ظٹطھ ط§ظ„ط¹ظ…ظ„ط§ط، â€” طھطµظ…ظٹظ… ظ…ط®طµطµ ============= */
 #view-clients .toolbar-card {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
@@ -2599,7 +2637,7 @@ body.dark-theme .hint-warn {
   color: var(--text-muted);
 }
 
-/* رأس جدول العملاء */
+/* ط±ط£ط³ ط¬ط¯ظˆظ„ ط§ظ„ط¹ظ…ظ„ط§ط، */
 #view-clients thead th {
   background: color-mix(in srgb, var(--surface-solid) 85%, transparent);
   color: var(--navy-dark);
@@ -2610,13 +2648,13 @@ body.dark-theme #view-clients thead th {
   color: var(--text);
 }
 
-/* شريط لون رفيع على كل صف */
+/* ط´ط±ظٹط· ظ„ظˆظ† ط±ظپظٹط¹ ط¹ظ„ظ‰ ظƒظ„ طµظپ */
 #view-clients tbody tr.owe,
 #view-clients tbody tr.paid {
   box-shadow: inset 3px 0 0 var(--navy);
 }
 
-/* ================= زرار الإضافة السريعة العائم ================= */
+/* ================= ط²ط±ط§ط± ط§ظ„ط¥ط¶ط§ظپط© ط§ظ„ط³ط±ظٹط¹ط© ط§ظ„ط¹ط§ط¦ظ… ================= */
 .fab-quickadd {
   position: fixed;
   bottom: 24px;
@@ -2644,7 +2682,7 @@ body.dark-theme #view-clients thead th {
   .fab-quickadd { bottom: 78px; left: 16px; width: 50px; height: 50px; font-size: 26px; }
 }
 
-/* ============= صناديق/بطاقات الجوال — كل الجداول تتحول لصناديق مرتبة ============= */
+/* ============= طµظ†ط§ط¯ظٹظ‚/ط¨ط·ط§ظ‚ط§طھ ط§ظ„ط¬ظˆط§ظ„ â€” ظƒظ„ ط§ظ„ط¬ط¯ط§ظˆظ„ طھطھط­ظˆظ„ ظ„طµظ†ط§ط¯ظٹظ‚ ظ…ط±طھط¨ط© ============= */
 @media (max-width: 680px) {
   .table-scroll {
     max-height: none;
@@ -2760,7 +2798,7 @@ body.dark-theme #view-clients thead th {
   }
 }
 
-/* ================= خلايا التعديل المباشر السريع (Inline Edit) في جدول الحركات المالية ================= */
+/* ================= ط®ظ„ط§ظٹط§ ط§ظ„طھط¹ط¯ظٹظ„ ط§ظ„ظ…ط¨ط§ط´ط± ط§ظ„ط³ط±ظٹط¹ (Inline Edit) ظپظٹ ط¬ط¯ظˆظ„ ط§ظ„ط­ط±ظƒط§طھ ط§ظ„ظ…ط§ظ„ظٹط© ================= */
 #vault-table-body td.editable-cell {
   cursor: text;
   position: relative;
@@ -2771,7 +2809,7 @@ body.dark-theme #view-clients thead th {
   outline-offset: -2px;
 }
 #vault-table-body td.editable-cell:hover::after {
-  content: "✎";
+  content: "âœژ";
   position: absolute;
   top: 2px;
   left: 4px;
