@@ -569,63 +569,45 @@ async function restoreBagStockOnly(file){
 // على السيرفر إن وُجدت، ثم يمسح أي بقايا قديمة على السيرفر ويرفع البيانات المستعادة الحالية من جديد
 // بلا أي تعارض ممكن (بنفس منطق الاستعادة وقت الاتصال بالضبط).
 async function resyncRestoredDataWithServer(){
+  // هذه الدالة كانت السبب الجذري لفقدان البيانات المتكرر: كانت تمسح كل بيانات السيرفر
+  // (wipeServerDataForFreshRestore) ثم ترفع ذاكرة الجهاز الحالي فوقها. أي جهاز بعلامة
+  // RESTORE_RESYNC_FLAG_KEY عالقة (بقيت بعد استعادة سابقة) — حتى بكاش قديم/ناقص — كان يمسح
+  // بيانات كل الأجهزة ثم يرفع نسخته، ويفعل الجهاز الآخر العكس، فيتلاشى كل شيء من السيرفر.
+  // الحل الجذري: لا مسح للسيرفر نهائياً في هذا المسار أبداً. نرفع النسخة القديمة المحفوظة
+  // محلياً كنسخة احتياطية (لو وُجدت)، ثم مزامنة جزئية آمنة عبر المسارات العادية التي تحفظ
+  // كل سجل مع رقم النسخة المعروف له وتتجاهل المتعارض فقط — أقصى ضرر ممكن هو بقاء بعض
+  // السجلات غير مرفوعة لو تعارضت، لكن لا يُحذف أي شيء إطلاقاً من السيرفر.
   try{
-    // حارس أمان حرج: لا تمسح السيرفر أبداً إلا إذا كانت الذاكرة الحالية تحمل بيانات فعلية لرفعها
-    // بديلاً. لو كانت الذاكرة فارغة أو نصف محمّلة (كاش قديم، تحميل لم يكتمل، أو جهاز جديد لم يُحمَّل
-    // بعد)، فالمسح ثم الرفع يعني فقدان كل ما هو أحدث على السيرفر نهائياً. عند غياب بيانات محلية
-    // ذات معنى نُبطل علامة إعادة المزامنة (لمنع تكرار محاولة المسح كل مزامنة خلفية) ونكتفي
-    // بالمزامنة الجزئية الآمنة العادية (saveClients/saveCollectionGeneric) التي لا تمسح أي شيء.
-    const localCounts = _localDataCounts();
-    if(localCounts.total <= 0){
-      console.warn('resyncRestoredDataWithServer: لا توجد بيانات محلية ذات معنى — لن نمسح السيرفر ونُبطل علامة إعادة المزامنة');
-      try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
-      try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
-      return;
-    }
     const oldSnapshotEnc = localStorage.getItem(RESTORE_OLD_SNAPSHOT_KEY);
     if(oldSnapshotEnc){
-      const res = await serverFetch('/api/backups', {
-        method: 'POST',
-        body: JSON.stringify({ kind: 'قبل استعادة نسخة أخرى (تمت بدون اتصال)', enc: oldSnapshotEnc }),
-      });
-      if(res.ok) localStorage.removeItem(RESTORE_OLD_SNAPSHOT_KEY);
-      // لو فشل الرفع، نترك المفتاح كما هو ليُعاد المحاولة فى المرة القادمة التي تنجح فيها هذه الدالة
+      try{
+        const res = await serverFetch('/api/backups', {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'قبل استعادة نسخة أخرى (تمت بدون اتصال)', enc: oldSnapshotEnc }),
+        });
+        if(res.ok) localStorage.removeItem(RESTORE_OLD_SNAPSHOT_KEY);
+        // لو فشل الرفع، نترك المفتاح كما هو ليُعاد المحاولة فى المرة القادمة التي تنجح فيها هذه الدالة
+      }catch(e){ console.error('resyncRestoredDataWithServer: تعذّر رفع نسخة البيانات القديمة', e); }
     }
-    await wipeServerDataForFreshRestore();
-  await pushCurrentDataToServer().catch(e=>{
-    console.error('restoreFullBackup: تعذّر رفع البيانات للسيرفر', e);
-    showToast('⚠️ تعذّر رفع البيانات إلى السيرفر حالياً — ستُحفَظ محلياً وتُرفع تلقائياً عند استقرار الاتصال');
-  });
-    // لا نعتبر المزامنة مكتملة إلا بعد التحقق من ظهور كل البيانات المستعادة على السيرفر بأعدادها
-    // الكاملة — دون ذلك نُبقي العلامة ليُعاد المحاولة تلقائياً بدل فتح البرنامج على بيانات ناقصة.
-    const verified = await verifyRestoredDataOnServer();
-    if(!verified){
-      // كسر حلقة إعادة المحاولة اللانهائية (راجع RESTORE_RESYNC_MAX_ATTEMPTS أعلى الملف): لو استمر
-      // فشل التحقق لأي سبب، فإبقاء العلامة يعني مسح السيرفر كل مزامنة خلفية حتى الأبد. بعد حد
-      // أقصى من المحاولات نُبطل العلامة ونعتمد المزامنة الجزئية الآمنة — أفضل بكثير من تكرار
-      // المسح المتلف. عند نجاح أي محاولة يُصفَّر العدّاد (أدناه) فيبدأ حد جديد من الصفر.
-      let attempts = 1;
-      try{ attempts = parseInt(localStorage.getItem(RESTORE_RESYNC_ATTEMPTS_KEY) || '1', 10) + 1; }catch(e){}
-      try{ localStorage.setItem(RESTORE_RESYNC_ATTEMPTS_KEY, String(attempts)); }catch(e){}
-      if(attempts >= RESTORE_RESYNC_MAX_ATTEMPTS){
-        try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
-        try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
-        showToast('⚠️ لم يكتمل التحقق من رفع نسخة الاستعادة للسيرفر بعد عدة محاولات — أُوقفت إعادة المزامنة التلقائية حفاظاً على البيانات. يمكنك إعادة الاستعادة يدوياً من الإعدادات إذا لزم الأمر.');
-        console.warn('resyncRestoredDataWithServer: أُوقفت إعادة المزامنة التلقائية بعد تجاوز حد المحاولات', localCounts);
-      }else{
-        showToast(`⛔ لم يكتمل رفع نسخة الاستعادة للسيرفر بالكامل — ستُعاد المحاولة تلقائياً (المحاولة ${attempts} من ${RESTORE_RESYNC_MAX_ATTEMPTS})`);
+    // مزامنة جزئية آمنة غير مدمرة (فقط لو الذاكرة تحمل بيانات فعلية — بلا بيانات لا شيء لنرفعه)
+    const localCounts = _localDataCounts();
+    if(localCounts.total > 0){
+      const tasks = [];
+      if(typeof saveClients === 'function') tasks.push(saveClients());
+      for(const c of ALLOWED_COLLECTIONS_LOCAL){
+        const arr = _currentCollectionArray(c);
+        if(arr && arr.length && typeof saveCollectionGeneric === 'function') tasks.push(saveCollectionGeneric(c, arr));
       }
-      return;
+      if(tasks.length) await Promise.allSettled(tasks);
     }
-    localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY);
+    // إزالة علامة إعادة المزامنة نهائياً: لا حاجة لمزيد من أي "مزامنة كاملة بالمسح" بعد الآن —
+    // المزامنة الجزئية الآمنة أعلاه تتعامل مع كل الاختلافات بلا مخاطرة، فأي علامة عالقة قديمة
+    // على أي جهاز تتوقف عن إلحاق الضرر فوراً لأنها لم تعد تمسح شيئاً بعد الآن.
+    try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
     try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
-    try{ await _kvCacheClearKv(); }catch(e){ console.error('resyncRestoredDataWithServer: تعذّر مسح الكاش المحلي', e); }
-    showToast('تمت مزامنة نسخة الاستعادة المحلية مع السيرفر بنجاح ✅ — سيُعاد فتح البرنامج الآن بالبيانات الجديدة');
-    setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1200);
+    showToast('تمت مزامنة الاستعادة المحلية مع السيرفر ✅');
   }catch(e){
-    // تعذّر إتمام المزامنة رغم عودة الاتصال (خطأ عابر) — نترك العلامة موجودة ليُعاد المحاولة
-    // تلقائياً عند محاولة الاتصال التالية، بدل فقد فرصة المزامنة الكاملة بصمت.
-    console.error('resyncRestoredDataWithServer: تعذّرت المزامنة الكاملة بعد عودة الاتصال', e);
+    console.error('resyncRestoredDataWithServer: تعذّرت المزامنة', e);
   }
 }
 window.addEventListener('online', async ()=>{
