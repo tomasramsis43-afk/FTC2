@@ -164,6 +164,74 @@ body.theme-obsidian .table-scroll thead th {
   background: #ffffff;
 }
 
+/* ============= ثيم "Neon Amethyst Cybernetic" (داكن، نيون بنفسجي/فوشيا) =============
+   مأخوذ من طقم Stitch الثالث: خلفية #131318، أساسي فوشيا/بنفسجي #ecb2ff، ثانوي
+   سايان نيون #00eefc للتباين، خط Space Grotesk. طقم داكن بديل تماماً عن الأصلي
+   (سايان/بنفسجي فاتح) بهوية لونية أكثر جرأة. */
+body.theme-amethyst {
+  --bg: #131318;
+  --surface: rgba(31, 31, 37, 0.76);
+  --surface-solid: #1b1b20;
+  --surface-alt: #2a292f;
+  --bg-soft: #2a292f;
+  --navy: #ecb2ff;
+  --navy-dark: #f8d8ff;
+  --gold: #00eefc;
+  --gold-dark: #7df4ff;
+  --gold-soft: #d1bcff;
+  --teal: #00eefc;
+  --success: #00eefc;
+  --red: #ffb4ab;
+  --danger: #ffb4ab;
+  --text: #e4e1e9;
+  --text-muted: #d4c0d7;
+  --border: rgba(236, 178, 255, 0.18);
+  --radius: 14px;
+  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 10px 32px -10px rgba(236, 178, 255, 0.32);
+  --on-accent-text: #320047;
+  color-scheme: dark;
+}
+body.theme-amethyst select,
+body.theme-amethyst input,
+body.theme-amethyst textarea {
+  color-scheme: dark;
+}
+
+body.theme-amethyst {
+  font-family: var(--font-display);
+  background:
+    radial-gradient(1000px 480px at 90% -10%, rgba(236, 178, 255, 0.1), transparent 60%),
+    radial-gradient(800px 420px at -10% 30%, rgba(0, 238, 252, 0.07), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+body.theme-amethyst header.top {
+  background: rgba(19, 19, 24, 0.82);
+  border: 1px solid var(--border);
+}
+body.theme-amethyst header.top::after {
+  background: linear-gradient(90deg, #ecb2ff, #00eefc);
+}
+body.theme-amethyst nav.tabs {
+  background: rgba(27, 27, 32, 0.85);
+  border: 1px solid var(--border);
+}
+body.theme-amethyst header.top .seal {
+  background: rgba(236, 178, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(236, 178, 255, 0.16), 0 0 20px rgba(236, 178, 255, 0.16);
+}
+body.theme-amethyst #view-clients thead th {
+  background: #1f1f25;
+  color: var(--navy-dark);
+}
+body.theme-amethyst .table-scroll thead th {
+  background: #1b1b20;
+}
+
 /* بطاقات اختيار مظهر الواجهة في الإعدادات */
 .theme-scheme-card {
   transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
@@ -1569,6 +1637,59 @@ thead th {
   font-family: var(--font-mono);
 }
 
+/* ============= رؤوس أعمدة قابلة للفرز (.sortable) ============= */
+thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-inline-end: 20px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+thead th.sortable:hover {
+  color: var(--navy);
+  background: color-mix(in srgb, var(--navy) 8%, transparent);
+}
+
+thead th.sortable::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-inline-start: 4px solid transparent;
+  border-inline-end: 4px solid transparent;
+  border-top: 5px solid color-mix(in srgb, var(--text-muted) 55%, transparent);
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+thead th.sortable:hover::after {
+  opacity: 0.9;
+}
+
+thead th.sortable[aria-sort="ascending"] {
+  color: var(--navy);
+}
+
+thead th.sortable[aria-sort="ascending"]::after {
+  border-top: none;
+  border-bottom: 5px solid var(--navy);
+  opacity: 1;
+  transform: translateY(-50%) rotate(0deg);
+}
+
+thead th.sortable[aria-sort="descending"] {
+  color: var(--navy);
+}
+
+thead th.sortable[aria-sort="descending"]::after {
+  border-top: 5px solid var(--navy);
+  opacity: 1;
+}
+
 tbody td {
   padding: 9px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
@@ -1625,6 +1746,25 @@ tbody tr:hover {
   border-color: color-mix(in srgb, var(--teal) 30%, transparent);
   background: color-mix(in srgb, var(--teal) 13%, transparent);
   color: var(--teal);
+}
+
+/* ============= بادج عداد الفلاتر النشطة (بجانب زر "فلاتر متقدمة") ============= */
+.filters-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-inline-start: 4px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: var(--on-accent-text, #04101f);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 60%, transparent);
 }
 
 /* ============= ROW ACTIONS MENU (⋮) ============= */

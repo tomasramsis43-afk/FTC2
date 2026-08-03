@@ -651,16 +651,18 @@ function applyTheme(isDark){
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
 /* التبديل بين الثيمات الكاملة الجاهزة — 'original' (الأصلي كحلي/سايان-بنفسجي)،
-   'stitch' (Stitch — فيريديان فلو)، و'obsidian' (Obsidian Light — مالي عصري فاتح،
-   الافتراضي). طقمان/طقم كامل ثابت (وليس تخصيص ألوان يدوي حر، الذي أُلغي عمداً
+   'stitch' (Stitch — فيريديان فلو)، 'obsidian' (Obsidian Light — مالي عصري فاتح،
+   الافتراضي)، و'amethyst' (Amethyst — نيون بنفسجي/فوشيا داكن). طقمان/طقم كامل ثابت (وليس تخصيص ألوان يدوي حر، الذي أُلغي عمداً
    سابقاً في applyThemeColors أدناه). يُحفظ الاختيار ضمن إعدادات البرنامج
    (settings.colorScheme) فيبقى نفسه لكل من يفتح البرنامج على هذا الحساب. */
 function applyColorScheme(scheme){
-  const s = scheme === 'obsidian' ? 'obsidian' : (scheme === 'stitch' ? 'stitch' : null);
+  const s = ['obsidian','stitch','amethyst'].includes(scheme) ? scheme : null;
   document.body.classList.toggle('theme-stitch', s === 'stitch');
   document.body.classList.toggle('theme-obsidian', s === 'obsidian');
+  document.body.classList.toggle('theme-amethyst', s === 'amethyst');
   // ثيم Obsidian Light وثيم Stitch فاتحان بطبيعتهما، فلا داعي لأي تراكب مع كلاس
-  // الوضع الليلي الداكن في نفس الوقت
+  // الوضع الليلي الداكن في نفس الوقت. ثيم Amethyst داكن بطبيعته فيُعامَل بنفس
+  // المنطق (طقم كامل مستقل بذاته، بلا تراكب مع dark-theme الافتراضي).
   if(s) document.body.classList.remove('dark-theme');
   else applyTheme(!!settings.darkMode);
   renderThemeSchemePanel();
@@ -679,7 +681,7 @@ if($('#theme-scheme-panel')) $('#theme-scheme-panel').addEventListener('click', 
   settings.colorScheme = scheme;
   applyColorScheme(scheme);
   await saveSettings();
-  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : 'الثيم الأصلي'}`);
+  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : 'الثيم الأصلي'}`);
   showToast('تم تغيير مظهر الواجهة');
 });
 /* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
