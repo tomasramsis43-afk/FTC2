@@ -370,7 +370,7 @@ async function restoreFullBackup(file){
   if(typeof renderAuditLog==='function') renderAuditLog();
   if(typeof renderSettings==='function') renderSettings();
   if(typeof renderZatca==='function') renderZatca();
-  applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'obsidian'); applySoundIcon(); applyThemeColors();
+  applyTheme(!!settings.darkMode); applyColorScheme(settings.colorScheme||'terminal'); applySoundIcon(); applyThemeColors();
   showToast(wasOffline
     ? 'تمت استعادة البيانات محلياً بنجاح ✅ — سيتم رفعها ومزامنتها مع السيرفر تلقائياً عند عودة الاتصال'
     : (restoreVerified
