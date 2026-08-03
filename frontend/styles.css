@@ -1,37 +1,74 @@
 /* ============================================================================
-   FTC2 â€” TERMINAL DESIGN SYSTEM (ط¥ط¹ط§ط¯ط© ط¨ظ†ط§ط، ظƒط§ظ…ظ„ط© ظ„ظ„ظˆط§ط¬ظ‡ط©)
-   ظ…ط£ط®ظˆط° ظ…ظ† طھطµظ…ظٹظ… Stitch "FTC2 Terminal v2.4.0": ط¯ط§ظƒظ† ط²ط¬ط§ط¬ظٹ (ط³ظٹط§ع؛/ظ†ط¹ظ†ط§ط¹ظٹ/ط¨ظ†ظپط³ط¬ظٹ)
-   + ط«ظٹظ… ظپط§طھط­ (Space Grotesk / ط£ط²ط±ظ‚). ظƒظ„ ط§ظ„ظ…ط­ط¯ط¯ط§طھ ط§ظ„ط£طµظ„ظٹط© ظ…ط­ظپظˆط¸ط© ظƒظ…ط§ ظ‡ظٹ ط­طھظ‰ ظ„ط§
-   ظٹطھط£ط«ط± ط£ظٹ ظƒظˆط¯ ط¬ط§ظپط§ط³ظƒط±ط¨طھ â€” ط£ط¹ظٹط¯ ط¨ظ†ط§ط، ط§ظ„ظ…ط¸ظ‡ط± ظپظ‚ط·.
+   FTC2 — TERMINAL DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
+   مأخوذ من تصميم Stitch "FTC2 Terminal v2.4.0": داكن زجاجي (سياں/نعناعي/بنفسجي)
+   + ثيم فاتح (Space Grotesk / أزرق). كل المحددات الأصلية محفوظة كما هي حتى لا
+   يتأثر أي كود جافاسكربت — أعيد بناء المظهر فقط.
    ============================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-/* ============= CSS VARIABLES & ROOT â€” Terminal Dark (ط§ظ„ط§ظپطھط±ط§ط¶ظٹ) ============= */
+/* ============= CSS VARIABLES & ROOT — Terminal Dark (الافتراضي) =============
+   نفس قيم الثيم المعتمدة من المرجع والمعاينة الداكنة. تُوحَّد هنا مع قيم
+   body.theme-terminal أدناه حتى لا يختلف الشكل قبل وبعد تحميل JavaScript. */
 :root {
   --bg: #060e1c;
-  --surface: rgba(15, 28, 50, 0.74);
-  --surface-solid: #0d1933;
-  --surface-alt: #101d38;
+  --surface: rgba(12, 27, 50, 0.74);
+  --surface-solid: #0b1322;
+  --surface-alt: #141c2a;
   --bg-soft: #101d38;
   --navy: #22d3ee;
   --navy-dark: #8aebff;
-  --gold: #8b5cf6;
-  --gold-dark: #a78bfa;
+  --gold: #d0bcff;
+  --gold-dark: #b794f6;
   --gold-soft: #d0bcff;
   --teal: #61f6b9;
   --success: #61f6b9;
-  --red: #ff5470;
-  --danger: #ff5470;
-  --text: #e8effc;
-  --text-muted: #8fa3c4;
-  --border: rgba(138, 235, 255, 0.14);
+  --red: #ffb4ab;
+  --danger: #ffb4ab;
+  --text: #dbe2f7;
+  --text-muted: #bbc9cd;
+  --border: rgba(34, 211, 238, 0.16);
   --radius: 14px;
   --font-display: 'Inter', 'Tajawal', sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.28);
   --on-accent-text: #04101f;
+  color-scheme: dark;
+}
+
+/* ============= ثيم "FTC2 Terminal Dark" (الافتراضي — مطابق معاينة المرجع الداكن) =============
+   يُفعَّل عبر body.theme-terminal من إعدادات المظهر. نفس قيم الجذر أعلاه، وأُضيفت
+   للوضوح وصيرورة الثيم الافتراضي قابلاً للاختيار الصريح من الإعدادات. */
+body.theme-terminal {
+  --bg: #060e1c;
+  --surface: rgba(12, 27, 50, 0.74);
+  --surface-solid: #0b1322;
+  --surface-alt: #141c2a;
+  --bg-soft: #101d38;
+  --navy: #22d3ee;
+  --navy-dark: #8aebff;
+  --gold: #d0bcff;
+  --gold-dark: #b794f6;
+  --gold-soft: #d0bcff;
+  --teal: #61f6b9;
+  --success: #61f6b9;
+  --red: #ffb4ab;
+  --danger: #ffb4ab;
+  --text: #dbe2f7;
+  --text-muted: #bbc9cd;
+  --border: rgba(34, 211, 238, 0.16);
+  --radius: 14px;
+  --font-display: 'Inter', 'Tajawal', sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.28);
+  --on-accent-text: #04101f;
+  color-scheme: dark;
+}
+body.theme-terminal select,
+body.theme-terminal input,
+body.theme-terminal textarea {
   color-scheme: dark;
 }
 
@@ -43,13 +80,13 @@ body.dark-theme {
   --bg-soft: #0e1b30;
   --navy: #22d3ee;
   --navy-dark: #7ee7ff;
-  --gold: #8b5cf6;
-  --gold-dark: #a78bfa;
+  --gold: #d0bcff;
+  --gold-dark: #b794f6;
   --gold-soft: #d0bcff;
   --teal: #61f6b9;
   --success: #61f6b9;
-  --red: #ff5470;
-  --danger: #ff5470;
+  --red: #ffb4ab;
+  --danger: #ffb4ab;
   --text: #e8effc;
   --text-muted: #8296b8;
   --border: rgba(138, 235, 255, 0.2);
@@ -65,8 +102,8 @@ body.dark-theme textarea {
   color-scheme: dark;
 }
 
-/* ============= ط«ظٹظ… "Stitch â€” ظپظٹط±ظٹط¯ظٹط§ظ† ظپظ„ظˆ" (ظپط§طھط­طŒ ط·ط§ظ‚ط© ط£ط®ط¶ط± ظˆظ…ظٹط§ظ‡ ط£ط²ط±ظ‚) =============
-   ط«ظٹظ… ط¨ط¯ظٹظ„ ظٹظڈط®طھط§ط± ظ…ظ† ظ„ظˆط­ط© ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ â€” ط¨ط¯ظˆظ† طھط¹ط¯ظٹظ„ ظ…ظ†ط·ظ‚ theme-settings.js. */
+/* ============= ثيم "Stitch — فيريديان فلو" (فاتح، طاقة أخضر ومياه أزرق) =============
+   ثيم بديل يُختار من لوحة الإعدادات — بدون تعديل منطق theme-settings.js. */
 body.theme-stitch {
   --bg: #f4f8f5;
   --surface: #ffffff;
@@ -99,32 +136,32 @@ body.theme-stitch textarea {
   color-scheme: light;
 }
 
-/* ============= ط«ظٹظ… "Obsidian Light" â†’ ظ…ظ‚ظ„ظˆط¨ ط¥ظ„ظ‰ ط§ظ„طھطµظ…ظٹظ… ط§ظ„ظپط§طھط­ ظ…ظ† Stitch =============
-   ط®ظ„ظپظٹط© ظپط§طھط­ط© #f4f7fbطŒ ظ„ظˆط­ط§طھ ط¨ظٹط¶ط§ط،طŒ ط£ط²ط±ظ‚ #2563eb ط£ط³ط§ط³ظٹطŒ ط®ط· Space Grotesk.
-   (ط§ظ„ط§ط³ظ… ظ…ط­ظپظˆط¸ ظƒظ…ط§ ظ‡ظˆ ظپظٹ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ ظˆط§ظ„ظƒظˆط¯ â€” ط§ظ„ظ‚ظٹظ… ط£ط¹ظٹط¯ ط¨ظ†ط§ط¤ظ‡ط§). */
+/* ============= ثيم "Obsidian Light" → مقلوب إلى التصميم الفاتح من Stitch =============
+   خلفية فاتحة #f4f7fb، لوحات بيضاء، أزرق #2563eb أساسي، خط Space Grotesk.
+   (الاسم محفوظ كما هو في الإعدادات والكود — القيم أعيد بناؤها). */
 body.theme-obsidian {
-  --bg: #f4f7fb;
+  --bg: #f7f9fb;
   --surface: #ffffff;
   --surface-solid: #ffffff;
-  --surface-alt: #eef2f8;
-  --bg-soft: #eef2f8;
-  --navy: #2563eb;
-  --navy-dark: #1e40af;
-  --gold: #d97706;
-  --gold-dark: #b45309;
-  --gold-soft: #fbbf24;
-  --teal: #059669;
-  --success: #059669;
-  --red: #e11d48;
-  --danger: #e11d48;
-  --text: #0f172a;
-  --text-muted: #475569;
-  --border: #dde5f0;
-  --radius: 14px;
+  --surface-alt: #eceef0;
+  --bg-soft: #e6e8ea;
+  --navy: #004ac6;
+  --navy-dark: #2563eb;
+  --gold: #515f74;
+  --gold-dark: #434655;
+  --gold-soft: #571bc1;
+  --teal: #2563eb;
+  --success: #166534;
+  --red: #ba1a1a;
+  --danger: #ba1a1a;
+  --text: #191c1e;
+  --text-muted: #434655;
+  --border: #c3c6d7;
+  --radius: 12px;
   --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 14px 30px -8px rgba(37, 99, 235, 0.18);
+  --shadow-hover: 0 14px 30px -8px rgba(0, 74, 198, 0.18);
   --on-accent-text: #ffffff;
   color-scheme: light;
 }
@@ -137,39 +174,39 @@ body.theme-obsidian textarea {
 body.theme-obsidian {
   font-family: var(--font-display);
   background:
-    radial-gradient(1000px 480px at 90% -10%, rgba(37, 99, 235, 0.07), transparent 60%),
-    radial-gradient(800px 420px at -10% 30%, rgba(217, 119, 6, 0.05), transparent 60%),
+    radial-gradient(1000px 480px at 90% -10%, rgba(0, 74, 198, 0.07), transparent 60%),
+    radial-gradient(800px 420px at -10% 30%, rgba(87, 27, 193, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
 }
 
 body.theme-obsidian header.top {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid #e2e8f0;
-}
-body.theme-obsidian header.top::after {
-  background: linear-gradient(90deg, #2563eb, #d97706);
-}
-body.theme-obsidian nav.tabs {
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid #e2e8f0;
 }
+body.theme-obsidian header.top::after {
+  background: linear-gradient(90deg, #004ac6, #571bc1);
+}
+body.theme-obsidian nav.tabs {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e2e8f0;
+}
 body.theme-obsidian header.top .seal {
-  background: rgba(15, 23, 42, 0.05);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14), 0 0 20px rgba(37, 99, 235, 0.12);
+  background: rgba(0, 74, 198, 0.05);
+  box-shadow: 0 0 0 3px rgba(0, 74, 198, 0.14), 0 0 20px rgba(0, 74, 198, 0.12);
 }
 body.theme-obsidian #view-clients thead th {
-  background: #eef2f8;
+  background: #eceef0;
   color: var(--navy-dark);
 }
 body.theme-obsidian .table-scroll thead th {
   background: #ffffff;
 }
 
-/* ============= ط«ظٹظ… "Neon Amethyst Cybernetic" (ط¯ط§ظƒظ†طŒ ظ†ظٹظˆظ† ط¨ظ†ظپط³ط¬ظٹ/ظپظˆط´ظٹط§) =============
-   ظ…ط£ط®ظˆط° ظ…ظ† ط·ظ‚ظ… Stitch ط§ظ„ط«ط§ظ„ط«: ط®ظ„ظپظٹط© #131318طŒ ط£ط³ط§ط³ظٹ ظپظˆط´ظٹط§/ط¨ظ†ظپط³ط¬ظٹ #ecb2ffطŒ ط«ط§ظ†ظˆظٹ
-   ط³ط§ظٹط§ظ† ظ†ظٹظˆظ† #00eefc ظ„ظ„طھط¨ط§ظٹظ†طŒ ط®ط· Space Grotesk. ط·ظ‚ظ… ط¯ط§ظƒظ† ط¨ط¯ظٹظ„ طھظ…ط§ظ…ط§ظ‹ ط¹ظ† ط§ظ„ط£طµظ„ظٹ
-   (ط³ط§ظٹط§ظ†/ط¨ظ†ظپط³ط¬ظٹ ظپط§طھط­) ط¨ظ‡ظˆظٹط© ظ„ظˆظ†ظٹط© ط£ظƒط«ط± ط¬ط±ط£ط©. */
+/* ============= ثيم "Neon Amethyst Cybernetic" (داكن، نيون بنفسجي/فوشيا) =============
+   مأخوذ من طقم Stitch الثالث: خلفية #131318، أساسي فوشيا/بنفسجي #ecb2ff، ثانوي
+   سايان نيون #00eefc للتباين، خط Space Grotesk. طقم داكن بديل تماماً عن الأصلي
+   (سايان/بنفسجي فاتح) بهوية لونية أكثر جرأة. */
 body.theme-amethyst {
   --bg: #131318;
   --surface: rgba(31, 31, 37, 0.76);
@@ -234,7 +271,7 @@ body.theme-amethyst .table-scroll thead th {
   background: #1b1b20;
 }
 
-/* ط¨ط·ط§ظ‚ط§طھ ط§ط®طھظٹط§ط± ظ…ط¸ظ‡ط± ط§ظ„ظˆط§ط¬ظ‡ط© ظپظٹ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ */
+/* بطاقات اختيار مظهر الواجهة في الإعدادات */
 .theme-scheme-card {
   transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
   backdrop-filter: blur(12px);
@@ -391,7 +428,7 @@ section.view.active {
   }
 }
 
-/* ============= HEADER (Top Bar ط²ط¬ط§ط¬ظٹ) ============= */
+/* ============= HEADER (Top Bar زجاجي) ============= */
 header.top {
   position: sticky;
   top: 12px;
@@ -622,7 +659,7 @@ header.top p {
   min-width: 0;
 }
 
-/* ============= NAVIGATION (ط§ظ„ط´ط±ظٹط· ط§ظ„ط¬ط§ظ†ط¨ظٹ 224px â€” Terminal) ============= */
+/* ============= NAVIGATION (الشريط الجانبي 224px — Terminal) ============= */
 nav.tabs {
   flex: none;
   width: 224px;
@@ -651,7 +688,7 @@ body.dark-theme nav.tabs {
   background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
 }
 
-/* ط´ط¹ط§ط± ط§ظ„ط¹ظ„ط§ظ…ط© ط£ط¹ظ„ظ‰ ط§ظ„ط´ط±ظٹط· ط§ظ„ط¬ط§ظ†ط¨ظٹ (FTC2 Terminal) */
+/* شعار العلامة أعلى الشريط الجانبي (FTC2 Terminal) */
 .nav-brand {
   display: flex;
   align-items: center;
@@ -824,7 +861,7 @@ nav.tabs button:hover svg {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
 }
 
-/* ============= ط£ظٹظ‚ظˆظ†ط§طھ Material Symbols (ط¨ط¯ظ„ SVG) â€” طھط·ط§ط¨ظ‚ ط§ظ„ظ…ط±ط¬ط¹ ============= */
+/* ============= أيقونات Material Symbols (بدل SVG) — تطابق المرجع ============= */
 nav.tabs button[data-view] svg {
   display: none;
 }
@@ -872,7 +909,7 @@ nav.tabs button[data-view]:not(.active):hover::before {
     max-height: none;
     overflow-x: auto;
     overflow-y: visible;
-    direction: rtl; /* ظٹط¶ظ…ظ† ط£ظ† ظˆط¶ط¹ ط§ظ„طھظ…ط±ظٹط± ط§ظ„ط§ظپطھط±ط§ط¶ظٹ (scrollLeft=0) ظٹط¨ط¯ط£ ظ…ظ† ط£ظ‚طµظ‰ ط§ظ„ظٹظ…ظٹظ† ط¯ط§ط¦ظ…ط§ظ‹ */
+    direction: rtl; /* يضمن أن وضع التمرير الافتراضي (scrollLeft=0) يبدأ من أقصى اليمين دائماً */
     padding: 8px;
     border-radius: 14px;
   }
@@ -916,7 +953,7 @@ nav.tabs button[data-view]:not(.active):hover::before {
   }
 }
 
-/* ظپط§طµظ„ ط¨طµط±ظٹ ط±ظپظٹط¹ ط¨ظٹظ† ظ…ط¬ظ…ظˆط¹ط§طھ ط§ظ„طھط¨ظˆظٹط¨ط§طھ */
+/* فاصل بصري رفيع بين مجموعات التبويبات */
 .nav-section-label {
   flex: none;
   align-self: stretch;
@@ -930,7 +967,7 @@ nav.tabs button[data-view]:not(.active):hover::before {
   color: transparent;
 }
 
-/* ============= NAV FLYOUT (ظ‚ط§ط¦ظ…ط© "ط§ظ„ط¹ظ…ظ„ط§ط،" ط§ظ„ظ…ظ†ط³ط¯ظ„ط© ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¯ظˆط±ط§طھ) ============= */
+/* ============= NAV FLYOUT (قائمة "العملاء" المنسدلة لأنواع الدورات) ============= */
 .nav-flyout-wrap {
   position: relative;
   flex: none;
@@ -1172,7 +1209,7 @@ section.view.active {
   border-inline-start-color: var(--teal);
 }
 
-/* ============= PANELS (ط¨ط·ط§ظ‚ط§طھ ط²ط¬ط§ط¬ظٹط©) ============= */
+/* ============= PANELS (بطاقات زجاجية) ============= */
 .panel {
   background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
   backdrop-filter: blur(18px) saturate(1.25);
@@ -1200,8 +1237,8 @@ section.view.active {
   gap: 8px;
 }
 
-/* طµظ†ط¯ظˆظ‚ ط£ظٹظ‚ظˆظ†ط© ظ…ظˆط­ظ‘ط¯ ظ„ط¹ظ†ط§ظˆظٹظ† ط§ظ„ط¨ط§ظ†ظ„ط² â€” ظٹظ„ظپ ط§ظ„ط¥ظٹظ…ظˆط¬ظٹ ط§ظ„ظ…ظˆط¬ظˆط¯ ط£طµظ„ط§ظ‹ ط¨ظ†ظپط³ ط´ظƒظ„ طµظ†ط§ط¯ظٹظ‚
-   ط§ظ„ط£ظٹظ‚ظˆظ†ط§طھ ط§ظ„ظ…ط³طھط®ط¯ظ…ط© ظپظٹ ط¨ط·ط§ظ‚ط§طھ KPI ظˆط´ط±ظٹط· ط§ظ„ط¥ط­طµط§ط¦ظٹط§طھطŒ ط¨ط¯ظ„ ظ…ط§ ظٹظپط¶ظ„ ط§ظ„ط¥ظٹظ…ظˆط¬ظٹ ط¹ط§ط±ظٹ */
+/* صندوق أيقونة موحّد لعناوين البانلز — يلف الإيموجي الموجود أصلاً بنفس شكل صناديق
+   الأيقونات المستخدمة في بطاقات KPI وشريط الإحصائيات، بدل ما يفضل الإيموجي عاري */
 .panel-icon {
   display: inline-flex;
   align-items: center;
@@ -1231,7 +1268,7 @@ section.view.active {
   }
 }
 
-/* ============= ظ„ظˆط­ط© ط§ظ„ظ†ط¸ط±ط© ط§ظ„طھظ†ظپظٹط°ظٹط© (Close Overview) ============= */
+/* ============= لوحة النظرة التنفيذية (Close Overview) ============= */
 .close-overview {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -1344,7 +1381,7 @@ section.view.active {
   .close-ring-col { border-inline-end: none; border-bottom: 1px solid var(--border); }
 }
 
-/* ---- ط§ظ„ط¯ظˆط±ط§طھ/ط§ظ„ظƒظٹط§ظ†ط§طھ ط­ط³ط¨ ط§ظ„ط­ط§ظ„ط© ---- */
+/* ---- الدورات/الكيانات حسب الحالة ---- */
 .close-entities-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1542,7 +1579,7 @@ section.view.active {
   font-weight: 600;
 }
 
-/* ط²ط± ط§ظ„ط¨ط­ط« ط§ظ„ط´ط§ظ…ظ„ â€” ظٹط£ط®ط° ظ…ط¸ظ‡ط± ط­ظ‚ظ„ ط¨ط­ط« طھظٹط±ظ…ظٹظ†ط§ظ„ (âŒکK) */
+/* زر البحث الشامل — يأخذ مظهر حقل بحث تيرمينال (⌘K) */
 #btn-global-search {
   min-width: 190px;
   justify-content: flex-start;
@@ -1554,7 +1591,7 @@ section.view.active {
   border-color: var(--border);
 }
 #btn-global-search::after {
-  content: 'âŒکK';
+  content: '⌘K';
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
@@ -1676,7 +1713,7 @@ table {
   box-shadow: 0 1px 0 var(--border);
 }
 
-/* ط£ط¹ظ…ط¯ط© ط«ط§ط¨طھط© (طھط­ط¯ظٹط¯ + ط§ظ„ط§ط³ظ…) */
+/* أعمدة ثابتة (تحديد + الاسم) */
 .sticky-col {
   position: sticky;
   background: var(--surface-solid);
@@ -1730,7 +1767,7 @@ thead th {
   font-family: var(--font-mono);
 }
 
-/* ============= ط±ط¤ظˆط³ ط£ط¹ظ…ط¯ط© ظ‚ط§ط¨ظ„ط© ظ„ظ„ظپط±ط² (.sortable) ============= */
+/* ============= رؤوس أعمدة قابلة للفرز (.sortable) ============= */
 thead th.sortable {
   cursor: pointer;
   user-select: none;
@@ -1841,7 +1878,7 @@ tbody tr:hover {
   color: var(--teal);
 }
 
-/* ============= ط¨ط§ط¯ط¬ ط¹ط¯ط§ط¯ ط§ظ„ظپظ„ط§طھط± ط§ظ„ظ†ط´ط·ط© (ط¨ط¬ط§ظ†ط¨ ط²ط± "ظپظ„ط§طھط± ظ…طھظ‚ط¯ظ…ط©") ============= */
+/* ============= بادج عداد الفلاتر النشطة (بجانب زر "فلاتر متقدمة") ============= */
 .filters-count-badge {
   display: inline-flex;
   align-items: center;
@@ -1860,7 +1897,7 @@ tbody tr:hover {
   box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 60%, transparent);
 }
 
-/* ============= ROW ACTIONS MENU (â‹®) ============= */
+/* ============= ROW ACTIONS MENU (⋮) ============= */
 .row-menu {
   position: relative;
   display: inline-block;
@@ -2078,7 +2115,7 @@ tbody tr:hover {
   }
 }
 
-/* ============= LOGIN (ط´ط§ط´ط§طھ ط§ظ„طھظپط¹ظٹظ„ ظˆطھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„) ============= */
+/* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
   --auth-bg-deep: #060e1c;
@@ -2577,12 +2614,12 @@ td select:hover:not(:focus) {
 }
 
 /* ============= HINT / INSTRUCTIONAL TEXT ============= */
-/* ط¥ط®ظپط§ط، ظƒظ„ ظ†طµظˆطµ ط§ظ„ط´ط±ط­ ط§ظ„طھظˆط¶ظٹط­ظٹط© ط§ظ„ط«ط§ط¨طھط© ط£ط³ظپظ„ ط¹ظ†ط§ظˆظٹظ† ط§ظ„ط£ظ‚ط³ط§ظ… */
+/* إخفاء كل نصوص الشرح التوضيحية الثابتة أسفل عناوين الأقسام */
 .hint-info {
   display: none !important;
 }
 
-/* طھظ†ط¨ظٹظ‡ طھط­ط°ظٹط±ظٹ ط¸ط§ظ‡ط± (ظٹظڈط³طھط®ط¯ظ… ظ„طھط­ط°ظٹط±ط§طھ ط§ظ„ط§ط³طھط¹ط§ط¯ط©) */
+/* تنبيه تحذيري ظاهر (يُستخدم لتحذيرات الاستعادة) */
 .hint-warn {
   font-size: 12px;
   line-height: 1.7;
@@ -2598,7 +2635,7 @@ body.dark-theme .hint-warn {
   border-color: rgba(251, 191, 36, 0.4);
 }
 
-/* ============= ط´ظٹطھ ط§ظ„ط¹ظ…ظ„ط§ط، â€” طھطµظ…ظٹظ… ظ…ط®طµطµ ============= */
+/* ============= شيت العملاء — تصميم مخصص ============= */
 #view-clients .toolbar-card {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
@@ -2637,7 +2674,7 @@ body.dark-theme .hint-warn {
   color: var(--text-muted);
 }
 
-/* ط±ط£ط³ ط¬ط¯ظˆظ„ ط§ظ„ط¹ظ…ظ„ط§ط، */
+/* رأس جدول العملاء */
 #view-clients thead th {
   background: color-mix(in srgb, var(--surface-solid) 85%, transparent);
   color: var(--navy-dark);
@@ -2648,13 +2685,13 @@ body.dark-theme #view-clients thead th {
   color: var(--text);
 }
 
-/* ط´ط±ظٹط· ظ„ظˆظ† ط±ظپظٹط¹ ط¹ظ„ظ‰ ظƒظ„ طµظپ */
+/* شريط لون رفيع على كل صف */
 #view-clients tbody tr.owe,
 #view-clients tbody tr.paid {
   box-shadow: inset 3px 0 0 var(--navy);
 }
 
-/* ================= ط²ط±ط§ط± ط§ظ„ط¥ط¶ط§ظپط© ط§ظ„ط³ط±ظٹط¹ط© ط§ظ„ط¹ط§ط¦ظ… ================= */
+/* ================= زرار الإضافة السريعة العائم ================= */
 .fab-quickadd {
   position: fixed;
   bottom: 24px;
@@ -2682,7 +2719,7 @@ body.dark-theme #view-clients thead th {
   .fab-quickadd { bottom: 78px; left: 16px; width: 50px; height: 50px; font-size: 26px; }
 }
 
-/* ============= طµظ†ط§ط¯ظٹظ‚/ط¨ط·ط§ظ‚ط§طھ ط§ظ„ط¬ظˆط§ظ„ â€” ظƒظ„ ط§ظ„ط¬ط¯ط§ظˆظ„ طھطھط­ظˆظ„ ظ„طµظ†ط§ط¯ظٹظ‚ ظ…ط±طھط¨ط© ============= */
+/* ============= صناديق/بطاقات الجوال — كل الجداول تتحول لصناديق مرتبة ============= */
 @media (max-width: 680px) {
   .table-scroll {
     max-height: none;
@@ -2798,7 +2835,7 @@ body.dark-theme #view-clients thead th {
   }
 }
 
-/* ================= ط®ظ„ط§ظٹط§ ط§ظ„طھط¹ط¯ظٹظ„ ط§ظ„ظ…ط¨ط§ط´ط± ط§ظ„ط³ط±ظٹط¹ (Inline Edit) ظپظٹ ط¬ط¯ظˆظ„ ط§ظ„ط­ط±ظƒط§طھ ط§ظ„ظ…ط§ظ„ظٹط© ================= */
+/* ================= خلايا التعديل المباشر السريع (Inline Edit) في جدول الحركات المالية ================= */
 #vault-table-body td.editable-cell {
   cursor: text;
   position: relative;
@@ -2809,7 +2846,7 @@ body.dark-theme #view-clients thead th {
   outline-offset: -2px;
 }
 #vault-table-body td.editable-cell:hover::after {
-  content: "âœژ";
+  content: "✎";
   position: absolute;
   top: 2px;
   left: 4px;
