@@ -252,7 +252,7 @@
     <div class="grid-cards" id="companies-stats-cards"></div>
 
     <div class="panel" id="companies-unsettled-panel" style="display:none; border-right:4px solid var(--red);">
-      <h3 style="margin:0 0 4px;" data-i18n="compUnsettledTitle">⚠️ حوالات غير مكتملة التسوية</h3>
+      <h3 style="margin:0 0 4px;" data-i18n="compUnsettledTitle"><span class="panel-icon">⚠️</span> حوالات غير مكتملة التسوية</h3>
       <div class="hint hint-info" style="margin:0 0 10px;" data-i18n="compUnsettledHint">حوالات قيمة ما خُصِّص فيها فعلياً للمتدربين (قيمة الدورة + قيمة الحقيبة) لا تساوي قيمة الحوالة المستلمة من الشركة — إما نقص لم يُكمَّل بعد، أو تخصيص زائد عن قيمة الحوالة بالخطأ.</div>
       <div id="companies-unsettled-list"></div>
     </div>
@@ -1227,7 +1227,7 @@
     </div>
 
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
-      <h3 style="margin:0 0 4px;">🗣️ إدخال سريع بالعربي الطبيعي</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🗣️</span> إدخال سريع بالعربي الطبيعي</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتب الحركة بجملة عادية وسيحاول البرنامج استخراج المبلغ وطريقة الدفع تلقائياً، ثم يفتح لك نموذج "حركة صادر جديدة" معبّأً مسبقاً مع اقتراح تصنيف بالذكاء الاصطناعي — تراجعه وتؤكد الحفظ بنفسك دائماً. مثال: "دفعت 500 كهرباء نقدي" أو "صرفت 1200 صيانة تكييف شبكة".</p>
       <div class="toolbar">
         <input type="text" id="nl-expense-input" placeholder="مثال: دفعت 500 كهرباء نقدي" style="flex:1; min-width:240px;">
@@ -1473,7 +1473,7 @@
     </div>
 
     <div class="panel" id="vault-recurring-panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
-      <h3 style="margin:0 0 4px;">🔁 حركات متكررة مكتشفة</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔁</span> حركات متكررة مكتشفة</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتشاف تلقائي لأنماط مصروفات تتكرر بفارق شهري تقريباً (نفس التصنيف والمستلم ومبلغ متقارب) — اقتراح فقط، ولن يتحول لقالب فعلي إلا بضغطك على الزر.</p>
       <div id="vault-recurring-suggestions"></div>
     </div>
@@ -2949,7 +2949,7 @@
 
     <!-- مطابقة صناديق نموذج الإقرار في بوابة الهيئة -->
     <div class="panel" style="margin-top:14px;">
-      <h3 style="margin:0 0 4px;">🧾 مطابقة صناديق نموذج الإقرار (بوابة هيئة الزكاة والضريبة والجمارك)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🧾</span> مطابقة صناديق نموذج الإقرار (بوابة هيئة الزكاة والضريبة والجمارك)</h3>
       <p class="hint hint-info" style="margin:0 0 10px;">الجدول التالي مرتّب بنفس ترتيب صناديق نموذج إقرار ضريبة القيمة المضافة في بوابة الهيئة، لتسهيل نسخ كل رقم لصندوقه مباشرة عند التعبئة. جميع مبيعات ومشتريات المركز حالياً محلية وخاضعة للنسبة الأساسية (15%)، لذلك تظهر بقية الصناديق (الصفرية/المعفاة/الاستيراد والتصدير) بصفر — إن وُجدت لديك عمليات من هذه الأنواع تحتاج مراجعة محاسب مختص لإدراجها يدوياً قبل التقديم.</p>
       <div class="table-scroll">
         <table id="zt-vat-boxes-table" style="width:100%;"></table>
@@ -3053,7 +3053,7 @@
     <div class="grid-cards" id="period-cards"></div>
     <div class="panel" style="border-right:4px solid var(--gold);">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
-        <h3 style="margin:0;">📊 قائمة الدخل (الأرباح والخسائر) حسب الفترة</h3>
+        <h3 style="margin:0;"><span class="panel-icon">📊</span> قائمة الدخل (الأرباح والخسائر) حسب الفترة</h3>
         <button class="btn btn-ghost btn-sm" id="btn-export-pnl">تصدير قائمة الدخل CSV</button>
       </div>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">مبنية على أساس الاستحقاق (حسب تاريخ تسجيل العميل للدورة وتاريخ الحركات) — الإيرادات حسب نوع الدورة، والمصروفات حسب التصنيف من الحركات المالية الصادرة، مع خصم مردودات المبيعات وإدراج القيود اليدوية (إهلاك/مستحقات/تسويات) داخل الفترة.</p>
@@ -3105,7 +3105,7 @@
       </div>
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 4px;">📤 إرسال التقارير عبر واتساب</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">📤</span> إرسال التقارير عبر واتساب</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 14px;">جميع خيارات إرسال التقارير عبر واتساب في مكان واحد.</p>
 
       <div class="cfo-grid" style="align-items:start;">
@@ -3281,7 +3281,7 @@
 
     <!-- ============ الذمم المدينة والدائنة (أعمار الديون) ============ -->
     <div class="panel" style="border-right:4px solid var(--navy);">
-      <h3 style="margin:0 0 4px;">👥 الذمم المدينة والدائنة (أعمار الديون)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">👥</span> الذمم المدينة والدائنة (أعمار الديون)</h3>
       <div class="field" style="max-width:220px; margin-bottom:10px;">
         <label>كما في تاريخ</label><input type="date" id="arap-asof">
       </div>
@@ -3407,7 +3407,7 @@
 
     <!-- ============ دليل الحسابات والقيود اليومية بنظام القيد المزدوج (وحدة إضافية مستقلة) ============ -->
     <div class="panel" style="border-right:4px solid var(--navy); margin-top:14px;">
-      <h3 style="margin:0 0 4px;">📒 دليل الحسابات والقيود اليومية (محاسبة مزدوجة)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">📒</span> دليل الحسابات والقيود اليومية (محاسبة مزدوجة)</h3>
       <p class="hint hint-info" style="margin:0 0 12px;">وحدة محاسبة مزدوجة كاملة (دليل حسابات + قيود يومية مدين/دائن متوازنة + دفتر أستاذ عام + ميزان مراجعة) لتوثيق أي عمليات محاسبية بالطريقة الرسمية، بشكل مستقل عن التقارير التلقائية أعلاه (قائمة الدخل والميزانية العمومية) التي تُبنى تلقائياً من حركات الخزنة والعملاء والمشتريات. كل قيد يدوي جديد، وكل فاتورة شراء أو فاتورة مبيعات يدوية جديدة، تُرحَّل تلقائياً هنا كقيد مزدوج متوازن لحظة حفظها. فواتير الدورات التدريبية (فواتير العملاء) تُرحَّل بالجملة عبر الزر أدناه لأن تسجيلها يتم بالتعديل المباشر داخل الجدول.</p>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-legacy" style="margin-bottom:6px;">🔗 ترحيل القيود اليدوية القديمة غير المرحّلة تلقائياً</button>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-sales-purchases" style="margin-bottom:6px;">🔗 ترحيل فواتير المبيعات والمشتريات غير المرحّلة تلقائياً</button>
@@ -3610,7 +3610,7 @@
   <!-- SETTINGS -->
   <section class="view" id="view-settings">
     <div class="panel">
-      <h3 style="margin:0 0 4px;">🎨 مظهر الواجهة</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🎨</span> مظهر الواجهة</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر الثيم اللي يعجبك — التبديل فوري ويُحفظ لهذا الحساب. الثيمات الأربعة متاحة دائماً.</p>
       <div id="theme-scheme-panel" style="display:flex; gap:14px; flex-wrap:wrap;">
         <div data-color-scheme="original" class="theme-scheme-card" style="cursor:pointer; border:2px solid var(--border); border-radius:var(--radius); padding:12px; width:190px; background:#0c1b32;">
@@ -3660,7 +3660,7 @@
       <div id="update-status" class="hint hint-info" style="margin-top:10px; display:none;"></div>
     </div>
     <div class="panel" >
-      <h3 style="margin:0 0 4px;">💾 النسخ الاحتياطي والاستعادة</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">💾</span> النسخ الاحتياطي والاستعادة</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">نسخة احتياطية كاملة تشمل كل بيانات البرنامج في ملف واحد (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) يمكن استخدامها لاستعادة البرنامج بالكامل عند الحاجة.</p>
       <div class="formgrid" style="margin-bottom:10px; align-items:end;">
         <div class="field">
@@ -3689,7 +3689,7 @@
       </div>
     </div>
     <div class="panel" >
-      <h3 style="margin:0 0 4px;">🔔 إعدادات التنبيهات الذكية</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔔</span> إعدادات التنبيهات الذكية</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:220px;"><label>حد أدنى لرصيد الخزنة + البنك (تنبيه لو أقل)</label><input type="number" id="set-low-balance" min="0" step="1"></div>
@@ -3698,7 +3698,7 @@
       </div>
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 4px;">📤 التقرير الشهري عبر واتساب</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">📤</span> التقرير الشهري عبر واتساب</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أدخل رقم واتساب المستلم (بالصيغة الدولية بدون + أو أصفار، مثال: 966501234567). عند بداية كل شهر جديد سيظهر تنبيه في لوحة التحكم لإرسال ملخص الشهر الماضي بضغطة واحدة، ويمكنك أيضاً إرسال ملخص أي شهر يدوياً من شاشة التقارير.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:260px;"><label>رقم واتساب المستلم</label><input type="text" id="set-monthly-wa-number" placeholder="966501234567" dir="ltr"></div>
@@ -3706,7 +3706,7 @@
       </div>
     </div>
     <div class="panel" style="border-right:4px solid #25D366;">
-      <h3 style="margin:0 0 4px;">📎 إرسال التقارير عبر واتساب (PDF)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">📎</span> إرسال التقارير عبر واتساب (PDF)</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
         احفظ أرقام واتساب المستلمين هنا (رقم أو أكثر، افصل بينها بفاصلة) — تبقى محفوظة دائماً ولا تُمسح عند إغلاق البرنامج أو إعادة فتحه. زر التوليد والإرسال الفعلي موجود بشاشة <b>التقارير</b>.
       </p>
@@ -3724,7 +3724,7 @@
       </div>
     </div>
     <div class="panel" >
-      <h3 style="margin:0 0 4px;">🔗 ربط Power Automate (Webhooks)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔗</span> ربط Power Automate (Webhooks)</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>
       <div class="formgrid" style="margin-bottom:10px;">
         <div class="field full"><label>رابط Webhook (HTTP POST URL من Power Automate)</label><input type="text" id="set-pa-webhook-url" placeholder="https://prod-00.westus.logic.azure.com/workflows/..."></div>
@@ -3739,7 +3739,7 @@
       </div>
     </div>
     <div class="panel" id="panel-server-sync" >
-      <h3 style="margin:0 0 4px;">🔌 الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔌</span> الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تسويه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <span id="server-sync-status-label" style="font-weight:700;"></span>
@@ -3855,7 +3855,7 @@
       <div class="hint hint-info" style="margin-top:14px;">لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به (لتفادي فقدان الوصول بالخطأ) — سجّل دخول بحساب مدير آخر أولاً لو احتجت حذفه.</div>
     </div>
     <div class="panel" id="panel-role-permissions">
-      <h3 style="margin:0 0 4px;">🛡️ صلاحيات الأدوار (أي أقسام تظهر لكل دور)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🛡️</span> صلاحيات الأدوار (أي أقسام تظهر لكل دور)</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">حدّد أي أقسام تظهر لكل دور غير "مدير". المدير دائماً له كل الصلاحيات كاملة ولا يمكن تقييده إطلاقاً، لتفادي فقدان الوصول الكامل للبرنامج بالخطأ.</p>
       <div class="table-scroll table-scroll-compact" id="role-permissions-table-wrap"></div>
       <button class="btn btn-primary btn-sm" id="btn-save-role-permissions" style="margin-top:12px;">حفظ الصلاحيات</button>
@@ -3875,24 +3875,24 @@
       <button class="btn btn-primary btn-sm" id="btn-save-reception-restrictions">حفظ قيود الاستقبال</button>
     </div>
     <div class="panel" id="panel-login-history">
-      <h3 style="margin:0 0 4px;">🕓 سجل الدخول والجلسات</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🕓</span> سجل الدخول والجلسات</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">آخر عمليات الدخول الناجحة لكل المستخدمين (الاسم، الوقت، عنوان IP). زر "تسجيل خروج فوري" ينهي كل جلسات هذا المستخدم على كل الأجهزة دفعة واحدة (مش جهاز بعينه)، فيحتاج يسجّل دخول من جديد في أي مكان.</p>
       <button class="btn btn-ghost btn-sm" id="btn-refresh-login-history" style="margin-bottom:10px;">🔄 تحديث السجل</button>
       <div id="login-history-list"><div class="hint hint-info">اضغط "تحديث السجل" لعرض آخر عمليات الدخول</div></div>
     </div>
     <div class="panel" id="panel-2fa">
-      <h3 style="margin:0 0 4px;">🔐 المصادقة الثنائية (2FA)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔐</span> المصادقة الثنائية (2FA)</h3>
       <div id="tfa-status-wrap">
         <span id="tfa-status-badge" class="hint hint-info">جارٍ التحقق من الحالة...</span>
       </div>
       <div id="tfa-controls" style="margin-top:10px;"></div>
     </div>
     <div class="panel" id="panel-prune-records">
-      <h3 style="margin:0 0 4px;">🧹 تنظيف السجلات القديمة (سجل المراجعة والمحذوفات)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🧹</span> تنظيف السجلات القديمة (سجل المراجعة والمحذوفات)</h3>
       <div id="prune-records-rows"></div>
     </div>
     <div class="panel" id="panel-pin-lock" >
-      <h3 style="margin:0 0 4px;">🔒 قفل الشاشة بـ PIN</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">🔒</span> قفل الشاشة بـ PIN</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">يقفل البرنامج تلقائياً بعد مدة خمول محددة، ويطلب رقم PIN لإعادة الدخول — مفيد لو تركت الجهاز بدون مراقبة. القفل شغّال على هذا الجهاز فقط ولا يؤثر على أي جهاز آخر.</p>
       <div class="formgrid" style="align-items:end;">
         <div class="field" style="max-width:160px;"><label>تفعيل القفل التلقائي</label>
@@ -3907,7 +3907,7 @@
       </div>
     </div>
     <div class="panel" id="panel-settings-export" >
-      <h3 style="margin:0 0 4px;">📤 تصدير / استيراد إعدادات البرنامج</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon">📤</span> تصدير / استيراد إعدادات البرنامج</h3>
       <p class="hint hint-info" style="margin:0 0 12px;">تصدير نسخة من إعدادات البرنامج (الألوان، أسعار الدورات، طرق الدفع، تصنيفات المصروفات، بيانات المركز، الجنسيات...) كملف واحد لنقلها لجهاز أو حساب آخر بسهولة. هذا الملف لا يشمل بيانات العملاء أو الحركات المالية أو كلمات المرور إطلاقاً.</p>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" id="btn-export-settings">⬇️ تصدير الإعدادات</button>
