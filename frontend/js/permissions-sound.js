@@ -403,14 +403,15 @@ async function loadData(cacheOnly){
     if(!settings.nextVoucherNo) settings.nextVoucherNo = 1;
     if(!settings.nextManualSalesInvoiceNo) settings.nextManualSalesInvoiceNo = 1;
     if(settings.darkMode===undefined) settings.darkMode = false;
-    // الثيم الافتراضي أصبح Obsidian Light (فاتح). الحسابات القديمة التي كانت محفوظة
-    // على 'original' تُرحَّل إليه لمرة واحدة فقط (راية themeMigratedToObsidian)؛ من
-    // يختار 'original' يدوياً بعدها لا يُرحَّل مجدداً. من اختار 'stitch' يبقى على اختياره.
+    // الثيم الافتراضي أصبح FTC2 Terminal (داكن — المطابق للتصميم المعتمد من المرجع).
+    // الحسابات القديمة التي كانت على 'original' أو 'obsidian' تُرحَّل إليه لمرة واحدة فقط
+    // (راية themeMigratedToTerminal)؛ من يختار ثيماً آخر يدوياً بعدها لا يُرحَّل مجدداً.
+    // من اختار 'stitch' أو 'amethyst' يبقى على اختياره.
     if(settings.colorScheme===undefined){
-      settings.colorScheme = 'obsidian';
-    }else if(settings.colorScheme==='original' && !settings.themeMigratedToObsidian){
-      settings.colorScheme = 'obsidian';
-      settings.themeMigratedToObsidian = true;
+      settings.colorScheme = 'terminal';
+    }else if((settings.colorScheme==='original' || settings.colorScheme==='obsidian') && !settings.themeMigratedToTerminal){
+      settings.colorScheme = 'terminal';
+      settings.themeMigratedToTerminal = true;
       await saveSettings();
     }
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;
