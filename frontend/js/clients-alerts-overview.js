@@ -124,7 +124,7 @@ function renderPendingApprovalsPanel(){
     return;
   }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
-    <h3 style="margin:0 0 10px;">🛂 عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
+    <h3 style="margin:0 0 10px;"><span class="panel-icon">🛂</span> عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
       <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${pendingApprovals.length})</button>
@@ -284,7 +284,7 @@ function renderSmartAlerts(){
   window.__openAlertsCount = alerts.length;
   if(!alerts.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--red);">
-    <h3 style="margin:0 0 8px;">🔔 تنبيهات تحتاج انتباهك</h3>
+    <h3 style="margin:0 0 8px;"><span class="panel-icon">🔔</span> تنبيهات تحتاج انتباهك</h3>
     ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
       <span style="font-size:18px;">${a.icon}</span>
       <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>

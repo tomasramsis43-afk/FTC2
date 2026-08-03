@@ -1157,6 +1157,25 @@ section.view.active {
   letter-spacing: 0.3px;
   border-inline-start: 3px solid var(--navy);
   padding-inline-start: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* صندوق أيقونة موحّد لعناوين البانلز — يلف الإيموجي الموجود أصلاً بنفس شكل صناديق
+   الأيقونات المستخدمة في بطاقات KPI وشريط الإحصائيات، بدل ما يفضل الإيموجي عاري */
+.panel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--navy) 14%, transparent);
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 45%, transparent);
 }
 
 @media(max-width: 600px) {
