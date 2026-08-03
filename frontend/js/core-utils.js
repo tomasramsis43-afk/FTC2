@@ -466,3 +466,71 @@ async function _recordsSnapClearAll(){
   }catch(e){}
 }
 
+/* ============================================================================
+   توسيم خلايا الجداول تلقائياً (data-label) لعرض بطاقات الموبايل
+   الجداول (.table-scroll) بتتحول لبطاقات رأسية على الشاشات الصغيرة (CSS)، وكل
+   خلية بتحتاج data-label عشان القارئ يعرف كل رقم بيمثل عمود إيه. جزء من الجداول
+   في الكود عنده data-label متحط يدوياً بالفعل (وده اللي بيتحترم زي ما هو من غير
+   أي تعديل)، والباقي بياخد التسمية تلقائياً من نص رأس العمود (thead th) هنا، عشان
+   ما يبقاش محتاج نمر على كل دالة render* في كل موديول ونضيفها يدوياً فى كل <td>. */
+function _autoLabelTable(table){
+  try{
+    const headRow = table.querySelector('thead tr');
+    if(!headRow) return;
+    const headers = Array.from(headRow.children).map(th=>{
+      const clone = th.cloneNode(true);
+      clone.querySelectorAll('svg,button').forEach(n=>n.remove());
+      return (clone.textContent || '').trim();
+    });
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      Array.from(tr.children).forEach((td, i)=>{
+        // لو الخلية عندها data-label بالفعل (حتى لو فاضي عمداً زي عمود الإجراءات)
+        // سيبها زي ما هي — احتراماً لأي توسيم يدوي متحط فعلاً في كود العرض
+        if(td.tagName === 'TD' && !td.hasAttribute('data-label') && headers[i]){
+          td.setAttribute('data-label', headers[i]);
+        }
+      });
+    });
+  }catch(e){ /* silent: تحسين عرض فقط، لا يجب أن يكسر أي شيء */ }
+}
+function _scanAutoLabelTables(root){
+  try{
+    const scope = (root && root.querySelectorAll) ? root : document;
+    scope.querySelectorAll('.table-scroll table').forEach(_autoLabelTable);
+  }catch(e){}
+}
+(function initAutoLabelObserver(){
+  if(typeof document === 'undefined') return;
+  const run = ()=>{
+    _scanAutoLabelTables(document);
+    let scheduled = false;
+    const mo = new MutationObserver((mutations)=>{
+      if(scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(()=>{
+        scheduled = false;
+        for(const m of mutations){
+          const target = m.target && m.target.closest ? m.target.closest('.table-scroll') : null;
+          if(target){ _scanAutoLabelTables(target); }
+        }
+      });
+    });
+    document.querySelectorAll('.table-scroll').forEach(el=>{
+      mo.observe(el, { childList:true, subtree:true });
+    });
+    // شاشات (views) بتتولّد وتُضاف للـ DOM لاحقاً (بعد تسجيل الدخول مثلاً) — إعادة
+    // فحص دورية خفيفة تلتقط أي .table-scroll جديد يظهر لاحقاً ولسه مش بيتراقَب
+    let lastCount = document.querySelectorAll('.table-scroll').length;
+    setInterval(()=>{
+      const els = document.querySelectorAll('.table-scroll');
+      if(els.length !== lastCount){
+        lastCount = els.length;
+        els.forEach(el=>{ mo.observe(el, { childList:true, subtree:true }); });
+        _scanAutoLabelTables(document);
+      }
+    }, 2000);
+  };
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+
