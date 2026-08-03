@@ -1758,9 +1758,10 @@ $('#btn-lang-toggle').addEventListener('click', ()=>{
 });
 $('#btn-theme-toggle').addEventListener('click', async ()=>{
   settings.darkMode = !settings.darkMode;
-  // زر الليلي/النهاري خاص بالثيم الأصلي فقط؛ ثيم Stitch وثيم Obsidian Light فاتحان
-  // بطبيعتهما ولهما بطاقة اختيار مستقلة في الإعدادات
-  if((settings.colorScheme||'obsidian') === 'original') applyTheme(settings.darkMode);
+  // زر الليلي/النهاري يعمل مع الثيم الأصلي (وفيما سبق مع أول ترحيل)؛ ثيم FTC2 Terminal
+  // وثيم Amethyst داكنان بطبيعتهما، وثيم Stitch وثيم Obsidian Light فاتحان — ولكل منها
+  // بطاقة اختيار مستقلة في الإعدادات.
+  if((settings.colorScheme||'terminal') === 'original') applyTheme(settings.darkMode);
   await saveSettings();
 });
 $('#btn-sound-toggle').addEventListener('click', async ()=>{
