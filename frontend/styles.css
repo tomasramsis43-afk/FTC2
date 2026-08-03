@@ -1173,9 +1173,14 @@ section.view.active {
   flex: none;
   border-radius: 8px;
   background: color-mix(in srgb, var(--navy) 14%, transparent);
-  font-size: 13px;
-  line-height: 1;
+  color: var(--navy);
   box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 45%, transparent);
+}
+.panel-icon svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  flex: none;
 }
 
 @media(max-width: 600px) {

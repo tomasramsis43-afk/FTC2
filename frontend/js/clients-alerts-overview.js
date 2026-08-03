@@ -124,7 +124,7 @@ function renderPendingApprovalsPanel(){
     return;
   }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
-    <h3 style="margin:0 0 10px;"><span class="panel-icon">🛂</span> عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
+    <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
       <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${pendingApprovals.length})</button>
@@ -284,7 +284,7 @@ function renderSmartAlerts(){
   window.__openAlertsCount = alerts.length;
   if(!alerts.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--red);">
-    <h3 style="margin:0 0 8px;"><span class="panel-icon">🔔</span> تنبيهات تحتاج انتباهك</h3>
+    <h3 style="margin:0 0 8px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> تنبيهات تحتاج انتباهك</h3>
     ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
       <span style="font-size:18px;">${a.icon}</span>
       <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
