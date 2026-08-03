@@ -728,7 +728,7 @@ async function printExpenseVoucher(id){
 }
 
 /* ---------------- Export ---------------- */
-$('#btn-export').addEventListener('click', ()=>{
+$('#btn-export')?.addEventListener('click', ()=>{
   const headers = ['رقم الهوية','الاسم','رقم المرجع','الجوال','الجنسية','نوع العميل','اسم الشركة','الأجل (أيام)','الرقم الضريبي للعميل','نوع الدورة','رقم الفاتورة','رقم الفاتورة الضريبية','مصدر الحقيبة','حالة الحقيبة','رقم فاتورة الحقيبة','التاريخ','سعر الدورة','دخل المركز','قيمة الحقيبة','الخصم','الإجمالي','إجمالي المدفوع (شامل كل الدفعات)','المتبقي','طريقة الدفع الأولى','مبلغ الدفعة الأولى','طريقة الدفع الثانية','مبلغ الدفعة الثانية','رقم فاتورة الشبكة','الحالة','ملاحظات'];
   const rows = filteredClients().map(c=>[c.clientId,c.name,c.referNum,c.phone,c.nationality,c.clientType==='company'?'عميل شركات':'عميل مركز',c.companyName||'',c.clientType==='company'?(num(c.creditDays)||''):'',c.clientTaxNumber||'',c.courseType,c.invoice,c.taxInvoiceNo?formatInvoiceNo(c.taxInvoiceNo):'',bagSourceLabel(c),c.bagStatus||'',c.bagInvoice,c.date,c.coursePrice,centerIncome(c),bagAmount(c),c.discount,total(c),paidTotal(c),remaining(c),c.channel,num(c.paid),c.channel2||'',num(c.paid2),c.networkInvoice||'',c.stage,c.notes]);
   const csv = '\uFEFF'+[headers, ...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -931,7 +931,7 @@ async function renderTfaPanel(){
   badge.textContent = enabled ? '✅ المصادقة الثنائية مفعّلة حالياً' : '⭕ المصادقة الثنائية غير مفعّلة';
   if(enabled){
     controls.innerHTML = `<button class="btn btn-danger btn-sm" id="btn-tfa-disable">إلغاء تفعيل المصادقة الثنائية</button>`;
-    $('#btn-tfa-disable').addEventListener('click', async ()=>{
+    $('#btn-tfa-disable')?.addEventListener('click', async ()=>{
       const password = prompt('لتأكيد إلغاء المصادقة الثنائية، أدخل كلمة مرور حسابك الحالية:');
       if(!password) return;
       try{
@@ -944,7 +944,7 @@ async function renderTfaPanel(){
     });
   } else {
     controls.innerHTML = `<button class="btn btn-gold btn-sm" id="btn-tfa-enable">تفعيل المصادقة الثنائية الآن</button>`;
-    $('#btn-tfa-enable').addEventListener('click', startTfaSetup);
+    $('#btn-tfa-enable')?.addEventListener('click', startTfaSetup);
   }
 }
 async function startTfaSetup(){
@@ -965,7 +965,7 @@ async function startTfaSetup(){
     if(typeof QRious !== 'undefined'){
       new QRious({ element: $('#tfa-qr-canvas'), value: data.otpauthUrl, size: 200, level:'M' });
     }
-    $('#btn-tfa-confirm').addEventListener('click', async ()=>{
+    $('#btn-tfa-confirm')?.addEventListener('click', async ()=>{
       const totpCode = $('#tfa-verify-code').value.trim();
       if(!totpCode){ showToast('أدخل الكود أولاً'); return; }
       try{
@@ -1066,7 +1066,7 @@ if($('#login-history-list')) $('#login-history-list').addEventListener('click', 
   }
 });
 /* ---------------- إعادة ضبط البرنامج بالكامل (حذف كل البيانات) ---------------- */
-$('#btn-reset-app').addEventListener('click', async ()=>{
+$('#btn-reset-app')?.addEventListener('click', async ()=>{
   const firstConfirm = await customConfirm('تحذير: سيتم حذف جميع بيانات البرنامج نهائياً في كل الشيتات (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، القيود والحسابات المحاسبية، الموازنة، الموردين، المشتريات، فواتير المبيعات اليدوية، تعديلات الزكاة، المستخدمين، وسجل المراجعة) من الجهاز ومن السيرفر، وستُحذف أيضاً كل النسخ الاحتياطية المحفوظة على السيرفر — ولن يمكن التراجع عن ذلك بأي شكل.\n\nالإعدادات فقط ستبقى كما هي دون أي تغيير.\n\nهل أنت متأكد أنك تريد المتابعة؟');
   if(!firstConfirm) return;
   const secondConfirm = await customConfirm('تأكيد أخير: سيتم الحذف فوراً بمجرد الضغط على "موافق" ولن تتمكن من التراجع — لا توجد أي طريقة لاسترجاع البيانات بعد ذلك.\n\nهل تريد المتابعة والحذف الآن؟');
@@ -1209,7 +1209,7 @@ $('#btn-reset-app').addEventListener('click', async ()=>{
     alert(`حدث خطأ أثناء عملية الحذف: ${err.message || err}`);
   }
 });
-$('#btn-update-app').addEventListener('click', ()=>{
+$('#btn-update-app')?.addEventListener('click', ()=>{
   if(!(window.appUpdater && window.appUpdater.installUpdate)){
     showToast('ميزة التحديث تعمل فقط في نسخة سطح المكتب المثبّتة (وليس في المتصفح)');
     return;
@@ -1217,7 +1217,7 @@ $('#btn-update-app').addEventListener('click', ()=>{
   $('#update-file-input').value = '';
   $('#update-file-input').click();
 });
-$('#update-file-input').addEventListener('change', async (e)=>{
+$('#update-file-input')?.addEventListener('change', async (e)=>{
   const file = e.target.files && e.target.files[0];
   if(!file) return;
   if(!await customConfirm(`سيتم استبدال النسخة الحالية من البرنامج بالملف المختار:\n"${file.name}"\n\nسيُحتفظ بنسخة احتياطية من النسخة الحالية تلقائياً، ولن تتأثر بياناتك المحفوظة. هل تريد المتابعة؟`)){
@@ -1267,7 +1267,7 @@ const KB_EXPORT_CLEAR_IDS = [
   'chart-report-expense','chart-report-revenue-course','chart-vault-method',
   'current-user-label','toast'
 ];
-$('#btn-export-app').addEventListener('click', ()=>{
+$('#btn-export-app')?.addEventListener('click', ()=>{
   try{
     const clone = document.documentElement.cloneNode(true);
     // تفريغ كل الحاويات التي تُعرض فيها بيانات حية (عملاء، حركات مالية، إلخ) في النسخة المُصدَّرة فقط
@@ -1289,7 +1289,7 @@ $('#btn-export-app').addEventListener('click', ()=>{
     showToast(`تعذّر تصدير نسخة البرنامج: ${err.message || err}`);
   }
 });
-$('#btn-save-centerinfo').addEventListener('click', async ()=>{
+$('#btn-save-centerinfo')?.addEventListener('click', async ()=>{
   settings.centerInfo = {
     name: $('#set-center-name').value.trim() || DEFAULT_SETTINGS.centerInfo.name,
     taxNumber: $('#set-center-tax').value.trim() || DEFAULT_SETTINGS.centerInfo.taxNumber,
@@ -1299,7 +1299,7 @@ $('#btn-save-centerinfo').addEventListener('click', async ()=>{
   await logAudit('edit','الإعدادات', 'تم تحديث بيانات المركز المستخدمة في الفاتورة');
   showToast('تم حفظ بيانات المركز');
 });
-$('#btn-save-autobackup').addEventListener('click', async ()=>{
+$('#btn-save-autobackup')?.addEventListener('click', async ()=>{
   settings.autoBackupEnabled = $('#set-autobackup-enabled').checked;
   settings.autoBackupIntervalDays = Math.max(1, Number($('#set-autobackup-days').value)||7);
   await saveSettings();
@@ -1339,7 +1339,7 @@ $('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
   await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي الإقرار الضريبي (${cleaned.length} رقم)`);
   showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
 });
-$('#btn-backup-now').addEventListener('click', ()=>{
+$('#btn-backup-now')?.addEventListener('click', ()=>{
   downloadFullBackup(false);
   showToast('تم تنزيل النسخة الاحتياطية');
 });
@@ -1382,19 +1382,19 @@ document.addEventListener('click', async (e)=>{
     catch(err){ showToast('تعذّر حذف النسخة: '+(err.message||'')); }
   }
 });
-$('#btn-restore-backup').addEventListener('click', ()=> $('#restore-backup-input').click());
-$('#restore-backup-input').addEventListener('change', async e=>{
+$('#btn-restore-backup')?.addEventListener('click', ()=> $('#restore-backup-input')?.click());
+$('#restore-backup-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(file) await restoreFullBackup(file);
   e.target.value = '';
 });
-$('#btn-restore-bagstock').addEventListener('click', ()=> $('#restore-bagstock-input').click());
-$('#restore-bagstock-input').addEventListener('change', async e=>{
+$('#btn-restore-bagstock')?.addEventListener('click', ()=> $('#restore-bagstock-input')?.click());
+$('#restore-bagstock-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(file) await restoreBagStockOnly(file);
   e.target.value = '';
 });
-$('#btn-add-user').addEventListener('click', async ()=>{
+$('#btn-add-user')?.addEventListener('click', async ()=>{
   const uname = $('#new-user-name').value.trim();
   const upass = $('#new-user-pass').value;
   const urole = $('#new-user-role').value;
@@ -1459,7 +1459,7 @@ document.addEventListener('click', async e=>{
     }
   }
 });
-$('#btn-add-course').addEventListener('click', async ()=>{
+$('#btn-add-course')?.addEventListener('click', async ()=>{
   const name = $('#new-course-name').value.trim();
   const price = num($('#new-course-price').value);
   if(!name) return;
@@ -1475,7 +1475,7 @@ $('#btn-add-course').addEventListener('click', async ()=>{
   await logAudit('add','الإعدادات', `تمت إضافة نوع دورة: ${name} (${fmt(price)})`);
   renderSettings(); refreshFilterOptions();
 });
-$('#btn-add-nat').addEventListener('click', async ()=>{
+$('#btn-add-nat')?.addEventListener('click', async ()=>{
   const v = $('#new-nat').value.trim(); if(!v) return;
   const dup = (settings.nationalities||[]).find(n=> String(n||'').trim().toLowerCase() === v.toLowerCase());
   if(dup){
@@ -1488,7 +1488,7 @@ $('#btn-add-nat').addEventListener('click', async ()=>{
   await logAudit('add','الإعدادات', `تمت إضافة جنسية: ${v}`);
   renderSettings(); refreshFilterOptions();
 });
-$('#btn-add-channel').addEventListener('click', async ()=>{
+$('#btn-add-channel')?.addEventListener('click', async ()=>{
   const v = $('#new-channel').value.trim(); if(!v) return;
   snapshotState(`إضافة طريقة دفع: ${v}`);
   settings.channels.push({name:v, dest:$('#new-channel-dest').value});
@@ -1497,7 +1497,7 @@ $('#btn-add-channel').addEventListener('click', async ()=>{
   await logAudit('add','الإعدادات', `تمت إضافة طريقة دفع: ${v}`);
   renderSettings(); refreshFilterOptions();
 });
-$('#btn-add-expcat').addEventListener('click', async ()=>{
+$('#btn-add-expcat')?.addEventListener('click', async ()=>{
   const v = $('#new-expcat').value.trim(); if(!v) return;
   snapshotState(`إضافة تصنيف مصروف: ${v}`);
   settings.expenseCategories.push(v); $('#new-expcat').value='';
@@ -1535,7 +1535,7 @@ document.addEventListener('click', async e=>{
     renderSettings();
   }
 });
-$('#btn-reset').addEventListener('click', async ()=>{
+$('#btn-reset')?.addEventListener('click', async ()=>{
   if(await customConfirm('سيتم حذف جميع بيانات العملاء نهائياً. متأكد؟')){
     const countBefore = clients.length;
     snapshotState(`حذف جميع بيانات العملاء (${countBefore} سجل)`);
@@ -1546,7 +1546,7 @@ $('#btn-reset').addEventListener('click', async ()=>{
     showToast('تم حذف جميع البيانات');
   }
 });
-$('#btn-save-bagprice').addEventListener('click', async ()=>{
+$('#btn-save-bagprice')?.addEventListener('click', async ()=>{
   const oldPrice = settings.bagPrice;
   settings.bagPrice = num($('#set-bagprice').value);
   await saveSettings();
@@ -1554,7 +1554,7 @@ $('#btn-save-bagprice').addEventListener('click', async ()=>{
   showToast('تم حفظ قيمة الحقيبة');
 });
 
-$('#btn-save-nat-prices').addEventListener('click', async ()=>{
+$('#btn-save-nat-prices')?.addEventListener('click', async ()=>{
   const oldSaudi = settings.priceSaudi, oldNonSaudi = settings.priceNonSaudi;
   settings.priceSaudi = num($('#set-price-saudi').value);
   settings.priceNonSaudi = num($('#set-price-nonsaudi').value);
