@@ -70,6 +70,13 @@ async function deleteServerBackup(id){
 }
 const RESTORE_RESYNC_FLAG_KEY = 'ftcPendingFullResyncAfterRestore';
 const RESTORE_OLD_SNAPSHOT_KEY = 'ftcPreRestoreSnapshotEnc';
+// حماية حلقة إعادة المزامنة اللانهائية: لو فشل التحقق من اكتمال رفع الاستعادة للسيرفر باستمرار
+// (أي سبب — انقطاع، تعديل متزامن من جهاز آخر غيّر الأعداد، تصنيف لا يُرفع)، فإبقاء علامة
+// RESTORE_RESYNC_FLAG_KEY تعني مسح السيرفر بالكامل + إعادة رفع ذاكرة هذا الجهاز كل مزامنة خلفية
+// (كل دقيقتين) إلى الأبد — كارثة تمسح بيانات كل الأجهزة فعلياً وتعيد رفع نسخة قديمة/ناقصة. بعد
+// عدة محاولات فاشلة نُبطل العلامة ونعتمد المزامنة الجزئية الآمنة العادية (لا تمسح أي شيء).
+const RESTORE_RESYNC_ATTEMPTS_KEY = 'ftcRestoreResyncAttempts';
+const RESTORE_RESYNC_MAX_ATTEMPTS = 5;
 
 /* ============================================================================
    إصلاح خلل "تعارض عند الاستعادة": كانت الاستعادة تستبدل المصفوفات فى الذاكرة فقط، ثم تحفظها
@@ -197,6 +204,20 @@ function _currentCollectionArray(c){
     case 'scheduledVaultTx': return scheduledVaultTx;
     default: return null;
   }
+}
+// عدّاد البيانات الفعلية (ذات id) الموجودة حالياً فى الذاكرة لكل تصنيف وللعملاء — يستخدمه حارس
+// أمان المسح في resyncRestoredDataWithServer: لا نمسح السيرفر أبداً إلا إذا كانت الذاكرة تحمل
+// بيانات فعلية لرفعها بديلاً. ذاكرة فارغة/نصف محمّلة تعني أن أي مسح ثم رفع سيُفقد كل ما هو أحدث
+// على السيرفر نهائياً — الأفضل عدم المساس بالسيرفر والاكتفاء بالمزامنة الجزئية الآمنة العادية.
+function _localDataCounts(){
+  const counts = { clients: (clients||[]).filter(c=> c && c.id).length };
+  for(const c of ALLOWED_COLLECTIONS_LOCAL){
+    const arr = _currentCollectionArray(c);
+    counts[c] = arr ? arr.filter(x=> x && x.id).length : 0;
+  }
+  let total = counts.clients;
+  for(const c of ALLOWED_COLLECTIONS_LOCAL) total += counts[c];
+  return { counts, total };
 }
 // يرجع true فقط لو كل البيانات المستعادة ظهرت فعلياً على السيرفر بأعدادها الكاملة.
 async function verifyRestoredDataOnServer(){
@@ -549,6 +570,18 @@ async function restoreBagStockOnly(file){
 // بلا أي تعارض ممكن (بنفس منطق الاستعادة وقت الاتصال بالضبط).
 async function resyncRestoredDataWithServer(){
   try{
+    // حارس أمان حرج: لا تمسح السيرفر أبداً إلا إذا كانت الذاكرة الحالية تحمل بيانات فعلية لرفعها
+    // بديلاً. لو كانت الذاكرة فارغة أو نصف محمّلة (كاش قديم، تحميل لم يكتمل، أو جهاز جديد لم يُحمَّل
+    // بعد)، فالمسح ثم الرفع يعني فقدان كل ما هو أحدث على السيرفر نهائياً. عند غياب بيانات محلية
+    // ذات معنى نُبطل علامة إعادة المزامنة (لمنع تكرار محاولة المسح كل مزامنة خلفية) ونكتفي
+    // بالمزامنة الجزئية الآمنة العادية (saveClients/saveCollectionGeneric) التي لا تمسح أي شيء.
+    const localCounts = _localDataCounts();
+    if(localCounts.total <= 0){
+      console.warn('resyncRestoredDataWithServer: لا توجد بيانات محلية ذات معنى — لن نمسح السيرفر ونُبطل علامة إعادة المزامنة');
+      try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
+      try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
+      return;
+    }
     const oldSnapshotEnc = localStorage.getItem(RESTORE_OLD_SNAPSHOT_KEY);
     if(oldSnapshotEnc){
       const res = await serverFetch('/api/backups', {
@@ -567,10 +600,25 @@ async function resyncRestoredDataWithServer(){
     // الكاملة — دون ذلك نُبقي العلامة ليُعاد المحاولة تلقائياً بدل فتح البرنامج على بيانات ناقصة.
     const verified = await verifyRestoredDataOnServer();
     if(!verified){
-      showToast('⛔ لم يكتمل رفع نسخة الاستعادة للسيرفر بالكامل — ستُعاد المحاولة تلقائياً عند استقرار الاتصال');
+      // كسر حلقة إعادة المحاولة اللانهائية (راجع RESTORE_RESYNC_MAX_ATTEMPTS أعلى الملف): لو استمر
+      // فشل التحقق لأي سبب، فإبقاء العلامة يعني مسح السيرفر كل مزامنة خلفية حتى الأبد. بعد حد
+      // أقصى من المحاولات نُبطل العلامة ونعتمد المزامنة الجزئية الآمنة — أفضل بكثير من تكرار
+      // المسح المتلف. عند نجاح أي محاولة يُصفَّر العدّاد (أدناه) فيبدأ حد جديد من الصفر.
+      let attempts = 1;
+      try{ attempts = parseInt(localStorage.getItem(RESTORE_RESYNC_ATTEMPTS_KEY) || '1', 10) + 1; }catch(e){}
+      try{ localStorage.setItem(RESTORE_RESYNC_ATTEMPTS_KEY, String(attempts)); }catch(e){}
+      if(attempts >= RESTORE_RESYNC_MAX_ATTEMPTS){
+        try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
+        try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
+        showToast('⚠️ لم يكتمل التحقق من رفع نسخة الاستعادة للسيرفر بعد عدة محاولات — أُوقفت إعادة المزامنة التلقائية حفاظاً على البيانات. يمكنك إعادة الاستعادة يدوياً من الإعدادات إذا لزم الأمر.');
+        console.warn('resyncRestoredDataWithServer: أُوقفت إعادة المزامنة التلقائية بعد تجاوز حد المحاولات', localCounts);
+      }else{
+        showToast(`⛔ لم يكتمل رفع نسخة الاستعادة للسيرفر بالكامل — ستُعاد المحاولة تلقائياً (المحاولة ${attempts} من ${RESTORE_RESYNC_MAX_ATTEMPTS})`);
+      }
       return;
     }
     localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY);
+    try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
     try{ await _kvCacheClearKv(); }catch(e){ console.error('resyncRestoredDataWithServer: تعذّر مسح الكاش المحلي', e); }
     showToast('تمت مزامنة نسخة الاستعادة المحلية مع السيرفر بنجاح ✅ — سيُعاد فتح البرنامج الآن بالبيانات الجديدة');
     setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 1200);
