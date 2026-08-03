@@ -27,13 +27,15 @@ const DEFAULT_SETTINGS = {
   nextVoucherNo: 1,
   nextManualSalesInvoiceNo: 1,
   darkMode: false,
-  // الثيم الكامل المختار للواجهة: 'obsidian' (ثيم Obsidian Light الفاتح — الافتراضي)
-  // أو 'original' (الثيم الأصلي كحلي/سايان-بنفسجي) أو 'stitch' (ثيم Stitch — فيريديان
-  // فلو). الثلاثة متاحون دائماً من لوحة الإعدادات ولا يُحذف أي منها.
-  colorScheme: 'obsidian',
-  // تُرفع هذه الراية لمرة واحدة بعد ترحيل حساب قديم كان على 'original' إلى 'obsidian'
-  // (قرار المنتج: الثيم الفاتح الجديد هو الافتراضي للجميع). من رجع يدوياً لـ 'original'
-  // بعدها لا يُرحَّل مجدداً. راجع الترحيل في permissions-sound.js (تحميل الإعدادات).
+  // الثيم الكامل المختار للواجهة: 'terminal' (ثيم FTC2 Terminal داكن — الافتراضي،
+  // مطابق للتصميم المعتمد من المرجع)، أو 'obsidian' (ثيم Obsidian Light الفاتح)،
+  // أو 'stitch' (ثيم Stitch — فيريديان فلو)، أو 'original' (الثيم الأصلي كحلي/سايان-بنفسجي)،
+  // أو 'amethyst' (ثيم Amethyst — نيون بنفسجي/فوشيا داكن). كلها متاحة دائماً من لوحة الإعدادات.
+  colorScheme: 'terminal',
+  // تُرفع هذه الراية لمرة واحدة بعد ترحيل حساب قديم كان على 'obsidian' أو 'original' إلى
+  // 'terminal' (قرار المنتج: الثيم الداكن الجديد المطابق للمرجع هو الافتراضي للجميع).
+  themeMigratedToTerminal: false,
+  // راية قديمة من ترحيل أسبق (original ← obsidian) — تُركت للتوافق مع الإصدارات السابقة.
   themeMigratedToObsidian: false,
   soundEnabled: true,
   autoBackupEnabled: true,
@@ -650,25 +652,27 @@ function applyTheme(isDark){
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
-/* التبديل بين الثيمات الكاملة الجاهزة — 'original' (الأصلي كحلي/سايان-بنفسجي)،
-   'stitch' (Stitch — فيريديان فلو)، 'obsidian' (Obsidian Light — مالي عصري فاتح،
-   الافتراضي)، و'amethyst' (Amethyst — نيون بنفسجي/فوشيا داكن). طقمان/طقم كامل ثابت (وليس تخصيص ألوان يدوي حر، الذي أُلغي عمداً
-   سابقاً في applyThemeColors أدناه). يُحفظ الاختيار ضمن إعدادات البرنامج
+/* التبديل بين الثيمات الكاملة الجاهزة — 'terminal' (FTC2 Terminal داكن، المطابق
+   للتصميم المعتمد من المرجع، الافتراضي)، 'obsidian' (Obsidian Light — فاتح مطابق
+   للمعاينة الفاتحة المعتمدة)، 'stitch' (Stitch — فيريديان فلو)، 'original' (الأصلي
+   كحلي/سايان-بنفسجي)، و'amethyst' (Amethyst — نيون بنفسجي/فوشيا داكن). طقم كامل ثابت
+   (وليس تخصيص ألوان يدوي حر). يُحفظ الاختيار ضمن إعدادات البرنامج
    (settings.colorScheme) فيبقى نفسه لكل من يفتح البرنامج على هذا الحساب. */
 function applyColorScheme(scheme){
-  const s = ['obsidian','stitch','amethyst'].includes(scheme) ? scheme : null;
+  const s = ['obsidian','stitch','amethyst','terminal'].includes(scheme) ? scheme : null;
   document.body.classList.toggle('theme-stitch', s === 'stitch');
   document.body.classList.toggle('theme-obsidian', s === 'obsidian');
   document.body.classList.toggle('theme-amethyst', s === 'amethyst');
+  document.body.classList.toggle('theme-terminal', s === 'terminal');
   // ثيم Obsidian Light وثيم Stitch فاتحان بطبيعتهما، فلا داعي لأي تراكب مع كلاس
-  // الوضع الليلي الداكن في نفس الوقت. ثيم Amethyst داكن بطبيعته فيُعامَل بنفس
-  // المنطق (طقم كامل مستقل بذاته، بلا تراكب مع dark-theme الافتراضي).
+  // الوضع الليلي الداكن في نفس الوقت. ثيم Amethyst وثيم Terminal داكنان بطبيعتهما
+  // فيُعامَلا بنفس المنطق (طقم كامل مستقل بذاته، بلا تراكب مع dark-theme الافتراضي).
   if(s) document.body.classList.remove('dark-theme');
   else applyTheme(!!settings.darkMode);
   renderThemeSchemePanel();
 }
 function renderThemeSchemePanel(){
-  const scheme = settings.colorScheme || 'original';
+  const scheme = settings.colorScheme || 'terminal';
   $all('[data-color-scheme]').forEach(card=>{
     card.classList.toggle('active', card.dataset.colorScheme === scheme);
   });
@@ -681,7 +685,7 @@ if($('#theme-scheme-panel')) $('#theme-scheme-panel').addEventListener('click', 
   settings.colorScheme = scheme;
   applyColorScheme(scheme);
   await saveSettings();
-  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : 'الثيم الأصلي'}`);
+  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : scheme==='terminal' ? 'ثيم FTC2 Terminal (داكن)' : 'الثيم الأصلي'}`);
   showToast('تم تغيير مظهر الواجهة');
 });
 /* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
@@ -797,7 +801,7 @@ async function importSettingsFromFile(file){
   await saveSettings();
   applyThemeColors(settings.themeColors);
   applyTheme(!!settings.darkMode);
-  applyColorScheme(settings.colorScheme||'obsidian');
+  applyColorScheme(settings.colorScheme||'terminal');
   await logAudit('edit','الإعدادات', `تم استيراد إعدادات البرنامج من ملف خارجي (${foundKeys.length} إعداد)`);
   renderSettings();
   showToast('تم استيراد الإعدادات بنجاح');
