@@ -7,9 +7,9 @@ function renderDashboard(){
   // العلوي بمعزل عن تبويب لوحة التحكم نفسه (المحجوب عنهم أصلاً عبر rolePermissions)، فكان يفضح
   // إجمالي المبالغ المالية للاستقبال رغم عدم وصولهم لأي شاشة مالية أخرى في البرنامج.
   $('#quickstats').innerHTML = (currentUserRole==='reception') ? '' : `
-    <div><div class="n">${c.length}</div><div class="l">عميل</div></div>
-    <div><div class="n">${fmt(totalPaid)}</div><div class="l">مستلم</div></div>
-    <div><div class="n">${fmt(totalRemaining)}</div><div class="l">متبقي</div></div>
+    <div><div class="qs-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.8 14.7c2.6.2 4.7 2.3 4.7 5.3"></path></svg></div><div><div class="n">${c.length}</div><div class="l">عميل</div></div></div>
+    <div><div class="qs-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 6.5a5 3.5 0 0 0-5-2c-3 0-5 1.3-5 3s2 2.6 5 3 5 1.3 5 3-2 3-5 3a5 3.5 0 0 1-5-2"></path></svg></div><div><div class="n">${fmt(totalPaid)}</div><div class="l">مستلم</div></div></div>
+    <div><div class="qs-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg></div><div><div class="n">${fmt(totalRemaining)}</div><div class="l">متبقي</div></div></div>
   `;
   // الشريط العلوي (quickstats) دايماً ظاهر فمحتاج يتحدّث دايماً — لكن باقي لوحة التحكم (CFO/التنبيهات
   // الذكية/نظرة الإقفال) بيحسب على كل بيانات العملاء والخزنة، وده تقيل ومحتاجينه بس لو تبويب "لوحة

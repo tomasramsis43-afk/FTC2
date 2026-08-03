@@ -494,13 +494,44 @@ header.top p {
 }
 
 .quickstats div {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: start;
   background: color-mix(in srgb, var(--surface-alt) 70%, transparent);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 7px 16px;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+.quickstats .qs-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--navy) 14%, transparent);
+  color: var(--navy);
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--navy) 45%, transparent);
+}
+.quickstats .qs-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+.quickstats div:nth-child(2) .qs-icon {
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  color: var(--teal);
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--teal) 45%, transparent);
+}
+.quickstats div:nth-child(3) .qs-icon {
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  color: var(--gold-soft);
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--gold) 45%, transparent);
 }
 
 .quickstats .n {
