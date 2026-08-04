@@ -7,69 +7,101 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-/* ============= CSS VARIABLES & ROOT — Terminal Dark (الافتراضي) =============
-   نفس قيم الثيم المعتمدة من المرجع والمعاينة الداكنة. تُوحَّد هنا مع قيم
+/* ============= CSS VARIABLES & ROOT — Indigo Light (الافتراضي الجديد) =============
+   طقم فاتح indigo (#4338CA) بديل عن Terminal الداكن السابق. تُوحَّد هنا مع قيم
    body.theme-terminal أدناه حتى لا يختلف الشكل قبل وبعد تحميل JavaScript. */
 :root {
-  --bg: #060e1c;
-  --surface: rgba(12, 27, 50, 0.74);
-  --surface-solid: #0b1322;
-  --surface-alt: #141c2a;
-  --bg-soft: #101d38;
-  --navy: #22d3ee;
-  --navy-dark: #8aebff;
-  --gold: #d0bcff;
-  --gold-dark: #b794f6;
-  --gold-soft: #d0bcff;
-  --teal: #61f6b9;
-  --success: #61f6b9;
-  --red: #ffb4ab;
-  --danger: #ffb4ab;
-  --text: #dbe2f7;
-  --text-muted: #bbc9cd;
-  --border: rgba(34, 211, 238, 0.16);
+  --bg: #f5f6fa;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #ffffff;
+  --surface-alt: #eef0f7;
+  --bg-soft: #eceef5;
+  --navy: #4338ca;
+  --navy-dark: #6d5ce0;
+  --gold: #d97706;
+  --gold-dark: #b45309;
+  --gold-soft: #fde8c8;
+  --teal: #16a34a;
+  --success: #16a34a;
+  --red: #dc2626;
+  --danger: #dc2626;
+  --text: #181b27;
+  --text-muted: #6b7086;
+  --border: #e5e7f0;
   --radius: 14px;
   --font-display: 'Inter', 'Tajawal', sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.28);
-  --on-accent-text: #04101f;
-  color-scheme: dark;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 14px 30px -8px rgba(67, 56, 202, 0.22);
+  --on-accent-text: #ffffff;
+  color-scheme: light;
 }
 
-/* ============= ثيم "FTC2 Terminal Dark" (الافتراضي — مطابق معاينة المرجع الداكن) =============
-   يُفعَّل عبر body.theme-terminal من إعدادات المظهر. نفس قيم الجذر أعلاه، وأُضيفت
-   للوضوح وصيرورة الثيم الافتراضي قابلاً للاختيار الصريح من الإعدادات. */
+/* ============= ثيم "Indigo Light" (الافتراضي الجديد — بديل Terminal الداكن) =============
+   يُفعَّل عبر body.theme-terminal من إعدادات المظهر (نفس اسم الكلاس القديم
+   محفوظ حتى لا ينكسر أي كود JS يشير إليه؛ الاسم المعروض في الإعدادات تغيّر). */
 body.theme-terminal {
-  --bg: #060e1c;
-  --surface: rgba(12, 27, 50, 0.74);
-  --surface-solid: #0b1322;
-  --surface-alt: #141c2a;
-  --bg-soft: #101d38;
-  --navy: #22d3ee;
-  --navy-dark: #8aebff;
-  --gold: #d0bcff;
-  --gold-dark: #b794f6;
-  --gold-soft: #d0bcff;
-  --teal: #61f6b9;
-  --success: #61f6b9;
-  --red: #ffb4ab;
-  --danger: #ffb4ab;
-  --text: #dbe2f7;
-  --text-muted: #bbc9cd;
-  --border: rgba(34, 211, 238, 0.16);
+  --bg: #f5f6fa;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #ffffff;
+  --surface-alt: #eef0f7;
+  --bg-soft: #eceef5;
+  --navy: #4338ca;
+  --navy-dark: #6d5ce0;
+  --gold: #d97706;
+  --gold-dark: #b45309;
+  --gold-soft: #fde8c8;
+  --teal: #16a34a;
+  --success: #16a34a;
+  --red: #dc2626;
+  --danger: #dc2626;
+  --text: #181b27;
+  --text-muted: #6b7086;
+  --border: #e5e7f0;
   --radius: 14px;
   --font-display: 'Inter', 'Tajawal', sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.28);
-  --on-accent-text: #04101f;
-  color-scheme: dark;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 14px 30px -8px rgba(67, 56, 202, 0.22);
+  --on-accent-text: #ffffff;
+  color-scheme: light;
 }
 body.theme-terminal select,
 body.theme-terminal input,
 body.theme-terminal textarea {
-  color-scheme: dark;
+  color-scheme: light;
+}
+
+/* خلفية الصفحة + عناصر chrome (الهيدر/الأزرار الأساسية) كانت مبنية بألوان سياں
+   ثابتة (hardcoded) بدل المتغيرات في التصميم الداكن القديم — استبدالها هنا بقيم
+   indigo فاتحة متسقة مع بقية الثيم الجديد. */
+body.theme-terminal {
+  background:
+    radial-gradient(1000px 480px at 90% -10%, rgba(67, 56, 202, 0.06), transparent 60%),
+    radial-gradient(800px 420px at -10% 20%, rgba(217, 119, 6, 0.05), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+body.theme-terminal header.top::before {
+  background: radial-gradient(400px 90px at 12% -40%, rgba(67, 56, 202, 0.1), transparent 70%);
+}
+body.theme-terminal header.top::after {
+  background: linear-gradient(90deg, var(--navy), var(--gold), var(--teal));
+}
+body.theme-terminal header.top,
+body.theme-terminal nav.tabs {
+  box-shadow: var(--shadow), 0 18px 44px -24px rgba(67, 56, 202, 0.16);
+}
+body.theme-terminal .btn-primary {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  color: #fff;
+  box-shadow: 0 4px 18px -4px rgba(67, 56, 202, 0.4);
+}
+body.theme-terminal .btn-primary:hover {
+  box-shadow: 0 8px 26px -6px rgba(67, 56, 202, 0.5);
+}
+body.theme-terminal .modal {
+  box-shadow: var(--shadow), 0 30px 70px -30px rgba(67, 56, 202, 0.22);
 }
 
 body.dark-theme {
