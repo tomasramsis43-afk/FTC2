@@ -685,7 +685,7 @@ if($('#theme-scheme-panel')) $('#theme-scheme-panel').addEventListener('click', 
   settings.colorScheme = scheme;
   applyColorScheme(scheme);
   await saveSettings();
-  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : scheme==='terminal' ? 'ثيم FTC2 Terminal (داكن)' : 'الثيم الأصلي'}`);
+  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : scheme==='terminal' ? 'ثيم FTC2 Indigo (فاتح، افتراضي)' : 'الثيم الأصلي'}`);
   showToast('تم تغيير مظهر الواجهة');
 });
 /* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
