@@ -26,9 +26,9 @@
   --bg-soft: #eceefa;
   --navy: #6d4df2;
   --navy-dark: #4e31d6;
-  --gold: #0fbe9e;
-  --gold-dark: #0b9a80;
-  --gold-soft: #0c9c82;
+  --gold: #e8a23c;
+  --gold-dark: #c97f1e;
+  --gold-soft: #b36f14;
   --teal: #0fbe9e;
   --success: #0fbe9e;
   --red: #f0473c;
@@ -60,9 +60,9 @@ body.dark-theme {
   --bg-soft: #12172a;
   --navy: #a996ff;
   --navy-dark: #7c5cfc;
-  --gold: #35e6c4;
-  --gold-dark: #22b49a;
-  --gold-soft: #7fe0cc;
+  --gold: #ffc15e;
+  --gold-dark: #e0a23c;
+  --gold-soft: #ffd98c;
   --teal: #35e6c4;
   --success: #35e6c4;
   --red: #ff6b6b;
