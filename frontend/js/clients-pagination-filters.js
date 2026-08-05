@@ -139,6 +139,10 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
   // من الصفوف) لضمان دقة الإجمالي بغض النظر عن أي مسار عُرض به الجدول.
   const cfp = $('#clients-filtered-paid');
   if(cfp) cfp.textContent = fmt(filteredClients().reduce((s,c)=>s+paidTotal(c),0));
+  // إجمالي المتبقي على كل العملاء المطابقين للفلتر الحالي (نفس منطق استبعاد الموقوفين/الملغيين
+  // المستخدم في حساب "متبقي" بلوحة التحكم)، ليظهر بجانب "إجمالي المدفوع" أعلى جدول العملاء.
+  const cfr = $('#clients-filtered-remaining');
+  if(cfr) cfr.textContent = fmt(filteredClients().filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0));
 
   $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
 
