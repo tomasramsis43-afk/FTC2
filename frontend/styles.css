@@ -1098,6 +1098,95 @@ nav.tabs button[data-view]:not(.active):hover::before {
   font-weight: 700;
 }
 
+/* ============= قائمة المستخدم المنسدلة بالهيدر (تحديث الشيت / اللغة / الصوت / الثيم / كثافة الصفوف) ============= */
+.user-menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-menu-wrap .user-pill {
+  margin: 0;
+}
+
+#btn-user-menu-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.user-menu-wrap.open #btn-user-menu-toggle svg {
+  transform: rotate(180deg);
+}
+
+.user-menu-dropdown {
+  display: none;
+  position: absolute;
+  z-index: 55;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 210px;
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
+  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+  animation: popIn 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+.user-menu-dropdown.show {
+  display: flex;
+}
+
+.user-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: right;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.user-menu-dropdown button:hover {
+  background: var(--surface-alt);
+}
+
+.user-menu-dropdown button .menu-icon {
+  display: flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.user-menu-dropdown button .menu-icon svg,
+.user-menu-dropdown button > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.user-menu-dropdown #btn-sound-toggle.muted .menu-icon svg {
+  opacity: 0.5;
+}
+
+.user-menu-dropdown #btn-density-toggle.active {
+  background: var(--surface-alt);
+  color: var(--navy);
+  font-weight: 700;
+}
+
 .nav-submenu-empty {
   padding: 10px;
   font-size: 12.5px;
