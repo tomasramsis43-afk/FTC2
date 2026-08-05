@@ -10,6 +10,35 @@
    ============================================================ */
 const $ = s => document.querySelector(s);
 const $all = s => document.querySelectorAll(s);
+
+// ضبط تلقائي للمسافة اللي تلزق عندها القائمة الجانبية (nav.tabs) أسفل الهيدر (header.top)،
+// عشان لما تعمل سكرول ميدخلوش في بعض. ارتفاع الهيدر مش ثابت (بيتغيّر حسب quickstats ولفّ
+// الأزرار على الشاشات الضيقة)، فبنقيسه فعليًا ونحدّث متغيّر CSS --sidebar-sticky-top بيه.
+(function initHeaderSidebarSpacing(){
+  function updateSidebarStickyTop(){
+    const header = document.querySelector('header.top');
+    if(!header) return;
+    const cs = getComputedStyle(header);
+    const headerTop = parseFloat(cs.top) || 12;      // top: 12px بتاعة الهيدر نفسه
+    const marginBottom = parseFloat(cs.marginBottom) || 14;
+    const gap = 12; // مسافة فاصلة إضافية بين تحت الهيدر وأول عنصر في القائمة الجانبية
+    const total = headerTop + header.offsetHeight + marginBottom + gap;
+    document.documentElement.style.setProperty('--sidebar-sticky-top', total + 'px');
+  }
+  if(typeof ResizeObserver !== 'undefined'){
+    const ro = new ResizeObserver(updateSidebarStickyTop);
+    document.addEventListener('DOMContentLoaded', () => {
+      const header = document.querySelector('header.top');
+      if(header) ro.observe(header);
+      updateSidebarStickyTop();
+    });
+  } else {
+    window.addEventListener('load', updateSidebarStickyTop);
+  }
+  window.addEventListener('resize', updateSidebarStickyTop);
+  window.addEventListener('load', updateSidebarStickyTop);
+  document.addEventListener('DOMContentLoaded', updateSidebarStickyTop);
+})();
 // هل تبويب معيّن (مثال: 'reports', 'accounting', 'vault') ظاهر فعلاً على الشاشة الآن؟ نستخدمها
 // لتجنّب حساب/رسم شاشات كاملة (وأحياناً على كل بيانات البرنامج) وهي مقفولة أصلاً — بما أن كل تبويب
 // أصلاً يُعاد رسمه من جديد لحظة فتحه (انظر معالج نقر button[data-view] فى ui-framework.js)، فلا داعي
