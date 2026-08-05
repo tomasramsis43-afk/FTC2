@@ -887,13 +887,13 @@ $('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
 const userMenuWrap = $('#user-menu-wrap');
 const userMenuToggleBtn = $('#btn-user-menu-toggle');
 const userMenuDropdown = $('#user-menu-dropdown');
-const userMenuPill = document.querySelector('#user-menu-wrap .user-pill');
-// اسم اليوزر (الـ pill) بقى كمان زرار لفتح/قفل نفس القائمة المنسدلة اللي بيفتحها زر السهم —
-// بنعمل stopPropagation هنا عشان الضغطة الأصلية ميتسمعهاش مستمع الإغلاق العام على document،
-// وبعدين بنحاكي ضغطة حقيقية على زر السهم نفسه عشان يشتغل نفس منطق الفتح/الحساب للموضع أدناه.
-userMenuPill?.addEventListener('click', (e)=>{
-  e.stopPropagation();
-  userMenuToggleBtn?.click();
+// اسم اليوزر نفسه بقى هو زر فتح/قفل القائمة المنسدلة (اتشالت علامة السهم المنفصلة)، وبما إنه
+// <span role="button"> مش <button> حقيقي، محتاجين ندعم كمان تفعيله بلوحة المفاتيح (Enter/Space).
+userMenuToggleBtn?.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter' || e.key===' '){
+    e.preventDefault();
+    userMenuToggleBtn.click();
+  }
 });
 // header.top فيه backdrop-filter (بجانب overflow:hidden)، و backdrop-filter/filter بيعمل
 // containing block جديد لأي عنصر position:fixed بداخله (حسب سبيك الـCSS) — فحتى لو حوّلنا

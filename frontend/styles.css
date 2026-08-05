@@ -954,14 +954,6 @@ nav.tabs button[data-view]:not(.active):hover::before {
   cursor: pointer;
 }
 
-#btn-user-menu-toggle svg {
-  transition: transform 0.2s ease;
-}
-
-.user-menu-wrap.open #btn-user-menu-toggle svg {
-  transform: rotate(180deg);
-}
-
 .user-menu-dropdown {
   display: none;
   position: absolute;
