@@ -900,6 +900,15 @@ userMenuToggleBtn?.addEventListener('click', (e)=>{
     userMenuDropdown.classList.add('show');
     userMenuWrap.classList.add('open');
     userMenuToggleBtn.setAttribute('aria-expanded','true');
+    // header.top عنده overflow:hidden (للزوايا الزجاجية المستديرة)، وده كان بيقصّ القائمة
+    // المنسدلة (position:absolute) فتختفي بدل ما تظهر فوق باقي الشاشة. الحل: نحوّلها لـ
+    // position:fixed ونحسب موضعها فعلياً بالنسبة للشاشة (خارج تأثير overflow الهيدر تماماً)،
+    // بنفس أسلوب قائمة "أنواع الدورات" المنسدلة الموجودة أصلاً بجانب زر "العملاء".
+    const r = userMenuToggleBtn.getBoundingClientRect();
+    userMenuDropdown.style.position = 'fixed';
+    userMenuDropdown.style.top = (r.bottom + 8) + 'px';
+    userMenuDropdown.style.right = (window.innerWidth - r.right) + 'px';
+    userMenuDropdown.style.left = 'auto';
   }
 });
 // إغلاق القائمة بعد اختيار أي عنصر (تحديث الشيت/اللغة/الثيم/الكثافة) — عدا كتم الصوت اللي
