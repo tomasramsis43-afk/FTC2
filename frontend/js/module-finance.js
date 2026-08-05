@@ -1642,7 +1642,7 @@ function renderVoidedLog(){
       <td>${escapeHtml(t.clientName||t.manual||t.category||'—')}</td>
       <td>${escapeHtml(t.deletedReason||'—')}</td>
       <td>${escapeHtml(t.deletedBy||'—')}</td>
-      <td class="mono">${t.deletedAt ? new Date(t.deletedAt).toLocaleString('ar-SA') : '—'}</td>
+      <td class="mono">${t.deletedAt ? new Date(t.deletedAt).toLocaleString('ar-SA-u-nu-latn') : '—'}</td>
     </tr>`).join('');
 }
 bindGenericPagination('voided', voidedPageState, renderVoidedLog);
@@ -1705,7 +1705,7 @@ function auditFilteredRows(){
 function actionLabel(a){ return {add:'إضافة', edit:'تعديل', delete:'حذف'}[a] || a; }
 function fmtDateTime(ts){
   const d = new Date(ts);
-  return d.toLocaleString('ar-SA', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleString('ar-SA-u-nu-latn', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
 }
 let auditPageState = {page:1, sig:''};
 function renderAuditLog(){
@@ -1758,7 +1758,7 @@ $('#btn-lang-toggle').addEventListener('click', ()=>{
 });
 $('#btn-theme-toggle').addEventListener('click', async ()=>{
   settings.darkMode = !settings.darkMode;
-  // الثيمات المتعددة أُلغيت — هوية واحدة "الدفتر الحي" فقط، فالزر يبدّل الوضع
+  // الثيمات المتعددة أُلغيت — هوية واحدة "نبض" فقط، فالزر يبدّل الوضع
   // الليلي/النهاري دائماً بلا أي شرط.
   applyTheme(settings.darkMode);
   await saveSettings();

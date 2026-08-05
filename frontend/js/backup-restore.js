@@ -486,7 +486,7 @@ async function restoreBagStockOnly(file){
   }
   const fromFile = (data.bagStock||[]).filter(b=> b && b.id).length;
   const current = (bagStock||[]).filter(b=> b && b.id).length;
-  const backupDate = data._createdAt ? new Date(data._createdAt).toLocaleString('ar-EG', { dateStyle:'short', timeStyle:'short' }) : 'غير معروف';
+  const backupDate = data._createdAt ? new Date(data._createdAt).toLocaleString('ar-EG-u-nu-latn', { dateStyle:'short', timeStyle:'short' }) : 'غير معروف';
   // معاينة الاستعادة قبل التنفيذ: جدول فرق لكل شيت + ملاحظات تحذيرية — لا يُمسح شيء قبل التأكيد.
   const previewNotes =
     'تنبيهات مهمة قبل المتابعة:\n' +
