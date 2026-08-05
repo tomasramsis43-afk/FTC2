@@ -1,130 +1,75 @@
 /* ============================================================================
-   FTC2 — TERMINAL DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
-   مأخوذ من تصميم Stitch "FTC2 Terminal v2.4.0": داكن زجاجي (سياں/نعناعي/بنفسجي)
-   + ثيم فاتح (Space Grotesk / أزرق). كل المحددات الأصلية محفوظة كما هي حتى لا
-   يتأثر أي كود جافاسكربت — أعيد بناء المظهر فقط.
+   FTC2 — LEDGER PRECISION DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
+   هوية بصرية واحدة موحّدة للبرنامج بالكامل، مستوحاة من الدفاتر الرسمية والفوترة
+   الضريبية: عاجي دافئ + أخضر زجاجي غامق + ذهبي نحاسي، مع وضع ليلي/نهاري حقيقي
+   لنفس الهوية (بدل تعدد الثيمات القديم). كل المحددات الأصلية (أسماء المتغيرات
+   والكلاسات) محفوظة كما هي حتى لا يتأثر أي كود جافاسكربت — أعيد بناء القيم فقط.
    ============================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-/* ============= CSS VARIABLES & ROOT — Indigo Light (الافتراضي الجديد) =============
-   طقم فاتح indigo (#4338CA) بديل عن Terminal الداكن السابق. تُوحَّد هنا مع قيم
-   body.theme-terminal أدناه حتى لا يختلف الشكل قبل وبعد تحميل JavaScript. */
+/* ============= CSS VARIABLES & ROOT — Ledger Precision (فاتح، الافتراضي) ============= */
 :root {
-  --bg: #f5f6fa;
-  --surface: rgba(255, 255, 255, 0.86);
+  --bg: #f6f3ec;
+  --surface: rgba(255, 255, 255, 0.92);
   --surface-solid: #ffffff;
-  --surface-alt: #eef0f7;
-  --bg-soft: #eceef5;
-  --navy: #4338ca;
-  --navy-dark: #6d5ce0;
-  --gold: #d97706;
-  --gold-dark: #b45309;
-  --gold-soft: #fde8c8;
-  --teal: #16a34a;
-  --success: #16a34a;
-  --red: #dc2626;
-  --danger: #dc2626;
-  --text: #181b27;
-  --text-muted: #6b7086;
-  --border: #e5e7f0;
-  --radius: 14px;
-  --font-display: 'Inter', 'Tajawal', sans-serif;
+  --surface-alt: #efebdf;
+  --bg-soft: #efebdf;
+  --navy: #1f4b3f;
+  --navy-dark: #16362d;
+  --gold: #b8862e;
+  --gold-dark: #96691f;
+  --gold-soft: #efdbb0;
+  --teal: #4f7a68;
+  --success: #3f7d4a;
+  --red: #b23a2e;
+  --danger: #b23a2e;
+  --text: #23241f;
+  --text-muted: #726f62;
+  --border: #e1dcc8;
+  --radius: 10px;
+  --font-display: 'Tajawal', sans-serif;
+  --font-heading: 'Markazi Text', 'Tajawal', serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 14px 30px -8px rgba(67, 56, 202, 0.22);
-  --on-accent-text: #ffffff;
+  --shadow: 0 1px 2px rgba(35, 36, 31, 0.06);
+  --shadow-hover: 0 12px 26px -12px rgba(31, 75, 63, 0.22);
+  --on-accent-text: #f6f3ec;
+  --sidebar-bg: #1f4b3f;
+  --sidebar-bg-alt: #244f43;
+  --sidebar-text: #cddbd2;
+  --sidebar-text-muted: #a9bcb2;
+  --sidebar-active-bg: #b8862e;
+  --sidebar-active-text: #1f2e26;
   color-scheme: light;
-}
-
-/* ============= ثيم "Indigo Light" (الافتراضي الجديد — بديل Terminal الداكن) =============
-   يُفعَّل عبر body.theme-terminal من إعدادات المظهر (نفس اسم الكلاس القديم
-   محفوظ حتى لا ينكسر أي كود JS يشير إليه؛ الاسم المعروض في الإعدادات تغيّر). */
-body.theme-terminal {
-  --bg: #f5f6fa;
-  --surface: rgba(255, 255, 255, 0.86);
-  --surface-solid: #ffffff;
-  --surface-alt: #eef0f7;
-  --bg-soft: #eceef5;
-  --navy: #4338ca;
-  --navy-dark: #6d5ce0;
-  --gold: #d97706;
-  --gold-dark: #b45309;
-  --gold-soft: #fde8c8;
-  --teal: #16a34a;
-  --success: #16a34a;
-  --red: #dc2626;
-  --danger: #dc2626;
-  --text: #181b27;
-  --text-muted: #6b7086;
-  --border: #e5e7f0;
-  --radius: 14px;
-  --font-display: 'Inter', 'Tajawal', sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 14px 30px -8px rgba(67, 56, 202, 0.22);
-  --on-accent-text: #ffffff;
-  color-scheme: light;
-}
-body.theme-terminal select,
-body.theme-terminal input,
-body.theme-terminal textarea {
-  color-scheme: light;
-}
-
-/* خلفية الصفحة + عناصر chrome (الهيدر/الأزرار الأساسية) كانت مبنية بألوان سياں
-   ثابتة (hardcoded) بدل المتغيرات في التصميم الداكن القديم — استبدالها هنا بقيم
-   indigo فاتحة متسقة مع بقية الثيم الجديد. */
-body.theme-terminal {
-  background:
-    radial-gradient(1000px 480px at 90% -10%, rgba(67, 56, 202, 0.06), transparent 60%),
-    radial-gradient(800px 420px at -10% 20%, rgba(217, 119, 6, 0.05), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
-}
-body.theme-terminal header.top::before {
-  background: radial-gradient(400px 90px at 12% -40%, rgba(67, 56, 202, 0.1), transparent 70%);
-}
-body.theme-terminal header.top::after {
-  background: linear-gradient(90deg, var(--navy), var(--gold), var(--teal));
-}
-body.theme-terminal header.top,
-body.theme-terminal nav.tabs {
-  box-shadow: var(--shadow), 0 18px 44px -24px rgba(67, 56, 202, 0.16);
-}
-body.theme-terminal .btn-primary {
-  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
-  color: #fff;
-  box-shadow: 0 4px 18px -4px rgba(67, 56, 202, 0.4);
-}
-body.theme-terminal .btn-primary:hover {
-  box-shadow: 0 8px 26px -6px rgba(67, 56, 202, 0.5);
-}
-body.theme-terminal .modal {
-  box-shadow: var(--shadow), 0 30px 70px -30px rgba(67, 56, 202, 0.22);
 }
 
 body.dark-theme {
-  --bg: #03060d;
-  --surface: rgba(9, 17, 32, 0.82);
-  --surface-solid: #0a1526;
-  --surface-alt: #0e1b30;
-  --bg-soft: #0e1b30;
-  --navy: #22d3ee;
-  --navy-dark: #7ee7ff;
-  --gold: #d0bcff;
-  --gold-dark: #b794f6;
-  --gold-soft: #d0bcff;
-  --teal: #61f6b9;
-  --success: #61f6b9;
-  --red: #ffb4ab;
-  --danger: #ffb4ab;
-  --text: #e8effc;
-  --text-muted: #8296b8;
-  --border: rgba(138, 235, 255, 0.2);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-hover: 0 10px 32px -10px rgba(34, 211, 238, 0.34);
-  --on-accent-text: #04101f;
+  --bg: #14201b;
+  --surface: rgba(27, 42, 35, 0.92);
+  --surface-solid: #1b2a23;
+  --surface-alt: #223529;
+  --bg-soft: #1f2e27;
+  --navy: #7fb89a;
+  --navy-dark: #6fae8c;
+  --gold: #d9a84e;
+  --gold-dark: #c79235;
+  --gold-soft: #3a2f1c;
+  --teal: #8fb9c7;
+  --success: #7fb89a;
+  --red: #d97462;
+  --danger: #d97462;
+  --text: #ede7d8;
+  --text-muted: #a6a08d;
+  --border: rgba(217, 168, 78, 0.16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
+  --on-accent-text: #14201b;
+  --sidebar-bg: #10241c;
+  --sidebar-bg-alt: #15291f;
+  --sidebar-text: #a9bcb2;
+  --sidebar-text-muted: #7c9186;
+  --sidebar-active-bg: #d9a84e;
+  --sidebar-active-text: #1f2e26;
   color-scheme: dark;
 }
 
@@ -134,188 +79,6 @@ body.dark-theme textarea {
   color-scheme: dark;
 }
 
-/* ============= ثيم "Stitch — فيريديان فلو" (فاتح، طاقة أخضر ومياه أزرق) =============
-   ثيم بديل يُختار من لوحة الإعدادات — بدون تعديل منطق theme-settings.js. */
-body.theme-stitch {
-  --bg: #f4f8f5;
-  --surface: #ffffff;
-  --surface-solid: #ffffff;
-  --surface-alt: #eef5f0;
-  --bg-soft: #e5f0ea;
-  --navy: #006d32;
-  --navy-dark: #005224;
-  --gold: #0059bb;
-  --gold-dark: #004493;
-  --gold-soft: #adc7ff;
-  --teal: #00d166;
-  --success: #00d166;
-  --red: #ba1a1a;
-  --danger: #ba1a1a;
-  --text: #0b1c30;
-  --text-muted: #3c4a3d;
-  --border: rgba(187, 203, 185, 0.4);
-  --radius: 12px;
-  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(11, 28, 48, 0.06);
-  --shadow-hover: 0 10px 28px rgba(11, 28, 48, 0.12);
-  --on-accent-text: #ffffff;
-  color-scheme: light;
-}
-body.theme-stitch select,
-body.theme-stitch input,
-body.theme-stitch textarea {
-  color-scheme: light;
-}
-
-/* ============= ثيم "Obsidian Light" → مقلوب إلى التصميم الفاتح من Stitch =============
-   خلفية فاتحة #f4f7fb، لوحات بيضاء، أزرق #2563eb أساسي، خط Space Grotesk.
-   (الاسم محفوظ كما هو في الإعدادات والكود — القيم أعيد بناؤها). */
-body.theme-obsidian {
-  --bg: #f7f9fb;
-  --surface: #ffffff;
-  --surface-solid: #ffffff;
-  --surface-alt: #eceef0;
-  --bg-soft: #e6e8ea;
-  --navy: #004ac6;
-  --navy-dark: #2563eb;
-  --gold: #515f74;
-  --gold-dark: #434655;
-  --gold-soft: #571bc1;
-  --teal: #2563eb;
-  --success: #166534;
-  --red: #ba1a1a;
-  --danger: #ba1a1a;
-  --text: #191c1e;
-  --text-muted: #434655;
-  --border: #c3c6d7;
-  --radius: 12px;
-  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 14px 30px -8px rgba(0, 74, 198, 0.18);
-  --on-accent-text: #ffffff;
-  color-scheme: light;
-}
-body.theme-obsidian select,
-body.theme-obsidian input,
-body.theme-obsidian textarea {
-  color-scheme: light;
-}
-
-body.theme-obsidian {
-  font-family: var(--font-display);
-  background:
-    radial-gradient(1000px 480px at 90% -10%, rgba(0, 74, 198, 0.07), transparent 60%),
-    radial-gradient(800px 420px at -10% 30%, rgba(87, 27, 193, 0.05), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
-}
-
-body.theme-obsidian header.top {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #e2e8f0;
-}
-body.theme-obsidian header.top::after {
-  background: linear-gradient(90deg, #004ac6, #571bc1);
-}
-body.theme-obsidian nav.tabs {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #e2e8f0;
-}
-body.theme-obsidian header.top .seal {
-  background: rgba(0, 74, 198, 0.05);
-  box-shadow: 0 0 0 3px rgba(0, 74, 198, 0.14), 0 0 20px rgba(0, 74, 198, 0.12);
-}
-body.theme-obsidian #view-clients thead th {
-  background: #eceef0;
-  color: var(--navy-dark);
-}
-body.theme-obsidian .table-scroll thead th {
-  background: #ffffff;
-}
-
-/* ============= ثيم "Neon Amethyst Cybernetic" (داكن، نيون بنفسجي/فوشيا) =============
-   مأخوذ من طقم Stitch الثالث: خلفية #131318، أساسي فوشيا/بنفسجي #ecb2ff، ثانوي
-   سايان نيون #00eefc للتباين، خط Space Grotesk. طقم داكن بديل تماماً عن الأصلي
-   (سايان/بنفسجي فاتح) بهوية لونية أكثر جرأة. */
-body.theme-amethyst {
-  --bg: #131318;
-  --surface: rgba(31, 31, 37, 0.76);
-  --surface-solid: #1b1b20;
-  --surface-alt: #2a292f;
-  --bg-soft: #2a292f;
-  --navy: #ecb2ff;
-  --navy-dark: #f8d8ff;
-  --gold: #00eefc;
-  --gold-dark: #7df4ff;
-  --gold-soft: #d1bcff;
-  --teal: #00eefc;
-  --success: #00eefc;
-  --red: #ffb4ab;
-  --danger: #ffb4ab;
-  --text: #e4e1e9;
-  --text-muted: #d4c0d7;
-  --border: rgba(236, 178, 255, 0.18);
-  --radius: 14px;
-  --font-display: 'Space Grotesk', 'Tajawal', sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-hover: 0 10px 32px -10px rgba(236, 178, 255, 0.32);
-  --on-accent-text: #320047;
-  color-scheme: dark;
-}
-body.theme-amethyst select,
-body.theme-amethyst input,
-body.theme-amethyst textarea {
-  color-scheme: dark;
-}
-
-body.theme-amethyst {
-  font-family: var(--font-display);
-  background:
-    radial-gradient(1000px 480px at 90% -10%, rgba(236, 178, 255, 0.1), transparent 60%),
-    radial-gradient(800px 420px at -10% 30%, rgba(0, 238, 252, 0.07), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
-}
-
-body.theme-amethyst header.top {
-  background: rgba(19, 19, 24, 0.82);
-  border: 1px solid var(--border);
-}
-body.theme-amethyst header.top::after {
-  background: linear-gradient(90deg, #ecb2ff, #00eefc);
-}
-body.theme-amethyst nav.tabs {
-  background: rgba(27, 27, 32, 0.85);
-  border: 1px solid var(--border);
-}
-body.theme-amethyst header.top .seal {
-  background: rgba(236, 178, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(236, 178, 255, 0.16), 0 0 20px rgba(236, 178, 255, 0.16);
-}
-body.theme-amethyst #view-clients thead th {
-  background: #1f1f25;
-  color: var(--navy-dark);
-}
-body.theme-amethyst .table-scroll thead th {
-  background: #1b1b20;
-}
-
-/* بطاقات اختيار مظهر الواجهة في الإعدادات */
-.theme-scheme-card {
-  transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.theme-scheme-card:hover {
-  transform: translateY(-2px);
-}
-.theme-scheme-card.active {
-  border-color: var(--navy) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 25%, transparent), 0 8px 24px -8px color-mix(in srgb, var(--navy) 40%, transparent);
-}
 
 /* native <select> popup lists follow OS rendering by default;
    force theme colors so dropdowns (year filters, etc.) stay on-brand */
@@ -369,16 +132,12 @@ html {
 body {
   margin: 0;
   background:
-    radial-gradient(1100px 500px at 85% -10%, rgba(34, 211, 238, 0.07), transparent 60%),
-    radial-gradient(900px 460px at -10% 20%, rgba(139, 92, 246, 0.06), transparent 60%),
-    radial-gradient(700px 400px at 50% 110%, rgba(97, 246, 185, 0.045), transparent 60%),
-    linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px),
+    radial-gradient(1000px 460px at 88% -12%, color-mix(in srgb, var(--navy) 5%, transparent), transparent 60%),
+    radial-gradient(800px 420px at -10% 25%, color-mix(in srgb, var(--gold) 5%, transparent), transparent 60%),
     var(--bg);
-  background-size: auto, auto, auto, 40px 40px, 40px 40px, auto;
   background-attachment: fixed;
   color: var(--text);
-  font-family: 'Inter', 'Tajawal', system-ui, sans-serif;
+  font-family: var(--font-display), 'Tajawal', system-ui, sans-serif;
   min-height: 100vh;
   overflow-x: clip;
   width: 100%;
@@ -460,7 +219,7 @@ section.view.active {
   }
 }
 
-/* ============= HEADER (Top Bar زجاجي) ============= */
+/* ============= HEADER (ترويسة رسمية مسطحة) ============= */
 header.top {
   position: sticky;
   top: 12px;
@@ -470,40 +229,25 @@ header.top {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  background: color-mix(in srgb, var(--surface-solid) 74%, transparent);
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  background: var(--surface-solid);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px 20px;
   color: var(--text);
-  box-shadow: var(--shadow), 0 18px 44px -22px rgba(34, 211, 238, 0.22);
+  box-shadow: var(--shadow);
   margin-bottom: 14px;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-body.dark-theme header.top {
-  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
-}
-
-header.top::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(400px 90px at 12% -40%, rgba(34, 211, 238, 0.14), transparent 70%);
-}
-
 header.top::after {
   content: '';
   position: absolute;
-  inset-inline: 18px;
+  inset-inline: 0;
   bottom: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--navy), var(--gold), var(--teal));
-  opacity: 0.85;
+  height: 3px;
+  background: var(--gold);
+  opacity: 0.9;
 }
 
 header.top .brand {
@@ -513,8 +257,8 @@ header.top .brand {
 }
 
 header.top .seal {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   flex: none;
   position: relative;
@@ -522,15 +266,15 @@ header.top .seal {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: rgba(6, 16, 32, 0.4);
-  border: 1.5px solid color-mix(in srgb, var(--navy) 70%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 14%, transparent), 0 0 20px color-mix(in srgb, var(--navy) 28%, transparent);
+  background: var(--navy);
+  border: 1.5px solid var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 16%, transparent);
   transition: transform 0.3s ease;
   will-change: transform;
 }
 
 header.top:hover .seal {
-  transform: rotate(-2deg) scale(1.06);
+  transform: rotate(-2deg) scale(1.05);
 }
 
 header.top .seal img {
@@ -542,11 +286,11 @@ header.top .seal img {
 }
 
 header.top h1 {
-  font-size: 16.5px;
+  font-size: 20px;
   margin: 0;
   font-weight: 700;
-  font-family: var(--font-display);
-  letter-spacing: 0.3px;
+  font-family: var(--font-heading);
+  letter-spacing: 0.2px;
 }
 
 header.top p {
@@ -699,13 +443,11 @@ nav.tabs {
   flex-direction: column;
   align-items: stretch;
   gap: 5px;
-  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  border: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  border: 1px solid color-mix(in srgb, var(--gold) 18%, transparent);
   padding: 14px 10px;
-  border-radius: 16px;
-  box-shadow: var(--shadow), 0 18px 44px -24px rgba(139, 92, 246, 0.25);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   position: sticky;
   top: var(--sidebar-sticky-top, 110px);
   z-index: 30;
@@ -715,10 +457,6 @@ nav.tabs {
   overflow-x: visible;
   transition: width 0.18s ease, top 0.15s ease;
   scrollbar-width: thin;
-}
-
-body.dark-theme nav.tabs {
-  background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
 }
 
 nav.tabs.collapsed {
@@ -732,23 +470,23 @@ nav.tabs.collapsed {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--gold) 20%, transparent);
   background: transparent;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--sidebar-text-muted);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   margin-bottom: 6px;
 }
 
 .nav-collapse-toggle:hover {
-  background: var(--surface-alt);
-  color: var(--navy);
-  border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
+  background: var(--sidebar-bg-alt);
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
 }
 
 .nav-collapse-toggle svg {
@@ -781,12 +519,12 @@ nav.tabs button {
   border: none;
   background: transparent;
   padding: 9px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--sidebar-text);
   text-align: right;
   white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
@@ -810,33 +548,23 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--navy) 16%, transparent), color-mix(in srgb, var(--gold) 9%, transparent));
-  color: var(--navy);
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--navy) 32%, transparent), 0 0 18px -6px color-mix(in srgb, var(--navy) 50%, transparent);
   animation: navPop 0.25s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
 nav.tabs button.active::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 22%;
-  bottom: 22%;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--navy);
-  box-shadow: 0 0 10px var(--navy);
+  content: none;
 }
 
 nav.tabs button:not(.active):hover {
-  background: var(--surface-alt);
-  color: var(--text);
+  background: var(--sidebar-bg-alt);
+  color: var(--gold);
 }
 
 nav.tabs button:hover svg {
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
+  transform: scale(1.08);
 }
 
 /* ============= أيقونات Material Symbols (بدل SVG) — تطابق المرجع ============= */
@@ -870,8 +598,7 @@ nav.tabs button[data-view="budget"]::before { content: "savings"; }
 nav.tabs button[data-view="audit"]::before { content: "fact_check"; }
 
 nav.tabs button[data-view]:not(.active):hover::before {
-  color: var(--navy);
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--navy) 55%, transparent));
+  color: var(--gold);
 }
 
 @media(max-width: 900px) {
@@ -1099,21 +826,18 @@ section.view.active {
 
 .card {
   position: relative;
-  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  background: var(--surface-solid);
   border-radius: var(--radius);
   padding: 16px 18px 16px 20px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
   border-inline-start: 3px solid var(--gold);
   transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
-  will-change: transform, box-shadow;
 }
 
 .card:hover {
   box-shadow: var(--shadow-hover);
-  border-color: color-mix(in srgb, var(--navy) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
   transform: translateY(-2px);
 }
 
@@ -1132,7 +856,6 @@ section.view.active {
   font-size: 23px;
   font-weight: 700;
   color: var(--navy);
-  text-shadow: 0 0 18px color-mix(in srgb, var(--navy) 40%, transparent);
   transition: color 0.2s ease;
 }
 
@@ -1162,26 +885,23 @@ section.view.active {
 
 /* ============= PANELS (بطاقات زجاجية) ============= */
 .panel {
-  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  border-radius: 16px;
-  box-shadow: var(--shadow), 0 20px 50px -30px rgba(34, 211, 238, 0.18);
-  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: var(--surface-solid);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
   padding: 18px 20px;
   margin-bottom: 16px;
   transition: box-shadow 0.2s ease;
-  will-change: transform;
 }
 
 .panel h3 {
   margin: 0 0 14px;
-  font-size: 14.5px;
+  font-size: 17px;
   color: var(--text);
-  font-family: var(--font-display);
+  font-family: var(--font-heading);
   font-weight: 700;
-  letter-spacing: 0.3px;
-  border-inline-start: 3px solid var(--navy);
+  letter-spacing: 0.2px;
+  border-inline-start: 3px solid var(--gold);
   padding-inline-start: 10px;
   display: flex;
   align-items: center;
@@ -1354,7 +1074,7 @@ section.view.active {
 }
 .close-entity-card:hover {
   border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
-  box-shadow: 0 8px 24px -12px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 8px 24px -12px rgba(217, 168, 78, 0.25);
 }
 .close-entity-info .l { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
 .close-entity-info .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 7px currentColor; }
@@ -1439,10 +1159,10 @@ section.view.active {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #22d3ee 0%, #d0bcff 100%);
-  color: #04101f;
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  color: var(--on-accent-text);
   font-weight: 700;
-  box-shadow: 0 4px 18px -4px rgba(34, 211, 238, 0.45);
+  box-shadow: 0 4px 18px -4px rgba(217, 168, 78, 0.45);
 }
 
 .btn-primary:hover {
@@ -1451,14 +1171,14 @@ section.view.active {
 }
 
 .btn-gold {
-  background: linear-gradient(135deg, var(--gold) 0%, color-mix(in srgb, var(--gold) 70%, #4f46e5) 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: var(--on-accent-text);
   box-shadow: 0 4px 18px -6px color-mix(in srgb, var(--gold) 55%, transparent);
 }
 
 .btn-gold:hover {
   background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold) 100%);
-  color: #fff;
+  color: var(--on-accent-text);
   box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--gold) 60%, transparent);
 }
 
@@ -1814,28 +1534,31 @@ tbody tr:hover {
 
 .stamp {
   display: inline-block;
-  border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent);
-  background: color-mix(in srgb, var(--teal) 13%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--teal) 55%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 30%, transparent);
+  background: color-mix(in srgb, var(--teal) 10%, transparent);
   color: var(--teal);
-  border-radius: 8px;
-  padding: 3px 10px;
+  border-radius: 4px;
+  padding: 2px 9px;
   font-size: 10.5px;
   font-weight: 700;
   white-space: nowrap;
   font-family: var(--font-mono);
-  letter-spacing: 0.4px;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--teal) 40%, transparent);
+  letter-spacing: 0.5px;
+  transform: rotate(-1.5deg);
 }
 
 .stamp.owe {
-  border-color: color-mix(in srgb, var(--red) 30%, transparent);
-  background: color-mix(in srgb, var(--red) 13%, transparent);
-  color: var(--red);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  color: var(--gold-dark);
 }
 
 .stamp.paid {
-  border-color: color-mix(in srgb, var(--teal) 30%, transparent);
-  background: color-mix(in srgb, var(--teal) 13%, transparent);
+  border-color: color-mix(in srgb, var(--teal) 55%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 30%, transparent);
+  background: color-mix(in srgb, var(--teal) 10%, transparent);
   color: var(--teal);
 }
 
@@ -1944,7 +1667,7 @@ tbody tr:hover {
   max-width: 640px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow), 0 30px 70px -30px rgba(34, 211, 238, 0.3);
+  box-shadow: var(--shadow), 0 30px 70px -30px rgba(217, 168, 78, 0.3);
   padding: 22px 26px;
 }
 
@@ -2079,19 +1802,19 @@ tbody tr:hover {
 /* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
-  --auth-bg-deep: #060e1c;
-  --auth-bg-mid: #0b2140;
-  --auth-panel: rgba(15, 33, 61, 0.55);
-  --auth-border: rgba(56, 189, 248, 0.35);
-  --auth-cyan: #22d3ee;
-  --auth-cyan-bright: #5eead4;
-  --auth-violet: #6366f1;
-  --auth-text: #eaf2ff;
-  --auth-text-dim: #8fa3c4;
+  --auth-bg-deep: #10241c;
+  --auth-bg-mid: #1a362b;
+  --auth-panel: rgba(31, 75, 63, 0.4);
+  --auth-border: rgba(217, 168, 78, 0.3);
+  --auth-cyan: #d9a84e;
+  --auth-cyan-bright: #efc978;
+  --auth-violet: #7fb89a;
+  --auth-text: #f6f3ec;
+  --auth-text-dim: #b9c9bf;
   background:
     radial-gradient(circle at 20% 15%, var(--auth-bg-mid) 0%, var(--auth-bg-deep) 55%),
-    repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.05) 0px, rgba(34, 211, 238, 0.05) 1px, transparent 1px, transparent 42px),
-    repeating-linear-gradient(90deg, rgba(34, 211, 238, 0.05) 0px, rgba(34, 211, 238, 0.05) 1px, transparent 1px, transparent 42px),
+    repeating-linear-gradient(0deg, rgba(217, 168, 78, 0.04) 0px, rgba(217, 168, 78, 0.04) 1px, transparent 1px, transparent 42px),
+    repeating-linear-gradient(90deg, rgba(217, 168, 78, 0.04) 0px, rgba(217, 168, 78, 0.04) 1px, transparent 1px, transparent 42px),
     var(--auth-bg-deep);
   background-size: cover, 42px 42px, 42px 42px, cover;
   background-position: center;
@@ -2104,7 +1827,7 @@ tbody tr:hover {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 18px;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08) inset;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(217, 168, 78, 0.08) inset;
   padding: 30px 28px;
   width: 100%;
   max-width: 360px;
@@ -2118,7 +1841,7 @@ tbody tr:hover {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 18px;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(34, 211, 238, 0.08) inset;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(217, 168, 78, 0.08) inset;
   overflow: hidden;
   width: 100%;
   max-width: 560px;
@@ -2183,7 +1906,7 @@ tbody tr:hover {
   overflow: hidden;
   background: rgba(6, 16, 32, 0.4);
   border: 1.5px solid var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15), 0 0 24px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 0 0 3px rgba(217, 168, 78, 0.15), 0 0 24px rgba(217, 168, 78, 0.35);
 }
 
 .login-box .seal img,
@@ -2229,7 +1952,7 @@ tbody tr:hover {
 
 .login-box .field input:focus {
   border-color: var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+  box-shadow: 0 0 0 3px rgba(217, 168, 78, 0.15);
 }
 
 .login-box .btn-primary {
@@ -2239,12 +1962,12 @@ tbody tr:hover {
   color: #04101f;
   font-weight: 700;
   border: none;
-  box-shadow: 0 8px 24px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 8px 24px rgba(217, 168, 78, 0.35);
 }
 
 .login-box .btn-primary:hover {
   background: linear-gradient(135deg, var(--auth-cyan-bright) 0%, var(--auth-violet) 100%);
-  box-shadow: 0 12px 30px rgba(34, 211, 238, 0.45);
+  box-shadow: 0 12px 30px rgba(217, 168, 78, 0.45);
 }
 
 .login-error {

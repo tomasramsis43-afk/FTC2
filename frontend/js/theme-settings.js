@@ -657,42 +657,18 @@ function applyTheme(isDark){
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
 }
-/* التبديل بين الثيمات الكاملة الجاهزة — 'terminal' (FTC2 Terminal داكن، المطابق
-   للتصميم المعتمد من المرجع، الافتراضي)، 'obsidian' (Obsidian Light — فاتح مطابق
-   للمعاينة الفاتحة المعتمدة)، 'stitch' (Stitch — فيريديان فلو)، 'original' (الأصلي
-   كحلي/سايان-بنفسجي)، و'amethyst' (Amethyst — نيون بنفسجي/فوشيا داكن). طقم كامل ثابت
-   (وليس تخصيص ألوان يدوي حر). يُحفظ الاختيار ضمن إعدادات البرنامج
-   (settings.colorScheme) فيبقى نفسه لكل من يفتح البرنامج على هذا الحساب. */
+/* الثيمات المتعددة أُلغيت نهائياً — الواجهة الآن تستخدم هوية بصرية واحدة موحّدة
+   "الدفتر الحي" (Ledger Precision) مع وضع ليلي/نهاري حقيقي لنفس الهوية فقط.
+   الدالتان التاليتان أُبقيتا بلا تأثير (no-op) حتى لا ينكسر أي استدعاء قديم لهما
+   في باقي الكود؛ التبديل الفعلي بين الفاتح/الداكن يتم فقط عبر applyTheme(). */
 function applyColorScheme(scheme){
-  const s = ['obsidian','stitch','amethyst','terminal'].includes(scheme) ? scheme : null;
-  document.body.classList.toggle('theme-stitch', s === 'stitch');
-  document.body.classList.toggle('theme-obsidian', s === 'obsidian');
-  document.body.classList.toggle('theme-amethyst', s === 'amethyst');
-  document.body.classList.toggle('theme-terminal', s === 'terminal');
-  // ثيم Obsidian Light وثيم Stitch فاتحان بطبيعتهما، فلا داعي لأي تراكب مع كلاس
-  // الوضع الليلي الداكن في نفس الوقت. ثيم Amethyst وثيم Terminal داكنان بطبيعتهما
-  // فيُعامَلا بنفس المنطق (طقم كامل مستقل بذاته، بلا تراكب مع dark-theme الافتراضي).
-  if(s) document.body.classList.remove('dark-theme');
-  else applyTheme(!!settings.darkMode);
-  renderThemeSchemePanel();
+  return;
 }
 function renderThemeSchemePanel(){
-  const scheme = settings.colorScheme || 'terminal';
-  $all('[data-color-scheme]').forEach(card=>{
-    card.classList.toggle('active', card.dataset.colorScheme === scheme);
-  });
+  return;
 }
-if($('#theme-scheme-panel')) $('#theme-scheme-panel').addEventListener('click', async (e)=>{
-  const card = e.target.closest('[data-color-scheme]');
-  if(!card) return;
-  const scheme = card.dataset.colorScheme;
-  if(settings.colorScheme === scheme) return;
-  settings.colorScheme = scheme;
-  applyColorScheme(scheme);
-  await saveSettings();
-  await logAudit('edit','الإعدادات', `تم تغيير مظهر الواجهة إلى: ${scheme==='stitch' ? 'ثيم Stitch (فيريديان فلو)' : scheme==='obsidian' ? 'ثيم Obsidian Light (فاتح)' : scheme==='amethyst' ? 'ثيم Amethyst (نيون بنفسجي داكن)' : scheme==='terminal' ? 'ثيم FTC2 Indigo (فاتح، افتراضي)' : 'الثيم الأصلي'}`);
-  showToast('تم تغيير مظهر الواجهة');
-});
+// لا توجد مستمعة (listener) على #theme-scheme-panel لأن العنصر نُحذف تماماً من الإعدادات.
+
 /* تم إلغاء تطبيق الألوان المخصصة نهائياً بناءً على طلب صريح — الدالة أصبحت بلا تأثير
    (no-op) حتى لا تفرض أي لون عبر inline style على body، وتبقى ألوان الواجهة كما هي
    مضبوطة في CSS الثابت فقط (رمادي محايد). أُبقيت الدالة موجودة بلا محتوى فقط لتفادي
