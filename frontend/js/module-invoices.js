@@ -767,7 +767,7 @@ function renderSettings(){
   if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
   if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
-    ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA')}`
+    ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA-u-nu-latn')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
   renderThemeSchemePanel();
   renderUsersList();
@@ -1036,7 +1036,7 @@ async function renderLoginHistory(){
             <td data-label="الحالة">${h.success===false?'❌ فشلت':'✅ ناجحة'}</td>
             <td data-label="اسم المستخدم">${escapeHtml(h.username)}${h.username===currentUser?' — أنت':''}</td>
             <td data-label="الصلاحية">${escapeHtml(SERVER_ROLE_LABELS[h.role]||h.role||'—')}</td>
-            <td class="mono" data-label="الوقت">${new Date(h.logged_in_at).toLocaleString('ar-SA')}</td>
+            <td class="mono" data-label="الوقت">${new Date(h.logged_in_at).toLocaleString('ar-SA-u-nu-latn')}</td>
             <td data-label="الجهاز" title="${escapeHtml(h.device_info||'')}">${escapeHtml(formatDeviceInfo(h.device_info))}</td>
             <td class="mono" data-label="عنوان IP">${escapeHtml(h.ip_address||'—')}</td>
           </tr>`).join('')}
@@ -1360,7 +1360,7 @@ async function renderServerBackupsList(){
   wrap.innerHTML = `<div class="table-scroll table-scroll-compact cards-mobile"><table><thead><tr>
     <th>التاريخ</th><th>النوع</th><th>الحجم</th><th>بواسطة</th><th></th></tr></thead><tbody>
     ${rows.map(r=>`<tr>
-      <td class="mono" data-label="التاريخ">${new Date(r.created_at).toLocaleString('ar-SA')}</td>
+      <td class="mono" data-label="التاريخ">${new Date(r.created_at).toLocaleString('ar-SA-u-nu-latn')}</td>
       <td data-label="النوع">${r.kind==='manual'?'يدوية':'تلقائية'}</td>
       <td class="mono" data-label="الحجم">${((r.size_bytes||0)/1024).toFixed(0)} كيلوبايت</td>
       <td data-label="بواسطة">${escapeHtml(r.created_by||'—')}</td>

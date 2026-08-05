@@ -134,7 +134,7 @@ function renderPendingApprovalsPanel(){
           <td data-label="الشاشة">${escapeHtml(pendingCollectionLabel(item.collection))}</td>
           <td data-label="العملية">${item.obj ? escapeHtml(pendingRecordSummary(item)) : escapeHtml(item.id)}</td>
           <td data-label="سجّلها">${escapeHtml(item.createdBy||'—')}</td>
-          <td class="mono" data-label="التاريخ">${item.updatedAt ? escapeHtml(new Date(item.updatedAt).toLocaleString('ar-EG')) : '—'}</td>
+          <td class="mono" data-label="التاريخ">${item.updatedAt ? escapeHtml(new Date(item.updatedAt).toLocaleString('ar-EG-u-nu-latn')) : '—'}</td>
           <td class="card-full" data-label="" style="white-space:nowrap;">
             <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير">✅ اعتماد</button>
             <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>

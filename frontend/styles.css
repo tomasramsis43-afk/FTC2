@@ -1,84 +1,76 @@
 /* ============================================================================
-   FTC2 — LEDGER PRECISION DESIGN SYSTEM (إعادة بناء كاملة للواجهة)
-   هوية بصرية واحدة موحّدة للبرنامج بالكامل، مستوحاة من الدفاتر الرسمية والفوترة
-   الضريبية: عاجي دافئ + أخضر زجاجي غامق + ذهبي نحاسي، مع وضع ليلي/نهاري حقيقي
-   لنفس الهوية (بدل تعدد الثيمات القديم). كل المحددات الأصلية (أسماء المتغيرات
-   والكلاسات) محفوظة كما هي حتى لا يتأثر أي كود جافاسكربت — أعيد بناء القيم فقط.
+   FTC2 — نبض (NABD) DESIGN SYSTEM (هوية بصرية جديدة كليًا — نفس المحددات/الكلاسات
+   الأصلية، قيم فقط أُعيد بناؤها حتى لا يتأثر أي كود جافاسكربت). هوية حديثة راقية:
+   إندجو داكن عميق + كهرماني دافئ (أساسي) + فيروزي/تركواز (ثانوي وحالات إيجابية) +
+   مرجاني (تنبيهات ومتأخرات). خط Cairo الثقيل للعناوين، IBM Plex Sans Arabic للنصوص،
+   IBM Plex Mono للأرقام. توهجات لونية خفيفة في الزوايا وخلف العناصر النشطة.
    ============================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
-/* ============================================================================
-   FTC2 — AURORA DESIGN SYSTEM (تحديث هوية بصرية — نفس المحددات/الكلاسات الأصلية،
-   قيم فقط أُعيد بناؤها). هوية حديثة: بنفسجي كهربائي + نعناعي، حواف دائرية أكبر،
-   توهجات لونية خفيفة (glow)، خط Cairo للعناوين وIBM Plex Sans Arabic للنصوص،
-   مع وضع ليلي/نهاري حقيقي لنفس الهوية. مواقع السايدبار/الهيدر لم تُمس إطلاقاً —
-   هذا الملف يغيّر الألوان/الخطوط/الحواف فقط.
-   ============================================================================ */
-
-/* ============= CSS VARIABLES & ROOT — Aurora Light (فاتح، الافتراضي) ============= */
+/* ============= CSS VARIABLES & ROOT — نبض Light (فاتح) ============= */
 :root {
-  --bg: #f5f6fb;
+  --bg: #f4f2ee;
   --surface: rgba(255, 255, 255, 0.92);
   --surface-solid: #ffffff;
-  --surface-alt: #eef0fa;
-  --bg-soft: #eceefa;
-  --navy: #6d4df2;
-  --navy-dark: #4e31d6;
-  --gold: #e8a23c;
-  --gold-dark: #c97f1e;
-  --gold-soft: #b36f14;
-  --teal: #0fbe9e;
-  --success: #0fbe9e;
-  --red: #f0473c;
-  --danger: #f0473c;
-  --text: #171a2b;
-  --text-muted: #767c97;
-  --border: #e7e9f5;
-  --radius: 14px;
+  --surface-alt: #f0ece4;
+  --bg-soft: #ece7dd;
+  --navy: #d9832f;
+  --navy-dark: #b3661e;
+  --gold: #1fa98a;
+  --gold-dark: #167a64;
+  --gold-soft: #5fcdb4;
+  --teal: #1fa98a;
+  --success: #1fa98a;
+  --red: #e0505e;
+  --danger: #e0505e;
+  --text: #201a2e;
+  --text-muted: #6c6478;
+  --border: #e6e1d8;
+  --radius: 16px;
   --font-display: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
   --font-heading: 'Cairo', 'Tajawal', sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(23, 26, 43, 0.04);
-  --shadow-hover: 0 16px 34px -16px rgba(109, 77, 242, 0.3);
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  --shadow: 0 1px 2px rgba(32, 26, 46, 0.05);
+  --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.35);
   --on-accent-text: #ffffff;
-  --sidebar-bg: #12162a;
-  --sidebar-bg-alt: #171b30;
+  --sidebar-bg: #171b2e;
+  --sidebar-bg-alt: #1c2036;
   --sidebar-text: #b9bedb;
   --sidebar-text-muted: #7a7fa0;
-  --sidebar-active-bg: #6d4df2;
-  --sidebar-active-text: #ffffff;
+  --sidebar-active-bg: #f0a857;
+  --sidebar-active-text: #0f1326;
   color-scheme: light;
 }
 
 body.dark-theme {
-  --bg: #090c14;
-  --surface: rgba(19, 24, 38, 0.92);
-  --surface-solid: #131826;
-  --surface-alt: #171d2e;
-  --bg-soft: #12172a;
-  --navy: #a996ff;
-  --navy-dark: #7c5cfc;
-  --gold: #ffc15e;
-  --gold-dark: #e0a23c;
-  --gold-soft: #ffd98c;
-  --teal: #35e6c4;
-  --success: #35e6c4;
-  --red: #ff6b6b;
-  --danger: #ff6b6b;
-  --text: #f3f4f8;
-  --text-muted: #8b93ab;
-  --border: #242c42;
+  --bg: #0f1326;
+  --surface: rgba(21, 25, 44, 0.92);
+  --surface-solid: #151a2c;
+  --surface-alt: #1a2038;
+  --bg-soft: #171c30;
+  --navy: #f0a857;
+  --navy-dark: #d98a34;
+  --gold: #2fd9b0;
+  --gold-dark: #21ad8b;
+  --gold-soft: #7eebd2;
+  --teal: #2fd9b0;
+  --success: #2fd9b0;
+  --red: #ff6e7a;
+  --danger: #ff6e7a;
+  --text: #f2f3fa;
+  --text-muted: #9199bf;
+  --border: #262c48;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-hover: 0 16px 34px -16px rgba(124, 92, 252, 0.4);
-  --on-accent-text: #0a0e17;
-  --sidebar-bg: #0b0f1c;
-  --sidebar-bg-alt: #10142a;
-  --sidebar-text: #8b93ab;
-  --sidebar-text-muted: #5b6280;
-  --sidebar-active-bg: #7c5cfc;
-  --sidebar-active-text: #ffffff;
+  --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.4);
+  --on-accent-text: #0f1326;
+  --sidebar-bg: #0b0e1c;
+  --sidebar-bg-alt: #11152a;
+  --sidebar-text: #9199bf;
+  --sidebar-text-muted: #565c85;
+  --sidebar-active-bg: #f0a857;
+  --sidebar-active-text: #0f1326;
   color-scheme: dark;
 }
 
@@ -297,7 +289,7 @@ header.top .seal img {
 header.top h1 {
   font-size: 20px;
   margin: 0;
-  font-weight: 700;
+  font-weight: 800;
   font-family: var(--font-heading);
   letter-spacing: 0.2px;
 }
@@ -560,6 +552,7 @@ nav.tabs button.active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-text);
   font-weight: 700;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-active-bg) 60%, transparent), 0 6px 20px -4px color-mix(in srgb, var(--sidebar-active-bg) 65%, transparent);
   animation: navPop 0.25s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
@@ -1171,12 +1164,64 @@ section.view.active {
   background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
   color: var(--on-accent-text);
   font-weight: 700;
-  box-shadow: 0 4px 18px -4px rgba(217, 168, 78, 0.45);
+  box-shadow: 0 4px 18px -4px color-mix(in srgb, var(--navy) 55%, transparent);
 }
 
 .btn-primary:hover {
   filter: brightness(1.1);
   box-shadow: 0 8px 26px -6px color-mix(in srgb, var(--navy) 65%, transparent);
+}
+
+/* شعار "نبض" — حلقة conic-gradient دوّارة بين الكهرماني والفيروزي، توقيع الهوية الجديدة */
+.nabd-logo-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 3px;
+  background: conic-gradient(from var(--nabd-angle, 0deg), var(--navy), var(--gold), var(--red), var(--navy));
+  animation: nabdSpin 6s linear infinite;
+}
+
+.nabd-logo-ring > img,
+.nabd-logo-ring > svg {
+  border-radius: 50%;
+  background: var(--surface-solid);
+  display: block;
+}
+
+@property --nabd-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes nabdSpin {
+  from { --nabd-angle: 0deg; }
+  to { --nabd-angle: 360deg; }
+}
+
+/* سباركلاين مصغّرة داخل بطاقات الإحصائيات */
+.nabd-sparkline {
+  display: block;
+  width: 100%;
+  height: 32px;
+  margin-top: 6px;
+  opacity: 0.9;
+}
+
+.nabd-sparkline path.nabd-spark-line {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nabd-sparkline path.nabd-spark-fill {
+  fill: color-mix(in srgb, var(--gold) 18%, transparent);
+  stroke: none;
 }
 
 .btn-gold {
@@ -1811,18 +1856,18 @@ tbody tr:hover {
 /* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
-  --auth-bg-deep: #eef0fb;
-  --auth-bg-mid: #f8f9fe;
+  --auth-bg-deep: #f4f2ee;
+  --auth-bg-mid: #f9f7f3;
   --auth-panel: rgba(255, 255, 255, 0.86);
-  --auth-border: rgba(109, 77, 242, 0.18);
-  --auth-cyan: #6d4df2;
-  --auth-cyan-bright: #8b6fff;
-  --auth-violet: #0fbe9e;
-  --auth-text: #171a2b;
-  --auth-text-dim: #767c97;
+  --auth-border: rgba(240, 168, 87, 0.18);
+  --auth-cyan: #d9832f;
+  --auth-cyan-bright: #f0a857;
+  --auth-violet: #1fa98a;
+  --auth-text: #201a2e;
+  --auth-text-dim: #6c6478;
   background:
-    radial-gradient(650px 380px at 85% -8%, rgba(109, 77, 242, 0.12), transparent 60%),
-    radial-gradient(560px 320px at 5% 15%, rgba(15, 190, 158, 0.1), transparent 60%),
+    radial-gradient(650px 380px at 85% -8%, rgba(240, 168, 87, 0.12), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(47, 217, 176, 0.1), transparent 60%),
     var(--auth-bg-deep);
   background-size: cover, cover, cover;
   background-position: center;
@@ -1831,18 +1876,18 @@ tbody tr:hover {
 
 body.dark-theme #license-screen,
 body.dark-theme #server-login-screen {
-  --auth-bg-deep: #090c14;
-  --auth-bg-mid: #0d111c;
-  --auth-panel: rgba(19, 24, 38, 0.75);
-  --auth-border: rgba(124, 92, 252, 0.28);
-  --auth-cyan: #a996ff;
-  --auth-cyan-bright: #c3b4ff;
-  --auth-violet: #35e6c4;
-  --auth-text: #f3f4f8;
-  --auth-text-dim: #8b93ab;
+  --auth-bg-deep: #0f1326;
+  --auth-bg-mid: #171d3a;
+  --auth-panel: rgba(21, 25, 44, 0.75);
+  --auth-border: rgba(240, 168, 87, 0.28);
+  --auth-cyan: #f0a857;
+  --auth-cyan-bright: #ffd9a0;
+  --auth-violet: #2fd9b0;
+  --auth-text: #f2f3fa;
+  --auth-text-dim: #9199bf;
   background:
-    radial-gradient(650px 380px at 85% -8%, rgba(124, 92, 252, 0.22), transparent 60%),
-    radial-gradient(560px 320px at 5% 15%, rgba(53, 230, 196, 0.12), transparent 60%),
+    radial-gradient(650px 380px at 85% -8%, rgba(240, 168, 87, 0.22), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(47, 217, 176, 0.12), transparent 60%),
     var(--auth-bg-deep);
 }
 
@@ -1852,7 +1897,7 @@ body.dark-theme #server-login-screen {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 22px;
-  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(109, 77, 242, 0.06) inset;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(240, 168, 87, 0.06) inset;
   padding: 30px 28px;
   width: 100%;
   max-width: 360px;
@@ -1866,7 +1911,7 @@ body.dark-theme #server-login-screen {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 22px;
-  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(109, 77, 242, 0.06) inset;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(240, 168, 87, 0.06) inset;
   overflow: hidden;
   width: 100%;
   max-width: 560px;
@@ -1883,7 +1928,7 @@ body.dark-theme #server-login-screen {
 
 .login-logo-panel {
   flex: 0 0 190px;
-  background: rgba(109, 77, 242, 0.05);
+  background: rgba(240, 168, 87, 0.05);
   border-inline-end: 1px solid var(--auth-border);
   display: flex;
   align-items: center;
@@ -1929,9 +1974,9 @@ body.dark-theme #server-login-screen {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: rgba(109, 77, 242, 0.06);
+  background: rgba(240, 168, 87, 0.06);
   border: 1.5px solid var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(109, 77, 242, 0.15), 0 0 24px rgba(109, 77, 242, 0.25);
+  box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15), 0 0 24px rgba(240, 168, 87, 0.25);
 }
 
 .login-box .seal img,
@@ -1977,7 +2022,7 @@ body.dark-theme #server-login-screen {
 
 .login-box .field input:focus {
   border-color: var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(109, 77, 242, 0.15);
+  box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15);
 }
 
 .login-box .btn-primary {
@@ -1988,16 +2033,16 @@ body.dark-theme #server-login-screen {
   font-weight: 700;
   border: none;
   border-radius: 12px;
-  box-shadow: 0 10px 26px -8px rgba(109, 77, 242, 0.5);
+  box-shadow: 0 10px 26px -8px rgba(240, 168, 87, 0.5);
 }
 
 .login-box .btn-primary:hover {
   background: linear-gradient(135deg, var(--auth-cyan-bright) 0%, var(--auth-violet) 100%);
-  box-shadow: 0 14px 32px -8px rgba(109, 77, 242, 0.6);
+  box-shadow: 0 14px 32px -8px rgba(240, 168, 87, 0.6);
 }
 
 .login-error {
-  color: #ff5470;
+  color: var(--red);
   font-size: 12.5px;
   text-align: center;
   margin-top: 10px;
@@ -2338,16 +2383,16 @@ td select:hover:not(:focus) {
 .hint-warn {
   font-size: 12px;
   line-height: 1.7;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
+  color: var(--navy-dark);
+  background: color-mix(in srgb, var(--navy) 12%, var(--surface-solid));
+  border: 1px solid color-mix(in srgb, var(--navy) 45%, transparent);
   border-radius: 8px;
   padding: 8px 12px;
 }
 body.dark-theme .hint-warn {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.4);
+  color: var(--navy);
+  background: color-mix(in srgb, var(--navy) 10%, transparent);
+  border-color: color-mix(in srgb, var(--navy) 40%, transparent);
 }
 
 /* ============= شيت العملاء — تصميم مخصص ============= */
