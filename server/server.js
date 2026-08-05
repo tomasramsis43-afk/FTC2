@@ -1734,6 +1734,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 /* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
 const zatca = require('./zatca/lib');
+const payments = require('./payments');
 const { centralErrorHandler } = require('./errors');
 
 // حالة التسجيل الحالية (بدون أي بيانات حسّاسة) — تُستخدم لعرض حالة الربط في الواجهة
@@ -1825,6 +1826,78 @@ app.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 's
     if (e.isValidation) return res.status(400).json({ error: e.message });
     console.error(e);
     res.status(500).json({ error: 'تعذّر إرسال المردود للهيئة', detail: e.message });
+  }
+});
+
+/* ================== الدفع الإلكتروني (Moyasar) ==================
+   ملاحظة: السيرفر لا يكتب أي قيد محاسبي مباشرة (لا يملك مفتاح فك التشفير)،
+   فقط يدير حالة عملية الدفع نفسها. المتصفح هو من يطبّق القيد المشفّر —
+   راجع GET /api/payments/pending و POST /api/payments/:id/ack أدناه. */
+
+// إنشاء رابط دفع جديد — لموظف مسجّل دخول فقط (نفس صلاحيات إصدار الفواتير).
+app.post('/api/payments/create-link', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
+  const { clientRef, clientLabel, amount, description } = req.body || {};
+  try {
+    const result = await payments.createPaymentLink({
+      clientRef, clientLabel, amount, description, createdBy: req.user.username,
+    });
+    res.json(result);
+  } catch (e) {
+    if (e.isValidation) return res.status(400).json({ error: e.message });
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إنشاء رابط الدفع', detail: e.message });
+  }
+});
+
+// استقبال إشعار الدفع من Moyasar — مسار عام (بدون requireAuth، البوابة نفسها
+// اللي بتناديه)، لكن محمي بالتحقق من secret_token داخل payments.handleWebhookEvent.
+app.post('/api/payments/webhook', async (req, res) => {
+  try {
+    const result = await payments.handleWebhookEvent(req.body || {});
+    res.json(result);
+  } catch (e) {
+    if (e.isValidation) return res.status(401).json({ error: e.message });
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر معالجة إشعار الدفع' });
+  }
+});
+
+// صفحة يُعاد توجيه العميل لها بعد محاولة الدفع (نجاح أو فشل) — تعرض رسالة بسيطة فقط.
+// الحالة الفعلية تصل من الـ webhook أعلاه (لا تعتمد أبداً على هذا المسار لتأكيد الدفع).
+app.get('/api/payments/:id/return', async (req, res) => {
+  let payment = null;
+  try { payment = await payments.getPayment(req.params.id); } catch (e) { console.error(e); }
+  const ok = payment && (payment.status === 'paid' || payment.status === 'applied');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+    <title>${ok ? 'تم الدفع بنجاح' : 'حالة الدفع'}</title>
+    <style>body{font-family:sans-serif;text-align:center;padding:60px 20px;background:#f7f7f8}
+    .box{max-width:420px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+    h1{font-size:20px}.ok{color:#16a34a}.pending{color:#b45309}</style></head>
+    <body><div class="box"><h1 class="${ok ? 'ok' : 'pending'}">${ok ? '✅ تم الدفع بنجاح' : '⏳ جاري تأكيد الدفع'}</h1>
+    <p>${ok ? 'شكراً لك، تم تسجيل عمليتك.' : 'قد تستغرق المعالجة دقيقة — لا حاجة لإعادة المحاولة إن كان المبلغ قد خُصم بالفعل.'}</p>
+    </div></body></html>`);
+});
+
+// الدفعات المؤكدة ("paid") التي لم تُطبَّق بعد كقيد محلي — يستدعيها المتصفح دورياً.
+app.get('/api/payments/pending', requireAuth, async (req, res) => {
+  try {
+    res.json(await payments.listPending());
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب الدفعات المعلّقة' });
+  }
+});
+
+// تأكيد إن المتصفح طبّق الدفعة فعلياً كحركة خزنة محلية — يمنع تكرار التطبيق من جهازين.
+app.post('/api/payments/:id/ack', requireAuth, async (req, res) => {
+  try {
+    const ok = await payments.markApplied(req.params.id, req.user.username);
+    if (!ok) return res.status(409).json({ error: 'الدفعة غير موجودة أو طُبّقت مسبقاً' });
+    res.json({ applied: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تأكيد تطبيق الدفعة' });
   }
 });
 
