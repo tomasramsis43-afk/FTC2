@@ -107,6 +107,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter_uniq ON zatca_in
 CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_source ON zatca_invoice_log(source_ref);
 
 -- ============================================================
+-- الدفع الإلكتروني (مدى / فيزا / ماستركارد عبر Moyasar)
+-- ============================================================
+-- ملاحظة معمارية مهمة: بيانات التطبيق (عملاء، حركات خزنة...) كلها مشفّرة من
+-- المتصفح (AES-GCM) قبل الوصول للسيرفر، والسيرفر لا يملك مفتاح فك التشفير
+-- إطلاقاً. لذلك هذا الجدول لا يخزّن أي قيد محاسبي مباشرة — فقط "حالة عملية
+-- الدفع" نفسها (مبلغ، حالة، مرجع البوابة)، وهي بيانات تشغيلية غير حساسة.
+-- المتصفح (الذي يملك مفتاح التشفير) هو من يقرأ الدفعات المؤكدة عبر
+-- GET /api/payments/pending ويُنشئ منها حركة الخزنة المشفّرة بنفس طريقة أي
+-- حركة يدوية عادية، ثم يبلّغ السيرفر بأنها طُبّقت (POST /api/payments/:id/ack)
+-- حتى لا تُطبَّق مرتين على جهازين مختلفين.
+CREATE TABLE IF NOT EXISTS online_payments (
+  id            TEXT PRIMARY KEY,             -- معرف داخلي (nanoid) يظهر في رابط الدفع
+  client_ref    TEXT,                         -- معرف العميل داخل التطبيق (clientId) — نص عادي غير حساس
+  client_label  TEXT,                         -- اسم يُعرض في صفحة الدفع فقط (اختياري، بدون بيانات حساسة)
+  amount        NUMERIC(12,2) NOT NULL,
+  currency      TEXT NOT NULL DEFAULT 'SAR',
+  description   TEXT,
+  gateway       TEXT NOT NULL DEFAULT 'moyasar',
+  gateway_id    TEXT,                         -- معرف الفاتورة/العملية عند البوابة
+  checkout_url  TEXT,                         -- رابط صفحة الدفع المستضافة عند البوابة
+  status        TEXT NOT NULL DEFAULT 'created', -- created|paid|failed|expired|applied
+  raw_event     JSONB,                        -- آخر استجابة/webhook من البوابة (لأغراض التدقيق فقط)
+  created_by    TEXT,                         -- اسم الموظف الذي أنشأ رابط الدفع
+  applied_by    TEXT,                         -- اسم المستخدم الذي طبّق القيد فعلياً على أي جهاز
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  paid_at       TIMESTAMPTZ,
+  applied_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_online_payments_status ON online_payments(status);
+CREATE INDEX IF NOT EXISTS idx_online_payments_gateway_id ON online_payments(gateway_id);
+
+-- ============================================================
 -- جدول العملاء كصفوف حقيقية مفهرسة (Pagination من السيرفر)
 -- ============================================================
 -- المصدر الأساسي لبيانات العملاء يبقى مفتاح kv_store('clients') كما هو تماماً
