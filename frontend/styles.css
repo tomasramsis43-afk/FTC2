@@ -1059,6 +1059,8 @@ nav.tabs button:focus-visible {
   border-radius: 20px;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .user-pill b {
@@ -1503,6 +1505,7 @@ section.view.active {
   gap: 6px;
   transition: transform 0.15s ease;
   will-change: transform;
+  flex-shrink: 0;
 }
 
 .icon-btn svg {
@@ -1526,11 +1529,12 @@ section.view.active {
 .topbar-user .icon-btn span {
   font-size: 11.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* زر البحث الشامل — يأخذ مظهر حقل بحث تيرمينال (⌘K) */
 #btn-global-search {
-  min-width: 190px;
+  min-width: 140px;
   justify-content: flex-start;
   gap: 8px;
   padding: 8px 14px;
@@ -1538,6 +1542,8 @@ section.view.active {
   color: var(--text-muted);
   background: color-mix(in srgb, var(--surface-alt) 55%, transparent);
   border-color: var(--border);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 #btn-global-search::after {
   content: '⌘K';
@@ -2282,6 +2288,10 @@ tbody tr:hover {
   font-size: 12px;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-user button:hover {
