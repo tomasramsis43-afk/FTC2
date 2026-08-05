@@ -237,7 +237,7 @@ function initYearFilter(){
 let currentLang = 'ar';
 const I18N = {
   ar: {
-    appTitle:'نظام إدارة العملاء والكورسات', appSubtitle:'بديل رقمي لملف الإكسل — العملاء، الدورات، الحقائب، والمدفوعات',
+    appTitle:'نظام إدارة العملاء', appSubtitle:'بديل رقمي لملف الإكسل — العملاء، الدورات، الحقائب، والمدفوعات',
     logout:'تسجيل الخروج',
     navDashboard:'لوحة التحكم', navClients:'العملاء', navCompanies:'تحويلات الشركات', navCourses:'الدورات', navVault:'الحركات المالية',
     navBags:'مخزون الحقائب', navReports:'التقارير', navAudit:'سجل المراجعة', navSettings:'الإعدادات',
