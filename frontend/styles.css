@@ -1614,7 +1614,8 @@ section.view.active {
 /* ============= TABLES ============= */
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 13px;
 }
 
@@ -1681,6 +1682,11 @@ table {
   right: 34px;
   z-index: 2;
   box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.35);
+  min-width: 130px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 thead th.sticky-col {
