@@ -630,7 +630,10 @@ function applyLanguage(lang){
   document.documentElement.dir = lang==='ar' ? 'rtl' : 'ltr';
   $all('[data-i18n]').forEach(el=>{ const k=el.dataset.i18n; if(I18N[lang] && I18N[lang][k]!==undefined) el.textContent = I18N[lang][k]; });
   $all('[data-i18n-placeholder]').forEach(el=>{ const k=el.dataset.i18nPlaceholder; if(I18N[lang] && I18N[lang][k]!==undefined) el.placeholder = I18N[lang][k]; });
-  $('#btn-lang-toggle').textContent = lang==='ar' ? 'EN' : 'AR';
+  // الزر أصبح داخل القائمة المنسدلة بجانب الاسم وله تسمية نصية داخلية (لسا فيه أيقونة ثابتة
+  // بجانبها)، فبدل استبدال محتوى الزر بالكامل (كان بيمسح الأيقونة) بنحدّث تسمية النص فقط.
+  const langMenuLabel = $('#lang-toggle-menu-label');
+  if(langMenuLabel) langMenuLabel.textContent = lang==='ar' ? 'English' : 'العربية';
   try{ window.storage.set('appLang', lang, false); }catch(e){}
   // إعادة رسم كل الجداول والمحتوى الديناميكي لتحديث النصوص المولّدة من JS
   if(typeof renderTable==='function') renderTable();
@@ -647,7 +650,9 @@ function applyLanguage(lang){
 /* تبديل الوضع الليلي/النهاري لكامل الواجهة، مع حفظ التفضيل ضمن إعدادات المستخدم */
 function applyTheme(isDark){
   document.body.classList.toggle('dark-theme', !!isDark);
-  const btn = $('#btn-theme-toggle');
+  // الزر بقى داخل القائمة المنسدلة ومعاه تسمية نصية ثابتة، فبنستبدل أيقونة الشمس/القمر فقط
+  // (داخل .menu-icon) بدل استبدال محتوى الزر بالكامل (كان بيمسح التسمية النصية).
+  const btn = $('#theme-toggle-icon');
   if(btn) btn.innerHTML = isDark
     ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>'
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>';
@@ -874,4 +879,35 @@ $('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
   const next = !$('nav.tabs')?.classList.contains('collapsed');
   applySidebarCollapsed(next);
   try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){}
+});
+
+/* ============ قائمة المستخدم المنسدلة بجانب الاسم (تحديث الشيت / اللغة / كتم الصوت /
+   الوضع الليلي-النهاري / كثافة الصفوف) — تجميع الأزرار الخمسة دي في قائمة واحدة بدل ما
+   تكون منتشرة كأزرار مستقلة في شريط الهيدر العلوي. ============ */
+const userMenuWrap = $('#user-menu-wrap');
+const userMenuToggleBtn = $('#btn-user-menu-toggle');
+const userMenuDropdown = $('#user-menu-dropdown');
+function closeUserMenuDropdown(){
+  userMenuDropdown?.classList.remove('show');
+  userMenuWrap?.classList.remove('open');
+  userMenuToggleBtn?.setAttribute('aria-expanded','false');
+}
+userMenuToggleBtn?.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const wasOpen = userMenuDropdown?.classList.contains('show');
+  closeUserMenuDropdown();
+  if(!wasOpen){
+    userMenuDropdown.classList.add('show');
+    userMenuWrap.classList.add('open');
+    userMenuToggleBtn.setAttribute('aria-expanded','true');
+  }
+});
+// إغلاق القائمة بعد اختيار أي عنصر (تحديث الشيت/اللغة/الثيم/الكثافة) — عدا كتم الصوت اللي
+// المستخدم ممكن يحب يجرّبه أكتر من مرة متتالية، فبنسيبها مفتوحة له فقط.
+userMenuDropdown?.addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(btn && btn.id!=='btn-sound-toggle') closeUserMenuDropdown();
+});
+document.addEventListener('click', (e)=>{
+  if(userMenuDropdown?.classList.contains('show') && !userMenuWrap.contains(e.target)) closeUserMenuDropdown();
 });
