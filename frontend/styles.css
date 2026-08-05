@@ -7,69 +7,78 @@
    ============================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 
-/* ============= CSS VARIABLES & ROOT — Ledger Precision (فاتح، الافتراضي) ============= */
+/* ============================================================================
+   FTC2 — AURORA DESIGN SYSTEM (تحديث هوية بصرية — نفس المحددات/الكلاسات الأصلية،
+   قيم فقط أُعيد بناؤها). هوية حديثة: بنفسجي كهربائي + نعناعي، حواف دائرية أكبر،
+   توهجات لونية خفيفة (glow)، خط Cairo للعناوين وIBM Plex Sans Arabic للنصوص،
+   مع وضع ليلي/نهاري حقيقي لنفس الهوية. مواقع السايدبار/الهيدر لم تُمس إطلاقاً —
+   هذا الملف يغيّر الألوان/الخطوط/الحواف فقط.
+   ============================================================================ */
+
+/* ============= CSS VARIABLES & ROOT — Aurora Light (فاتح، الافتراضي) ============= */
 :root {
-  --bg: #f6f3ec;
+  --bg: #f5f6fb;
   --surface: rgba(255, 255, 255, 0.92);
   --surface-solid: #ffffff;
-  --surface-alt: #efebdf;
-  --bg-soft: #efebdf;
-  --navy: #1f4b3f;
-  --navy-dark: #16362d;
-  --gold: #b8862e;
-  --gold-dark: #96691f;
-  --gold-soft: #efdbb0;
-  --teal: #4f7a68;
-  --success: #3f7d4a;
-  --red: #b23a2e;
-  --danger: #b23a2e;
-  --text: #23241f;
-  --text-muted: #726f62;
-  --border: #e1dcc8;
-  --radius: 10px;
-  --font-display: 'Tajawal', sans-serif;
-  --font-heading: 'Markazi Text', 'Tajawal', serif;
+  --surface-alt: #eef0fa;
+  --bg-soft: #eceefa;
+  --navy: #6d4df2;
+  --navy-dark: #4e31d6;
+  --gold: #0fbe9e;
+  --gold-dark: #0b9a80;
+  --gold-soft: #0c9c82;
+  --teal: #0fbe9e;
+  --success: #0fbe9e;
+  --red: #f0473c;
+  --danger: #f0473c;
+  --text: #171a2b;
+  --text-muted: #767c97;
+  --border: #e7e9f5;
+  --radius: 14px;
+  --font-display: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
+  --font-heading: 'Cairo', 'Tajawal', sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
-  --shadow: 0 1px 2px rgba(35, 36, 31, 0.06);
-  --shadow-hover: 0 12px 26px -12px rgba(31, 75, 63, 0.22);
-  --on-accent-text: #f6f3ec;
-  --sidebar-bg: #1f4b3f;
-  --sidebar-bg-alt: #244f43;
-  --sidebar-text: #cddbd2;
-  --sidebar-text-muted: #a9bcb2;
-  --sidebar-active-bg: #b8862e;
-  --sidebar-active-text: #1f2e26;
+  --shadow: 0 1px 2px rgba(23, 26, 43, 0.04);
+  --shadow-hover: 0 16px 34px -16px rgba(109, 77, 242, 0.3);
+  --on-accent-text: #ffffff;
+  --sidebar-bg: #12162a;
+  --sidebar-bg-alt: #171b30;
+  --sidebar-text: #b9bedb;
+  --sidebar-text-muted: #7a7fa0;
+  --sidebar-active-bg: #6d4df2;
+  --sidebar-active-text: #ffffff;
   color-scheme: light;
 }
 
 body.dark-theme {
-  --bg: #14201b;
-  --surface: rgba(27, 42, 35, 0.92);
-  --surface-solid: #1b2a23;
-  --surface-alt: #223529;
-  --bg-soft: #1f2e27;
-  --navy: #7fb89a;
-  --navy-dark: #6fae8c;
-  --gold: #d9a84e;
-  --gold-dark: #c79235;
-  --gold-soft: #3a2f1c;
-  --teal: #8fb9c7;
-  --success: #7fb89a;
-  --red: #d97462;
-  --danger: #d97462;
-  --text: #ede7d8;
-  --text-muted: #a6a08d;
-  --border: rgba(217, 168, 78, 0.16);
+  --bg: #090c14;
+  --surface: rgba(19, 24, 38, 0.92);
+  --surface-solid: #131826;
+  --surface-alt: #171d2e;
+  --bg-soft: #12172a;
+  --navy: #a996ff;
+  --navy-dark: #7c5cfc;
+  --gold: #35e6c4;
+  --gold-dark: #22b49a;
+  --gold-soft: #7fe0cc;
+  --teal: #35e6c4;
+  --success: #35e6c4;
+  --red: #ff6b6b;
+  --danger: #ff6b6b;
+  --text: #f3f4f8;
+  --text-muted: #8b93ab;
+  --border: #242c42;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-hover: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
-  --on-accent-text: #14201b;
-  --sidebar-bg: #10241c;
-  --sidebar-bg-alt: #15291f;
-  --sidebar-text: #a9bcb2;
-  --sidebar-text-muted: #7c9186;
-  --sidebar-active-bg: #d9a84e;
-  --sidebar-active-text: #1f2e26;
+  --shadow-hover: 0 16px 34px -16px rgba(124, 92, 252, 0.4);
+  --on-accent-text: #0a0e17;
+  --sidebar-bg: #0b0f1c;
+  --sidebar-bg-alt: #10142a;
+  --sidebar-text: #8b93ab;
+  --sidebar-text-muted: #5b6280;
+  --sidebar-active-bg: #7c5cfc;
+  --sidebar-active-text: #ffffff;
   color-scheme: dark;
 }
 
@@ -1802,23 +1811,39 @@ tbody tr:hover {
 /* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
-  --auth-bg-deep: #10241c;
-  --auth-bg-mid: #1a362b;
-  --auth-panel: rgba(31, 75, 63, 0.4);
-  --auth-border: rgba(217, 168, 78, 0.3);
-  --auth-cyan: #d9a84e;
-  --auth-cyan-bright: #efc978;
-  --auth-violet: #7fb89a;
-  --auth-text: #f6f3ec;
-  --auth-text-dim: #b9c9bf;
+  --auth-bg-deep: #eef0fb;
+  --auth-bg-mid: #f8f9fe;
+  --auth-panel: rgba(255, 255, 255, 0.86);
+  --auth-border: rgba(109, 77, 242, 0.18);
+  --auth-cyan: #6d4df2;
+  --auth-cyan-bright: #8b6fff;
+  --auth-violet: #0fbe9e;
+  --auth-text: #171a2b;
+  --auth-text-dim: #767c97;
   background:
-    radial-gradient(circle at 20% 15%, var(--auth-bg-mid) 0%, var(--auth-bg-deep) 55%),
-    repeating-linear-gradient(0deg, rgba(217, 168, 78, 0.04) 0px, rgba(217, 168, 78, 0.04) 1px, transparent 1px, transparent 42px),
-    repeating-linear-gradient(90deg, rgba(217, 168, 78, 0.04) 0px, rgba(217, 168, 78, 0.04) 1px, transparent 1px, transparent 42px),
+    radial-gradient(650px 380px at 85% -8%, rgba(109, 77, 242, 0.12), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(15, 190, 158, 0.1), transparent 60%),
     var(--auth-bg-deep);
-  background-size: cover, 42px 42px, 42px 42px, cover;
+  background-size: cover, cover, cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+body.dark-theme #license-screen,
+body.dark-theme #server-login-screen {
+  --auth-bg-deep: #090c14;
+  --auth-bg-mid: #0d111c;
+  --auth-panel: rgba(19, 24, 38, 0.75);
+  --auth-border: rgba(124, 92, 252, 0.28);
+  --auth-cyan: #a996ff;
+  --auth-cyan-bright: #c3b4ff;
+  --auth-violet: #35e6c4;
+  --auth-text: #f3f4f8;
+  --auth-text-dim: #8b93ab;
+  background:
+    radial-gradient(650px 380px at 85% -8%, rgba(124, 92, 252, 0.22), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(53, 230, 196, 0.12), transparent 60%),
+    var(--auth-bg-deep);
 }
 
 .login-box {
@@ -1826,8 +1851,8 @@ tbody tr:hover {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
-  border-radius: 18px;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(217, 168, 78, 0.08) inset;
+  border-radius: 22px;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(109, 77, 242, 0.06) inset;
   padding: 30px 28px;
   width: 100%;
   max-width: 360px;
@@ -1840,8 +1865,8 @@ tbody tr:hover {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
-  border-radius: 18px;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55), 0 0 40px rgba(217, 168, 78, 0.08) inset;
+  border-radius: 22px;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(109, 77, 242, 0.06) inset;
   overflow: hidden;
   width: 100%;
   max-width: 560px;
@@ -1858,7 +1883,7 @@ tbody tr:hover {
 
 .login-logo-panel {
   flex: 0 0 190px;
-  background: rgba(6, 16, 32, 0.35);
+  background: rgba(109, 77, 242, 0.05);
   border-inline-end: 1px solid var(--auth-border);
   display: flex;
   align-items: center;
@@ -1904,9 +1929,9 @@ tbody tr:hover {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: rgba(6, 16, 32, 0.4);
+  background: rgba(109, 77, 242, 0.06);
   border: 1.5px solid var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(217, 168, 78, 0.15), 0 0 24px rgba(217, 168, 78, 0.35);
+  box-shadow: 0 0 0 3px rgba(109, 77, 242, 0.15), 0 0 24px rgba(109, 77, 242, 0.25);
 }
 
 .login-box .seal img,
@@ -1940,34 +1965,35 @@ tbody tr:hover {
 }
 
 .login-box .field input {
-  background: rgba(6, 16, 32, 0.55);
-  border: 1px solid rgba(148, 180, 222, 0.18);
+  background: color-mix(in srgb, var(--auth-panel) 40%, var(--auth-bg-mid));
+  border: 1px solid var(--auth-border);
   color: var(--auth-text);
   box-shadow: none;
 }
 
 .login-box .field input::placeholder {
-  color: #5c7295;
+  color: var(--auth-text-dim);
 }
 
 .login-box .field input:focus {
   border-color: var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(217, 168, 78, 0.15);
+  box-shadow: 0 0 0 3px rgba(109, 77, 242, 0.15);
 }
 
 .login-box .btn-primary {
   width: 100%;
   margin-top: 6px;
-  background: linear-gradient(135deg, var(--auth-cyan) 0%, var(--auth-violet) 100%);
-  color: #04101f;
+  background: linear-gradient(135deg, var(--auth-cyan) 0%, var(--auth-cyan-bright) 100%);
+  color: #ffffff;
   font-weight: 700;
   border: none;
-  box-shadow: 0 8px 24px rgba(217, 168, 78, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px -8px rgba(109, 77, 242, 0.5);
 }
 
 .login-box .btn-primary:hover {
   background: linear-gradient(135deg, var(--auth-cyan-bright) 0%, var(--auth-violet) 100%);
-  box-shadow: 0 12px 30px rgba(217, 168, 78, 0.45);
+  box-shadow: 0 14px 32px -8px rgba(109, 77, 242, 0.6);
 }
 
 .login-error {
@@ -2388,7 +2414,7 @@ body.dark-theme #view-clients thead th {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--gold) 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
   color: #fff;
   font-size: 30px;
   font-weight: 700;
