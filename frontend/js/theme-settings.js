@@ -881,12 +881,20 @@ $('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
   try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){}
 });
 
-/* ============ قائمة المستخدم المنسدلة بجانب الاسم (تحديث الشيت / اللغة / كتم الصوت /
-   الوضع الليلي-النهاري / كثافة الصفوف) — تجميع الأزرار الخمسة دي في قائمة واحدة بدل ما
-   تكون منتشرة كأزرار مستقلة في شريط الهيدر العلوي. ============ */
+/* ============ قائمة المستخدم المنسدلة بجانب الاسم (الإعدادات / تحديث الشيت / اللغة /
+   كتم الصوت / الوضع الليلي-النهاري / كثافة الصفوف / اختصارات لوحة المفاتيح) — تجميع
+   الأزرار دي في قائمة واحدة بدل ما تكون منتشرة كأزرار مستقلة في شريط الهيدر العلوي. ============ */
 const userMenuWrap = $('#user-menu-wrap');
 const userMenuToggleBtn = $('#btn-user-menu-toggle');
 const userMenuDropdown = $('#user-menu-dropdown');
+// header.top فيه backdrop-filter (بجانب overflow:hidden)، و backdrop-filter/filter بيعمل
+// containing block جديد لأي عنصر position:fixed بداخله (حسب سبيك الـCSS) — فحتى لو حوّلنا
+// القائمة المنسدلة لـ position:fixed، هي بتفضل "محبوسة" جوه حدود الهيدر المقصوصة (overflow:hidden)
+// ومش بتظهر فيها أي حاجة فعليًا. الحل الجذري: ننقل عنصر القائمة نفسه (DOM) ليكون ابن مباشر
+// لـ body، بعيدًا تمامًا عن أي ancestor عنده backdrop-filter أو overflow:hidden.
+if(userMenuDropdown && userMenuDropdown.parentElement !== document.body){
+  document.body.appendChild(userMenuDropdown);
+}
 function closeUserMenuDropdown(){
   userMenuDropdown?.classList.remove('show');
   userMenuWrap?.classList.remove('open');
@@ -900,10 +908,8 @@ userMenuToggleBtn?.addEventListener('click', (e)=>{
     userMenuDropdown.classList.add('show');
     userMenuWrap.classList.add('open');
     userMenuToggleBtn.setAttribute('aria-expanded','true');
-    // header.top عنده overflow:hidden (للزوايا الزجاجية المستديرة)، وده كان بيقصّ القائمة
-    // المنسدلة (position:absolute) فتختفي بدل ما تظهر فوق باقي الشاشة. الحل: نحوّلها لـ
-    // position:fixed ونحسب موضعها فعلياً بالنسبة للشاشة (خارج تأثير overflow الهيدر تماماً)،
-    // بنفس أسلوب قائمة "أنواع الدورات" المنسدلة الموجودة أصلاً بجانب زر "العملاء".
+    // القائمة بقت ابن مباشر لـ body، فموضعها بـ position:fixed بيتحسب دلوقتي فعليًا بالنسبة
+    // للشاشة كلها (زي قائمة "أنواع الدورات" المنسدلة الموجودة أصلاً بجانب زر "العملاء").
     const r = userMenuToggleBtn.getBoundingClientRect();
     userMenuDropdown.style.position = 'fixed';
     userMenuDropdown.style.top = (r.bottom + 8) + 'px';
