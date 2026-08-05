@@ -721,59 +721,9 @@ body.dark-theme nav.tabs {
   background: color-mix(in srgb, var(--surface-solid) 84%, transparent);
 }
 
-/* شعار العلامة أعلى الشريط الجانبي (FTC2 Terminal) */
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 8px 12px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-}
-.nav-brand img {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid color-mix(in srgb, var(--navy) 55%, transparent);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--navy) 30%, transparent);
-  flex: none;
-}
-.nav-brand b {
-  display: block;
-  font-size: 14.5px;
-  font-weight: 700;
-  font-family: var(--font-display);
-  letter-spacing: 0.4px;
-  color: var(--text);
-}
-.nav-brand span {
-  display: block;
-  font-size: 9px;
-  font-family: var(--font-mono);
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-top: 1px;
-}
-.nav-brand span em {
-  font-style: normal;
-  color: var(--navy);
-}
-
 nav.tabs.collapsed {
   width: 60px;
   padding: 14px 6px;
-}
-
-nav.tabs.collapsed .nav-brand {
-  justify-content: center;
-  padding: 4px 0 12px;
-  margin-bottom: 10px;
-}
-nav.tabs.collapsed .nav-brand b,
-nav.tabs.collapsed .nav-brand span {
-  display: none;
 }
 
 .nav-collapse-toggle {
@@ -813,18 +763,13 @@ nav.tabs.collapsed .nav-collapse-toggle svg {
   transform: rotate(180deg);
 }
 
-nav.tabs.collapsed button span,
-nav.tabs.collapsed .nav-caret {
+nav.tabs.collapsed button span {
   display: none;
 }
 
 nav.tabs.collapsed button {
   justify-content: center;
   padding: 9px;
-}
-
-nav.tabs.collapsed .nav-flyout-row {
-  justify-content: center;
 }
 
 nav.tabs button {
@@ -947,10 +892,6 @@ nav.tabs button[data-view]:not(.active):hover::before {
     border-radius: 14px;
   }
 
-  nav.tabs .nav-brand {
-    display: none;
-  }
-
   nav.tabs button {
     width: auto;
     flex: none;
@@ -998,105 +939,6 @@ nav.tabs button[data-view]:not(.active):hover::before {
   line-height: 0;
   overflow: hidden;
   color: transparent;
-}
-
-/* ============= NAV FLYOUT (قائمة "العملاء" المنسدلة لأنواع الدورات) ============= */
-.nav-flyout-wrap {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-}
-
-.nav-flyout-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.nav-caret {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  margin-inline-start: -6px;
-  border: none;
-  background: transparent;
-  border-radius: 7px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.nav-caret svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  flex: none;
-  transition: transform 0.2s ease;
-}
-
-.nav-caret:hover {
-  background: var(--surface-alt);
-  color: var(--text);
-}
-
-.nav-flyout-wrap.open .nav-caret svg {
-  transform: rotate(180deg);
-}
-
-.nav-submenu {
-  display: none;
-  position: absolute;
-  z-index: 55;
-  top: calc(100% + 8px);
-  right: 0;
-  min-width: 180px;
-  max-width: 260px;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
-  padding: 6px;
-  flex-direction: column;
-  gap: 2px;
-  animation: popIn 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
-}
-
-.nav-submenu.show {
-  display: flex;
-}
-
-.nav-submenu button {
-  width: 100%;
-  text-align: right;
-  border: none;
-  background: transparent;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s ease;
-}
-
-.nav-submenu button:hover {
-  background: var(--surface-alt);
-}
-
-.nav-submenu button.active-course-filter {
-  background: var(--surface-alt);
-  color: var(--navy);
-  font-weight: 700;
 }
 
 /* ============= قائمة المستخدم المنسدلة بالهيدر (تحديث الشيت / اللغة / الصوت / الثيم / كثافة الصفوف) ============= */
@@ -1186,14 +1028,6 @@ nav.tabs button[data-view]:not(.active):hover::before {
   background: var(--surface-alt);
   color: var(--navy);
   font-weight: 700;
-}
-
-.nav-submenu-empty {
-  padding: 10px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  text-align: center;
-  white-space: normal;
 }
 
 /* ============= FOCUS STATES ============= */
