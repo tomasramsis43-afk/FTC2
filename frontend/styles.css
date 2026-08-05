@@ -951,6 +951,7 @@ nav.tabs button[data-view]:not(.active):hover::before {
 
 .user-menu-wrap .user-pill {
   margin: 0;
+  cursor: pointer;
 }
 
 #btn-user-menu-toggle svg {
