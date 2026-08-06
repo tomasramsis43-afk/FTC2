@@ -100,7 +100,7 @@ function renderCourseInvoices(){
     const diffColor = diff===null ? '' : (Math.abs(diff)<0.01 ? 'teal' : 'red');
     return `
     <tr>
-      <td class="sticky-col sticky-col-1" data-label="العميل">${escapeHtml(c.name||'')}</td>
+      <td class="sticky-col sticky-col-2" data-label="العميل">${escapeHtml(c.name||'')}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
       <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
