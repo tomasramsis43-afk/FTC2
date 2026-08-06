@@ -300,10 +300,10 @@ function renderCompanyPersons(){
   $('#company-persons-list').innerHTML = rows.length ? `
     <div class="table-scroll table-scroll-compact">
     <table>
-      <thead><tr><th class="sticky-col sticky-col-1">${tr('thId')}</th><th>${tr('thName')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('transferDateCol')}</th><th>${tr('thChannel')}</th><th>${tr('thCourse')}</th><th>${tr('thCourseNum')}</th><th>${tr('courseValueCol')}</th><th>${tr('bagValueCol')}</th><th>${tr('thTotal')}</th><th>${tr('statusCol')}</th></tr></thead>
+      <thead><tr><th class="sticky-col sticky-col-2">${tr('thId')}</th><th>${tr('thName')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('transferDateCol')}</th><th>${tr('thChannel')}</th><th>${tr('thCourse')}</th><th>${tr('thCourseNum')}</th><th>${tr('courseValueCol')}</th><th>${tr('bagValueCol')}</th><th>${tr('thTotal')}</th><th>${tr('statusCol')}</th></tr></thead>
       <tbody>
         ${pageRows.map(({t,tr:trn,c})=>`<tr>
-          <td class="mono sticky-col sticky-col-1">${escapeHtml(trn.clientId)}</td>
+          <td class="mono sticky-col sticky-col-2">${escapeHtml(trn.clientId)}</td>
           <td>${escapeHtml(c?c.name:'—')}${!c?` <span class="hint" style="display:inline;">${tr('notInClientsSheetYet')}</span>`:''}</td>
           <td class="mono">${escapeHtml(c?(c.phone||'—'):'—')}</td>
           <td>${escapeHtml(c?(c.nationality||'—'):'—')}</td>
