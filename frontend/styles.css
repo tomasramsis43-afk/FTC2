@@ -1641,34 +1641,41 @@ tbody tr:hover {
   background: color-mix(in srgb, var(--navy) 7%, transparent);
 }
 
+/* بادجات الحالة (طريقة الدفع/المتبقي/الحقيبة وأي خانة مشابهة) — شكل حبة دواء مستدير
+   نظيف مطابق لهوية نبض (بدون ميلان أو حواف حادة تحاكي "ختم ورقي" قديم)، بألوان دلالية
+   واضحة: كهرماني للمعلّق/المتبقي، فيروزي للمدفوع/المكتمل، ورمادي محايد لطريقة الدفع. */
 .stamp {
-  display: inline-block;
-  border: 1.5px solid color-mix(in srgb, var(--teal) 55%, transparent);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 30%, transparent);
-  background: color-mix(in srgb, var(--teal) 10%, transparent);
-  color: var(--teal);
-  border-radius: 4px;
-  padding: 2px 9px;
-  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--teal) 45%, transparent);
+  background: color-mix(in srgb, var(--teal) 12%, transparent);
+  color: var(--gold-dark);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   font-family: var(--font-mono);
-  letter-spacing: 0.5px;
-  transform: rotate(-1.5deg);
+  letter-spacing: 0.3px;
 }
 
 .stamp.owe {
-  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 32%, transparent);
-  background: color-mix(in srgb, var(--gold) 10%, transparent);
-  color: var(--gold-dark);
+  border-color: color-mix(in srgb, var(--navy) 55%, transparent);
+  background: color-mix(in srgb, var(--navy) 14%, transparent);
+  color: var(--navy-dark);
 }
 
 .stamp.paid {
-  border-color: color-mix(in srgb, var(--teal) 55%, transparent);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--teal) 30%, transparent);
-  background: color-mix(in srgb, var(--teal) 10%, transparent);
-  color: var(--teal);
+  border-color: color-mix(in srgb, var(--teal) 50%, transparent);
+  background: color-mix(in srgb, var(--teal) 12%, transparent);
+  color: var(--gold-dark);
+}
+
+.stamp.channel {
+  border-color: var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 /* ============= بادج عداد الفلاتر النشطة (بجانب زر "فلاتر متقدمة") ============= */
