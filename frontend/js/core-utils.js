@@ -563,3 +563,30 @@ function _scanAutoLabelTables(root){
   else run();
 })();
 
+/* ============= قائمة "إجراءات أخرى" المنسدلة — تفعيل عام لكل الشاشات ============= */
+(function(){
+  function closeAllMenus(except){
+    document.querySelectorAll('.overflow-menu.open').forEach(m=>{
+      if(m !== except) m.classList.remove('open');
+    });
+  }
+  document.addEventListener('click', function(e){
+    const toggle = e.target.closest('[data-overflow-toggle]');
+    if(toggle){
+      e.preventDefault();
+      const wrap = toggle.closest('.overflow-wrap');
+      const menu = wrap ? wrap.querySelector('.overflow-menu') : null;
+      if(menu){
+        const willOpen = !menu.classList.contains('open');
+        closeAllMenus();
+        if(willOpen) menu.classList.add('open');
+      }
+      return;
+    }
+    if(!e.target.closest('.overflow-menu')) closeAllMenus();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeAllMenus();
+  });
+})();
+
