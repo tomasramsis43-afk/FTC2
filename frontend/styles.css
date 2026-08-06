@@ -7,15 +7,15 @@
    ============================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 /* ============= CSS VARIABLES & ROOT — نبض Light (فاتح) ============= */
 :root {
-  --bg: #f4f2ee;
+  --bg: #f6f7f9;
   --surface: rgba(255, 255, 255, 0.92);
   --surface-solid: #ffffff;
-  --surface-alt: #f0ece4;
-  --bg-soft: #ece7dd;
+  --surface-alt: #eef1f5;
+  --bg-soft: #eef1f5;
   --navy: #d9832f;
   --navy-dark: #b3661e;
   --gold: #1fa98a;
@@ -27,9 +27,9 @@
   --danger: #e0505e;
   --text: #201a2e;
   --text-muted: #6c6478;
-  --border: #e6e1d8;
-  --radius: 16px;
-  --font-display: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
+  --border: #e3e7ec;
+  --radius: 20px;
+  --font-display: 'Tajawal', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-heading: 'Cairo', 'Tajawal', sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
   --shadow: 0 1px 2px rgba(32, 26, 46, 0.05);
@@ -139,6 +139,7 @@ body {
   background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-display), 'Tajawal', system-ui, sans-serif;
+  font-weight: 500;
   min-height: 100vh;
   overflow-x: clip;
   width: 100%;
@@ -289,7 +290,7 @@ header.top .seal img {
 header.top h1 {
   font-size: 20px;
   margin: 0;
-  font-weight: 800;
+  font-weight: 900;
   font-family: var(--font-heading);
   letter-spacing: 0.2px;
 }
@@ -408,7 +409,7 @@ header.top p {
   max-width: none;
   width: 100%;
   margin: 0 auto;
-  padding: 16px 28px 60px;
+  padding: 16px 36px 60px;
   box-sizing: border-box;
 }
 
@@ -428,7 +429,7 @@ header.top p {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: 16px;
+  gap: 20px;
 }
 
 .main-content {
@@ -436,10 +437,10 @@ header.top p {
   min-width: 0;
 }
 
-/* ============= NAVIGATION (الشريط الجانبي 224px — نبض) ============= */
+/* ============= NAVIGATION (الشريط الجانبي 240px — نبض) ============= */
 nav.tabs {
   flex: none;
-  width: 224px;
+  width: 240px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -901,7 +902,7 @@ section.view.active {
   font-size: 17px;
   color: var(--text);
   font-family: var(--font-heading);
-  font-weight: 700;
+  font-weight: 900;
   letter-spacing: 0.2px;
   border-inline-start: 3px solid var(--gold);
   padding-inline-start: 10px;
@@ -1808,8 +1809,8 @@ tbody tr:hover {
   margin: 0 0 16px;
   font-size: 16px;
   color: var(--text);
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-heading);
+  font-weight: 900;
   letter-spacing: 0.3px;
   border-inline-start: 3px solid var(--navy);
   padding-inline-start: 10px;
@@ -1935,8 +1936,8 @@ tbody tr:hover {
 /* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
-  --auth-bg-deep: #f4f2ee;
-  --auth-bg-mid: #f9f7f3;
+  --auth-bg-deep: #f6f7f9;
+  --auth-bg-mid: #fbfcfd;
   --auth-panel: rgba(255, 255, 255, 0.86);
   --auth-border: rgba(240, 168, 87, 0.18);
   --auth-cyan: #d9832f;
