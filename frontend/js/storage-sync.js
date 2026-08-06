@@ -731,6 +731,14 @@ async function _persistAllSnapshotsAfterLoad(){
 
 async function fetchAllRecordsGeneric(collection){
   await flushPendingRecordWrites().catch(()=>{});
+  // المسار الجديد: جلب "الفروق فقط" (لا ننزّل الجدول كاملاً إطلاقاً إلا عند الضرورة) لتسريع
+  // المزامنة وتقليل استهلاك البيانات. أي مشكلة هنا (لا لقطة محلية، خطأ شبكة، سيرفر قديم لا يدعم
+  // endpoints الجديدة، أو عدد تغييرات كبير) → نَمِر تلقائياً للمسار الكامل الأصلي بالأسفل، أي أن
+  // التحميل الكامل يظل خطّ الرجعة الدائم المضمون. لا يُمكن أن يُنتج هذا تعارضاً مع التخزين/النسخ.
+  try{
+    const delta = await _fetchDeltaRecords(collection);
+    if(delta) return delta;
+  }catch(e){ /* نكمل بالمسار الكامل */ }
   const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}`);
   if(!res.ok) throw new Error('تعذّر جلب بيانات ' + collection);
   const data = await res.json();
@@ -753,11 +761,110 @@ async function fetchAllRecordsGeneric(collection){
   _recordVersions[collection] = versions;
   recordMeta[collection] = metaMap;
   // نفس خط الأمان الموجود فى fetchAllClientRecords بالضبط: أي سطر لسه معلّق فعلياً (بدون اتصال
-  // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً فى الذاكرة بدل اختفائه فجأة من الشاشة.
+  // حقيقي حتى بعد محاولة الرفع أعلاه) يظل ظاهراً في الذاكرة بدل اختفائه فجأة من الشاشة.
   await _mergePendingRecordsIntoList(collection, list);
   // تحديث اللقطة المحلية حتى يبدأ أي فتح تالٍ (cacheOnly) من هذه الحالة المؤكدة + الـ baseline
   await _persistRecordsSnap(collection, list, baseline, versions, metaMap);
   return { list, baseline };
+}
+
+// ==== جلب الفروض فقط (delta) ====
+// يعتمد على لقطة محلية مؤكدة + أرقام النسخ المحلية: يستعلم عن أرقام النسخ الخفيفة من السيرفر
+// عبر /versions، ثم ينزّل فقط السجلات الجديدة/المتغيّرة عبر /records?ids=، ويحذف المحذوفة.
+// يرجع كائناً بنفس شكل fetchAllRecordsGeneric { list, baseline } أو يُرمي خطأ ليتولى المسار
+// الكامل. لا يمسّ baseline/أرقام النسخ للسجلات الثابتة، ولا يغيّر صيغة التخزين/النسخ أبداً.
+async function _fetchDeltaRecords(collection){
+  const known = _recordVersions[collection];
+  if(!known || known.size === 0) throw new Error('لا توجد أرقام نسخ محلية — تحميل كامل');
+  const snap = await _recordsSnapRead(RECORDS_SNAP_PREFIX + collection);
+  if(!snap || !Array.isArray(snap.list) || snap.list.length === 0) throw new Error('لا توجد لقطة محلية — تحميل كامل');
+
+  const vr = await serverFetch(`/api/records/${encodeURIComponent(collection)}/versions`);
+  if(!vr.ok) throw new Error('تعذّر جلب أرقام الإصدارات');
+  const vd = await vr.json().catch(()=>null);
+  if(!vd || !Array.isArray(vd.pairs)) throw new Error('استجابة أرقام إصدارات غير صالحة');
+
+  const serverVers = new Map(vd.pairs);
+  const serverIds = new Set(vd.pairs.map(p=>p[0]));
+  const removedIds = [];
+  for(const id of known.keys()) if(!serverIds.has(id)) removedIds.push(id);
+
+  const fetchIds = [];
+  for(const id of serverIds){
+    if(!known.has(id) || known.get(id) !== serverVers.get(id)) fetchIds.push(id);
+  }
+  // حد أمان لطول عنوان الـ URL: عدد تغييرات كبير جداً لا يستفيد من الـ delta على أي حال.
+  if(fetchIds.length > 500) throw new Error('تغييرات كثيرة جداً — تحميل كامل');
+
+  const nothingChanged = fetchIds.length === 0 && removedIds.length === 0;
+  const oldItems = snap.list;
+  const snapBaseline = new Map();
+  for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length===2) snapBaseline.set(pair[0], pair[1]); }
+
+  const finalItems = [];
+  const baseline = new Map();
+  const versions = new Map();
+  const metaMap = {};
+
+  // جولة أساسية: كل عناصر اللقطة المحفوظة (غير المحذوفة على السيرفر) + أرقام نسخها/باس لاين
+  for(const it of oldItems){
+    if(!it || !it.id) continue;
+    if(removedIds.includes(it.id)) continue;
+    finalItems.push(it);
+    const j = snapBaseline.get(it.id);
+    if(j !== undefined) baseline.set(it.id, j);
+    const v = known.get(it.id);
+    if(v !== undefined) versions.set(it.id, v);
+  }
+
+  if(nothingChanged){
+    // لا تغيير إطلاقًا — القائمة كاملة جاهزة من اللقطة.
+    _recordVersions[collection] = versions;
+    if(!recordMeta[collection]) recordMeta[collection] = {};
+    for(const pair of (snap.metaPairs||[])){ if(pair && pair.length===2 && pair[0] && pair[1] && pair[1].status) recordMeta[collection][pair[0]] = { origin: pair[1].origin || 'general', status: pair[1].status }; }
+    await _mergePendingRecordsIntoList(collection, finalItems);
+    await _persistRecordsSnap(collection, finalItems, baseline, versions, recordMeta[collection]);
+    return { list: finalItems, baseline };
+  }
+
+  // ننزل فقط السجلات المعبّرة/الجديدة.
+  if(fetchIds.length){
+    const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}?ids=${encodeURIComponent(fetchIds.join(','))}`);
+    if(!res.ok) throw new Error('تعذّر جلب السجلات المتعبّرة');
+    const data = await res.json().catch(()=>null);
+    if(!data || !Array.isArray(data.records)) throw new Error('استجابة سجلات غير صالحة');
+    // أمان: لو السيرفر اعاد بكل السجلات (لا يعرف ids= / سيرفر قديم) بعدد أكبر بوضوح مما طلبنا،
+    // نعود للتحميل الكامل بدل الاعتماد على تخمين.
+    if(data.records.length > fetchIds.length * 2 + 5) throw new Error('السيرفر لا يدعم جلب الفروق — تحميل كامل');
+    const byId = new Map();
+    for(const r of data.records){
+      byId.set(r.id, r);
+      versions.set(r.id, Number.isInteger(r.version) ? r.version : 0);
+      if(r.origin || r.status) metaMap[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
+    }
+    for(const id of fetchIds){
+      const r = byId.get(id);
+      if(!r) continue;
+      let plain;
+      try{ plain = await _decryptOrFail(r.enc); }catch(e){ throw e; }
+      try{
+        const obj = JSON.parse(plain);
+        // نتأكد أنها قائمة القائمة: لو كانت هي نفسها موجودة مسبقًا من اللقطة نستبدل بقبل النسخة.
+        if(!removedIds.includes(id)){
+          const idx = finalItems.findIndex(x=>x.id===id);
+          if(idx>=0) finalItems[idx] = obj; else finalItems.push(obj);
+        }
+        baseline.set(id, plain);
+      }catch(e){ /* سجل تالف — نتجاهله */ }
+    }
+  }
+
+  _recordVersions[collection] = versions;
+  if(!recordMeta[collection]) recordMeta[collection] = {};
+  Object.assign(recordMeta[collection], metaMap);
+  await _mergePendingRecordsIntoList(collection, finalItems);
+  await _persistRecordsSnap(collection, finalItems, baseline, versions, recordMeta[collection]);
+  return { list: finalItems, baseline };
 }
 
 async function saveOneRecordGeneric(collection, id, plainJson){
@@ -1040,7 +1147,9 @@ async function saveCollectionGeneric(collection, arr){
       for(const id of baseline.keys()) if(!currentIds.has(id)) removedIds.push(id);
 
       let anyNetworkFailure = false;
-      if(changed.length > 20){
+      // حدّ التجميع مُخفّض (5 بدل 20): التعديلات المتعددة تُرفع في طلب واحد مجمّع بدل طلب منفصل
+      // لكل سجل — يقلّل عدد الـ round-trips وضغط الـ rate limiter، ويسرّع الحفظ الفعلي.
+      if(changed.length > 5){
         try{
           const conflictIds = await bulkUploadRecordsGeneric(collection, changed.map(x=>x.item));
           const conflictSet = new Set(conflictIds);
@@ -1053,7 +1162,7 @@ async function saveCollectionGeneric(collection, arr){
           else if(ok === null) anyNetworkFailure = true;
         }
       }
-      if(removedIds.length > 20){
+      if(removedIds.length > 5){
         // حذف كثير دفعة واحدة (تنظيف/إعادة ضبط جزئي) — طلب واحد مُجمَّع بدل طلب DELETE منفصل
         // لكل سجل، لتفادي ضرب سقف الـ rate limiter بعشرات/مئات الطلبات المتتالية.
         const failedIds = await bulkDeleteRecordsGeneric(collection, removedIds);

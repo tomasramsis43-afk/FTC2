@@ -50,10 +50,20 @@ app.use(helmet({
 // للعالم كله؛ ده كان بيسمح لأي موقع تاني يكلّم الـ API مباشرة من متصفح أي زائر.
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : { origin: false }));
-// ضغط كل الاستجابات (gzip) — يقلّل حجم app.html (~1.8MB) واستجابات
-// /api/storage (بيانات العملاء/الحركات المشفّرة كنصوص طويلة) بشكل كبير جداً
-// أثناء النقل عبر الشبكة، بدون أي تأثير على المحتوى أو المنطق.
-app.use(compression());
+// ضغط كل الاستجابات (gzip) — يقلّل حجم app.html (~1.8MB) أثناء النقل عبر الشبكة.
+// نستثني مسارات البيانات المشفّرة (ENC2) لأن النص المشفّر عشوائي لا يضغط إطلاقاً —
+// محاولة gzip عليه تهدر CPU السيرفر وتطيل الاستجابة. استجابات /api/records-versions و
+// /api/storage-versions (أرقام صغيرة جداً) تظل مضغوطة كالمعتاد.
+app.use(compression({
+  filter: (req, res) => {
+    const p = req.path;
+    if (p === '/api/storage-versions' || p === '/api/records-versions') return true;
+    if (p.startsWith('/api/storage')) return false;               // قيم مشفّرة كبيرة
+    if (p.startsWith('/api/records/') && !p.endsWith('/versions') && !p.endsWith('/pending')) return false;
+    if (p.startsWith('/api/client-records') && !p.endsWith('/version') && !p.endsWith('/ids')) return false;
+    return true;
+  }
+}));
 app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
 
 /* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
@@ -1219,11 +1229,38 @@ app.get('/api/records/:collection', requireAuth, requireValidCollection, async (
       sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
       sqlParams.push(pageSize, (page - 1) * pageSize);
     }
+    // جلب الفروق فقط (delta): لو المُستدعي أرسل ids= (قائمة ids مفصولة بفواصل) نرجع هذه السجلات
+    // فقط بدل الجدول كامل — تستخدمه المزامنة لجلب السجلات المتغيّرة/الجديدة. معاملة `id = ANY`
+    // تحترم فلترة الرؤية أعلاه (أي id لا يحق للمستخدم رؤيته يُستبعد تلقائياً).
+    const idsParam = req.query.ids;
+    if (typeof idsParam === 'string' && idsParam.length) {
+      const idList = idsParam.split(',').map(s => s && s.trim()).filter(Boolean);
+      if (idList.length) {
+        sql += ` AND id = ANY($${sqlParams.length + 1}::text[])`;
+        sqlParams.push(idList);
+      }
+    }
     const r = await pool.query(sql, sqlParams);
     res.json({ records: r.rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب البيانات' });
+  }
+});
+
+// أرقام إصدارات كل سجل على حدة (طلب خفيف بدون بيانات فعلية) — تستخدمه المزامنة الجديدة لجلب
+// "الفروق فقط" بدل تنزيل التصنيف كاملاً: يُقارن بها الكلاينت أرقامه المحلية فيطلب لاحقاً عبر
+// GET /api/records/:collection?ids= السجلات المتغيّرة/الجديدة فقط. يحترم فلترة الرؤية نفسها.
+app.get('/api/records/:collection/versions', requireAuth, requireValidCollection, async (req, res) => {
+  try {
+    const vis = recordsVisibilitySql(req.user.role, req.user.username);
+    const sql = `SELECT id, version FROM collection_records WHERE collection = $1 ${vis.where}`;
+    const params = [req.params.collection, ...vis.params];
+    const r = await pool.query(sql, params);
+    res.json({ pairs: r.rows.map(row => [row.id, Number(row.version)]) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب أرقام الإصدارات' });
   }
 });
 
