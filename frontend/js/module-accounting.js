@@ -539,7 +539,7 @@ function printAccountingReport(title, tableSel, opts){
   const periodLine = opts.asOfOnly
     ? `كأرصدة تراكمية حتى: <b>${escapeHtml(formatDateDisplay(asOf))}</b>`
     : `عن الفترة: <b>${escapeHtml(formatDateDisplay(from))}</b> إلى <b>${escapeHtml(formatDateDisplay(to))}</b>`;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   // ننسخ محتوى الجدول كنص/أرقام فقط (بدون أزرار أو عناصر تفاعلية) حتى تخرج الطباعة نظيفة
   const clone = table.cloneNode(true);
   clone.querySelectorAll('button').forEach(b=>b.remove());
@@ -1064,7 +1064,7 @@ $('#btn-print-courses-report').addEventListener('click', ()=>{
   const fcid = $('#cs-filter-clientid').value.trim().toLowerCase();
   const sessions = coursesFilteredSessions();
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const ffrom = $('#cs-filter-from').value;
   const fto = $('#cs-filter-to').value;
 

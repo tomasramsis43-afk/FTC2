@@ -371,7 +371,7 @@ function printCompanyTransferTrainees(transferId){
   if(!t){ showToast('تعذّر إيجاد بيانات هذه الحوالة'); return; }
   const company = companies.find(c=>c.id===t.companyId);
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const allocated = transferAllocatedTotal(t);
   const remaining = num(t.amount) - allocated;
   const trainees = t.trainees || [];
@@ -530,7 +530,7 @@ function printCompanyStatement(companyId){
   if(!company){ showToast('تعذّر إيجاد الشركة'); return; }
   const transfers = companyTransfers.filter(t=>t.companyId===companyId).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
   const totalAmount = transfers.reduce((s,t)=>s+num(t.amount),0);
   const totalAllocated = transfers.reduce((s,t)=>s+transferAllocatedTotal(t),0);
