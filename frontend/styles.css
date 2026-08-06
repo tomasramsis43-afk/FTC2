@@ -810,8 +810,8 @@ section.view.active {
 .grid-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 @media(max-width: 900px) {
@@ -830,7 +830,7 @@ section.view.active {
   position: relative;
   background: var(--surface-solid);
   border-radius: var(--radius);
-  padding: 16px 18px 16px 20px;
+  padding: 20px 22px 20px 24px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
   border-inline-start: 3px solid var(--gold);
@@ -844,9 +844,9 @@ section.view.active {
 }
 
 .card .k {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: 600;
@@ -855,7 +855,7 @@ section.view.active {
 
 .card .v {
   font-family: var(--font-mono);
-  font-size: 23px;
+  font-size: 27px;
   font-weight: 700;
   color: var(--navy);
   transition: color 0.2s ease;
@@ -891,8 +891,8 @@ section.view.active {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  padding: 18px 20px;
-  margin-bottom: 16px;
+  padding: 22px 24px;
+  margin-bottom: 18px;
   transition: box-shadow 0.2s ease;
 }
 
@@ -1137,11 +1137,11 @@ section.view.active {
 /* ============= BUTTONS ============= */
 .btn {
   border: none;
-  border-radius: 10px;
-  padding: 9px 16px;
+  border-radius: 11px;
+  padding: 11px 20px;
   font-family: inherit;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.2px;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, filter 0.12s ease;
@@ -1260,9 +1260,9 @@ section.view.active {
 }
 
 .btn-sm {
-  padding: 5px 10px;
-  font-size: 11.5px;
-  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  border-radius: 9px;
 }
 
 .btn:disabled {
@@ -1347,19 +1347,19 @@ section.view.active {
 /* ============= TOOLBAR ============= */
 .toolbar {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .toolbar input,
 .toolbar select {
   font-family: inherit;
-  padding: 8px 12px;
+  padding: 11px 15px;
   border: 1.5px solid var(--border);
-  border-radius: 10px;
-  font-size: 13px;
+  border-radius: 11px;
+  font-size: 14px;
   background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
   color: var(--text);
   box-shadow: var(--shadow);
@@ -1367,7 +1367,7 @@ section.view.active {
 }
 
 .toolbar input[type=text] {
-  min-width: 200px;
+  min-width: 220px;
   flex: 1;
 }
 
@@ -1492,11 +1492,11 @@ tbody tr.paid .sticky-col {
 
 thead th {
   text-align: right;
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted);
   font-weight: 700;
   letter-spacing: 0.7px;
-  padding: 9px 10px;
+  padding: 14px 14px;
   border-bottom: 1px solid var(--border);
   text-transform: uppercase;
   font-family: var(--font-mono);
@@ -1556,7 +1556,8 @@ thead th.sortable[aria-sort="descending"]::after {
 }
 
 tbody td {
-  padding: 9px 10px;
+  padding: 14px 14px;
+  font-size: 13.5px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   vertical-align: middle;
 }
@@ -2399,8 +2400,8 @@ body.dark-theme .hint-warn {
 #view-clients .toolbar-card {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 14px 16px;
+  border-radius: var(--radius);
+  padding: 18px 20px;
   box-shadow: var(--shadow);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -2408,29 +2409,29 @@ body.dark-theme .hint-warn {
 
 #view-clients .client-stats {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 #view-clients .client-stats .stat {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 16px;
+  border-radius: var(--radius);
+  padding: 16px 22px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 130px;
+  gap: 6px;
+  min-width: 160px;
   box-shadow: var(--shadow);
 }
 
 #view-clients .client-stats .stat b {
-  font-size: 18px;
+  font-size: 24px;
   font-family: var(--font-mono);
 }
 
 #view-clients .client-stats .stat span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
