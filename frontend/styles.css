@@ -1583,6 +1583,16 @@ thead th.sortable {
   transition: color 0.15s ease, background 0.15s ease;
 }
 
+/* إصلاح: إعادة تفعيل التثبيت (sticky) لرؤوس الأعمدة القابلة للفرز داخل الجداول المنسدلة.
+   قاعدة .thead th.sortable أعلاه تضبط position: relative فتلغي الـ sticky تبع
+   .table-scroll thead th (نفس قوة الخصوصية، والأخيرة في الملف هي التي تفوز)،
+   مما كان يجعل جزءاً من رأس الجدول يسافر مع السكرول. هذه القاعدة (لاحقة في الملف)
+   تعيد التثبيت للأعمدة القابلة للفرز مع الحفاظ على تموضع سهم الفرز (sticky تثبيت فعال). */
+.table-scroll thead th.sortable {
+  position: sticky;
+  top: 0;
+}
+
 thead th.sortable:hover {
   color: var(--navy);
   background: color-mix(in srgb, var(--navy) 8%, var(--surface-solid));
