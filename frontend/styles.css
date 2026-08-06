@@ -2267,6 +2267,11 @@ td select:hover:not(:focus) {
   transition: opacity 0.3s ease, transform 0.3s ease;
   backdrop-filter: blur(2px);
   will-change: transform, opacity;
+  /* لازم تظهر فوق أي شاشة مفتوحة (مودالات .overlay بقيمة 50، قوائم .row-menu-panel/
+     .user-menu-dropdown بقيمة 55) — قبل هذا التعديل ما كان للتوست z-index إطلاقاً فكانت
+     أي نافذة منبثقة مفتوحة وقت ظهور الإشعار (تسجيل/خطأ) تغطيه تماماً فيختفي بصمت. */
+  z-index: 9999;
+  pointer-events: none;
 }
 
 .toast svg {
