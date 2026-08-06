@@ -109,6 +109,19 @@ let _clientsSyncBaseline = null;
 // منه. تُستخدم هذه الراية فى module-clients.js لمنع الحفظ (مع رسالة واضحة للمستخدم) لحد ما تكتمل
 // أول مزامنة حقيقية — راجع تعليق "منع الحفظ أثناء نافذة المزامنة الأولى" هناك.
 let _clientsFirstRealSyncDone = false;
+// انتظار قصير (بحد أقصى maxMs) لاكتمال أول مزامنة حقيقية مع السيرفر لبيانات العملاء، بدل رفض
+// الحفظ فوراً وإجبار المستخدم على نقر "حفظ" يدوياً مرة تانية — كانت تحصل كثيراً مع الاستقبال
+// تحديداً لأن أول حاجة يعملوها بعد فتح البرنامج صباحاً هي تسجيل عميل، أي خلال أول ثانية/اتنين قبل
+// اكتمال المزامنة. تُرجع true لو اكتملت المزامنة فعلاً خلال المهلة، أو false لو انتهت المهلة أولاً
+// (يبقى المتصل حراً يقرر: عرض رسالة الانتظار القديمة أو أي تصرّف آخر مناسب لسياقه).
+async function waitForClientsFirstRealSync(maxMs = 8000){
+  if(_clientsFirstRealSyncDone) return true;
+  const start = Date.now();
+  while(!_clientsFirstRealSyncDone && (Date.now() - start) < maxMs){
+    await new Promise(r=>setTimeout(r, 250));
+  }
+  return _clientsFirstRealSyncDone;
+}
 let bagStock = [];
 let vaultTx = [];
 let deletedVaultTx = []; // سجل الحركات المالية الملغاة (حذف منطقي Soft Delete) — لا تُستخدم في أي حسابات، فقط للتدقيق والاسترجاع

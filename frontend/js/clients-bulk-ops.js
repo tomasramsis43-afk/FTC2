@@ -136,7 +136,7 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!toAdd.length){ showToast('لم تُدخل بيانات أي عميل'); return; }
   // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي أعلاه
-  if(!_clientsFirstRealSyncDone){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
+  if(!(await waitForClientsFirstRealSync())){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   // فحص إضافي عبر الخادم عن أرقام هوية مكررة موجودة فعلاً فى النظام ولا تظهر فى القائمة المحمَّلة
   // محلياً (نفس سبب الفحص المضاف فى النموذج الفردي أعلاه — مهم خصوصاً لمستخدم الاستقبال المعزول).
   const allIdsBulk = await fetchAllClientIds();
@@ -434,7 +434,7 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!patches.length){ showToast('لم تُدخل بيانات أي صف'); return; }
   // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي فى بداية الملف
-  if(!_clientsFirstRealSyncDone){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
+  if(!(await waitForClientsFirstRealSync())){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   snapshotState(`تحديث/استيراد بيانات العملاء دفعة واحدة (${patches.length} صف)`);
   let added=0, updated=0;
   const changedRows = [];
