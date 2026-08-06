@@ -586,14 +586,19 @@
         <option value="empty">لم تُدخل القيمة الفعلية بعد</option>
       </select>
       <span class="spacer"></span>
-      <button class="btn btn-ghost btn-sm" id="btn-template-ci-import">نموذج استيراد فواتير الدورات</button>
-      <button class="btn btn-ghost btn-sm" id="btn-import-ci">استيراد من Excel</button>
+      <div class="overflow-wrap">
+        <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+        <div class="overflow-menu">
+          <button class="btn btn-ghost btn-sm" id="btn-template-ci-import">نموذج استيراد فواتير الدورات</button>
+          <button class="btn btn-ghost btn-sm" id="btn-import-ci">استيراد من Excel</button>
+          <button class="btn btn-ghost btn-sm" id="btn-ci-bulk">📋 تحديث/استيراد فواتير الدورات (جدول)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-export-course-invoices">تصدير Excel</button>
+          <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-course-invoices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
+        </div>
+      </div>
       <input type="file" id="ci-import-input" accept=".xlsx,.xls,.csv" style="display:none;">
-      <button class="btn btn-primary btn-sm" id="btn-ci-bulk">📋 تحديث/استيراد فواتير الدورات (جدول)</button>
       <button class="btn btn-gold btn-sm" id="btn-ci-ai-upload">📄🤖 رفع فواتير حقيقية (PDF/صور) — قراءة تلقائية</button>
       <input type="file" id="ci-ai-upload-input" accept=".pdf,image/*" multiple style="display:none;">
-      <button class="btn btn-ghost btn-sm" id="btn-export-course-invoices">تصدير Excel</button>
-      <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-course-invoices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span>تحديث الشيت</span></button>
     </div>
     <div class="hint hint-info" style="margin-top:-6px;">الاستيراد يتم بالربط برقم الهوية (وبرقم الدورة إن وُجد لتحديد التسجيل الصحيح عند وجود أكثر من دورة لنفس رقم الهوية). ملف Excel بخمسة أعمدة: "رقم الهوية"، "رقم الدورة" (اختياري لكن يُنصح به)، "رقم الفاتورة" (اختياري — إن وُجد يُرحَّل تلقائياً لعمود "رقم الفاتورة" في شيت العملاء أيضاً)، "التاريخ" (تاريخ صدور الفاتورة)، "القيمة الفعلية للايصال".</div>
     <div class="hint hint-info" style="margin-top:-6px;">القيمة الفعلية بالإيصال وقيمة الدورة بالنظام تُعامَلان كمبالغ شاملة لضريبة القيمة المضافة، ويتم استخراج الضريبة من داخل المبلغ (بقسمته على 1.15) وليس إضافتها فوقه — لضمان توافق الاحتساب مع باقي فواتير النظام.</div>
@@ -1276,13 +1281,19 @@
     <span>صافي حركات البنك بالنظام: <b class="mono">2,692,602.57 ﷼</b></span>
   </div>
       <div class="toolbar" style="margin-bottom:10px;">
-        <button class="btn btn-ghost btn-sm" id="btn-template-bankrecon">تحميل نموذج فارغ</button>
         <button class="btn btn-ghost btn-sm" id="btn-import-bankrecon">استيراد كشف الحساب من Excel</button>
         <input type="file" id="import-bankrecon-input" accept=".xlsx,.xls,.csv" style="display:none;">
-        <button class="btn btn-ghost btn-sm" id="btn-bankrecon-rerun-automatch">🔄 إعادة تشغيل المطابقة التلقائية</button>
-        <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-bankrecon-toggle-matched">إظهار/إخفاء الحركات المطابَقة</button>
-        <button class="btn btn-danger btn-sm" id="btn-bankrecon-clear">مسح كشف الحساب المستورد بالكامل</button>
+        <span class="spacer"></span>
+        <div class="overflow-wrap">
+          <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+          <div class="overflow-menu">
+            <button class="btn btn-ghost btn-sm" id="btn-template-bankrecon">تحميل نموذج فارغ</button>
+            <button class="btn btn-ghost btn-sm" id="btn-bankrecon-rerun-automatch">🔄 إعادة تشغيل المطابقة التلقائية</button>
+            <hr>
+            <button class="btn btn-danger btn-sm" id="btn-bankrecon-clear">مسح كشف الحساب المستورد بالكامل</button>
+          </div>
+        </div>
       </div>
       <div id="bankrecon-wrap"><div class="empty-state" style="padding:20px;"><div class="big">🏦</div>لم يتم استيراد كشف حساب بنكي بعد</div></div>
     </div>
@@ -1317,8 +1328,13 @@
           <input type="checkbox" id="v-filter-anomaly" style="width:auto; margin:0;"> ⚠️ عرض الحركات غير المعتادة فقط
         </label>
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" id="btn-extract-nomethod">🔍 استخراج الحركات بدون طريقة دفع</button>
-        <button class="btn btn-ghost btn-sm" id="btn-export-vault">تصدير التقرير CSV (حسب الفلتر الحالي)</button>
+        <div class="overflow-wrap">
+          <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+          <div class="overflow-menu">
+            <button class="btn btn-ghost btn-sm" id="btn-extract-nomethod">🔍 استخراج الحركات بدون طريقة دفع</button>
+            <button class="btn btn-ghost btn-sm" id="btn-export-vault">تصدير التقرير CSV (حسب الفلتر الحالي)</button>
+          </div>
+        </div>
         <button class="btn btn-gold" id="btn-add-vault">+ حركة جديدة</button>
       </div>
       <div class="toolbar" id="vault-bulk-actions-bar" style="display:none; background:rgba(180,72,58,.08); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
