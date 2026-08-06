@@ -1275,10 +1275,109 @@ async function fetchAllClientIds(){
   }catch(e){ return null; }
 }
 
+// نفس فكرة _fetchDeltaRecords بالضبط (السطر أعلاه) لكن لنظام العملاء المستقل (_clientRecordVersions
+// كائن عادي وليس Map، وclientRecordMeta/_persistClientsSnap بدل نظيراتهم العامة) — كان هذا تحديداً
+// السبب الأكبر لاستهلاك حصة نقل بيانات نيون الشهرية: أي عميل واحد يتغيّر فى أي مكان كان يستوجب
+// إعادة تنزيل جدول العملاء بالكامل (كل عميل مسجَّل، مهما كان عددهم) على كل جهاز مفتوح خلال أقرب
+// دورة فحص (كل دقيقتين) — لا فرق بينه وبين المشكلة نفسها التي عولجت أصلاً فى _fetchDeltaRecords
+// للتصنيفات العامة (الخزنة/المخزون/الدورات...)، فقط لم تكن العملاء موصولة بنفس الآلية من قبل.
+async function _fetchDeltaClientRecords(){
+  const knownIds = Object.keys(_clientRecordVersions || {});
+  if(!knownIds.length) throw new Error('لا توجد أرقام نسخ محلية — تحميل كامل');
+  const snap = await _recordsSnapRead(_clientsSnapKey());
+  if(!snap || !Array.isArray(snap.list) || snap.list.length === 0) throw new Error('لا توجد لقطة محلية — تحميل كامل');
+
+  const vr = await serverFetch('/api/client-records/versions');
+  if(!vr.ok) throw new Error('تعذّر جلب أرقام إصدارات العملاء');
+  const vd = await vr.json().catch(()=>null);
+  if(!vd || !Array.isArray(vd.pairs)) throw new Error('استجابة أرقام إصدارات غير صالحة');
+
+  const serverVers = new Map(vd.pairs);
+  const serverIds = new Set(vd.pairs.map(p=>p[0]));
+  const removedIds = [];
+  for(const id of knownIds) if(!serverIds.has(id)) removedIds.push(id);
+
+  const fetchIds = [];
+  for(const id of serverIds){
+    if(!(id in _clientRecordVersions) || _clientRecordVersions[id] !== serverVers.get(id)) fetchIds.push(id);
+  }
+  // حد أمان لطول عنوان الـ URL: عدد تغييرات كبير جداً لا يستفيد من الـ delta على أي حال.
+  if(fetchIds.length > 500) throw new Error('تغييرات كثيرة جداً — تحميل كامل');
+
+  const nothingChanged = fetchIds.length === 0 && removedIds.length === 0;
+  const oldItems = snap.list;
+  const snapBaseline = new Map();
+  for(const pair of (snap.baselinePairs||[])){ if(pair && pair.length===2) snapBaseline.set(pair[0], pair[1]); }
+
+  const finalItems = [];
+  const baseline = new Map();
+  clientRecordMeta = {};
+
+  for(const it of oldItems){
+    if(!it || !it.id) continue;
+    if(removedIds.includes(it.id)) continue;
+    finalItems.push(it);
+    const j = snapBaseline.get(it.id);
+    if(j !== undefined) baseline.set(it.id, j);
+  }
+  for(const pair of (snap.metaPairs||[])){ if(pair && pair.length===2 && pair[0] && pair[1] && pair[1].status && !removedIds.includes(pair[0])) clientRecordMeta[pair[0]] = { origin: pair[1].origin || 'general', status: pair[1].status }; }
+  for(const id of removedIds) delete _clientRecordVersions[id];
+
+  if(nothingChanged){
+    // لا تغيير إطلاقًا — القائمة كاملة جاهزة من اللقطة، بلا أي نقل بيانات فعلي إضافي.
+    await _mergePendingRecordsIntoList('clients', finalItems);
+    await _persistClientsSnap(finalItems, baseline, _clientRecordVersions, clientRecordMeta);
+    return { list: finalItems, baseline };
+  }
+
+  // ننزل فقط سجلات العملاء المتغيّرة/الجديدة.
+  if(fetchIds.length){
+    const res = await serverFetch(`/api/client-records?ids=${encodeURIComponent(fetchIds.join(','))}`);
+    if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء المتغيّرة');
+    const data = await res.json().catch(()=>null);
+    if(!data || !Array.isArray(data.records)) throw new Error('استجابة سجلات غير صالحة');
+    // أمان: لو السيرفر أعاد كل العملاء (لا يعرف ids= / سيرفر قديم) بعدد أكبر بوضوح مما طلبنا،
+    // نعود للتحميل الكامل بدل الاعتماد على تخمين.
+    if(data.records.length > fetchIds.length * 2 + 5) throw new Error('السيرفر لا يدعم جلب الفروق — تحميل كامل');
+    const byId = new Map();
+    for(const r of data.records){
+      byId.set(r.id, r);
+      _clientRecordVersions[r.id] = r.version;
+      if(r.origin || r.status) clientRecordMeta[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
+    }
+    for(const id of fetchIds){
+      const r = byId.get(id);
+      if(!r) continue;
+      let plain;
+      try{ plain = await _decryptOrFail(r.enc); }catch(e){ throw e; }
+      try{
+        const obj = JSON.parse(plain);
+        if(!removedIds.includes(id)){
+          const idx = finalItems.findIndex(x=>x.id===id);
+          if(idx>=0) finalItems[idx] = obj; else finalItems.push(obj);
+        }
+        baseline.set(id, plain);
+      }catch(e){ /* سجل تالف — نتجاهله */ }
+    }
+  }
+
+  await _mergePendingRecordsIntoList('clients', finalItems);
+  await _persistClientsSnap(finalItems, baseline, _clientRecordVersions, clientRecordMeta);
+  return { list: finalItems, baseline };
+}
+
 async function fetchAllClientRecords(){
   // نحاول رفع أي تعديلات عملاء معلّقة أولاً (لو النت رجع من تحته) قبل قراءة "الحقيقة" من السيرفر —
   // بدون هذه الخطوة، أي عميل نجح رفعه سابقاً جزئياً فقط كان سيظهر تاني بنسخته القديمة أو يختفي تماماً.
   await flushPendingRecordWrites().catch(()=>{});
+  // المسار الجديد: جلب "الفروق فقط" (لا ننزّل جدول العملاء كاملاً إطلاقاً إلا عند الضرورة) بنفس
+  // فكرة fetchAllRecordsGeneric تماماً — راجع تعليق _fetchDeltaClientRecords لشرح الأثر. أي مشكلة
+  // هنا (لا لقطة محلية، خطأ شبكة، عدد تغييرات كبير...) → نمر تلقائياً للمسار الكامل الأصلي بالأسفل،
+  // الذي يظل خطّ الرجعة الدائم المضمون.
+  try{
+    const delta = await _fetchDeltaClientRecords();
+    if(delta) return delta;
+  }catch(e){ /* نكمل بالمسار الكامل */ }
   const res = await serverFetch('/api/client-records');
   if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
   const data = await res.json();
