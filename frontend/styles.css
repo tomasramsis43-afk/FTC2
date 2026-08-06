@@ -1494,7 +1494,7 @@ table {
   position: sticky;
   top: 0;
   background: var(--surface-solid);
-  z-index: 1;
+  z-index: 5;
   box-shadow: 0 1px 0 var(--border);
 }
 
@@ -1542,7 +1542,7 @@ table {
 }
 
 thead th.sticky-col {
-  z-index: 4;
+  z-index: 6;
   background: var(--surface-solid);
 }
 
