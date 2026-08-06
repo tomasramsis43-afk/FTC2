@@ -254,3 +254,19 @@ ALTER TABLE server_users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 -- آخر مرة راجع فيها هذا المستخدم (أدمن) شاشة "سجل الدخول" — تُستخدم لتنبيهه فور تسجيل الدخول
 -- التالي لو ظهر نشاط مشبوه جديد لم يشاهده بعد، بدل انتظار فتحه شاشة الإعدادات بنفسه.
 ALTER TABLE server_users ADD COLUMN IF NOT EXISTS last_login_history_seen_at TIMESTAMPTZ;
+
+-- صلاحيات عرض الأقسام لكل دور (staff/accountant/reception — الأدمن دائماً كل شيء بلا استثناء).
+-- مقصودة تبقى نص صريح (غير مشفّرة) بخلاف باقي kv_store، لأن هذا الجدول تحديداً يُقرأ من
+-- السيرفر نفسه لفرض القيد الفعلي على الـ API (roleCanAccessView فى server.js)، وليس فقط
+-- لإخفاء تبويب فى الواجهة. لو بقي مشفّراً بمفتاح المستخدم مثل بقية settings، لَما قدر السيرفر
+-- يقرأه بدون فك تشفير الكتلة الكاملة (وده يحتاج معرفة clientId الترخيص فى كل طلب) — فقُصد فصله
+-- هنا كمصدر حقيقة وحيد (single source of truth) يقرأه كل من الواجهة والسيرفر مباشرة، بدل التعارض
+-- السابق بين ROLE_PERMISSIONS الثابتة بكود السيرفر وsettings.rolePermissions القابلة للتعديل من
+-- الواجهة (كان تعديل الأدمن للصلاحيات من الإعدادات يُخفي/يُظهر التبويب فقط دون أي أثر فعلي
+-- على فرض القيد الحقيقي فى الـ API، بل يبقى محكوماً بقائمة السيرفر الثابتة القديمة).
+CREATE TABLE IF NOT EXISTS role_permissions (
+  role         TEXT PRIMARY KEY,
+  views        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by   TEXT
+);

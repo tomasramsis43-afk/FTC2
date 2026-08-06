@@ -805,12 +805,27 @@ async function renderUsersList(){
     el.innerHTML = `<div class="hint" style="color:var(--red);">تعذّر تحميل قائمة المستخدمين: ${escapeHtml(e.message||'')}</div>`;
   }
 }
-/* ---------------- صلاحيات الأدوار (جدول مصفوفة قابل للتعديل من الإعدادات) ---------------- */
-function renderRolePermissionsPanel(){
+/* ---------------- صلاحيات الأدوار (جدول مصفوفة قابل للتعديل من الإعدادات) ----------------
+   المصدر الحقيقي الآن جدول role_permissions فى السيرفر (غير مشفّر، يقرأه السيرفر نفسه لفرض
+   القيد الفعلي على الـ API — راجع GET/PUT /api/role-permissions فى server.js)، وليس
+   settings.rolePermissions المشفّرة كما كان سابقاً (كانت مجرد إخفاء/إظهار تبويب بصري بلا أثر
+   حقيقي). settings.rolePermissions ما زالت تُحدَّث كنسخة محلية احتياطية للعرض السريع/وضع عدم
+   الاتصال فقط، لكنها لم تعد المرجع. */
+async function renderRolePermissionsPanel(){
   const wrap = $('#role-permissions-table-wrap');
   if(!wrap) return;
-  const rp = settings.rolePermissions || DEFAULT_SETTINGS.rolePermissions;
-  wrap.innerHTML = `
+  let rp = settings.rolePermissions || DEFAULT_SETTINGS.rolePermissions;
+  let offlineNotice = '';
+  try{
+    const res = await fetch(API_BASE + '/api/role-permissions', { headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN } });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر جلب صلاحيات الأدوار من الخادم');
+    rp = data.rolePermissions;
+    settings.rolePermissions = rp; // مزامنة النسخة المحلية الاحتياطية مع مصدر الحقيقة الفعلي
+  }catch(e){
+    offlineNotice = `<div class="hint" style="color:var(--red); margin-bottom:8px;">تعذّر تحميل الصلاحيات الفعلية من الخادم (${escapeHtml(e.message||'')})؛ المعروض تالياً نسخة محلية قديمة وقد لا تطابق ما هو مُطبَّق فعلياً على الخادم.</div>`;
+  }
+  wrap.innerHTML = offlineNotice + `
     <table>
       <thead><tr><th>القسم</th>${EDITABLE_ROLES.map(r=>`<th>${escapeHtml(r.label)}</th>`).join('')}</tr></thead>
       <tbody>
@@ -829,9 +844,23 @@ if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventList
   });
   const emptyRoles = EDITABLE_ROLES.filter(r=>!newRp[r.id].length).map(r=>r.label);
   if(emptyRoles.length && !await customConfirm(`الأدوار التالية لن يكون لها أي قسم ظاهر إطلاقاً: ${emptyRoles.join('، ')}. متابعة؟`)) return;
-  settings.rolePermissions = newRp;
+  try{
+    // نحفظ أولاً فى الجدول الفعلي الذي يفرضه السيرفر — لو فشل (اتصال/صلاحية) نوقف هنا ولا نوهم
+    // المستخدم بأن الصلاحيات تغيّرت فعلياً بمجرد حفظها محلياً فى settings المشفّرة.
+    const res = await fetch(API_BASE + '/api/role-permissions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+      body: JSON.stringify(newRp),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر حفظ صلاحيات الأدوار على الخادم');
+  }catch(e){
+    showToast('❌ تعذّر حفظ الصلاحيات على الخادم: ' + (e.message||''));
+    return;
+  }
+  settings.rolePermissions = newRp; // نسخة محلية احتياطية فقط، بعد نجاح الحفظ الفعلي على الخادم
   await saveSettings();
-  await logAudit('edit','الإعدادات','تم تعديل صلاحيات الأدوار (أي أقسام تظهر لكل دور)');
+  await logAudit('edit','الإعدادات','تم تعديل صلاحيات الأدوار (أي أقسام تظهر لكل دور، ويُفرض فعلياً على الخادم)');
   applyRolePermissions();
   showToast('تم حفظ الصلاحيات');
 });
