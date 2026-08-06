@@ -231,7 +231,7 @@ async function htmlBodyToPdfFile(bodyHtml, {title, filename, variant='table'} = 
 /* تقرير الإقرار الضريبي كمستند مستقل (بدل الاعتماد على جدول معروض بالشاشة، حتى يعمل لأي شهر مباشرة) */
 function vatReturnReportBodyHtml(r, from, to, monthLabel){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const row = (label, value, opts)=> `<tr style="${opts&&opts.bold?'font-weight:800; border-top:1px solid #D8DEE6;':(opts&&opts.muted?'color:#66707E;':'')}"><td style="${opts&&opts.indent?'padding-right:22px;':''}">${label}</td><td class="mono" style="text-align:left;">${fmt(value)}</td></tr>`;
   const summaryHtml = `<table><tbody>
     <tr><td colspan="2" style="padding-top:14px; font-weight:800;">المبيعات (ضريبة المخرجات) — ${r.salesRows.length} فاتورة${r.returnRows.length?` · ${r.returnRows.length} مردود`:''}</td></tr>
@@ -259,7 +259,7 @@ function vatReturnReportBodyHtml(r, from, to, monthLabel){
 /* تقرير الحركات المالية الصادرة خلال الشهر، باستثناء ما يخص تمويل/شراء مخزون الحقائب */
 function vaultOutReportBodyHtml(from, to, monthLabel){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const rows = vaultTx.filter(t=> t.type==='out' && !t.isReturn && inRange(t.date, from, to) && !String(t.category||'').includes('حقائب'))
     .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
   const total = rows.reduce((s,t)=>s+num(t.amount),0);
@@ -289,7 +289,7 @@ function vaultOutReportBodyHtml(from, to, monthLabel){
 /* تقرير الحقائب المشتراة خلال الشهر: قسمان — حقائب أضافها المركز للمخزون، وحقائب اشتراها العملاء مباشرة */
 function bagsPurchasedReportBodyHtml(from, to, monthLabel){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const stockRows = bagStock.filter(b=> b.type!=='issue' && b.date && b.date>=from && b.date<=to)
     .sort((a,b)=> String(a.date||'').localeCompare(String(b.date||'')));
   const stockQtyTotal = stockRows.reduce((s,b)=> s+num(b.qty), 0);

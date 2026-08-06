@@ -464,7 +464,7 @@ async function printInvoice(id){
   const totalInclVat = income + (bagShown ? bag : 0);
   const vat = vatFromGross(totalInclVat);
   const grand = totalInclVat - vat; // القيمة الفعلية بدون الضريبة
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
   // قرار عمل صريح: هذه الفاتورة (تُطبَع من شيت العملاء) لم تعد تُرسَل لهيئة الزكاة والضريبة إطلاقاً —
   // أصبحت "فاتورة مبسطة" داخلية فقط (رمز QR مُولَّد محلياً كما كان دائماً فى الحالة العادية أدناه،
@@ -565,7 +565,7 @@ async function printReturnInvoice(id){
   await logAudit('edit','الحركات المالية', `تمت طباعة فاتورة استرجاع رقم ${invNoLabel} للعميل: ${tx.clientName||tx.clientId||'—'}`);
 
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const returnNet = netFromGross(num(tx.amount));
 
   const zatcaResult = await zatcaSubmit('/api/zatca/return', {
@@ -663,7 +663,7 @@ async function printExpenseVoucher(id){
   await logAudit('edit','الحركات المالية', `تمت طباعة سند صرف رقم ${voucherLabel} بمبلغ ${fmt(num(tx.amount))}`);
 
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
   const win = openPrintTarget();
   win.document.write(`

@@ -419,7 +419,7 @@ async function printManualSalesInvoice(id){
   const totalInclVat = num(m.total);
   const vat = vatFromGross(totalInclVat);
   const net = totalInclVat - vat;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
   const win = openPrintTarget();
   win.document.write(`

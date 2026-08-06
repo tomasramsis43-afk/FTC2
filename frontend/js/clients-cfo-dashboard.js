@@ -407,7 +407,7 @@ function monthlyClientsDailyReport(yearMonth){
 function monthlyClientsReportBodyHtml(yearMonth){
   const rep = monthlyClientsDailyReport(yearMonth);
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
-  const today = new Date().toLocaleDateString('ar-SA');
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const rowsHtml = rep.rows.map(r=>`
     <tr>
       <td class="mono">${r.day}</td>
