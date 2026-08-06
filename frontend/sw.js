@@ -3,8 +3,8 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v6';
-const RUNTIME_CACHE = 'ftc-runtime-v6';
+const CACHE_VERSION = 'ftc-cache-v7';
+const RUNTIME_CACHE = 'ftc-runtime-v7';
 // ملفات JS لا تُضاف هنا — يتم تحديثها تلقائياً عبر networkFirstStrategy
 // (شبكة أولاً) في كل تشغيل، وتُحفظ في RUNTIME_CACHE للاستخدام أوفلاين.
 // إضافتها للـ pre-cache تجعل المتصفح يستخدم النسخ القديمة حتى يتغير
