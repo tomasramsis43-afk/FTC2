@@ -1523,6 +1523,15 @@ table {
   white-space: nowrap;
 }
 
+/* شيت فواتير الدورات: مفيش مربع تحديد قبل عمود العميل، فمفيش داعي لفراغ الـ34px المحجوز له،
+   وعمود الاسم نفسه أضيق شوية عشان ياخد مساحة أقل ويسيب مكان أوسع لباقي الأعمدة (رقم الهوية،
+   رقم الفاتورة...) اللي كانت بتتقصّ */
+#view-courseinvoices .sticky-col-2 {
+  right: 0;
+  min-width: 90px;
+  max-width: 130px;
+}
+
 thead th.sticky-col {
   z-index: 4;
   background: var(--surface-solid);
