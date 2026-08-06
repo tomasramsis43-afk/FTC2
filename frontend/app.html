@@ -328,9 +328,14 @@
         <select id="ctf-channel"><option value="" data-i18n="allChannels">كل طرق الدفع</option><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select>
         <input type="text" id="ctf-clientid" placeholder="بحث برقم الهوية أو اسم المتدرب (في كل الحوالات)" data-i18n-placeholder="searchByIdOrTraineeName">
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" id="btn-template-trainees" data-i18n="btnDownloadTemplate">تحميل نموذج استيراد المتدربين</button>
-        <button class="btn btn-ghost btn-sm" id="btn-export-companies" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
-        <button class="btn btn-ghost btn-sm" id="btn-export-companies-xlsx" data-i18n="exportExcelFiltered">تصدير Excel (حسب الفلتر الحالي)</button>
+        <div class="overflow-wrap">
+          <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+          <div class="overflow-menu">
+            <button class="btn btn-ghost btn-sm" id="btn-template-trainees" data-i18n="btnDownloadTemplate">تحميل نموذج استيراد المتدربين</button>
+            <button class="btn btn-ghost btn-sm" id="btn-export-companies" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
+            <button class="btn btn-ghost btn-sm" id="btn-export-companies-xlsx" data-i18n="exportExcelFiltered">تصدير Excel (حسب الفلتر الحالي)</button>
+          </div>
+        </div>
       </div>
       <input type="file" id="import-trainees-input" accept=".xlsx,.xls,.csv" style="display:none;">
       <input type="file" id="import-company-trainees-input" accept=".xlsx,.xls,.csv" style="display:none;">
@@ -397,16 +402,21 @@
       <input type="date" id="cs-filter-from" title="من تاريخ" data-i18n-title="fromDateTitle">
       <input type="date" id="cs-filter-to" title="إلى تاريخ" data-i18n-title="toDateTitle">
       <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-upcoming" data-i18n="upcomingCoursesBtn">الدورات القادمة</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-undefined" data-i18n="undefinedCoursesBtn">⚠️ الدورات غير محددة (رقم/تاريخ/نوع)</button>
       <input type="text" id="cs-filter-num" placeholder="فلترة برقم الدورة" data-i18n-placeholder="filterByCourseNumPlaceholder">
       <input type="text" id="cs-filter-clientid" placeholder="فلترة برقم هوية العميل" data-i18n-placeholder="filterByClientIdPlaceholder">
       <span class="spacer"></span>
-      <button class="btn btn-ghost btn-sm" id="btn-export-courses" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
-      <button class="btn btn-gold btn-sm" id="btn-print-courses-report" data-i18n="printFullReportBtn">🖨️ طباعة تقرير شامل (كل التفاصيل)</button>
-      <button class="btn btn-ghost btn-sm" id="btn-template-course-numbers" data-i18n="templateCourseNumbersBtn">نموذج أرقام الدورات</button>
-      <button class="btn btn-ghost btn-sm" id="btn-import-course-numbers" data-i18n="importCourseNumbersBtn">استيراد أرقام الدورات (Excel)</button>
+      <div class="overflow-wrap">
+        <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+        <div class="overflow-menu">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-filter-undefined" data-i18n="undefinedCoursesBtn">⚠️ الدورات غير محددة (رقم/تاريخ/نوع)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-export-courses" data-i18n="btnExportCsvFiltered">تصدير CSV (حسب الفلتر الحالي)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-print-courses-report" data-i18n="printFullReportBtn">🖨️ طباعة تقرير شامل (كل التفاصيل)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-template-course-numbers" data-i18n="templateCourseNumbersBtn">نموذج أرقام الدورات</button>
+          <button class="btn btn-ghost btn-sm" id="btn-import-course-numbers" data-i18n="importCourseNumbersBtn">استيراد أرقام الدورات (Excel)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-cs-bulk" data-i18n="bulkUpdateCourseInvoiceBtn">📋 تحديث/استيراد أرقام الدورات والفواتير (جدول)</button>
+        </div>
+      </div>
       <input type="file" id="import-coursenum-input" accept=".xlsx,.xls,.csv" style="display:none;">
-      <button class="btn btn-primary btn-sm" id="btn-cs-bulk" data-i18n="bulkUpdateCourseInvoiceBtn">📋 تحديث/استيراد أرقام الدورات والفواتير (جدول)</button>
       <button class="btn btn-gold" id="btn-add-session" data-i18n="newSessionBtn">+ دورة جديدة</button>
     </div>
     <div class="hint hint-info" data-i18n="importCourseNumbersHint">استيراد أرقام الدورات يتم بالربط برقم الهوية/الإقامة فقط: ملف Excel بعمودين "رقم الهوية" و"رقم الدورة"، ويتم تحديث شيت العملاء تلقائياً لكل الأرقام المطابقة دفعة واحدة. إن كان رقم الهوية غير موجود إطلاقاً في شيت العملاء (أو في أي مكان آخر بالبرنامج)، يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية ورقم الدورة فقط) بدل تجاهله أو رفضه — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته (كالاسم والجوال) لاحقاً، ولا يُحذف تلقائياً لعدم اكتمالها. يمكن أيضاً إضافة عمود "تاريخ الدورة" (اختياري)، ليتم تحديث تاريخ الدورة في شيت الدورات تلقائياً، أو إنشاء دورة جديدة بهذا التاريخ إذا لم تكن موجودة. أو استخدم زر "تحديث/استيراد أرقام الدورات والفواتير (جدول)" لإدخال/لصق البيانات مباشرة من داخل البرنامج دون الحاجة لملف Excel — يشمل رقم الفاتورة أيضاً، وبنفس سلوك إضافة العميل تلقائياً إن لم يكن موجوداً.</div>
