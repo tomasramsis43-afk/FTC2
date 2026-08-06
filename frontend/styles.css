@@ -1585,7 +1585,7 @@ thead th.sortable {
 
 thead th.sortable:hover {
   color: var(--navy);
-  background: color-mix(in srgb, var(--navy) 8%, transparent);
+  background: color-mix(in srgb, var(--navy) 8%, var(--surface-solid));
 }
 
 thead th.sortable::after {
