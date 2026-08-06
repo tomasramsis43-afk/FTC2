@@ -1,3 +1,18 @@
+// تنفيذ قائمة عناصر بالتوازي على دفعات (بدل طابور تسلسلي عنصر-عنصر) — كل عنصر ينتظر السيرفر
+// بمفرده بمعزل عن الباقي، فتنفيذ N عنصر تسلسلياً يكلّف N × زمن الرحلة الكاملة (RTT) بينما تنفيذهم
+// بالتوازي على دفعات يكلّف تقريباً (N/concurrency) × RTT فقط — فرق كبير فى أي حالة فيها أكتر من
+// تعديل واحد معلّق (استيراد جماعي، عودة من انقطاع اتصال طويل...). concurrency=6 آمن تماماً مع حد
+// معدل الطلبات على السيرفر (storageLimiter: 120 طلب/دقيقة لكل IP، راجع server.js). لو `worker`
+// أرجعت stop=true (مثال: انقطاع اتصال حقيقي مكتشف)، نوقف عن بدء أي دفعات جديدة فوراً (العناصر التي
+// بدأت بالفعل فى الدفعة الحالية تُكمَل حتى نهايتها بشكل طبيعي).
+async function _runWithConcurrency(items, worker, concurrency = 6){
+  let stopped = false;
+  for(let i = 0; i < items.length && !stopped; i += concurrency){
+    const chunk = items.slice(i, i + concurrency);
+    const results = await Promise.all(chunk.map(item => worker(item).catch(() => ({ stop: true }))));
+    if(results.some(r => r && r.stop)) stopped = true;
+  }
+}
 // ---------------- طابور "تعديلات بانتظار الرفع" (يعمل فقط أثناء انقطاع الاتصال بالسيرفر) ----------------
 // كل مفتاح (clients, vaultTx, settings...) له قيد واحد فقط بالطابور (آخر نسخة غير مرفوعة له)، لأن
 // المطلوب هو حفظ آخر تعديل محلياً وليس سجل تاريخي لكل تعديل بينما التطبيق نفسه لا يزال مفتوحاً بلا اتصال.
@@ -199,7 +214,9 @@ async function flushPendingWrites(){
           }
         }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) — سيُكمل بالمنطق القديم أدناه كخط رجعة */ }
       }
-      for(const item of pending){
+      // معالجة كل عنصر (نفس المنطق بالضبط كما كان تسلسلياً، ملفوف الآن فى دالة تُنفَّذ بالتوازي على
+      // دفعات عبر _runWithConcurrency بدل حلقة for...of تسلسلية — راجع تعليقها لشرح الفرق).
+      await _runWithConcurrency(pending, async (item) => {
         try{
           const res = await serverFetch(`/api/storage/${encodeURIComponent(item.key)}`, {
             method: 'PUT',
@@ -212,19 +229,19 @@ async function flushPendingWrites(){
             _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
             await _pendingDelete(item.key);
             showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
-            continue;
+            return;
           }
-          if(!res.ok) continue; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
+          if(!res.ok) return; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
           const data = await res.json();
           _kvVersions[item.key] = data.version || 0;
           await _kvCacheWrite(item.key, data.version || 0, item.value);
           await _pendingDelete(item.key);
         }catch(e){
-          // لا يزال بدون اتصال — نوقف المحاولة لباقي العناصر هذه الجولة ونعيدها كلها لاحقاً
+          // لا يزال بدون اتصال — نوقف بدء أي دفعات جديدة (باقي العناصر تفضل فى الطابور لمحاولة لاحقة)
           markOffline();
-          break;
+          return { stop: true };
         }
-      }
+      });
     } finally {
       _ftcSyncInFlight = false;
       _ftcSyncPromise = null;
@@ -251,7 +268,11 @@ async function flushPendingRecordWrites(){
     try{
       const pending = await _pendingRecordReadAll();
       if(!pending.length) return;
-      for(const item of pending){
+      // نفس تحويل الحلقة التسلسلية لتنفيذ متوازٍ على دفعات — راجع تعليق _runWithConcurrency أعلى
+      // الملف. كل عنصر (سواء عميل أو سجل شيت عام) مستقل تماماً عن باقي العناصر (مفتاح مركّب مختلف
+      // فى قاعدة البيانات)، فلا خطر من معالجتهم بالتوازي — منطق كل عنصر (بما فيه إعادة محاولة 409)
+      // بقي بلا أي تغيير، فقط انتقل من for...of إلى دالة worker تُستدعى بالتوازي.
+      await _runWithConcurrency(pending, async (item) => {
         try{
           const isClient = item.collection === 'clients';
           const url = isClient ? `/api/client-records/${encodeURIComponent(item.id)}` : `/api/records/${encodeURIComponent(item.collection)}/${encodeURIComponent(item.id)}`;
@@ -282,7 +303,7 @@ async function flushPendingRecordWrites(){
               if(retryRes.status === 409){
                 // تعارض حقيقي أثناء إعادة المحاولة — نكمل للمسار أدناه (إسقاط + إشعار)
               }else if(!retryRes.ok){
-                continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+                return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
               }else{
                 const retryData = await retryRes.json().catch(()=>({}));
                 if(isClient){
@@ -293,16 +314,16 @@ async function flushPendingRecordWrites(){
                   _recordVersions[item.collection].set(item.id, retryData.version || retryVersion);
                 }
                 await _pendingRecordDelete(item.collection, item.id);
-                continue;
+                return;
               }
             }
             if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
             else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
             await _pendingRecordDelete(item.collection, item.id);
             showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
-            continue;
+            return;
           }
-          if(!res.ok) continue; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+          if(!res.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
           if(item.op === 'delete'){
             if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
             else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
@@ -318,10 +339,10 @@ async function flushPendingRecordWrites(){
           }
           await _pendingRecordDelete(item.collection, item.id);
         }catch(e){
-          // لا يزال بدون اتصال فعلياً — نوقف هذه الجولة (باقي العناصر تفضل فى الطابور لمحاولة قادمة)
-          break;
+          // لا يزال بدون اتصال فعلياً — نوقف بدء أي دفعات جديدة (باقي العناصر تفضل فى الطابور)
+          return { stop: true };
         }
-      }
+      });
     } finally {
       _ftcRecordSyncInFlight = false;
       _ftcRecordSyncPromise = null;
