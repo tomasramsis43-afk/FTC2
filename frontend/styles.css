@@ -436,7 +436,7 @@ header.top p {
   min-width: 0;
 }
 
-/* ============= NAVIGATION (الشريط الجانبي 224px — Terminal) ============= */
+/* ============= NAVIGATION (الشريط الجانبي 224px — نبض) ============= */
 nav.tabs {
   flex: none;
   width: 224px;
