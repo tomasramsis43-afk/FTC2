@@ -565,26 +565,64 @@ function _scanAutoLabelTables(root){
 
 /* ============= قائمة "إجراءات أخرى" المنسدلة — تفعيل عام لكل الشاشات ============= */
 (function(){
+  // كانت كل قائمة position:absolute جوّه .overflow-wrap مباشرة. المشكلة: أغلب الـ .overflow-wrap
+  // دي جوّه حاويات (.panel) عندها overflow-x:auto أو عناصر فيها backdrop-filter، وأي حاوية زي
+  // دي بتقصّ/تحبس أي عنصر position:absolute (أو حتى position:fixed) بداخلها — فالقائمة كانت
+  // بتظهر مقطوعة أو متداخلة مع صناديق الفلاتر (input/select) اللي حواليها بدل ما تطفو فوقها
+  // بشكل نضيف، وبالتبعية أزرارها بتبقى مش قابلة للنقر فعليًا. نفس الحل المستخدم فعليًا لقائمة
+  // المستخدم (#user-menu-dropdown): ننقل كل قائمة لتبقى ابن مباشر لـ body بعيدًا عن أي حاوية
+  // قاصّة، ونحسب موضعها ديناميكيًا بـ position:fixed بالنسبة لزر التفعيل بتاعها.
+  const pairs = [];
+  document.querySelectorAll('.overflow-wrap').forEach(wrap=>{
+    const toggle = wrap.querySelector('[data-overflow-toggle]');
+    const menu = wrap.querySelector('.overflow-menu');
+    if(!toggle || !menu) return;
+    if(menu.parentElement !== document.body) document.body.appendChild(menu);
+    pairs.push({ toggle, menu });
+  });
+
   function closeAllMenus(except){
-    document.querySelectorAll('.overflow-menu.open').forEach(m=>{
-      if(m !== except) m.classList.remove('open');
+    pairs.forEach(p=>{
+      if(p.menu !== except) p.menu.classList.remove('open');
     });
   }
+
+  function positionMenu(toggle, menu){
+    const r = toggle.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (r.bottom + 8) + 'px';
+    menu.style.right = (window.innerWidth - r.right) + 'px';
+    menu.style.left = 'auto';
+  }
+
   document.addEventListener('click', function(e){
     const toggle = e.target.closest('[data-overflow-toggle]');
     if(toggle){
       e.preventDefault();
-      const wrap = toggle.closest('.overflow-wrap');
-      const menu = wrap ? wrap.querySelector('.overflow-menu') : null;
+      const pair = pairs.find(p=>p.toggle === toggle);
+      const menu = pair ? pair.menu : null;
       if(menu){
         const willOpen = !menu.classList.contains('open');
         closeAllMenus();
-        if(willOpen) menu.classList.add('open');
+        if(willOpen){
+          positionMenu(toggle, menu);
+          menu.classList.add('open');
+        }
       }
       return;
     }
-    if(!e.target.closest('.overflow-menu')) closeAllMenus();
+    if(!e.target.closest('.overflow-menu') && !e.target.closest('[data-overflow-toggle]')) closeAllMenus();
   });
+
+  // القائمة بقت ابن مباشر لـ body مش جوّه شريط الأدوات، فلازم نعيد حساب موضعها لو الصفحة
+  // اتمررت أو الشاشة اتغير حجمها وهي لسه مفتوحة، عشان تفضل ملزّقة بزرها.
+  window.addEventListener('resize', ()=>{
+    pairs.forEach(p=>{ if(p.menu.classList.contains('open')) positionMenu(p.toggle, p.menu); });
+  });
+  window.addEventListener('scroll', ()=>{
+    pairs.forEach(p=>{ if(p.menu.classList.contains('open')) positionMenu(p.toggle, p.menu); });
+  }, true);
+
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape') closeAllMenus();
   });
