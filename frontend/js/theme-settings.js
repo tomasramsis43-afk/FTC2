@@ -45,6 +45,13 @@ const DEFAULT_SETTINGS = {
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
+  // ملحوظة معمارية: هذه القيم لم تعد المصدر الحقيقي لصلاحيات الأدوار (كانت سابقاً تتحكم فقط
+  // بإخفاء/إظهار التبويب فى الواجهة دون أي أثر فعلي على الـ API، بخلاف ROLE_PERMISSIONS الثابتة
+  // بكود السيرفر التى كانت تفرض قيداً مختلفاً وأوسع لدور 'استقبال'). المرجع الفعلي الآن جدول
+  // role_permissions فى قاعدة البيانات (يُقرأ ويُكتَب عبر GET/PUT /api/role-permissions، راجع
+  // server.js وschema.sql)، ويقرأه السيرفر نفسه لفرض القيد الحقيقي. القيم هنا تُستخدم فقط كنسخة
+  // احتياطية محلية للعرض السريع قبل اكتمال تحميل الصلاحيات من الخادم (renderRolePermissionsPanel)
+  // أو فى وضع عدم الاتصال، وتُستبدل تلقائياً بمجرد نجاح الاتصال بالخادم.
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
     accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
