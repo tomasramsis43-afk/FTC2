@@ -2514,9 +2514,10 @@ body.dark-theme .hint-warn {
   color: var(--text-muted);
 }
 
-/* رأس جدول العملاء */
+/* رأس جدول العملاء — خلفية مصمتة حتى لا تظهر خلايا الأعمدة الثابتة أثناء السكرول
+   وتجعل شريط الرأس يبدو مقطوعاً (كانت 85% شفافة) */
 #view-clients thead th {
-  background: color-mix(in srgb, var(--surface-solid) 85%, transparent);
+  background: var(--surface-solid);
   color: var(--navy-dark);
 }
 
