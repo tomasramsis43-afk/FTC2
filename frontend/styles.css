@@ -1532,6 +1532,14 @@ table {
   max-width: 130px;
 }
 
+/* جدول "التابعين للشركات" (سجل تحويلات الشركات): 13 عمود ومفيش مربع تحديد قبل عمود رقم الهوية،
+   فنفس المنطق: نلغي فراغ الـ34px ونضيّق العمود عشان يبين أكبر عدد ممكن من الأعمدة التانية */
+#company-persons-list .sticky-col-2 {
+  right: 0;
+  min-width: 85px;
+  max-width: 110px;
+}
+
 thead th.sticky-col {
   z-index: 4;
   background: var(--surface-solid);
