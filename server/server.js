@@ -949,6 +949,19 @@ app.get('/api/client-records', requireAuth, async (req, res) => {
     const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
     let sql = `SELECT id, enc, version, origin, status FROM client_records ${where}`;
     const sqlParams = [...params];
+    // جلب الفروق فقط (delta): نفس فكرة GET /api/records/:collection?ids= بالضبط — لو المُستدعي
+    // أرسل ids= (قائمة ids مفصولة بفواصل) نرجع هذه السجلات فقط بدل جدول العملاء كامل. هذا هو
+    // الأساس الذي بنيت عليه _fetchDeltaClientRecords فى الواجهة لتفادي إعادة تنزيل كل عميل فى
+    // النظام (وقد يكونوا آلاف) بمجرد تعديل عميل واحد من أي جهاز — كان السبب الرئيسي لاستهلاك
+    // ضخم غير ضروري من حصة نقل بيانات قاعدة البيانات الشهرية.
+    const idsParam = req.query.ids;
+    if (typeof idsParam === 'string' && idsParam.length) {
+      const idList = idsParam.split(',').map(s => s && s.trim()).filter(Boolean);
+      if (idList.length) {
+        sql += ` AND id = ANY($${sqlParams.length + 1}::text[])`;
+        sqlParams.push(idList);
+      }
+    }
     if (Number.isInteger(page) && page >= 1) {
       sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
       sqlParams.push(pageSize, (page - 1) * pageSize);
@@ -958,6 +971,21 @@ app.get('/api/client-records', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب سجلات العملاء' });
+  }
+});
+
+// أرقام إصدارات كل عميل على حدة (طلب خفيف بدون بيانات فعلية) — تستخدمه المزامنة الجديدة (راجع
+// _fetchDeltaClientRecords فى storage-sync.js) لجلب "الفروق فقط" بدل تنزيل جدول العملاء كاملاً:
+// يُقارن بها الجهاز أرقامه المحلية فيطلب لاحقاً عبر GET /api/client-records?ids= العملاء الذين
+// تغيّروا/أُضيفوا فقط. نفس فلترة الرؤية المطبَّقة على GET /api/client-records تماماً.
+app.get('/api/client-records/versions', requireAuth, async (req, res) => {
+  try {
+    const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
+    const r = await pool.query(`SELECT id, version FROM client_records ${where}`, params);
+    res.json({ pairs: r.rows.map(row => [row.id, Number(row.version)]) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب أرقام إصدارات العملاء' });
   }
 });
 
