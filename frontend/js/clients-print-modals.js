@@ -707,11 +707,23 @@ $('#client-form').addEventListener('submit', async e=>{
   // تحميل حقيقي متصل بالسيرفر لبيانات العملاء) بيانات clients فى الذاكرة قد تكون قديمة/غير مكتملة
   // (عرض سريع من الكاش المحلي فقط). أي إضافة/تعديل فى هذه اللحظة بالذات كان (قبل هذا الإصلاح) قد
   // يُحفَظ عبر مسار قديم متروك لم يعد أي جزء آخر من البرنامج يقرأ منه — راجع تعليق
-  // _clientsFirstRealSyncDone فى ui-framework.js. الحل: نمنع الحفظ مؤقتاً ونطلب من المستخدم
-  // المحاولة بعد ثانية بدل حفظ صامت فى مكان لا يراه أحد.
+  // _clientsFirstRealSyncDone فى ui-framework.js.
+  // الحل (بعد هذا التحديث): بدل رفض الحفظ فوراً وإجبار المستخدم على نقر "حفظ" يدوياً مرة تانية
+  // (كان بيحصل كتير جداً مع الاستقبال تحديداً، لأنهم أول حاجة يعملوها بعد فتح البرنامج صباحاً
+  // هي تسجيل عميل)، ننتظر بصمت لحد ثانيتين إجمالاً (المدة اللي بتاخدها المزامنة الأولى عادةً)
+  // ونكمل الحفظ تلقائياً بمجرد اكتمالها، مع تعطيل زر الحفظ ووسم مؤقت حتى لا يظن المستخدم أن
+  // الضغطة لم تُسجَّل. لو تجاوزنا 8 ثوانٍ (اتصال بطيء جداً/انقطاع)، نعرض الرسالة القديمة كخط
+  // رجعة أخير بدل الانتظار للأبد.
   if(!_clientsFirstRealSyncDone){
-    showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول الحفظ تاني بعد ثانية واحدة');
-    return;
+    const submitBtn = $('#client-form button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.textContent : '';
+    if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = '⏳ جارٍ التحضير...'; }
+    const synced = await waitForClientsFirstRealSync();
+    if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
+    if(!synced){
+      showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول الحفظ تاني بعد ثانية واحدة');
+      return;
+    }
   }
   if(editingId && !canReceptionEditClient(clients.find(x=>x.id===editingId))){
     showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
