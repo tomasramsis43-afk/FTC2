@@ -3,12 +3,20 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v7';
-const RUNTIME_CACHE = 'ftc-runtime-v7';
-// ملفات JS لا تُضاف هنا — يتم تحديثها تلقائياً عبر networkFirstStrategy
-// (شبكة أولاً) في كل تشغيل، وتُحفظ في RUNTIME_CACHE للاستخدام أوفلاين.
-// إضافتها للـ pre-cache تجعل المتصفح يستخدم النسخ القديمة حتى يتغير
-// CACHE_VERSION يدوياً بعد كل تحديث — وهو مصدر مشاكل ظهور نسخ قديمة.
+const CACHE_VERSION = 'ftc-cache-v8';
+const RUNTIME_CACHE = 'ftc-runtime-v8';
+// ملحوظة معمارية (تحديث): كانت ملفات JS/CSS/HTML تُستثنى من الكاش الفوري عمداً (راجع الشرح
+// القديم أسفل هذا السطر) لضمان وصول التحديثات فوراً. لكن هذا كان يفرض round-trip كامل للسيرفر
+// لكل ملف (22+ ملف JS) في كل فتحة للبرنامج حتى لو لم يتغيّر أي شيء فعلياً — بطيء خصوصاً على
+// اتصال بطيء/بعيد جغرافياً عن السيرفر. الحل: تحوّلت لاستراتيجية Stale-While-Revalidate (تحت)
+// لهذه الملفات — تُقدَّم فوراً من الكاش (سرعة فورية) بينما تُحدَّث فى الخلفية بالتوازي. ضمان وصول
+// التحديثات لا يعتمد أصلاً على Network-First بل على آلية منفصلة موجودة سلفاً فى sw-register.js:
+// أي نشر جديد يستوجب رفع رقم هذين الثابتين (v8 -> v9...)، فيصبح اسم RUNTIME_CACHE مختلفاً تماماً
+// (كاش فارغ لا يحتوي أي نسخة قديمة مطلقاً)، ويُفعَّل الـ SW الجديد فوراً (skipWaiting)، فيُطلق
+// حدث controllerchange الذي يعيد تحميل الصفحة تلقائياً مرة واحدة — فيحصل المستخدم على أحدث نسخة
+// فور نشرها بالضبط كالسابق، لكن كل الفتحات اللاحقة (الغالبية العظمى) تصبح فورية من الكاش المحلي.
+// (الشرح القديم الذي كان هنا: "ملفات JS لا تُضاف هنا — يتم تحديثها تلقائياً عبر
+// networkFirstStrategy فى كل تشغيل" — لم يعد دقيقاً، الاستراتيجية الحالية موضحة أعلاه.)
 const STATIC_ASSETS = [
   '/app.html',
   '/styles.css',
@@ -77,11 +85,14 @@ self.addEventListener('fetch', event => {
 
   // تحديد استراتيجية التخزين حسب نوع الملف
   if (request.method === 'GET') {
-    // للـ HTML و CSS و JS - استخدم Network First
+    // للـ HTML و CSS و JS - استخدم Stale-While-Revalidate (استجابة فورية من الكاش المحلي + تحديث
+    // فى الخلفية بالتوازي بلا انتظار) بدل Network First (كان يفرض انتظار السيرفر لكل ملف فى كل
+    // فتحة). راجع تعليق CACHE_VERSION/RUNTIME_CACHE أعلى الملف لشرح كيف لا يزال وصول التحديثات
+    // فورياً رغم ذلك.
     if (url.pathname.endsWith('.html') || 
         url.pathname.endsWith('.css') || 
         url.pathname.endsWith('.js')) {
-      event.respondWith(networkFirstStrategy(request));
+      event.respondWith(staleWhileRevalidate(request));
     }
     // للصور والـ fonts - استخدم Cache First
     else if (url.pathname.match(/\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/)) {
