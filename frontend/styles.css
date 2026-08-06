@@ -1344,6 +1344,60 @@ section.view.active {
   opacity: 0.55;
 }
 
+/* ============= قائمة "إجراءات أخرى" المنسدلة (نبض) — تُستخدم في كل شاشات
+   البرنامج لتجميع الأزرار الثانوية (استيراد/تصدير/حذف جدول) بدل ازدحام الشريط ============= */
+.overflow-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.overflow-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-start: 0;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 240px;
+  box-shadow: 0 20px 40px -14px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overflow-menu.open {
+  display: flex;
+  animation: navPop 0.15s ease both;
+}
+
+.overflow-menu .btn {
+  width: 100%;
+  text-align: start;
+  justify-content: flex-start;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.overflow-menu .btn:hover {
+  background: color-mix(in srgb, var(--navy) 12%, transparent) !important;
+}
+
+.overflow-menu .btn.btn-danger {
+  color: var(--red);
+}
+
+.overflow-menu hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 6px 4px;
+}
+
 /* ============= TOOLBAR ============= */
 .toolbar {
   display: flex;

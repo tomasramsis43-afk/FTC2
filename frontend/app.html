@@ -145,21 +145,28 @@
   <section class="view" id="view-clients">
     <div id="approval-notices-banner"></div>
     <div class="toolbar toolbar-card">
-      <button class="btn btn-ghost btn-sm" id="btn-filter-suspended" title="عرض العملاء الموقوفين فقط" data-i18n="filterSuspended" data-i18n-title="titleFilterSuspended">الموقوفين</button>
-      <button class="btn btn-ghost btn-sm" id="btn-filter-unpurchased-bags" title="عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد" data-i18n="filterUnpBags" data-i18n-title="titleFilterUnpBags">الحقائب غير المشتراة</button>
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
-      <select id="filter-course"><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
       <select id="filter-status"><option value="" data-i18n="allStatuses">كل حالات السداد</option><option value="paid" data-i18n="fullyPaid">مسدد بالكامل</option><option value="owe" data-i18n="owing">متبقي عليه</option></select>
+      <select id="filter-course"><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
       <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-advanced-filters" aria-expanded="false"><span data-i18n="advancedFilters">فلاتر متقدمة</span> <span id="advanced-filters-count" class="filters-count-badge" style="display:none;">0</span> ▾</button>
       <span class="spacer"></span>
-      <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
-      <button class="btn btn-primary btn-sm" id="btn-bulk-update" data-i18n="bulkUpdateImport">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
-      <button class="btn btn-primary btn-sm" id="btn-refnum-bulk" data-i18n="refNumBulkImport">📋 استيراد الرقم المرجعي (جدول)</button>
-      <button class="btn btn-primary btn-sm" id="btn-compworkers-bulk" data-i18n="compWorkersBulkImport">📋 استيراد عمال الشركات (جدول)</button>
-      <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table" data-i18n="bulkDeleteTable">🗑 حذف عملاء (جدول)</button>
-      <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span data-i18n="refreshSheet">تحديث الشيت</span></button>
+      <div class="overflow-wrap">
+        <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
+        <div class="overflow-menu">
+          <button class="btn btn-ghost btn-sm" id="btn-filter-suspended" title="عرض العملاء الموقوفين فقط" data-i18n="filterSuspended" data-i18n-title="titleFilterSuspended">الموقوفين</button>
+          <button class="btn btn-ghost btn-sm" id="btn-filter-unpurchased-bags" title="عرض العملاء الذين حقيبتهم مطلوب شراؤها ولم تُشترى بعد" data-i18n="filterUnpBags" data-i18n-title="titleFilterUnpBags">الحقائب غير المشتراة</button>
+          <hr>
+          <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
+          <button class="btn btn-ghost btn-sm" id="btn-bulk-update" data-i18n="bulkUpdateImport">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-refnum-bulk" data-i18n="refNumBulkImport">📋 استيراد الرقم المرجعي (جدول)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-compworkers-bulk" data-i18n="compWorkersBulkImport">📋 استيراد عمال الشركات (جدول)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-bulk-add" data-i18n="bulkAddClients">+ إضافة عدة عملاء</button>
+          <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span data-i18n="refreshSheet">تحديث الشيت</span></button>
+          <hr>
+          <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table" data-i18n="bulkDeleteTable">🗑 حذف عملاء (جدول)</button>
+        </div>
+      </div>
       <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
-      <button class="btn btn-gold" id="btn-bulk-add" data-i18n="bulkAddClients">+ إضافة عدة عملاء</button>
     </div>
     <div class="toolbar advanced-filters-panel" id="advanced-filters-panel" style="display:none;">
       <select id="filter-nat"><option value="" data-i18n="allNats">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
