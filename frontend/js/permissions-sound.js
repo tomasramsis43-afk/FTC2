@@ -403,17 +403,6 @@ async function loadData(cacheOnly){
     if(!settings.nextVoucherNo) settings.nextVoucherNo = 1;
     if(!settings.nextManualSalesInvoiceNo) settings.nextManualSalesInvoiceNo = 1;
     if(settings.darkMode===undefined) settings.darkMode = false;
-    // الثيم الافتراضي أصبح FTC2 Terminal (داكن — المطابق للتصميم المعتمد من المرجع).
-    // الحسابات القديمة التي كانت على 'original' أو 'obsidian' تُرحَّل إليه لمرة واحدة فقط
-    // (راية themeMigratedToTerminal)؛ من يختار ثيماً آخر يدوياً بعدها لا يُرحَّل مجدداً.
-    // من اختار 'stitch' أو 'amethyst' يبقى على اختياره.
-    if(settings.colorScheme===undefined){
-      settings.colorScheme = 'terminal';
-    }else if((settings.colorScheme==='original' || settings.colorScheme==='obsidian') && !settings.themeMigratedToTerminal){
-      settings.colorScheme = 'terminal';
-      settings.themeMigratedToTerminal = true;
-      await saveSettings();
-    }
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;
     if(settings.autoBackupEnabled===undefined) settings.autoBackupEnabled = true;
     if(settings.lowBalanceThreshold===undefined) settings.lowBalanceThreshold = 5000;
@@ -425,20 +414,6 @@ async function loadData(cacheOnly){
     if(!settings.autoBackupIntervalDays) settings.autoBackupIntervalDays = 7;
     if(settings.lastAutoBackupAt===undefined) settings.lastAutoBackupAt = null;
     if(settings.bagFinanceLinkEnabled===undefined) settings.bagFinanceLinkEnabled = true;
-    if(!settings.themeColors) settings.themeColors = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.themeColors));
-    else{
-      // إكمال أي لون مفقود بالقيمة الافتراضية (توافقاً مع نسخ قديمة محفوظة)
-      Object.keys(DEFAULT_SETTINGS.themeColors).forEach(k=>{ if(!settings.themeColors[k]) settings.themeColors[k] = DEFAULT_SETTINGS.themeColors[k]; });
-    }
-    if(!settings.themePresetId) settings.themePresetId = 'nocolor';
-    // ترقية لمرة واحدة: إزالة كل الألوان من واجهة البرنامج بناءً على طلب صريح — يُنقل
-    // أي حساب (مهما كان الطقم المختار سابقاً) تلقائياً لطقم "بدون ألوان" الرمادي المحايد.
-    if(!settings._themeDefaultMigratedV4){
-      settings.themePresetId = 'nocolor';
-      settings.themeColors = JSON.parse(JSON.stringify(THEME_PRESETS.find(p=>p.id==='nocolor').colors));
-      settings._themeDefaultMigratedV4 = true;
-      await saveSettings();
-    }
     if(!settings.pinLock) settings.pinLock = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.pinLock));
     else{
       if(settings.pinLock.enabled===undefined) settings.pinLock.enabled = false;
