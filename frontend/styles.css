@@ -2315,21 +2315,17 @@ td select:hover:not(:focus) {
 /* ============= CFO DASHBOARD ============= */
 .cfo-hero {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
 
-@media (max-width: 1100px) {
-  .cfo-hero { grid-template-columns: repeat(3, 1fr); }
-}
-
 @media (max-width: 680px) {
-  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .cfo-hero { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
 }
 
 @media (max-width: 480px) {
-  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .cfo-hero { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
   .cfo-hero-item { padding: 10px; gap: 8px; }
   .cfo-hero-icon { width: 30px; height: 30px; }
   .cfo-hero-icon svg { width: 15px; height: 15px; }
