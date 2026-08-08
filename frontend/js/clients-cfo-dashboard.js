@@ -139,33 +139,58 @@ function renderCfoHero(){
   const fc = forecastCurrentMonthIncome();
 
   el.innerHTML = `
-    <div class="cfo-hero-item accent-neutral">
+    <div class="cfo-hero-item accent-neutral" data-hero-nav="today-clients">
       <div class="cfo-hero-label">تسجيلات اليوم</div>
       <div class="cfo-hero-value">${String(todayRegCount)}</div>
       <div class="cfo-hero-sub">دخل اليوم: <b>${fmt(todayIncome)}</b> ﷼</div>
     </div>
-    <div class="cfo-hero-item accent-good">
+    <div class="cfo-hero-item accent-good" data-hero-nav="vault">
       <div class="cfo-hero-label">تحصيل اليوم</div>
       <div class="cfo-hero-value">${fmt(todayCollected)} ﷼</div>
       <div class="cfo-hero-sub">من الحركات المالية الداخلة</div>
     </div>
-    <div class="cfo-hero-item ${collectionRate>=80?'accent-good':(collectionRate>=50?'accent-neutral':'accent-bad')}">
+    <div class="cfo-hero-item ${collectionRate>=80?'accent-good':(collectionRate>=50?'accent-neutral':'accent-bad')}" data-hero-nav="reports">
       <div class="cfo-hero-label">نسبة التحصيل ${thisYear}</div>
       <div class="cfo-hero-value">${collectionRate.toFixed(1)}%</div>
       <div class="cfo-hero-sub">محصّل ${fmt(yearCollected)} من ${fmt(yearSales)} ﷼</div>
     </div>
-    <div class="cfo-hero-item accent-neutral">
+    <div class="cfo-hero-item accent-neutral" data-hero-nav="vault">
       <div class="cfo-hero-label">رصيد الخزنة + البنك + الشبكة</div>
       <div class="cfo-hero-value">${fmt(totalBalance)} ﷼</div>
       <div class="cfo-hero-sub">إجمالي السيولة المتاحة الآن</div>
     </div>
-    <div class="cfo-hero-item ${totalRemaining>0?'accent-bad':'accent-good'}">
+    <div class="cfo-hero-item ${totalRemaining>0?'accent-bad':'accent-good'}" data-hero-nav="owing-clients">
       <div class="cfo-hero-label">المتبقي على العملاء</div>
       <div class="cfo-hero-value">${fmt(totalRemaining)} ﷼</div>
       <div class="cfo-hero-sub">توقع دخل الشهر: <b>${fmt(fc.projected)}</b> ﷼</div>
     </div>
   `;
 }
+/* التنقل من كروت الهيرو لأقرب شاشة/فلتر ذي علاقة بالرقم اللي دوس عليه المستخدم */
+function goHeroNav(kind){
+  const clickTab = (view)=> document.querySelector(`nav.tabs button[data-view="${view}"]`)?.click();
+  if(kind==='vault'){ clickTab('vault'); return; }
+  if(kind==='reports'){ clickTab('reports'); return; }
+  if(kind==='owing-clients'){
+    clickTab('clients');
+    if($('#filter-status')){ $('#filter-status').value = 'owe'; $('#filter-status').dispatchEvent(new Event('change')); }
+    return;
+  }
+  if(kind==='today-clients'){
+    clickTab('clients');
+    const panel = $('#advanced-filters-panel');
+    if(panel) panel.style.display = '';
+    const t = todayISO();
+    if($('#cl-date-from')){ $('#cl-date-from').value = t; $('#cl-date-from').dispatchEvent(new Event('input')); }
+    if($('#cl-date-to')){ $('#cl-date-to').value = t; $('#cl-date-to').dispatchEvent(new Event('input')); }
+    return;
+  }
+}
+$('#cfo-hero')?.addEventListener('click', e=>{
+  const item = e.target.closest('[data-hero-nav]');
+  if(!item) return;
+  goHeroNav(item.dataset.heroNav);
+});
 /* رسم لوحة CFO-Style الكاملة (6 لوحات: الدخل، التحصيل والمتبقي، الخزنة والبنك، المشتريات المستحقة، توزيع الدورات، طريقة الدفع) */
 function renderCfoDashboard(){
   renderCfoHero();
@@ -250,7 +275,7 @@ function renderCfoDashboard(){
   const receptionPerf = receptionPerformance(8);
 
   el.innerHTML = `
-    <div class="cfo-panel accent-gold">
+    <div data-cfo-tab="overview" class="cfo-panel accent-gold">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
       <div class="cfo-kpis">
         ${cfoKpi('sales','إجمالي المبيعات ' + thisYear, fmt(salesYear)+' ﷼')}
@@ -260,7 +285,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-income"></div>
     </div>
 
-    <div class="cfo-panel accent-teal">
+    <div data-cfo-tab="collection" class="cfo-panel accent-teal">
       <h3 class="cfo-panel-title">تحصيل المدفوعات والمتبقي</h3>
       <div class="cfo-kpis">
         ${cfoKpi('wallet','المحصّل ' + thisYear, fmt(collectedYear)+' ﷼')}
@@ -271,7 +296,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual cfo-bars" id="cfo-bars-remaining"></div>
     </div>
 
-    <div class="cfo-panel accent-navy">
+    <div data-cfo-tab="overview" class="cfo-panel accent-navy">
       <h3 class="cfo-panel-title">الخزنة والبنك</h3>
       <div class="cfo-kpis cfo-kpis-3">
         ${cfoKpi('vault','الخزنة (كاش)', fmt(vaultBal)+' ﷼')}
@@ -282,7 +307,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-cash"></div>
     </div>
 
-    <div class="cfo-panel accent-red">
+    <div data-cfo-tab="inventory" class="cfo-panel accent-red">
       <h3 class="cfo-panel-title">المشتريات والموردون (مستحقات)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('invoice','مستحق للموردين', fmt(unpaidTotal)+' ﷼')}
@@ -292,7 +317,7 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
-    <div class="cfo-panel accent-red">
+    <div data-cfo-tab="collection" class="cfo-panel accent-red">
       <h3 class="cfo-panel-title">أعمار الذمم المدينة (المتأخرات على العملاء)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('wallet','إجمالي الذمم المدينة', fmt(arData?arData.total:0)+' ﷼')}
@@ -302,7 +327,7 @@ function renderCfoDashboard(){
       ${arBars.length ? `<div class="cfo-visual cfo-bars" id="cfo-bars-ar"></div>` : `<div class="cfo-caption" style="color:var(--text-muted);">لا توجد ذمم مدينة حالياً</div>`}
     </div>
 
-    <div class="cfo-panel accent-navy">
+    <div data-cfo-tab="inventory" class="cfo-panel accent-navy">
       <h3 class="cfo-panel-title">تمويل مخزون الحقائب (اتجاه شهري)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('truck','مصروف الحقائب (آخر '+rangeN+' شهر)', fmt(bagTrend.series[1].values.reduce((a,b)=>a+b,0))+' ﷼')}
@@ -312,14 +337,14 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-bags"></div>
     </div>
 
-    <div class="cfo-panel accent-gold">
+    <div data-cfo-tab="overview" class="cfo-panel accent-gold">
       <h3 class="cfo-panel-title">أعلى الدورات ربحية ${thisYear}</h3>
       <div class="cfo-caption">صافي دخل المركز حسب نوع الدورة (وليس عدد التسجيلات فقط)</div>
       <div class="cfo-visual cfo-bars" id="cfo-bars-topcourses"></div>
     </div>
 
     ${receptionPerf.length ? `
-    <div class="cfo-panel accent-teal">
+    <div data-cfo-tab="overview" class="cfo-panel accent-teal">
       <h3 class="cfo-panel-title">أداء موظفي الاستقبال ${thisYear}</h3>
       <div class="cfo-caption">عدد التسجيلات وصافي الدخل الناتج عن كل موظف</div>
       <div class="cfo-visual cfo-bars" id="cfo-bars-reception"></div>
@@ -338,7 +363,22 @@ function renderCfoDashboard(){
   if(receptionPerf.length){
     drawBars('#cfo-bars-reception', receptionPerf.map(([name,d])=>[name, d.income]), 8, v=>fmt(v)+' ﷼');
   }
+  applyCfoTabFilter();
 }
+/* تبويبات فرعية داخل لوحة التحكم: تعرض فقط بانلات التبويب النشط بدل نزول كل البانلات تحت بعض */
+let cfoActiveTab = 'overview';
+function applyCfoTabFilter(){
+  document.querySelectorAll('#cfo-grid [data-cfo-tab]').forEach(panel=>{
+    panel.style.display = (panel.dataset.cfoTab===cfoActiveTab) ? '' : 'none';
+  });
+}
+$('#cfo-tabs')?.addEventListener('click', e=>{
+  const btn = e.target.closest('.cfo-tab-btn');
+  if(!btn) return;
+  cfoActiveTab = btn.dataset.cfoTab;
+  document.querySelectorAll('#cfo-tabs .cfo-tab-btn').forEach(b=> b.classList.toggle('active', b===btn));
+  applyCfoTabFilter();
+});
 function groupCount(list, field){
   const map = {};
   list.forEach(x=>{ const k = x[field] || 'غير محدد'; map[k]=(map[k]||0)+1; });
