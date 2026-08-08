@@ -632,7 +632,7 @@ async function printReturnInvoice(id){
 
     <div class="sig-grid">
       <div class="sig-box">
-        <div class="sig-line">توقيع العميل (${escapeHtml(tx.clientName || client?.name || '—')})</div>
+        <div class="sig-line">توقيع العميل أو من ينوب عنه (${escapeHtml(tx.clientName || client?.name || '—')})</div>
       </div>
       <div class="sig-box">
         <div class="sig-line">توقيع المركز / المستلم للتوقيع</div>
