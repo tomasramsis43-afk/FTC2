@@ -611,6 +611,7 @@ async function printReturnInvoice(id){
       </div>
       <div class="info-box">
         <h4>بيانات المردود</h4>
+        ${client?.invoice ? `<div class="info-row"><span>رقم فاتورة الدورة:</span><b>${escapeHtml(client.invoice)}</b></div>` : ''}
         <div class="info-row"><span>حساب الصرف:</span><b>${escapeHtml(destLabel(tx.destination||'vault'))}</b></div>
         <div class="info-row"><span>طريقة الاسترجاع:</span><b>${escapeHtml(tx.method || '—')}</b></div>
         <div class="info-row"><span>ملاحظات:</span><b>${escapeHtml(tx.notes || '—')}</b></div>
