@@ -139,30 +139,45 @@ function renderCfoHero(){
   const fc = forecastCurrentMonthIncome();
 
   el.innerHTML = `
-    <div class="cfo-hero-item accent-neutral" data-hero-nav="today-clients">
-      <div class="cfo-hero-label">تسجيلات اليوم</div>
-      <div class="cfo-hero-value">${String(todayRegCount)}</div>
-      <div class="cfo-hero-sub">دخل اليوم: <b>${fmt(todayIncome)}</b> ﷼</div>
+    <div class="cfo-hero-item" data-hero-nav="today-clients">
+      <div class="cfo-hero-icon">${CFO_ICONS.sales}</div>
+      <div class="cfo-hero-body">
+        <div class="cfo-hero-label">تسجيلات اليوم</div>
+        <div class="cfo-hero-value">${String(todayRegCount)}</div>
+        <div class="cfo-hero-sub">دخل اليوم: <b>${fmt(todayIncome)}</b> ﷼</div>
+      </div>
     </div>
-    <div class="cfo-hero-item accent-good" data-hero-nav="vault">
-      <div class="cfo-hero-label">تحصيل اليوم</div>
-      <div class="cfo-hero-value">${fmt(todayCollected)} ﷼</div>
-      <div class="cfo-hero-sub">من الحركات المالية الداخلة</div>
+    <div class="cfo-hero-item" data-hero-nav="vault">
+      <div class="cfo-hero-icon">${CFO_ICONS.wallet}</div>
+      <div class="cfo-hero-body">
+        <div class="cfo-hero-label">تحصيل اليوم</div>
+        <div class="cfo-hero-value">${fmt(todayCollected)} ﷼</div>
+        <div class="cfo-hero-sub">من الحركات المالية الداخلة</div>
+      </div>
     </div>
-    <div class="cfo-hero-item ${collectionRate>=80?'accent-good':(collectionRate>=50?'accent-neutral':'accent-bad')}" data-hero-nav="reports">
-      <div class="cfo-hero-label">نسبة التحصيل ${thisYear}</div>
-      <div class="cfo-hero-value">${collectionRate.toFixed(1)}%</div>
-      <div class="cfo-hero-sub">محصّل ${fmt(yearCollected)} من ${fmt(yearSales)} ﷼</div>
+    <div class="cfo-hero-item" data-hero-nav="reports">
+      <div class="cfo-hero-icon">${CFO_ICONS.profit}</div>
+      <div class="cfo-hero-body">
+        <div class="cfo-hero-label">نسبة التحصيل ${thisYear}</div>
+        <div class="cfo-hero-value">${collectionRate.toFixed(1)}%</div>
+        <div class="cfo-hero-sub">محصّل ${fmt(yearCollected)} من ${fmt(yearSales)} ﷼</div>
+      </div>
     </div>
-    <div class="cfo-hero-item accent-neutral" data-hero-nav="vault">
-      <div class="cfo-hero-label">رصيد الخزنة + البنك + الشبكة</div>
-      <div class="cfo-hero-value">${fmt(totalBalance)} ﷼</div>
-      <div class="cfo-hero-sub">إجمالي السيولة المتاحة الآن</div>
+    <div class="cfo-hero-item" data-hero-nav="vault">
+      <div class="cfo-hero-icon">${CFO_ICONS.vault}</div>
+      <div class="cfo-hero-body">
+        <div class="cfo-hero-label">رصيد الخزنة + البنك + الشبكة</div>
+        <div class="cfo-hero-value">${fmt(totalBalance)} ﷼</div>
+        <div class="cfo-hero-sub">إجمالي السيولة المتاحة الآن</div>
+      </div>
     </div>
-    <div class="cfo-hero-item ${totalRemaining>0?'accent-bad':'accent-good'}" data-hero-nav="owing-clients">
-      <div class="cfo-hero-label">المتبقي على العملاء</div>
-      <div class="cfo-hero-value">${fmt(totalRemaining)} ﷼</div>
-      <div class="cfo-hero-sub">توقع دخل الشهر: <b>${fmt(fc.projected)}</b> ﷼</div>
+    <div class="cfo-hero-item" data-hero-nav="owing-clients">
+      <div class="cfo-hero-icon">${CFO_ICONS.alert}</div>
+      <div class="cfo-hero-body">
+        <div class="cfo-hero-label">المتبقي على العملاء</div>
+        <div class="cfo-hero-value">${fmt(totalRemaining)} ﷼</div>
+        <div class="cfo-hero-sub">توقع دخل الشهر: <b>${fmt(fc.projected)}</b> ﷼</div>
+      </div>
     </div>
   `;
 }
