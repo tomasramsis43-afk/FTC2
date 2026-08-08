@@ -2337,6 +2337,13 @@ td select:hover:not(:focus) {
   padding: 14px 14px 12px;
   position: relative;
   overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+
+.cfo-hero-item:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
 .cfo-hero-item::before {
@@ -2381,6 +2388,12 @@ td select:hover:not(:focus) {
 
 .cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
 .cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
+
+.cfo-tab-btn.active {
+  background: var(--gold);
+  color: var(--on-accent-text);
+  border-color: var(--gold);
+}
 
 .cfo-grid {
   column-count: 3;
