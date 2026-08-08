@@ -2325,45 +2325,31 @@ td select:hover:not(:focus) {
 }
 
 @media (max-width: 680px) {
-  .cfo-hero {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 8px;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-  }
-  .cfo-hero-item {
-    flex: 0 0 108px;
-    aspect-ratio: 1 / 1;
-    justify-content: center;
-    padding: 10px 8px;
-  }
-  .cfo-hero-label { font-size: 10.5px; }
-  .cfo-hero-value { font-size: 17px; }
-  .cfo-hero-sub { font-size: 9px; }
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 
 @media (max-width: 480px) {
-  .cfo-hero { gap: 6px; }
-  .cfo-hero-item { flex: 0 0 92px; padding: 10px 8px; }
-  .cfo-hero-label { font-size: 10px; }
-  .cfo-hero-value { font-size: 16px; }
-  .cfo-hero-sub { display: none; }
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .cfo-hero-item { padding: 10px; gap: 8px; }
+  .cfo-hero-icon { width: 30px; height: 30px; }
+  .cfo-hero-icon svg { width: 15px; height: 15px; }
+  .cfo-hero-label { font-size: 9.5px; }
+  .cfo-hero-value { font-size: 15px; }
+  .cfo-hero-sub { font-size: 9px; }
 }
 
 .cfo-hero-item {
-  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px 16px;
+  border-radius: 14px;
+  padding: 14px;
   box-shadow: var(--shadow);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 6px;
+  gap: 12px;
+  text-align: start;
   cursor: pointer;
   transition: box-shadow .18s ease, transform .18s ease;
 }
@@ -2373,37 +2359,62 @@ td select:hover:not(:focus) {
   transform: translateY(-2px);
 }
 
+.cfo-hero-icon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold-soft);
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.cfo-hero-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.cfo-hero-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .cfo-hero-label {
-  order: 2;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
+  letter-spacing: 0.3px;
+  margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
 
 .cfo-hero-value {
-  order: 1;
   font-family: var(--font-mono);
   font-weight: 800;
-  font-size: 24px;
-  color: var(--text);
+  font-size: 18px;
+  color: var(--navy-dark);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
 
 .cfo-hero-sub {
-  order: 3;
   font-size: 10.5px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
 .cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
+
+
 
 
 .cfo-tab-btn.active {
