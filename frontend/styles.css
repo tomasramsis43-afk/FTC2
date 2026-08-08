@@ -2325,18 +2325,32 @@ td select:hover:not(:focus) {
 }
 
 @media (max-width: 680px) {
-  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .cfo-hero {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .cfo-hero-item {
+    flex: 0 0 108px;
+    aspect-ratio: 1 / 1;
+    justify-content: center;
+    padding: 10px 8px;
+  }
+  .cfo-hero-label { font-size: 10.5px; }
+  .cfo-hero-value { font-size: 17px; }
+  .cfo-hero-sub { font-size: 9px; }
 }
 
 @media (max-width: 480px) {
-  .cfo-hero {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  .cfo-hero-item { padding: 12px 10px; }
-  .cfo-hero-label { font-size: 10.5px; }
-  .cfo-hero-value { font-size: 18px; }
-  .cfo-hero-sub { font-size: 9px; }
+  .cfo-hero { gap: 6px; }
+  .cfo-hero-item { flex: 0 0 92px; padding: 10px 8px; }
+  .cfo-hero-label { font-size: 10px; }
+  .cfo-hero-value { font-size: 16px; }
+  .cfo-hero-sub { display: none; }
 }
 
 .cfo-hero-item {
