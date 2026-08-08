@@ -250,7 +250,7 @@ function renderCfoDashboard(){
   const receptionPerf = receptionPerformance(8);
 
   el.innerHTML = `
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-gold">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
       <div class="cfo-kpis">
         ${cfoKpi('sales','إجمالي المبيعات ' + thisYear, fmt(salesYear)+' ﷼')}
@@ -260,7 +260,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-income"></div>
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-teal">
       <h3 class="cfo-panel-title">تحصيل المدفوعات والمتبقي</h3>
       <div class="cfo-kpis">
         ${cfoKpi('wallet','المحصّل ' + thisYear, fmt(collectedYear)+' ﷼')}
@@ -271,7 +271,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual cfo-bars" id="cfo-bars-remaining"></div>
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-navy">
       <h3 class="cfo-panel-title">الخزنة والبنك</h3>
       <div class="cfo-kpis cfo-kpis-3">
         ${cfoKpi('vault','الخزنة (كاش)', fmt(vaultBal)+' ﷼')}
@@ -282,7 +282,7 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-cash"></div>
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-red">
       <h3 class="cfo-panel-title">المشتريات والموردون (مستحقات)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('invoice','مستحق للموردين', fmt(unpaidTotal)+' ﷼')}
@@ -292,7 +292,7 @@ function renderCfoDashboard(){
       ${apBars.length ? `<div class="cfo-caption">أعلى الموردين استحقاقاً</div><div class="cfo-visual cfo-bars" id="cfo-bars-ap"></div>` : `<div class="cfo-visual" id="cfo-trend-purchases"></div>`}
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-red">
       <h3 class="cfo-panel-title">أعمار الذمم المدينة (المتأخرات على العملاء)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('wallet','إجمالي الذمم المدينة', fmt(arData?arData.total:0)+' ﷼')}
@@ -302,7 +302,7 @@ function renderCfoDashboard(){
       ${arBars.length ? `<div class="cfo-visual cfo-bars" id="cfo-bars-ar"></div>` : `<div class="cfo-caption" style="color:var(--text-muted);">لا توجد ذمم مدينة حالياً</div>`}
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-navy">
       <h3 class="cfo-panel-title">تمويل مخزون الحقائب (اتجاه شهري)</h3>
       <div class="cfo-kpis">
         ${cfoKpi('truck','مصروف الحقائب (آخر '+rangeN+' شهر)', fmt(bagTrend.series[1].values.reduce((a,b)=>a+b,0))+' ﷼')}
@@ -312,14 +312,14 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-bags"></div>
     </div>
 
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-gold">
       <h3 class="cfo-panel-title">أعلى الدورات ربحية ${thisYear}</h3>
       <div class="cfo-caption">صافي دخل المركز حسب نوع الدورة (وليس عدد التسجيلات فقط)</div>
       <div class="cfo-visual cfo-bars" id="cfo-bars-topcourses"></div>
     </div>
 
     ${receptionPerf.length ? `
-    <div class="cfo-panel">
+    <div class="cfo-panel accent-teal">
       <h3 class="cfo-panel-title">أداء موظفي الاستقبال ${thisYear}</h3>
       <div class="cfo-caption">عدد التسجيلات وصافي الدخل الناتج عن كل موظف</div>
       <div class="cfo-visual cfo-bars" id="cfo-bars-reception"></div>
