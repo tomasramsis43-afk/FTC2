@@ -2315,9 +2315,27 @@ td select:hover:not(:focus) {
 /* ============= CFO DASHBOARD ============= */
 .cfo-hero {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: clamp(4px, 1.6vw, 12px);
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
   margin-bottom: 18px;
+}
+
+@media (max-width: 1100px) {
+  .cfo-hero { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 680px) {
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+
+@media (max-width: 480px) {
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .cfo-hero-item { padding: 10px; gap: 8px; }
+  .cfo-hero-icon { width: 30px; height: 30px; }
+  .cfo-hero-icon svg { width: 15px; height: 15px; }
+  .cfo-hero-label { font-size: 9.5px; }
+  .cfo-hero-value { font-size: 15px; }
+  .cfo-hero-sub { font-size: 9px; }
 }
 
 .cfo-hero-item {
@@ -2325,17 +2343,13 @@ td select:hover:not(:focus) {
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border: 1px solid var(--border);
-  border-radius: clamp(8px, 2vw, 14px);
-  padding: clamp(6px, 2vw, 14px);
+  border-radius: 14px;
+  padding: 14px;
   box-shadow: var(--shadow);
-  aspect-ratio: 1 / 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: clamp(2px, 1vw, 6px);
-  min-width: 0;
+  gap: 12px;
+  text-align: start;
   cursor: pointer;
   transition: box-shadow .18s ease, transform .18s ease;
 }
@@ -2346,10 +2360,10 @@ td select:hover:not(:focus) {
 }
 
 .cfo-hero-icon {
-  width: clamp(18px, 6vw, 38px);
-  height: clamp(18px, 6vw, 38px);
+  width: 38px;
+  height: 38px;
   flex: none;
-  border-radius: clamp(6px, 1.6vw, 10px);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--gold) 14%, transparent);
   display: flex;
   align-items: center;
@@ -2359,19 +2373,20 @@ td select:hover:not(:focus) {
 }
 
 .cfo-hero-icon svg {
-  width: 55%;
-  height: 55%;
+  width: 19px;
+  height: 19px;
 }
 
 .cfo-hero-body {
   min-width: 0;
-  width: 100%;
+  flex: 1;
 }
 
 .cfo-hero-label {
-  font-size: clamp(7px, 1.7vw, 11px);
+  font-size: 11px;
   color: var(--text-muted);
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
+  margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2380,7 +2395,7 @@ td select:hover:not(:focus) {
 .cfo-hero-value {
   font-family: var(--font-mono);
   font-weight: 800;
-  font-size: clamp(10px, 2.6vw, 18px);
+  font-size: 18px;
   color: var(--navy-dark);
   white-space: nowrap;
   overflow: hidden;
@@ -2398,12 +2413,6 @@ td select:hover:not(:focus) {
 
 .cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
 .cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
-
-@media (max-width: 680px) {
-  .cfo-hero-sub { display: none; }
-}
-
-
 
 
 
