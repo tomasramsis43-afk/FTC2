@@ -2333,21 +2333,23 @@ td select:hover:not(:focus) {
     grid-template-columns: repeat(2, 1fr);
     gap: 6px;
   }
-  .cfo-hero-item { padding: 9px 9px 8px; border-radius: 10px; }
-  .cfo-hero-label { font-size: 9.5px; margin-bottom: 3px; }
-  .cfo-hero-value { font-size: 14px; }
-  .cfo-hero-sub { font-size: 9px; margin-top: 2px; }
+  .cfo-hero-item { padding: 12px 10px; }
+  .cfo-hero-label { font-size: 10.5px; }
+  .cfo-hero-value { font-size: 18px; }
+  .cfo-hero-sub { font-size: 9px; }
 }
 
 .cfo-hero-item {
-  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 14px 12px;
-  position: relative;
-  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
   cursor: pointer;
   transition: box-shadow .18s ease, transform .18s ease;
 }
@@ -2357,48 +2359,38 @@ td select:hover:not(:focus) {
   transform: translateY(-2px);
 }
 
-.cfo-hero-item::before {
-  content: '';
-  position: absolute;
-  inset-inline-start: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--hero-accent, var(--gold));
-}
-
-.cfo-hero-item.accent-good { --hero-accent: var(--teal); }
-.cfo-hero-item.accent-bad { --hero-accent: var(--red); }
-.cfo-hero-item.accent-neutral { --hero-accent: var(--navy); }
-
 .cfo-hero-label {
-  font-size: 11px;
+  order: 2;
+  font-size: 12px;
   color: var(--text-muted);
-  letter-spacing: 0.3px;
-  margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .cfo-hero-value {
+  order: 1;
   font-family: var(--font-mono);
   font-weight: 800;
-  font-size: 19px;
-  color: var(--navy-dark);
+  font-size: 24px;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .cfo-hero-sub {
+  order: 3;
   font-size: 10.5px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
 .cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
+
 
 .cfo-tab-btn.active {
   background: var(--gold);
