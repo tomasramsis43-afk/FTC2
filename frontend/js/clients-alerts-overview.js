@@ -15,7 +15,6 @@ function renderDashboard(){
   if(isViewActive('dashboard')){
     renderCfoDashboard();
     renderSmartAlerts();
-    renderCloseOverview(c, totalPaid, totalRemaining);
     if(currentUserRole==='admin') refreshPendingApprovals();
   }
 }
