@@ -552,6 +552,14 @@ function formatReturnInvoiceNo(n){ return 'RET-' + String(n).padStart(6,'0'); }
 async function printReturnInvoice(id){
   const tx = vaultTx.find(x=>x.id===id);
   if(!tx || !tx.isReturn){ showToast('تعذر إيجاد بيانات المردود'); return; }
+  // ترجمة إنجليزية لحساب الصرف (قيمة ثابتة معروفة داخل النظام)
+  const destLabelEn = d => ({vault:'Vault (Cash)', bank:'Bank', network:'Network', other:'Other'}[d] || 'Other');
+  // ترجمة إنجليزية "أفضل محاولة" لطريقة الاسترجاع — القيمة تأتي من قنوات دفع قابلة للتخصيص من الإعدادات
+  // فلا يوجد تعداد ثابت لها؛ إن لم تُطابق القاموس، تُعرض بالعربي فقط بدون افتراض ترجمة خاطئة
+  const methodLabelEn = m => {
+    const map = {'نقد':'Cash', 'كاش':'Cash', 'شبكة':'Network', 'تحويل بنكي':'Bank Transfer', 'تحويل':'Bank Transfer', 'فيزا':'Card', 'بطاقة':'Card', 'ماستر كارد':'Card', 'مدى':'Mada Card', 'STC Pay':'STC Pay', 'أبل باي':'Apple Pay'};
+    return map[String(m||'').trim()] || '';
+  };
   if(!tx.returnInvoiceNo){
     // نفس حماية تكرار الأرقام: نأخذ أعلى رقم مردود مستخدم فعلاً +1 (مزامنة/استيراد قديم)
     const maxUsed = vaultTx.reduce((mx,t)=> Math.max(mx, num(t.returnInvoiceNo)||0), 0);
@@ -589,58 +597,60 @@ async function printReturnInvoice(id){
         <div>
           <p class="center-name">${escapeHtml(ci.name)}</p>
           <div class="center-meta">
-            الرقم الضريبي: ${escapeHtml(ci.taxNumber)}<br>
-            الهاتف: ${escapeHtml(ci.phone)}
+            الرقم الضريبي / Tax No.: ${escapeHtml(ci.taxNumber)}<br>
+            الهاتف / Phone: ${escapeHtml(ci.phone)}
           </div>
         </div>
       </div>
       ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, num(tx.amount), num(tx.amount) - returnNet, tx.date || today)}
       <div class="inv-title">
-        <h2>فاتورة استرجاع مبلغ</h2>
+        <h2>فاتورة استرجاع مبلغ<br><span style="font-size:14px;">Return Invoice</span></h2>
         <div class="no">${invNoLabel}</div>
-        <div style="font-size:12px; color:#66707E; margin-top:4px;">تاريخ الاسترجاع: ${escapeHtml(tx.date || today)}</div>
+        <div style="font-size:12px; color:#66707E; margin-top:4px;">تاريخ الاسترجاع / Return Date: ${escapeHtml(tx.date || today)}</div>
       </div>
     </div>
 
     <div class="info-grid">
       <div class="info-box">
-        <h4>بيانات العميل</h4>
-        <div class="info-row"><span>الاسم:</span><b>${escapeHtml(tx.clientName || client?.name || '—')}</b></div>
-        <div class="info-row"><span>رقم الهوية / الإقامة:</span><b>${escapeHtml(tx.clientId || '—')}</b></div>
-        ${client?.phone ? `<div class="info-row"><span>رقم الجوال:</span><b>${escapeHtml(client.phone)}</b></div>` : ''}
+        <h4>بيانات العميل / Client Information</h4>
+        <div class="info-row"><span>الاسم / Name:</span><b>${escapeHtml(tx.clientName || client?.name || '—')}</b></div>
+        <div class="info-row"><span>رقم الهوية / الإقامة<br>ID / Iqama No.:</span><b>${escapeHtml(tx.clientId || '—')}</b></div>
+        ${client?.phone ? `<div class="info-row"><span>رقم الجوال / Mobile:</span><b>${escapeHtml(client.phone)}</b></div>` : ''}
       </div>
       <div class="info-box">
-        <h4>بيانات المردود</h4>
-        ${client?.invoice ? `<div class="info-row"><span>رقم فاتورة الدورة:</span><b>${escapeHtml(client.invoice)}</b></div>` : ''}
-        <div class="info-row"><span>حساب الصرف:</span><b>${escapeHtml(destLabel(tx.destination||'vault'))}</b></div>
-        <div class="info-row"><span>طريقة الاسترجاع:</span><b>${escapeHtml(tx.method || '—')}</b></div>
-        <div class="info-row"><span>ملاحظات:</span><b>${escapeHtml(tx.notes || '—')}</b></div>
+        <h4>بيانات المردود / Return Details</h4>
+        ${client?.invoice ? `<div class="info-row"><span>رقم فاتورة الدورة<br>Course Invoice No.:</span><b>${escapeHtml(client.invoice)}</b></div>` : ''}
+        <div class="info-row"><span>حساب الصرف / Payment Account:</span><b>${escapeHtml(destLabel(tx.destination||'vault'))} / ${escapeHtml(destLabelEn(tx.destination||'vault'))}</b></div>
+        <div class="info-row"><span>طريقة الاسترجاع / Return Method:</span><b>${escapeHtml(tx.method || '—')}${methodLabelEn(tx.method) ? ' / ' + escapeHtml(methodLabelEn(tx.method)) : ''}</b></div>
+        <div class="info-row"><span>ملاحظات / Notes:</span><b>${escapeHtml(tx.notes || '—')}</b></div>
       </div>
     </div>
 
     <div class="amount-box">
-      <div class="lbl">المبلغ المسترجع للعميل</div>
+      <div class="lbl">المبلغ المسترجع للعميل / Amount Refunded to Client</div>
       <div class="amt">${fmt(num(tx.amount))} ﷼</div>
       <div style="font-size:12.5px; color:#66707E; margin-top:10px; border-top:1px dashed #E9CFC9; padding-top:8px;">
-        <b>المبلغ كتابةً:</b> ${escapeHtml(numberToArabicWords(tx.amount))}
+        <b>المبلغ كتابةً / Amount in Words:</b> ${escapeHtml(numberToArabicWords(tx.amount))}
       </div>
     </div>
 
     <p style="font-size:13px; text-align:center; margin-bottom:0;">
-      أقرّ أنا الموقّع أدناه باستلامي المبلغ الموضح أعلاه كمردود مبيعات، وذلك بحضوري الشخصي.
+      أقرّ أنا الموقّع أدناه باستلامي المبلغ الموضح أعلاه كمردود مبيعات، وذلك بحضوري الشخصي.<br>
+      <span style="font-size:11.5px; color:#66707E;">I, the undersigned, acknowledge receipt of the above amount as a sales return, in person.</span>
     </p>
 
     <div class="sig-grid">
       <div class="sig-box">
-        <div class="sig-line">توقيع العميل أو من ينوب عنه (${escapeHtml(tx.clientName || client?.name || '—')})</div>
+        <div class="sig-line">توقيع العميل أو من ينوب عنه (${escapeHtml(tx.clientName || client?.name || '—')})<br><span style="font-size:11px; color:#66707E;">Client Signature or Representative</span></div>
       </div>
       <div class="sig-box">
-        <div class="sig-line">توقيع المركز / المستلم للتوقيع</div>
+        <div class="sig-line">توقيع المركز / المستلم للتوقيع<br><span style="font-size:11px; color:#66707E;">Center Signature / Receiver</span></div>
       </div>
     </div>
 
     <div class="footer-note">
-      هذه الفاتورة صادرة إلكترونياً من نظام إدارة ${escapeHtml(ci.name)} — رقم الفاتورة تسلسلي ولا يتم التلاعب به، وهذا المردود خاص بهذا العميل فقط.
+      هذه الفاتورة صادرة إلكترونياً من نظام إدارة ${escapeHtml(ci.name)} — رقم الفاتورة تسلسلي ولا يتم التلاعب به، وهذا المردود خاص بهذا العميل فقط.<br>
+      <span style="font-size:10.5px;">This invoice is issued electronically by ${escapeHtml(ci.name)} management system — the invoice number is sequential and non-editable, and this return applies to this client only.</span>
     </div>
     ${zatcaStatusBadge(zatcaResult)}
     ${printDocFooterButton()}
