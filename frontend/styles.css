@@ -2313,6 +2313,75 @@ td select:hover:not(:focus) {
 }
 
 /* ============= CFO DASHBOARD ============= */
+.cfo-hero {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1100px) {
+  .cfo-hero { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 680px) {
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); }
+}
+
+.cfo-hero-item {
+  background: color-mix(in srgb, var(--surface-solid) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cfo-hero-item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--hero-accent, var(--gold));
+}
+
+.cfo-hero-item.accent-good { --hero-accent: var(--teal); }
+.cfo-hero-item.accent-bad { --hero-accent: var(--red); }
+.cfo-hero-item.accent-neutral { --hero-accent: var(--navy); }
+
+.cfo-hero-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfo-hero-value {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 19px;
+  color: var(--navy-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfo-hero-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
+.cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
+
 .cfo-grid {
   column-count: 3;
   column-gap: 16px;

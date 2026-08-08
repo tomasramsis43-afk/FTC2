@@ -82,8 +82,93 @@ function remainingByCourseType(){
   });
   return Object.entries(map).sort((a,b)=>b[1]-a[1]);
 }
+/* أعلى أنواع الدورات ربحية (صافي دخل المركز) خلال السنة الحالية */
+function topCoursesByProfit(limit=6){
+  const map = {};
+  clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(new Date().getFullYear())).forEach(c=>{
+    const k = c.courseType || 'غير محدد';
+    map[k] = (map[k]||0) + centerIncome(c);
+  });
+  return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0, limit);
+}
+/* أداء موظفي الاستقبال: عدد التسجيلات وصافي الدخل لكل موظف خلال السنة الحالية (للإدمن/المحاسب فقط) */
+function receptionPerformance(limit=8){
+  if(!canSeeAllData()) return [];
+  const map = {};
+  clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(new Date().getFullYear()) && c.createdBy).forEach(c=>{
+    const k = c.createdBy;
+    if(!map[k]) map[k] = {count:0, income:0};
+    map[k].count += 1;
+    map[k].income += centerIncome(c);
+  });
+  return Object.entries(map).sort((a,b)=>b[1].income-a[1].income).slice(0, limit);
+}
+/* توقع دخل الشهر الحالي بناءً على المعدل اليومي حتى الآن (تنبؤ بسيط بالاستقراء الخطي) */
+function forecastCurrentMonthIncome(){
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const soFar = clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,7)===thisMonthKey).reduce((s,c)=>s+centerIncome(c),0);
+  if(dayOfMonth<=0) return {soFar:0, projected:0};
+  const dailyAvg = soFar/dayOfMonth;
+  return { soFar: Math.round(soFar*100)/100, projected: Math.round(dailyAvg*daysInMonth*100)/100 };
+}
+/* شريط KPI رئيسي أعلى لوحة التحكم: أهم أرقام يحتاجها المستخدم فور فتح البرنامج */
+function renderCfoHero(){
+  const el = $('#cfo-hero');
+  if(!el) return;
+  if(!canAccessView('vault') && !canAccessView('accounting')){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display = '';
+
+  const today = todayISO();
+  const activeClients = clients.filter(c=>!c.cancelled);
+  const todayClients = activeClients.filter(c=>String(c.date||'')===today);
+  const todayRegCount = todayClients.length;
+  const todayIncome = todayClients.reduce((s,c)=>s+centerIncome(c),0);
+  const todayCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'')===today).reduce((s,t)=>s+num(t.amount),0);
+
+  const thisYear = new Date().getFullYear();
+  const yearSales = activeClients.filter(c=>String(c.date||'').slice(0,4)===String(thisYear)).reduce((s,c)=>s+num(c.coursePrice),0);
+  const yearCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(thisYear)).reduce((s,t)=>s+num(t.amount),0);
+  const collectionRate = yearSales>0 ? Math.min(999, (yearCollected/yearSales)*100) : 0;
+
+  const totalBalance = balanceOf('vault') + balanceOf('bank') + balanceOf('network');
+  const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
+
+  const fc = forecastCurrentMonthIncome();
+
+  el.innerHTML = `
+    <div class="cfo-hero-item accent-neutral">
+      <div class="cfo-hero-label">تسجيلات اليوم</div>
+      <div class="cfo-hero-value">${String(todayRegCount)}</div>
+      <div class="cfo-hero-sub">دخل اليوم: <b>${fmt(todayIncome)}</b> ﷼</div>
+    </div>
+    <div class="cfo-hero-item accent-good">
+      <div class="cfo-hero-label">تحصيل اليوم</div>
+      <div class="cfo-hero-value">${fmt(todayCollected)} ﷼</div>
+      <div class="cfo-hero-sub">من الحركات المالية الداخلة</div>
+    </div>
+    <div class="cfo-hero-item ${collectionRate>=80?'accent-good':(collectionRate>=50?'accent-neutral':'accent-bad')}">
+      <div class="cfo-hero-label">نسبة التحصيل ${thisYear}</div>
+      <div class="cfo-hero-value">${collectionRate.toFixed(1)}%</div>
+      <div class="cfo-hero-sub">محصّل ${fmt(yearCollected)} من ${fmt(yearSales)} ﷼</div>
+    </div>
+    <div class="cfo-hero-item accent-neutral">
+      <div class="cfo-hero-label">رصيد الخزنة + البنك + الشبكة</div>
+      <div class="cfo-hero-value">${fmt(totalBalance)} ﷼</div>
+      <div class="cfo-hero-sub">إجمالي السيولة المتاحة الآن</div>
+    </div>
+    <div class="cfo-hero-item ${totalRemaining>0?'accent-bad':'accent-good'}">
+      <div class="cfo-hero-label">المتبقي على العملاء</div>
+      <div class="cfo-hero-value">${fmt(totalRemaining)} ﷼</div>
+      <div class="cfo-hero-sub">توقع دخل الشهر: <b>${fmt(fc.projected)}</b> ﷼</div>
+    </div>
+  `;
+}
 /* رسم لوحة CFO-Style الكاملة (6 لوحات: الدخل، التحصيل والمتبقي، الخزنة والبنك، المشتريات المستحقة، توزيع الدورات، طريقة الدفع) */
 function renderCfoDashboard(){
+  renderCfoHero();
   const el = $('#cfo-grid');
   if(!el) return;
   // القسم ده فيه أرصدة الخزنة/البنك واتجاهات التحصيل — بيانات مالية حساسة تخص
@@ -158,6 +243,12 @@ function renderCfoDashboard(){
     ['أكثر من 90 يوم', arData.buckets['أكثر من 90 يوم']],
   ] : [];
 
+  // === لوحة 7: أعلى الدورات ربحية (صافي دخل المركز) ===
+  const topCourses = topCoursesByProfit(6);
+
+  // === لوحة 8: أداء موظفي الاستقبال (تسجيلات + دخل هذه السنة) — للإدمن/المحاسب فقط ===
+  const receptionPerf = receptionPerformance(8);
+
   el.innerHTML = `
     <div class="cfo-panel">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
@@ -221,6 +312,19 @@ function renderCfoDashboard(){
       <div class="cfo-visual" id="cfo-trend-bags"></div>
     </div>
 
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">أعلى الدورات ربحية ${thisYear}</h3>
+      <div class="cfo-caption">صافي دخل المركز حسب نوع الدورة (وليس عدد التسجيلات فقط)</div>
+      <div class="cfo-visual cfo-bars" id="cfo-bars-topcourses"></div>
+    </div>
+
+    ${receptionPerf.length ? `
+    <div class="cfo-panel">
+      <h3 class="cfo-panel-title">أداء موظفي الاستقبال ${thisYear}</h3>
+      <div class="cfo-caption">عدد التسجيلات وصافي الدخل الناتج عن كل موظف</div>
+      <div class="cfo-visual cfo-bars" id="cfo-bars-reception"></div>
+    </div>` : ''}
+
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -230,6 +334,10 @@ function renderCfoDashboard(){
   drawBars('#cfo-bars-remaining', remainBars, 6, v=>fmt(v)+' ﷼');
   if(arBars.length){ drawBars('#cfo-bars-ar', arBars, 4, v=>fmt(v)+' ﷼'); }
   drawLineChart('#cfo-trend-bags', bagTrend.labels, bagTrend.series);
+  drawBars('#cfo-bars-topcourses', topCourses, 6, v=>fmt(v)+' ﷼');
+  if(receptionPerf.length){
+    drawBars('#cfo-bars-reception', receptionPerf.map(([name,d])=>[name, d.income]), 8, v=>fmt(v)+' ﷼');
+  }
 }
 function groupCount(list, field){
   const map = {};
