@@ -2412,19 +2412,40 @@ td select:hover:not(:focus) {
   flex-direction: column;
   break-inside: avoid;
   margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow .18s ease, transform .18s ease;
 }
+
+.cfo-panel::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--panel-accent, var(--gold));
+}
+
+.cfo-panel:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+.cfo-panel.accent-gold { --panel-accent: var(--gold); }
+.cfo-panel.accent-teal { --panel-accent: var(--teal); }
+.cfo-panel.accent-navy { --panel-accent: var(--navy); }
+.cfo-panel.accent-red { --panel-accent: var(--red); }
 
 .cfo-panel-title {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 700;
-  color: var(--navy);
-  text-align: center;
+  color: var(--text);
+  text-align: start;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+  font-family: var(--font-heading);
 }
 
 .cfo-kpis {
