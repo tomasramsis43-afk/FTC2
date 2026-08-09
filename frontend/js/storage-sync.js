@@ -29,6 +29,7 @@ async function _pendingWrite(key, encryptedValue){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[StorageSync] _pendingWrite failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _pendingDelete(key){
   try{
@@ -43,6 +44,7 @@ async function _pendingDelete(key){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[StorageSync] _pendingDelete failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _pendingReadAll(){
   try{
@@ -143,13 +145,17 @@ let _activeRecordSaves = 0;
 // فنجعل beforeunload يحذّر أيضاً عند وجود أي منها.
 let _activeKvSaves = 0;
 window.addEventListener('beforeunload', (e)=>{
-  // لا ننتظر أي Promise هنا (المتصفح لا يسمح بذلك فى beforeunload) — فقط نتحقق من العدّاد
-  // الحالي فى الذاكرة (طلبات حفظ لسه جارية) بشكل متزامن. طابور IndexedDB نفسه (تعديلات
-  // فشلت فعلاً ومسجّلة) لا يحتاج تحذيراً هنا لأنه أصلاً هيُعاد رفعه تلقائياً عند فتح البرنامج
-  // من جديد أو عودة الاتصال — التحذير هنا فقط لمنع فقدان تعديل لسه "فى الهواء" لم يُحسم بعد.
-  if(_activeRecordSaves > 0 || _activeKvSaves > 0){
+  // لا ننتظر أي Promise هنا (المتصفح لا يسمح بذلك فى beforeunload) — فقط نتحقق من عدّادات
+  // متزامنة فى الذاكرة. _activeRecordSaves/_activeKvSaves تغطي طلبات لسه "فى الهواء" فعلياً على
+  // الشبكة. _pendingQueueSyncCount تغطي حالة مختلفة ومهمة بنفس القدر: تعديل اتحفظ فى طابور
+  // IndexedDB المحلي (نجح الحفظ محلياً) لكن لسه ما اتزامنش مع السيرفر إطلاقاً — لو المستخدم قفل
+  // الصفحة دلوقتي وفتح نفس حسابه من جهاز تاني قبل ما يرجع يفتح البرنامج هنا تاني، التعديل ده
+  // هيفضل غايب تماماً عن أي جهاز/تقرير تاني (وممكن يضيع نهائياً لو تعارض مع تعديل لاحق من جهاز
+  // آخر لنفس السجل — راجع 409 فى flushPendingWrites/flushPendingRecordWrites). القيمة هنا مُحدَّثة
+  // مسبقاً (فارق ملّي ثوانٍ فقط) وليست قراءة حيّة، لأن beforeunload لا يقدر ينتظر IndexedDB.
+  if(_activeRecordSaves > 0 || _activeKvSaves > 0 || _pendingQueueSyncCount > 0){
     e.preventDefault();
-    e.returnValue = 'فيه تعديلات لسه بتتحفظ على السيرفر — لو غادرت الصفحة دلوقتي ممكن تفقد آخر تعديل. متأكد إنك عايز تكمل؟';
+    e.returnValue = 'فيه تعديلات لسه محفوظة على هذا الجهاز فقط ولم تُرفع للسيرفر بعد — لو غادرت الصفحة دلوقتي ممكن تفقد آخر تعديل، أو تختفي مؤقتاً عن باقي الأجهزة حتى تفتح البرنامج هنا تاني. متأكد إنك عايز تكمل؟';
     return e.returnValue;
   }
 });
@@ -265,6 +271,11 @@ async function flushPendingWrites(){
   })();
   return _ftcSyncPromise;
 }
+// ضبط أولي لعدّاد الطابور المتزامن عند تحميل الملف مباشرة (وليس فقط بعد أول تعديل جديد فى هذه
+// الجلسة): لو فيه تعديلات معلّقة متبقية من جلسة سابقة لم تُرفع بعد (مثال: الجهاز اتقفل فجأة قبلها)،
+// لازم beforeunload يعرف بوجودها فوراً حتى لو المستخدم قفل الصفحة تاني قبل ما flushPendingWrites
+// ينجح أو حتى يبدأ.
+_refreshPendingQueueSyncCount();
 window.addEventListener('online', ()=>{ flushPendingWrites(); flushPendingRecordWrites(); });
 window.addEventListener('offline', ()=>{ markOffline(); });
 // محاولة دورية احتياطية (كل 20 ثانية) بجانب حدث online، ولا تُكلّف شيئاً لو الطابور فارغ بالفعل

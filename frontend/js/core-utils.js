@@ -241,6 +241,24 @@ const KV_IDB_PENDING_STORE = 'pending';
 // سبب وجود هذا المخزن: قبل إضافته، أي فشل رفع فردي (انقطاع نت لحظي، rate limit، إغلاق الصفحة أثناء
 // الحفظ) كان بيضيع نهائياً بمجرد أي ريفرش لاحق — راجع flushPendingRecordWrites فى storage-sync.js.
 const RECORD_PENDING_STORE = 'pendingRecords';
+// عدّاد متزامن (بلا await) لإجمالي عدد التعديلات فى طابوري IndexedDB (kv + records) معاً — يُحدَّث
+// فور اكتمال أي إضافة/حذف/مسح فعلي فى أي منهما (راجع _refreshPendingQueueSyncCount أدناه، ومواضع
+// استدعائها فى نهاية _pendingWrite/_pendingDelete/_pendingRecordPut/_pendingRecordDelete/
+// _pendingClearAll/_pendingRecordClearAll). الغرض الوحيد منه: تمكين beforeunload فى storage-sync.js
+// من التحذير عند إغلاق الصفحة وفى الطابور تعديلات لم تُرفع بعد — حتى لو لم يوجد طلب شبكة "طائر"
+// فعلياً فى هذه اللحظة بالذات، لأن beforeunload لا يمكنه انتظار أي قراءة IndexedDB (غير متزامنة)
+// وقت الإغلاق نفسه، فنعتمد بدلاً من ذلك على قيمة محدَّثة مسبقاً فى الذاكرة (فارق التحديث ملّي ثوانٍ
+// فقط منذ آخر تعديل فعلي، غير ملحوظ عملياً، ولا يشكّل أي خطر إضافي مقارنة بعدم وجود أي تحذير إطلاقاً).
+let _pendingQueueSyncCount = 0;
+async function _refreshPendingQueueSyncCount(){
+  try{
+    const [kvCount, recCount] = await Promise.all([
+      (typeof _pendingCount==='function') ? _pendingCount() : Promise.resolve(0),
+      _pendingRecordCount(),
+    ]);
+    _pendingQueueSyncCount = (kvCount||0) + (recCount||0);
+  }catch(e){ /* نترك القيمة القديمة كما هى عند أي فشل غير متوقع — أفضل من تصفيرها خطأً */ }
+}
 let _kvIdbPromise = null;
 function _openKvIdb(){
   if(_kvIdbPromise) return _kvIdbPromise;
@@ -275,6 +293,7 @@ async function _pendingRecordPut(collection, id, payload){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[Core] _pendingRecordPut failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _pendingRecordDelete(collection, id){
   try{
@@ -289,6 +308,7 @@ async function _pendingRecordDelete(collection, id){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[Core] _pendingRecordDelete failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _pendingRecordReadAll(){
   try{
@@ -320,6 +340,7 @@ async function _pendingRecordClearAll(){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[Core] _pendingRecordClearAll failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _pendingRecordCount(){
   try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
@@ -339,6 +360,7 @@ async function _pendingClearAll(){
       }catch(e){ resolve(); }
     });
   }catch(e){ console.error('[Core] _pendingClearAll failed:', e); }
+  _refreshPendingQueueSyncCount();
 }
 async function _kvCacheRead(key){
   try{
