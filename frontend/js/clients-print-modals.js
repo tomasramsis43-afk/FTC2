@@ -214,11 +214,17 @@ document.addEventListener('click', async e=>{
     const c = clients.find(x=>x.id===rejectId);
     if(await customConfirm(`تأكيد رفض وحذف تسجيل "${c?.name||''}" نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.`)){
       const ok = await deleteOneClientRecord(rejectId);
-      if(ok!==false){
+      if(ok===true){
         clients = clients.filter(x=>x.id!==rejectId);
         await logAudit('delete','العملاء', `تم رفض وحذف تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}"`);
         refreshEverything();
         showToast('تم رفض التسجيل وحذفه');
+      }else if(ok===null){
+        // تعذّر تأكيد الحذف من السيرفر الآن (انقطاع اتصال/رفض مؤقت) — السجل تم جدولته للحذف
+        // تلقائياً عند عودة الاتصال (راجع _pendingRecordPut داخل deleteOneClientRecord)، لكن يجب
+        // ألا يختفي محلياً من شيت العملاء الآن وإلا يبدو "محذوفاً" بينما رقم هويته لا يزال يحجب
+        // تسجيل أي عميل جديد بنفس الرقم على السيرفر حتى تكتمل عملية الحذف فعلياً.
+        showToast('⏳ تعذّر تأكيد الحذف من السيرفر الآن — تم جدولته وسيُنفَّذ تلقائياً عند استقرار الاتصال (العميل سيبقى ظاهراً حتى ذلك الحين)');
       }else{
         showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
       }
@@ -700,6 +706,37 @@ function updateComputed(){
   $('#calc-remaining').textContent = fmt(r);
 }
 
+// عند اكتشاف رقم هوية مكرر (سواء محلياً أو عبر فحص السيرفر)، العميل الآخر صاحب نفس الرقم قد
+// يكون مخفياً عن المستخدم حالياً لسبب بسيط جداً: فلتر السنة أعلى الشاشة مضبوط على سنة غير سنة
+// تسجيله، أو أحد الفلاتر المتقدمة (جنسية/شركة/حالة حقيبة...) مفعَّل، أو خانة البحث بها نص قديم —
+// فيظهر للمستخدم وكأن "العميل مش موجود" رغم أنه فعلاً مسجَّل. هذه الدالة تنقل المستخدم تلقائياً
+// لشاشة العملاء، تمسح كل الفلاتر (بما فيها فلتر السنة) وتبحث برقم الهوية مباشرة، حتى يظهر العميل
+// الآخر أمامه فوراً بدل رسالة تحذير فقط بلا أي وسيلة عملية للعثور عليه.
+async function revealDuplicateClient(clientIdValue, knownName){
+  closeModal();
+  document.querySelector('nav.tabs button[data-view="clients"]')?.click();
+  selectedYearFilter = 'all';
+  try{ localStorage.setItem('selectedYearFilter','all'); }catch(e){ /* غير حرج */ }
+  const yearSel = $('#year-filter'); if(yearSel) yearSel.value = 'all';
+  if(typeof applyYearFilterToAllViews==='function') applyYearFilterToAllViews();
+  const textLikeIds = ['cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
+  textLikeIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const selectIds = ['filter-course','filter-nat','filter-status','filter-company','filter-invoice','filter-coursenum','filter-refnum','filter-bag-source','filter-reception'];
+  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex = 0; });
+  showSuspendedOnly = false;
+  $('#btn-filter-suspended')?.classList.remove('btn-gold');
+  $('#btn-filter-suspended')?.classList.add('btn-ghost');
+  showUnpurchasedBagsOnly = false;
+  $('#btn-filter-unpurchased-bags')?.classList.remove('btn-gold');
+  $('#btn-filter-unpurchased-bags')?.classList.add('btn-ghost');
+  const searchEl = $('#search'); if(searchEl) searchEl.value = clientIdValue;
+  if(typeof updateAdvancedFiltersBadge==='function') updateAdvancedFiltersBadge();
+  if(typeof renderTable==='function') await renderTable();
+  showToast(knownName
+    ? `⚠️ رقم الهوية مستخدم بالفعل لعميل آخر: ${knownName} — تم عرضه أدناه`
+    : `⚠️ رقم الهوية مستخدم بالفعل لعميل آخر فى النظام — تم مسح كل الفلاتر (بما فيها فلتر السنة) والبحث عنه أدناه`);
+}
+
 $('#client-form').addEventListener('submit', async e=>{
   e.preventDefault();
   // (تحديث): أُزيل انتظار _clientsFirstRealSyncDone هنا عمداً بناءً على طلب صريح — بدل تعطيل
@@ -759,7 +796,7 @@ $('#client-form').addEventListener('submit', async e=>{
   if(!/^\d{10}$/.test(data.clientId)){ showToast('رقم الهوية يجب أن يتكون من 10 خانات (أرقام) بالضبط — لا أقل ولا أكثر'); return; }
   if(!data.name){ showToast('الاسم مطلوب'); return; }
   const dupId = clients.find(c=>c.clientId===data.clientId && c.id!==editingId);
-  if(dupId){ showToast(`رقم الهوية مستخدم بالفعل لعميل آخر: ${dupId.name}`); return; }
+  if(dupId){ await revealDuplicateClient(data.clientId, dupId.name); return; }
   // فحص إضافي عبر الخادم (لا يعتمد على قائمة العملاء المحمَّلة محلياً فقط): مهم خصوصاً لمستخدم
   // الاستقبال المعزول عادةً عن رؤية باقي عملاء الشركة — بدون هذا الفحص قد يسجّل رقم هوية مكرر
   // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً. مهلة 8 ثوانٍ
@@ -769,7 +806,7 @@ $('#client-form').addEventListener('submit', async e=>{
   if(allIds){
     const existingRecordId = allIds.get(await sha256Hex(data.clientId));
     if(existingRecordId && existingRecordId !== editingId){
-      showToast('رقم الهوية مستخدم بالفعل لعميل آخر فى النظام'); return;
+      await revealDuplicateClient(data.clientId, null); return;
     }
   }
   const wasEdit = !!editingId;
