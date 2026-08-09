@@ -889,10 +889,16 @@ function applyRolePermissions(){
   $all('button[data-view]').forEach(btn=>{
     btn.style.display = canAccessView(btn.dataset.view) ? '' : 'none';
   });
-  // إن كان المستخدم على قسم غير مسموح له به (مثلاً بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده للوحة التحكم
+  // إن كان المستخدم على قسم غير مسموح له به (مثلاً عند أول دخول لدور صفحته الافتراضية "لوحة
+  // التحكم" غير متاحة له أصلاً — كالاستقبال — أو بعد تسجيل دخول مستخدم آخر بنفس الجلسة) نعيده
+  // لأول قسم مسموح له به فعلياً بدل "لوحة التحكم" الثابتة، التي قد تكون هي نفسها ممنوعة عن دوره
+  // فيبقى عالقاً على شاشة فارغة بلا أي تبويب نشط ظاهر (هذا بالضبط ما كان يحصل مع الاستقبال).
   const activeBtn = $('button[data-view].active');
   if(activeBtn && !canAccessView(activeBtn.dataset.view)){
-    $('[data-view="dashboard"]').click();
+    const rp = (settings && settings.rolePermissions) || DEFAULT_SETTINGS.rolePermissions;
+    const allowed = Array.isArray(rp[currentUserRole]) ? rp[currentUserRole] : null;
+    const fallbackView = (allowed && allowed.length) ? allowed[0] : 'dashboard';
+    $(`[data-view="${fallbackView}"]`)?.click();
   }
   // إخفاء أزرار الاستيراد الجماعي (تحديث/استيراد العملاء، استيراد الرقم المرجعي، استيراد عمال الشركات)
   // وزر حذف العملاء الجماعي (جدول) عن يوزر الاستقبال — هذه أدوات جماعية حسّاسة لا تخص عمل موظف الاستقبال اليومي.
