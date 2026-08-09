@@ -65,15 +65,17 @@ function signToken(user) {
   );
 }
 
-async function requireAuth(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'لم يتم تسجيل الدخول' });
+// المنطق الفعلي للتحقق من توكن ومعرفة هوية صاحبه — مستخرج بمعزل عن requireAuth حتى يُعاد
+// استخدامه من أي مكان آخر لا يمر عبر ترويسة Authorization العادية (مثال: اتصال SSE فى
+// sse-stream، حيث EventSource فى المتصفح لا يدعم إرسال ترويسات مخصّصة إطلاقاً، فيصل التوكن
+// عبر query string بدلاً من ذلك). يرمي استثناءً برسالة مناسبة عند أي رفض؛ لا يكتب على res.
+async function resolveUserFromToken(token) {
+  if (!token) { const e = new Error('لم يتم تسجيل الدخول'); e.status = 401; throw e; }
   let payload;
   try {
     payload = verifyAnyJwtSecret(token);
   } catch (e) {
-    return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
+    const err = new Error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً'); err.status = 401; throw err;
   }
   // توكن حساب الطوارئ: لا يمر على قاعدة البيانات إطلاقاً، فيستمر في العمل حتى لو
   // كانت قاعدة البيانات غير متاحة أو تم استبدالها بالكامل. نتحقق فقط أن متغيرات
@@ -81,29 +83,35 @@ async function requireAuth(req, res, next) {
   // تلقائياً لو غُيّر EMERGENCY_ADMIN_USERNAME لاحقاً).
   if (payload.emergency && payload.sub === 'emergency-admin') {
     if (!EMERGENCY_ADMIN_USERNAME || payload.username !== EMERGENCY_ADMIN_USERNAME) {
-      return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
+      const err = new Error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً'); err.status = 401; throw err;
     }
-    req.user = { sub: 'emergency-admin', username: payload.username, role: 'admin' };
-    return next();
+    return { sub: 'emergency-admin', username: payload.username, role: 'admin' };
   }
+  const r = await pool.query('SELECT role, token_version, is_active FROM server_users WHERE id = $1', [payload.sub]);
+  const dbUser = r.rows[0];
+  // dbUser غير موجود = تم حذف الحساب. token_version مختلف = تم تسجيل خروج/تغيير كلمة
+  // مرور أو صلاحية بعد إصدار هذا التوكن. في الحالتين نرفض التوكن فوراً بدل انتظار انتهائه.
+  if (!dbUser || (payload.tv || 0) !== dbUser.token_version) {
+    const err = new Error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً'); err.status = 401; throw err;
+  }
+  // الحساب معطّل من طرف المدير: نقطع الجلسة فوراً حتى لو كان التوكن لا يزال صالحاً،
+  // بدل انتظار انتهاء صلاحيته (30 يوماً).
+  if (dbUser.is_active === false) {
+    const err = new Error('هذا الحساب معطّل حالياً، تواصل مع المدير'); err.status = 401; throw err;
+  }
+  // نأخذ role من القاعدة الآن وليس من داخل التوكن القديم، حتى يُطبَّق أي تغيير
+  // صلاحية فوراً على أي جلسة مفتوحة لنفس المستخدم دون انتظار تسجيل دخول جديد.
+  return { sub: payload.sub, username: payload.username, role: dbUser.role };
+}
+
+async function requireAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   try {
-    const r = await pool.query('SELECT role, token_version, is_active FROM server_users WHERE id = $1', [payload.sub]);
-    const dbUser = r.rows[0];
-    // dbUser غير موجود = تم حذف الحساب. token_version مختلف = تم تسجيل خروج/تغيير كلمة
-    // مرور أو صلاحية بعد إصدار هذا التوكن. في الحالتين نرفض التوكن فوراً بدل انتظار انتهائه.
-    if (!dbUser || (payload.tv || 0) !== dbUser.token_version) {
-      return res.status(401).json({ error: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً' });
-    }
-    // الحساب معطّل من طرف المدير: نقطع الجلسة فوراً حتى لو كان التوكن لا يزال صالحاً،
-    // بدل انتظار انتهاء صلاحيته (30 يوماً).
-    if (dbUser.is_active === false) {
-      return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
-    }
-    // نأخذ role من القاعدة الآن وليس من داخل التوكن القديم، حتى يُطبَّق أي تغيير
-    // صلاحية فوراً على أي جلسة مفتوحة لنفس المستخدم دون انتظار تسجيل دخول جديد.
-    req.user = { sub: payload.sub, username: payload.username, role: dbUser.role };
+    req.user = await resolveUserFromToken(token);
     next();
   } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.message });
     console.error(e);
     return res.status(500).json({ error: 'تعذّر التحقق من الجلسة' });
   }
@@ -174,6 +182,6 @@ async function consumeBackupCode(storedJson, code) {
 }
 
 module.exports = {
-  signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
+  signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode,
 };

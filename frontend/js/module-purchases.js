@@ -737,6 +737,9 @@ async function startApp(){
   try{ await maybeRunAutoBackup(); }catch(e){ console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e); }
   try{ SoundFX.login(); }catch(e){ console.error('startApp: فشلت خطوة "SoundFX.login"', e); }
   backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج (الأخطاء القاتلة تُعالَج داخلها)
+  // اتصال البث اللحظي (SSE): لو متصل بالسيرفر فعلياً (SERVER_AUTH_TOKEN موجود)، أي تعديل لاحق
+  // من مستخدم آخر يصل هنا فوراً بدل انتظار الفحص الدوري كل دقيقتين (راجع sse-client.js).
+  try{ if(typeof connectRealtimeEvents==='function') connectRealtimeEvents(); }catch(e){ console.error('startApp: فشلت خطوة "connectRealtimeEvents"', e); }
 }
 
 /* ---------------- License gate: يجب التحقق من كود الترخيص قبل تشغيل أي جزء من البرنامج ---------------- */

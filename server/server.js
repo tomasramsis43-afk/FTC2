@@ -7,8 +7,9 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 const { pool, ensureSchema } = require('./db');
-const { signToken, requireAuth, requireRole, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
+const { signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('./auth');
+const { addClient: addSseClient, removeClient: removeSseClient, broadcastRecordChanged } = require('./sse');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -339,6 +340,36 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
     console.error(e);
     res.status(500).json({ error: 'تعذّر تسجيل الخروج على الخادم' });
   }
+});
+
+/* ---------------- بث الأحداث اللحظية (SSE) ----------------
+   اتصال يبقى مفتوحاً طوال الجلسة، يُخطِر كل الأجهزة المتصلة (أي دور) فوراً بأي تعديل/حذف/اعتماد
+   يحدث من مستخدم آخر — بدل انتظار الفحص الدوري كل دقيقتين فى الواجهة. لا نستخدم requireAuth
+   العادي هنا لأن EventSource فى المتصفح لا يدعم إرسال ترويسة Authorization إطلاقاً، فيصل نفس
+   التوكن المعتاد عبر query string بدلاً من ذلك (نفس آلية resolveUserFromToken المستخدمة داخلياً
+   فى requireAuth، فلا فرق فى قوة التحقق نفسها). خارج أي rate limiter لأنه اتصال واحد طويل لكل
+   جهاز وليس سلسلة طلبات متكررة.
+   ملاحظة: يظهر التوكن هنا فى الـ URL (سجلات الوصول المحتملة على السيرفر/الوسطاء) — تُقبَل هذه
+   نقطة الضعف الصغيرة لأن SSE لا يدعم ترويسات أصلاً، وتوكن الجلسة نفسه (30 يوماً صلاحية) لا
+   يتغيّر بذلك عن أي طلب GET آخر لو كان يُمرَّر بطريقة مشابهة. */
+app.get('/api/events/stream', async (req, res) => {
+  let user;
+  try {
+    user = await resolveUserFromToken(req.query.token);
+  } catch (e) {
+    return res.status(e.status || 401).end();
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    // يمنع أي وسيط شبكي (proxy) يقف بين المتصفح والسيرفر من تخزين الاستجابة مؤقتاً بدل بثها
+    // لحظياً — بدونه قد تصل الأحداث متأخرة أو دفعة واحدة بدل لحظياً حسب إعدادات الوسيط.
+    'X-Accel-Buffering': 'no',
+  });
+  res.write(': connected\n\n');
+  const clientId = addSseClient(res, user);
+  req.on('close', () => removeSseClient(clientId));
 });
 
 /* ---------------- إدارة المستخدمين (للمدير admin فقط) ----------------
@@ -856,6 +887,7 @@ app.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin, as
       // "RETURNING value" من قاعدة البيانات — لا داعي لأي رحلة إضافية لنقل نفس البيانات الضخمة
       // (قد تصل لعدة ميجابايت مع آلاف العملاء) من قاعدة البيانات ثم تخزينها فى المتغيّر مرة أخرى.
       if (req.params.key === 'clients') queueSyncClientsRows(value);
+      broadcastRecordChanged({ collection: 'kv:' + req.params.key, actorUsername: req.user.username });
       // لا نُعيد "value" فى الرد: المتصفح أصلاً يملك نفس البيانات التي أرسلها للتو ولا يستخدم
       // القيمة الراجعة من هذا الرد إطلاقاً (انظر window.storage.set فى storage-sync.js) — فإعادة
       // إرسالها كانت تضاعف حجم البيانات المنقولة فى كل عملية حفظ (رفع + تنزيل لنفس البيانات)، وهو ما
@@ -1060,7 +1092,10 @@ app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res)
        RETURNING version, origin, status`,
       [req.params.id, enc, req.user.username, knownVersion, newOrigin, newStatus, plainClientId]
     );
-    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+    if (upsert.rows[0]) {
+      broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+      return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+    }
     const current = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل بيانات هذا العميل من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
@@ -1085,6 +1120,7 @@ app.post('/api/client-records/:id/approve', requireAuth, requireRole('admin'), a
       [req.params.id]
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'confirmed' });
   } catch (e) {
     console.error(e);
@@ -1109,6 +1145,7 @@ app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
       }
     }
     await pool.query('DELETE FROM client_records WHERE id = $1', [req.params.id]);
+    broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
@@ -1135,6 +1172,7 @@ app.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, async (
       // مسودات/سجلات استقبال معلّقة لا يملك رؤيتها أصلاً (إصلاح ثغرة تجاوز العزل دفعةً واحدة).
       await pool.query(`DELETE FROM client_records WHERE id = ANY($1::text[]) AND status = 'confirmed'`, [ids]);
     }
+    broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);
@@ -1146,6 +1184,7 @@ app.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, async (
 app.delete('/api/client-records', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     await pool.query('DELETE FROM client_records');
+    broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ deleted: true });
   } catch (e) {
     console.error(e);
@@ -1435,7 +1474,10 @@ app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireVali
        RETURNING version, origin, status`,
       [req.params.collection, req.params.id, enc, req.user.username, newOrigin, newStatus, knownVersion]
     );
-    if (upsert.rows[0]) return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+    if (upsert.rows[0]) {
+      broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+      return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+    }
     const current = await pool.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
@@ -1465,6 +1507,7 @@ app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
         [req.params.collection, req.params.id, 'confirmed']
       );
     }
+    broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
@@ -1485,6 +1528,7 @@ app.post('/api/records/:collection/:id/approve', requireAuth, requireRole('admin
       [req.params.collection, req.params.id]
     );
     if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'confirmed' });
   } catch (e) {
     console.error(e);
@@ -1561,6 +1605,7 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
     const confRows = await client.query('SELECT id, current_version FROM _conf');
     const migrated = records.length - confRows.rows.length;
     await client.query('COMMIT');
+    if (migrated > 0) broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
   } catch (e) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -1593,6 +1638,7 @@ app.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter, re
         [req.params.collection, ids, 'confirmed']
       );
     }
+    broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);
@@ -1604,6 +1650,7 @@ app.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter, re
 app.delete('/api/records/:collection', requireAuth, requireRole('admin'), requireValidCollection, async (req, res) => {
   try {
     await pool.query('DELETE FROM collection_records WHERE collection = $1', [req.params.collection]);
+    broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ deleted: true });
   } catch (e) {
     console.error(e);

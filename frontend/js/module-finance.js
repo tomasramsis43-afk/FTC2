@@ -1802,6 +1802,7 @@ $('#btn-logout').addEventListener('click', async ()=>{
         headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
       });
     }catch(e){ /* حتى لو فشل الاتصال، نكمّل تسجيل الخروج محلياً بالأسفل */ }
+    try{ if(typeof disconnectRealtimeEvents==='function') disconnectRealtimeEvents(); }catch(e){ /* لا يمنع إكمال تسجيل الخروج */ }
     currentUser = null;
     currentUserRole = 'staff';
     SERVER_AUTH_TOKEN = null;

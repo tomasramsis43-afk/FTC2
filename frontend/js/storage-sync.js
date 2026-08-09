@@ -426,6 +426,7 @@ async function serverFetch(path, options = {}) {
       // انتهت الجلسة أو لم يسجَّل الدخول بعد — أعد عرض شاشة الدخول على الخادم
       SERVER_AUTH_TOKEN = null;
       try { sessionStorage.removeItem('serverAuthToken'); } catch (e) { console.error('[StorageSync] Failed to clear serverAuthToken:', e); }
+      try{ if(typeof disconnectRealtimeEvents==='function') disconnectRealtimeEvents(); }catch(e){}
       showServerLoginScreen('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
       throw new Error('غير مصرَّح — يرجى تسجيل الدخول');
     }
