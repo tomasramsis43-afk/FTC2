@@ -95,25 +95,39 @@ async function updateOfflineIndicator(){
   try{
     const el = document.getElementById('offline-status-indicator');
     if(!el) return;
-    const count = await _pendingCount();
+    el.style.display = 'flex';
     if(manualOfflineMode){
-      el.style.display = 'flex';
+      const count = await _pendingCount();
       el.style.background = '#4a3b1f';
       el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — لا يتصل البرنامج بالسيرفر إطلاقاً، وأي تعديل يُحفظ محلياً فقط حتى تُعيد تفعيل الاتصال';
       el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الرفع لاحقاً` : '');
-    } else if(_ftcIsOffline){
-      el.style.display = 'flex';
+      return;
+    }
+    if(_ftcIsOffline){
+      const count = await _pendingCount();
       el.style.background = '#7a1f1f';
       el.title = 'لا يوجد اتصال بالسيرفر حالياً — البرنامج يعمل من آخر نسخة محفوظة على هذا الجهاز، وأي تعديل سيُحفظ محلياً ويُرفع تلقائياً عند عودة الاتصال';
       el.innerHTML = '⚠️ غير متصل' + (count ? ` (${count} بانتظار الرفع)` : '');
-    } else if(count > 0){
-      el.style.display = 'flex';
+      return;
+    }
+    // فحص فوري (بدون انتظار IndexedDB): فيه طلب حفظ/حذف لسه طاير فى الشبكة الآن فعلياً؟
+    if(_activeRecordSaves > 0 || _activeKvSaves > 0){
+      el.style.background = '#1f4a6e';
+      el.title = 'جارٍ رفع آخر تعديل إلى السيرفر الآن...';
+      el.innerHTML = '🔄 جارٍ الرفع للسيرفر...';
+      return;
+    }
+    const count = await _pendingCount();
+    if(count > 0){
       el.style.background = '#7a5a1f';
       el.title = 'يوجد تعديلات محفوظة محلياً بانتظار رفعها للسيرفر — جارٍ المحاولة تلقائياً';
       el.innerHTML = `⏳ جارٍ رفع ${count} تعديل...`;
-    } else {
-      el.style.display = 'none';
+      return;
     }
+    // لا اتصال معطّل، ولا رفع جارٍ الآن، ولا تعديلات معلّقة بالطابور — كل شيء محفوظ فعلياً على السيرفر
+    el.style.background = '#1f5c3a';
+    el.title = 'كل التعديلات محفوظة على السيرفر بنجاح — لا يوجد أي شيء معلّق حالياً';
+    el.innerHTML = '✅ كل شيء محدث';
   }catch(e){ console.error('[StorageSync] updateOfflineIndicator error:', e); }
 }
 let _ftcSyncInFlight = false;
@@ -554,6 +568,7 @@ window.storage = {
     async set(key, value, shared, meta){
       const toStore = await encryptValue(value);
       _activeKvSaves++; // يُخفض دائماً في finally أدناه — يحمي من فقدان تعديل يُحسم فقط عند رد السيرفر
+      updateOfflineIndicator(); // إظهار "جارٍ الرفع" فوراً فى مؤشّر الهيدر
       try{
         const res = await serverFetch(`/api/storage/${encodeURIComponent(key)}`, {
           method: 'PUT',
@@ -590,6 +605,7 @@ window.storage = {
         return { key, value, shared: !!shared, offline: true };
       }finally{
         _activeKvSaves--;
+        updateOfflineIndicator(); // تحديث مؤشّر الهيدر لحالة "محدث" أو "بانتظار رفع" حسب النتيجة
       }
     },
     async delete(key, shared){
@@ -890,6 +906,7 @@ async function _fetchDeltaRecords(collection){
 
 async function saveOneRecordGeneric(collection, id, plainJson){
   _activeRecordSaves++;
+  updateOfflineIndicator();
   try{
     const enc = await encryptValue(plainJson);
     if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
@@ -924,11 +941,12 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; }
+  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
 }
 
 async function deleteOneRecordGeneric(collection, id){
   _activeRecordSaves++;
+  updateOfflineIndicator();
   try{
     let res;
     try{
@@ -949,7 +967,7 @@ async function deleteOneRecordGeneric(collection, id){
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; }
+  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
 }
 
 // حذف عدة سجلات دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل id — يُستخدم لو عدد السجلات
@@ -1411,6 +1429,7 @@ async function fetchAllClientRecords(){
 // (بدون إنترنت) — المستدعي فى هذه الحالة يقرر خط الرجعة (راجع saveClients فى ui-framework.js).
 async function saveOneClientRecord(client, plainJson){
   _activeRecordSaves++;
+  updateOfflineIndicator();
   try{
     const enc = await encryptValue(plainJson);
     let res;
@@ -1444,11 +1463,12 @@ async function saveOneClientRecord(client, plainJson){
     await _pendingRecordDelete('clients', client.id); // نجح الحفظ فعلياً — أي تعديل معلّق أقدم لنفس العميل لم يعد له داعٍ
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; }
+  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
 }
 
 async function deleteOneClientRecord(id){
   _activeRecordSaves++;
+  updateOfflineIndicator();
   try{
     let res;
     try{
@@ -1468,7 +1488,7 @@ async function deleteOneClientRecord(id){
     await _pendingRecordDelete('clients', id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; }
+  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
 }
 
 // حذف عدة عملاء دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل عميل — نفس فكرة
