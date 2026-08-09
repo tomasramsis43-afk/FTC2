@@ -58,6 +58,12 @@ app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : { origin: fals
 app.use(compression({
   filter: (req, res) => {
     const p = req.path;
+    // اتصال البث اللحظي (SSE) يجب أن يبقى دائماً بلا ضغط: gzip يعمل على تجميع (buffering) البيانات
+    // داخل zlib حتى تتوفر كمية كافية لإنتاج كتلة مضغوطة، فتتأخر كل الأحداث حتى تصل هذه الكمية أو
+    // يُغلَق الاتصال — بينما اتصال SSE مصمم أصلاً ليبقى مفتوحاً لفترة طويلة يبعث كل حدث فور وقوعه.
+    // ضغطه هو تحديداً ما كان يسبب ظهور الاتصال "معلّقاً"/متأخراً، وتنافساً غريباً بين اتصالات
+    // مستخدمين مختلفين على نفس الموارد (تبديل الاتصال بينهم بدل بقاء الاثنين مفتوحين معاً).
+    if (p === '/api/events/stream') return false;
     if (p === '/api/storage-versions' || p === '/api/records-versions') return true;
     if (p.startsWith('/api/storage')) return false;               // قيم مشفّرة كبيرة
     if (p.startsWith('/api/records/') && !p.endsWith('/versions') && !p.endsWith('/pending')) return false;
@@ -367,6 +373,11 @@ app.get('/api/events/stream', async (req, res) => {
     // لحظياً — بدونه قد تصل الأحداث متأخرة أو دفعة واحدة بدل لحظياً حسب إعدادات الوسيط.
     'X-Accel-Buffering': 'no',
   });
+  // تعطيل خوارزمية Nagle على هذا الاتصال تحديداً: بدونها، Node/TCP قد يؤخر إرسال حزم صغيرة
+  // (مثل نبضة الحياة أو حدث تغيير واحد) بضع مئات المللي ثانية أملاً فى تجميعها مع بيانات أخرى —
+  // تأخير غير مقبول لقناة الغرض الوحيد منها السرعة اللحظية.
+  try { req.socket.setNoDelay(true); } catch (e) {}
+  res.flushHeaders();
   res.write(': connected\n\n');
   const clientId = addSseClient(res, user);
   req.on('close', () => removeSseClient(clientId));
