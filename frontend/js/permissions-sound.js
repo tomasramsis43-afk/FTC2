@@ -187,10 +187,18 @@ async function loadData(cacheOnly){
   // آلاف العملاء) بدل تحميله ككتلة واحدة ضخمة مع باقي المفاتيح — راجع قسم "تحميل العملاء" أدناه.
   // 'auditLog' أُزيل من هذه القائمة أيضاً: له مسار تحميل خاص أسفل (سجلات مستقلة عبر
   // loadCollectionGeneric، أول تصنيف يُوصَّل فعلياً بنظام collection_records الجاهز من قبل).
-  const kvKeys = ['settings','bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows',
-    'deletedInvoices','courseSessions','appLang','companies','companyTransfers','journalEntries',
-    'chartOfAccounts','journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','zakatAdjustments'
-  ].concat(wantUsers ? ['users'] : []);
+  // 'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
+  // 'courseSessions','companies','companyTransfers','journalEntries','chartOfAccounts','journalDE',
+  // 'budgetEntries','suppliers','purchases','manualSalesInvoices' أُزيلوا أيضاً: كل هذه التصنيفات
+  // مُرحَّلة فعلياً لنظام السجلات المستقلة (ALLOWED_COLLECTIONS) ولها استدعاء loadGeneric() خاص
+  // أسفل يكتب فوق أي قيمة هنا فوراً — نتيجة جلبها هنا من kv_store القديم لم تكن تُستخدم فى أي
+  // مكان بالملف إطلاقاً (تحقّقنا: فقط kv.settings / kv.appLang / kv.users / kv.zakatAdjustments
+  // تُستخدم فعلياً). إبقاؤها هنا كان يعني 16 طلب شبكة زيادة بلا أي فائدة تُرسَل بالتوازي مع كل
+  // فتح للبرنامج، تضرب نفس الـ storageLimiter الذي تسبب سابقاً فى مشكلة تشبع الطلبات مع journalDE
+  // (راجع storage-sync.js) — هنا فى جهة القراءة GET بدل الكتابة PUT، وقد يتسبب فى 429 عابر لبعض
+  // طلبات loadGeneric الحقيقية عند فتح البرنامج تحت ضغط (نت بطيء / سيرفر صاحٍ لتوّه)، فتظهر
+  // بيانات ناقصة مؤقتاً فى شاشات مثل سجل الحقائب حتى تُصلحها المزامنة الخلفية لاحقاً.
+  const kvKeys = ['settings','appLang','zakatAdjustments'].concat(wantUsers ? ['users'] : []);
   const kv = {};
   const decryptFailedKeys = [];
   await Promise.all(kvKeys.map(async k=>{
