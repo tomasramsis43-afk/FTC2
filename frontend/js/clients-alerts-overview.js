@@ -23,8 +23,40 @@ function renderDashboard(){
 // قائمة سجلات الاستقبال المعلّقة من كل التصنيفات التشغيلية (تُجلب من /api/records/pending) —
 // تُعرض في لوحة التحكم مع زر اعتماد/رفض، وتُحدِّث عداد الإشعار للأدمن.
 let pendingApprovals = [];
+// قائمة العناصر "المستقلة" فقط بعد استبعاد أي حركة خزنة/حقيبة مرتبطة بعميل استقبال لسه معلّق —
+// هذه العناصر تُعتمد/تُرفض تلقائياً (كاسكيد) مع اعتماد/رفض العميل نفسه من شيت العملاء، فلا داعي
+// لعرضها هنا كإجراء منفصل قد يُنسي الأدمن أن العميل المرتبط لسه معلّق (راجع cascadeLinkedPendingRecords).
+let visiblePendingApprovals = [];
 const PENDING_COLLECTION_LABELS = { vaultTx: 'الحركات المالية (الخزنة)', bagStock: 'مخزون الحقائب', courseSessions: 'الدورات' };
 function pendingCollectionLabel(c){ return PENDING_COLLECTION_LABELS[c] || c; }
+// معرّف السجل المرتبط (id عميل) لأي عنصر معلّق عام — حركة خزنة تلقائية (auto_/auto2_) مرتبطة بعميل
+// عبر autoClientId، أو تسليم حقيبة من المخزون مرتبط بعميل عبر issuedClientId. غير ذلك: عنصر مستقل.
+function pendingItemLinkedClientId(item){
+  const o = item && item.obj;
+  if(!o) return null;
+  return o.autoClientId || o.issuedClientId || null;
+}
+// كل معرّفات العملاء اللي سجّلهم الاستقبال ولسه معلّقين اعتماد الأدمن (status==='pending')
+function pendingClientIdSet(){
+  const s = new Set();
+  if(typeof clients==='undefined' || typeof clientRecordMeta==='undefined') return s;
+  for(const c of clients){
+    const m = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[c.id] : null;
+    if(m && m.status==='pending') s.add(c.id);
+  }
+  return s;
+}
+// اعتماد/رفض كل السجلات العامة (حركات خزنة/حقائب) المرتبطة بعميل معيّن دفعة واحدة — يُستدعى بعد
+// اعتماد/رفض العميل نفسه (اعتماد/رفض تسلسلي واحد بدل عدة إجراءات منفصلة قد تترك بيانات يتيمة).
+async function cascadeLinkedPendingRecords(clientRecordId, isApprove){
+  const linked = pendingApprovals.filter(it=> pendingItemLinkedClientId(it)===clientRecordId);
+  let ok = 0, fail = 0;
+  for(const item of linked){
+    const res = isApprove ? await approveRecordGeneric(item.collection, item.id) : await deleteOneRecordGeneric(item.collection, item.id);
+    if(isApprove ? res : res!==false) ok++; else fail++;
+  }
+  return { count: linked.length, ok, fail };
+}
 
 /* ============ إشعارات موظفي الاستقبال بنتيجة اعتماد/رفض عملياتهم ============
    عند اعتماد أو رفض الأدمن لأي عملية سجّلها الاستقبال، تُحفظ إشعارات موجزة في
@@ -114,21 +146,28 @@ async function refreshPendingApprovals(){
 function renderPendingApprovalsPanel(){
   const el = $('#pending-approvals-panel');
   if(!el) return;
-  if(currentUserRole!=='admin' || !pendingApprovals.length){
+  // نستبعد أي حركة خزنة/حقيبة مرتبطة بعميل استقبال لسه معلّق — هذه تُعتمد/تُرفض تلقائياً مع
+  // العميل نفسه من شيت العملاء (اعتماد/رفض تسلسلي واحد)، فلا تُعرض هنا كإجراء مستقل ثانٍ.
+  const pendingClientIds = pendingClientIdSet();
+  visiblePendingApprovals = pendingApprovals.filter(item=>{
+    const linkedId = pendingItemLinkedClientId(item);
+    return !(linkedId && pendingClientIds.has(linkedId));
+  });
+  if(currentUserRole!=='admin' || !visiblePendingApprovals.length){
     el.innerHTML = '';
     return;
   }
   el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
-    <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${pendingApprovals.length})</h3>
-    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد</div>
+    <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${visiblePendingApprovals.length})</h3>
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد. (حركات الخزنة/الحقائب المرتبطة بعميل معلّق تُعتمد أو تُرفض تلقائياً مع العميل من شيت العملاء)</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${pendingApprovals.length})</button>
-      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع">✖ رفض الكل (${pendingApprovals.length})</button>
+      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${visiblePendingApprovals.length})</button>
+      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع">✖ رفض الكل (${visiblePendingApprovals.length})</button>
     </div>
     <div class="table-scroll cards-mobile">
     <table>
       <thead><tr><th>الشاشة</th><th>العملية</th><th>سجّلها</th><th>التاريخ</th><th></th></tr></thead>
-      <tbody>${pendingApprovals.map(item=>`
+      <tbody>${visiblePendingApprovals.map(item=>`
         <tr>
           <td data-label="الشاشة">${escapeHtml(pendingCollectionLabel(item.collection))}</td>
           <td data-label="العملية">${item.obj ? escapeHtml(pendingRecordSummary(item)) : escapeHtml(item.id)}</td>
@@ -153,14 +192,14 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
   // === اعتماد / رفض جماعي لكل العمليات المعلّقة دفعة واحدة ===
   if(approveAllBtn || rejectAllBtn){
     const isApprove = !!approveAllBtn;
-    const count = pendingApprovals.length;
+    const count = visiblePendingApprovals.length;
     if(!count) return;
     if(!await customConfirm(isApprove
       ? `اعتماد كل العمليات المعلّقة (${count}) دفعة واحدة؟ ستدخل فوراً في الحسابات والتقارير كباقي البيانات.`
       : `رفض وحذف كل العمليات المعلّقة (${count}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
     let ok = 0, fail = 0;
     const bulkLabel = isApprove ? 'اعتماد جماعي' : 'رفض جماعي';
-    for(const item of pendingApprovals){
+    for(const item of visiblePendingApprovals){
       const desc = item.obj ? pendingRecordSummary(item) : item.id;
       const res = isApprove ? await approveRecordGeneric(item.collection, item.id) : await deleteOneRecordGeneric(item.collection, item.id);
       if(isApprove ? res : res!==false){
@@ -221,8 +260,14 @@ function renderSmartAlerts(){
   const alerts = [];
 
   // ٠) عمليات الاستقبال بانتظار اعتماد الأدمن — أول تنبيه وأهمه (إشعار فوري بعدد المعلّق)
-  if(currentUserRole==='admin' && pendingApprovals.length){
-    alerts.push({level:'red', icon:'🛂', text:`${pendingApprovals.length} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
+  // العدد = العملاء المعلّقين أنفسهم (كل عميل = إجراء اعتماد/رفض واحد يشمل ما يرتبط به تلقائياً)
+  // + العمليات المستقلة غير المرتبطة بأي عميل معلّق (زي سحب نقدي عادي من الاستقبال).
+  if(currentUserRole==='admin'){
+    const pendingClientsCount = pendingClientIdSet().size;
+    const totalPending = pendingClientsCount + visiblePendingApprovals.length;
+    if(totalPending){
+      alerts.push({level:'red', icon:'🛂', text:`${totalPending} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
+    }
   }
 
   // ١) حقائب مطلوب شراؤها متأخرة عن الحد المسموح

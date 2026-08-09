@@ -198,12 +198,17 @@ document.addEventListener('click', async e=>{
   const rejectId = e.target.dataset.reject;
   if(approveId){
     const c = clients.find(x=>x.id===approveId);
-    if(await customConfirm(`تأكيد اعتماد العميل "${c?.name||''}"؟ سيدخل فوراً في الحسابات والداشبورد والتقارير كباقي العملاء.`)){
+    if(await customConfirm(`تأكيد اعتماد العميل "${c?.name||''}"؟ سيدخل فوراً هو وكل ما يرتبط به من حركات مالية/حقائب معلّقة في الحسابات والداشبورد والتقارير كباقي العملاء (اعتماد تسلسلي واحد).`)){
+      // نجلب أحدث قائمة السجلات المعلّقة أولاً لضمان اكتشاف كل الحركات المرتبطة بهذا العميل
+      // (حركة الخزنة التلقائية autoClientId، وتسليم الحقيبة issuedClientId) قبل اعتمادها معه.
+      if(typeof refreshPendingApprovals==='function') await refreshPendingApprovals();
       const ok = await approveClientRecord(approveId);
       if(ok){
-        await logAudit('edit','العملاء', `تم اعتماد تسجيل الاستقبال للعميل "${c?.name||approveId}"`);
+        const cascade = (typeof cascadeLinkedPendingRecords==='function') ? await cascadeLinkedPendingRecords(approveId, true) : {count:0, ok:0, fail:0};
+        await logAudit('edit','العملاء', `تم اعتماد تسجيل الاستقبال للعميل "${c?.name||approveId}"${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر اعتماد ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
-        showToast('✅ تم اعتماد العميل');
+        if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
+        showToast(cascade.count ? `✅ تم اعتماد العميل مع ${cascade.ok} عملية مرتبطة` : '✅ تم اعتماد العميل');
       }else{
         showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
@@ -212,13 +217,16 @@ document.addEventListener('click', async e=>{
   }
   if(rejectId){
     const c = clients.find(x=>x.id===rejectId);
-    if(await customConfirm(`تأكيد رفض وحذف تسجيل "${c?.name||''}" نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.`)){
+    if(await customConfirm(`تأكيد رفض وحذف تسجيل "${c?.name||''}" وكل ما يرتبط به من حركات مالية/حقائب معلّقة نهائياً؟ هذا الإجراء لا يمكن التراجع عنه (رفض تسلسلي واحد).`)){
+      if(typeof refreshPendingApprovals==='function') await refreshPendingApprovals();
       const ok = await deleteOneClientRecord(rejectId);
       if(ok===true){
         clients = clients.filter(x=>x.id!==rejectId);
-        await logAudit('delete','العملاء', `تم رفض وحذف تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}"`);
+        const cascade = (typeof cascadeLinkedPendingRecords==='function') ? await cascadeLinkedPendingRecords(rejectId, false) : {count:0, ok:0, fail:0};
+        await logAudit('delete','العملاء', `تم رفض وحذف تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}"${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر حذف ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
-        showToast('تم رفض التسجيل وحذفه');
+        if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
+        showToast(cascade.count ? `تم رفض التسجيل وحذفه مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل وحذفه');
       }else if(ok===null){
         // تعذّر تأكيد الحذف من السيرفر الآن (انقطاع اتصال/رفض مؤقت) — السجل تم جدولته للحذف
         // تلقائياً عند عودة الاتصال (راجع _pendingRecordPut داخل deleteOneClientRecord)، لكن يجب
