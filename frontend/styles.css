@@ -2321,17 +2321,17 @@ td select:hover:not(:focus) {
 }
 
 @media (max-width: 680px) {
-  .cfo-hero { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 
 @media (max-width: 480px) {
-  .cfo-hero { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+  .cfo-hero { grid-template-columns: repeat(2, 1fr); gap: 6px; }
   .cfo-hero-item { padding: 10px; gap: 8px; }
-  .cfo-hero-icon { width: 30px; height: 30px; }
-  .cfo-hero-icon svg { width: 15px; height: 15px; }
-  .cfo-hero-label { font-size: 9.5px; }
-  .cfo-hero-value { font-size: 15px; }
-  .cfo-hero-sub { font-size: 9px; }
+  .cfo-hero-icon { width: 26px; height: 26px; }
+  .cfo-hero-icon svg { width: 13px; height: 13px; }
+  .cfo-hero-label { font-size: 9px; }
+  .cfo-hero-value { font-size: 14px; }
+  .cfo-hero-sub { font-size: 8.5px; }
 }
 
 .cfo-hero-item {
