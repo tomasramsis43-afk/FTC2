@@ -135,11 +135,12 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   });
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!toAdd.length){ showToast('لم تُدخل بيانات أي عميل'); return; }
-  // نفس منع الحفظ أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي أعلاه
-  if(!(await waitForClientsFirstRealSync())){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
+  // (تحديث): أُزيل انتظار _clientsFirstRealSyncDone هنا عمداً بناءً على طلب صريح — راجع تعليق
+  // submit handler الرئيسي أعلاه لنفس المنطق بالتفصيل.
   // فحص إضافي عبر الخادم عن أرقام هوية مكررة موجودة فعلاً فى النظام ولا تظهر فى القائمة المحمَّلة
   // محلياً (نفس سبب الفحص المضاف فى النموذج الفردي أعلاه — مهم خصوصاً لمستخدم الاستقبال المعزول).
-  const allIdsBulk = await fetchAllClientIds();
+  // مهلة 8 ثوانٍ فقط بدل الافتراضي 60 ثانية — راجع تعليق fetchAllClientIds فى النموذج الفردي.
+  const allIdsBulk = await fetchAllClientIds(8000);
   if(allIdsBulk){
     const hashes = await Promise.all(toAdd.map(c=>sha256Hex(c.clientId).catch(()=>null)));
     const dupRows = toAdd.filter((c,i)=>hashes[i] && allIdsBulk.has(hashes[i]));
@@ -150,7 +151,20 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
   }
   snapshotState(`إضافة ${toAdd.length} عميل دفعة واحدة`);
   toAdd.forEach(c=>{ clients.push(c); syncClientLedgerEntry(c); });
-  await saveClients();
+  if(!_clientsSyncBaseline){
+    // مزامنة العملاء الحقيقية الأولى لسه ماكملتش هذه الجلسة — نرفع فقط العملاء الجدد المضافين هنا
+    // تحديداً كسجلات مباشرة (آمنة دائماً لأن معرّفاتهم جديدة فعلاً) بدل استدعاء saveClients() الذي
+    // كان سيرفع كل قائمة العملاء المحلية دفعة واحدة اعتماداً على لقطة قد تكون قديمة.
+    try{
+      const conflictIds = await bulkUploadClientRecords(toAdd);
+      const conflictSet = new Set(conflictIds);
+      if(!_clientsSyncBaseline) _clientsSyncBaseline = new Map();
+      for(const c of toAdd){ if(!conflictSet.has(c.id)) _clientsSyncBaseline.set(c.id, JSON.stringify(c)); }
+    }catch(e){ /* فشل اتصال فعلي — bulkUploadClientRecords سجّلت كل عميل فى طابور المعلّقات بالفعل */ }
+    if(typeof _scheduleClientsSnapPersist==='function') _scheduleClientsSnapPersist();
+  }else{
+    await saveClients();
+  }
   await syncBagStockIssues();
   await saveVaultTx();
   await saveSettings();

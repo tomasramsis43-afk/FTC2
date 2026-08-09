@@ -703,28 +703,13 @@ function updateComputed(){
 
 $('#client-form').addEventListener('submit', async e=>{
   e.preventDefault();
-  // منع الحفظ أثناء نافذة المزامنة الأولى: أول ثانية أو اتنين من فتح البرنامج (قبل اكتمال أول
-  // تحميل حقيقي متصل بالسيرفر لبيانات العملاء) بيانات clients فى الذاكرة قد تكون قديمة/غير مكتملة
-  // (عرض سريع من الكاش المحلي فقط). أي إضافة/تعديل فى هذه اللحظة بالذات كان (قبل هذا الإصلاح) قد
-  // يُحفَظ عبر مسار قديم متروك لم يعد أي جزء آخر من البرنامج يقرأ منه — راجع تعليق
-  // _clientsFirstRealSyncDone فى ui-framework.js.
-  // الحل (بعد هذا التحديث): بدل رفض الحفظ فوراً وإجبار المستخدم على نقر "حفظ" يدوياً مرة تانية
-  // (كان بيحصل كتير جداً مع الاستقبال تحديداً، لأنهم أول حاجة يعملوها بعد فتح البرنامج صباحاً
-  // هي تسجيل عميل)، ننتظر بصمت لحد ثانيتين إجمالاً (المدة اللي بتاخدها المزامنة الأولى عادةً)
-  // ونكمل الحفظ تلقائياً بمجرد اكتمالها، مع تعطيل زر الحفظ ووسم مؤقت حتى لا يظن المستخدم أن
-  // الضغطة لم تُسجَّل. لو تجاوزنا 8 ثوانٍ (اتصال بطيء جداً/انقطاع)، نعرض الرسالة القديمة كخط
-  // رجعة أخير بدل الانتظار للأبد.
-  if(!_clientsFirstRealSyncDone){
-    const submitBtn = $('#client-form button[type="submit"]');
-    const originalBtnText = submitBtn ? submitBtn.textContent : '';
-    if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = '⏳ جارٍ التحضير...'; }
-    const synced = await waitForClientsFirstRealSync();
-    if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
-    if(!synced){
-      showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول الحفظ تاني بعد ثانية واحدة');
-      return;
-    }
-  }
+  // (تحديث): أُزيل انتظار _clientsFirstRealSyncDone هنا عمداً بناءً على طلب صريح — بدل تعطيل
+  // الشاشة وإجبار المستخدم على الانتظار لحد ما تتأكد نسخة العملاء من السيرفر (كان يمكن أن يمتد
+  // لغاية 60 ثانية لو السيرفر "نائم" ويحتاج يصحى، راجع تعليق serverFetch)، نسجّل العميل فورًا فى
+  // الذاكرة ونعرضه على الشاشة على طول. الحفظ الفعلي للسيرفر يحدث بعد ذلك (راجع أسفل: لعميل جديد
+  // تحديداً حفظ سجل واحد مباشر آمن دائماً بدل رفع كل قائمة العملاء)، ولو تعذّر الاتصال فعلياً وقتها
+  // يُسجَّل تلقائياً فى طابور "المعلّقات" (pendingRecords) ويُعاد رفعه تلقائياً أول ما الاتصال يرجع
+  // أو أول ما المزامنة الخلفية تكتمل — بنفس الآلية المستخدمة بالفعل لكل انقطاع اتصال فى البرنامج.
   if(editingId && !canReceptionEditClient(clients.find(x=>x.id===editingId))){
     showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
     closeModal();
@@ -778,8 +763,10 @@ $('#client-form').addEventListener('submit', async e=>{
   if(dupId){ showToast(`رقم الهوية مستخدم بالفعل لعميل آخر: ${dupId.name}`); return; }
   // فحص إضافي عبر الخادم (لا يعتمد على قائمة العملاء المحمَّلة محلياً فقط): مهم خصوصاً لمستخدم
   // الاستقبال المعزول عادةً عن رؤية باقي عملاء الشركة — بدون هذا الفحص قد يسجّل رقم هوية مكرر
-  // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً.
-  const allIds = await fetchAllClientIds();
+  // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً. مهلة 8 ثوانٍ
+  // فقط (بدل الافتراضي 60 ثانية) — لو السيرفر بطيء/نائم وقتها، لا يجوز تعليق تسجيل عميل جديد
+  // كل هذه المدة لمجرد فحص احتياطي إضافي؛ نتراجع تلقائياً للفحص المحلي فقط (allIds=null).
+  const allIds = await fetchAllClientIds(8000);
   if(allIds){
     const existingRecordId = allIds.get(await sha256Hex(data.clientId));
     if(existingRecordId && existingRecordId !== editingId){
@@ -811,7 +798,22 @@ $('#client-form').addEventListener('submit', async e=>{
     showToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
-  await saveClients();
+  if(!wasEdit && !_clientsSyncBaseline){
+    // مزامنة العملاء الحقيقية الأولى لسه ماكملتش هذه الجلسة (سيرفر بطيء/نائم لتوّه) — بدل
+    // استدعاء saveClients() العام (الذي كان سيرفع -فى غياب baseline مؤكد- كل قائمة العملاء
+    // المحلية دفعة واحدة اعتماداً على لقطة قد تكون قديمة)، نحفظ هذا العميل الجديد تحديداً فقط
+    // كسجل واحد مباشر: آمن دائماً لأن معرّفه (id) جديد فعلاً برقم نسخة صفر، ولا يوجد أي خطر من
+    // تعارضه مع بيانات موجودة على السيرفر. لو تعذّر الاتصال فعلياً، يُسجَّل تلقائياً فى طابور
+    // "المعلّقات" (pendingRecords) ويُعاد رفعه أول ما الاتصال يرجع أو أول ما المزامنة الخلفية تكتمل.
+    const ok = await saveOneClientRecord(savedClient, JSON.stringify(savedClient));
+    if(ok){
+      if(!_clientsSyncBaseline) _clientsSyncBaseline = new Map();
+      _clientsSyncBaseline.set(savedClient.id, JSON.stringify(savedClient));
+    }
+    if(typeof _scheduleClientsSnapPersist==='function') _scheduleClientsSnapPersist();
+  }else{
+    await saveClients();
+  }
   syncClientLedgerEntry(savedClient);
   await syncBagStockIssues();
   await saveVaultTx();

@@ -1264,9 +1264,9 @@ async function sha256Hex(str){
 // عن رؤية باقي بيانات العملاء، لأن هذه النقطة تحديداً مصمَّمة لترجع البصمات بغض النظر عن
 // origin/status/created_by (راجع تعليق الخادم). يرجع Map من بصمة رقم الهوية -> معرّف السجل (id)
 // الداخلي، لتمييز "نفس العميل الذي أعدّله الآن" عن "عميل آخر يملك نفس الرقم فعلاً".
-async function fetchAllClientIds(){
+async function fetchAllClientIds(timeoutMs){
   try{
-    const res = await serverFetch('/api/client-records/ids');
+    const res = await serverFetch('/api/client-records/ids', timeoutMs ? { timeout: timeoutMs } : {});
     if(!res.ok) return null; // تعذّر السؤال عن الخادم — المستدعي يقرر خط الرجعة (فحص محلي فقط)
     const data = await res.json();
     const map = new Map();
