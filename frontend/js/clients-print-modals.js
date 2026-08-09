@@ -217,24 +217,18 @@ document.addEventListener('click', async e=>{
   }
   if(rejectId){
     const c = clients.find(x=>x.id===rejectId);
-    if(await customConfirm(`تأكيد رفض وحذف تسجيل "${c?.name||''}" وكل ما يرتبط به من حركات مالية/حقائب معلّقة نهائياً؟ هذا الإجراء لا يمكن التراجع عنه (رفض تسلسلي واحد).`)){
+    if(await customConfirm(`تأكيد رفض تسجيل "${c?.name||''}"؟ سيختفي من عندك وتُحذف كل الحركات المالية/الحقائب المعلّقة المرتبطة به نهائياً، لكنه يبقى ظاهراً لموظف الاستقبال الذي سجّله لمدة 15 يوماً قبل حذفه نهائياً (رفض تسلسلي واحد).`)){
       if(typeof refreshPendingApprovals==='function') await refreshPendingApprovals();
-      const ok = await deleteOneClientRecord(rejectId);
+      const ok = await rejectClientRecordSoft(rejectId);
       if(ok===true){
         clients = clients.filter(x=>x.id!==rejectId);
         const cascade = (typeof cascadeLinkedPendingRecords==='function') ? await cascadeLinkedPendingRecords(rejectId, false) : {count:0, ok:0, fail:0};
-        await logAudit('delete','العملاء', `تم رفض وحذف تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}"${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر حذف ${cascade.fail}` : ''}` : ''}`);
+        await logAudit('delete','العملاء', `تم رفض تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}" (يبقى ظاهراً للاستقبال 15 يوماً)${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر حذف ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
         if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
-        showToast(cascade.count ? `تم رفض التسجيل وحذفه مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل وحذفه');
-      }else if(ok===null){
-        // تعذّر تأكيد الحذف من السيرفر الآن (انقطاع اتصال/رفض مؤقت) — السجل تم جدولته للحذف
-        // تلقائياً عند عودة الاتصال (راجع _pendingRecordPut داخل deleteOneClientRecord)، لكن يجب
-        // ألا يختفي محلياً من شيت العملاء الآن وإلا يبدو "محذوفاً" بينما رقم هويته لا يزال يحجب
-        // تسجيل أي عميل جديد بنفس الرقم على السيرفر حتى تكتمل عملية الحذف فعلياً.
-        showToast('⏳ تعذّر تأكيد الحذف من السيرفر الآن — تم جدولته وسيُنفَّذ تلقائياً عند استقرار الاتصال (العميل سيبقى ظاهراً حتى ذلك الحين)');
+        showToast(cascade.count ? `تم رفض التسجيل مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل');
       }else{
-        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+        showToast('⚠️ تعذّر الرفض — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;

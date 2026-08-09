@@ -1467,6 +1467,21 @@ async function saveOneClientRecord(client, plainJson){
   finally{ _activeRecordSaves--; updateOfflineIndicator(); }
 }
 
+// رفض "لطيف" للأدمن لعميل معلّق سجّله الاستقبال (pending -> rejected): بدل الحذف الفوري النهائي،
+// السجل يبقى فى قاعدة البيانات بحالة rejected ويظهر لموظف الاستقبال صاحبه فقط لمدة 15 يوماً
+// (يُحذف تلقائياً نهائياً بعدها من السيرفر — راجع cleanRejectedClientRecords فى server.js).
+// يرجع true لو نجح.
+async function rejectClientRecordSoft(id){
+  try{
+    const res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+    if(!res.ok) return false;
+    const data = await res.json();
+    _clientRecordVersions[id] = data.version || _clientRecordVersions[id];
+    clientRecordMeta[id] = { origin: 'reception', status: 'rejected' };
+    return true;
+  }catch(e){ return false; }
+}
+
 async function deleteOneClientRecord(id){
   _activeRecordSaves++;
   updateOfflineIndicator();

@@ -172,6 +172,11 @@ UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
 -- (الاسم/الهاتف/المبالغ...) تبقى بالكامل داخل enc المشفّر كما هي تماماً بلا أي تغيير.
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS client_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_client_records_client_id ON client_records(client_id);
+-- رفض الأدمن لسجل استقبال معلّق: بدل الحذف النهائي فوراً، status يتحول 'rejected' (بدل الحذف من
+-- الجدول) ويُسجَّل وقت الرفض هنا. يبقى السجل ظاهراً لموظف الاستقبال صاحبه فقط (نفس عزل رؤيته
+-- المعتاد) لمدة 15 يوماً ليعرف سبب/وقت الرفض قبل أن يُحذف نهائياً تلقائياً (راجع cleanRejectedClientRecords
+-- فى server.js). لا يظهر لأي دور آخر غير الأدمن ولا يدخل أي حساب أو تقرير مطلقاً.
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ;
 
 -- ============================================================
 -- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (سجل واحد = صف واحد)

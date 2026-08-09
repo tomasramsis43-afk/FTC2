@@ -962,7 +962,9 @@ app.get('/api/storage', requireAuth, async (req, res) => {
 // فقط السجلات المعتمدة status='confirmed' (نفس السلوك القديم تماماً بالنسبة له).
 function clientRecordsVisibilitySql(role, username) {
   if (role === 'admin') return { where: '', params: [] };
-  if (role === 'reception') return { where: 'WHERE origin = $1 AND created_by = $2', params: ['reception', username] };
+  // مستخدم الاستقبال يرى سجلاته المعلّقة/المعتمدة دائماً، وسجلاته المرفوضة أيضاً لكن لمدة 15 يوماً
+  // فقط من وقت الرفض (raised_at)، ليعرف أن الأدمن رفضها قبل أن تُحذف نهائياً تلقائياً بعد المهلة.
+  if (role === 'reception') return { where: `WHERE origin = $1 AND created_by = $2 AND (status <> 'rejected' OR rejected_at > now() - INTERVAL '15 days')`, params: ['reception', username] };
   return { where: 'WHERE status = $1', params: ['confirmed'] };
 }
 
@@ -1136,6 +1138,28 @@ app.post('/api/client-records/:id/approve', requireAuth, requireRole('admin'), a
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر اعتماد بيانات العميل' });
+  }
+});
+
+// رفض الأدمن لسجل عميل معلّق سجّله الاستقبال (pending -> rejected): بدل الحذف الفوري النهائي،
+// نُبقي السجل فى الجدول بحالة 'rejected' مع وقت الرفض، فيبقى ظاهراً لموظف الاستقبال صاحبه فقط
+// (راجع clientRecordsVisibilitySql) لمدة 15 يوماً ليعرف أن الأدمن رفضه، ثم يُحذف تلقائياً نهائياً
+// (راجع cleanRejectedClientRecords أسفل الملف). لا يدخل هذا السجل أي حساب/تقرير مطلقاً كحاله وقت
+// كان pending تماماً — فقط status يتغيّر، enc يبقى كما هو (السيرفر لا يعرف محتواه أصلاً).
+app.post('/api/client-records/:id/reject', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE client_records SET status = 'rejected', rejected_at = now(), version = version + 1, updated_at = now()
+       WHERE id = $1 AND origin = 'reception' AND status = 'pending'
+       RETURNING id, version`,
+      [req.params.id]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+    res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'rejected' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر رفض بيانات العميل' });
   }
 });
 
@@ -2072,6 +2096,18 @@ ensureSchema()
     }
     cleanLoginHistory();
     setInterval(cleanLoginHistory, 24 * 60 * 60 * 1000); // كل 24 ساعة
+
+    // حذف نهائي تلقائي لسجلات العملاء المرفوضة من الأدمن بعد 15 يوماً من وقت الرفض (رفض تسلسلي
+    // "لطيف": السجل يبقى ظاهراً لموظف الاستقبال صاحبه فقط خلال هذه المهلة — راجع تعليق
+    // /api/client-records/:id/reject و clientRecordsVisibilitySql أعلاه فى نفس الملف).
+    async function cleanRejectedClientRecords() {
+      try {
+        const r = await pool.query(`DELETE FROM client_records WHERE status = 'rejected' AND rejected_at < now() - INTERVAL '15 days'`);
+        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} سجل عميل مرفوض تجاوز مهلة الـ15 يوماً`);
+      } catch (e) { console.error('تعذّر تنظيف سجلات العملاء المرفوضة:', e.message); }
+    }
+    cleanRejectedClientRecords();
+    setInterval(cleanRejectedClientRecords, 24 * 60 * 60 * 1000); // كل 24 ساعة
 
     app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
   })
