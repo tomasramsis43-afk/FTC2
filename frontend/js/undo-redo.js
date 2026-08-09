@@ -790,7 +790,7 @@ function clearAllSheetFilters(){
 
   const selectIds = [
     'filter-course','filter-nat','filter-status','filter-company','filter-invoice','filter-coursenum','filter-refnum',
-    'filter-bag-own','filter-bag-stock',
+    'filter-bag-source',
     'ci-filter-diff','v-filter-dest','v-filter-type','filter-reception','v-filter-reception',
     'cbp-year-filter','ownbag-year-filter',
     'purchase-supplier-filter','purchase-status-filter',
