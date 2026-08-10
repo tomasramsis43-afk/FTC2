@@ -169,6 +169,14 @@ function isReceptionUsername(username){
   return !!(u && u.role==='reception');
 }
 function syncClientLedgerEntry(client){
+  // عميل سجّله الاستقبال ولسه معلّق اعتماد الأدمن (status='pending'): لا تُنشأ له حركات مالية
+  // تلقائية إطلاقاً قبل الاعتماد — تُنشأ لحظة اعتماد الأدمن له (راجع approveClientRecord في
+  // clients-print-modals.js) فتدخل الحسابات والتقارير من يوم اعتماده وليس قبلها.
+  const recMeta = (typeof clientRecordMeta==='object' && clientRecordMeta) ? clientRecordMeta[client.id] : null;
+  // الحالة المعلّقة معروفة من السيرفر: status==='pending'. واحتياطاً، لو الحالة غير معروفة بعد
+  // (حفظ فشل/أوفلاين) وجلسة الاستقبال هي من تحرّك العميل، فسجله سيُرفع حتماً كـ pending — نمنع
+  // إنشاء القيود احترازاً حتى لا تظهر حركات مالية لعميل لم يُعتمد بعد.
+  if(recMeta ? recMeta.status === 'pending' : currentUserRole === 'reception') return;
   // نحافظ على الرقم التسلسلي الرسمي القديم لهذين القيدين إن كانا موجودين مسبقاً (يُعاد توليدهما عند كل حفظ لبيانات العميل)
   const prevSeqs = {};
   // نحافظ أيضاً على حالة "تسوية الاستقبال" (settled) القديمة، حتى لا يفقد المسؤول عن الخزنة
