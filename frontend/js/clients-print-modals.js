@@ -204,6 +204,29 @@ document.addEventListener('click', async e=>{
       if(typeof refreshPendingApprovals==='function') await refreshPendingApprovals();
       const ok = await approveClientRecord(approveId);
       if(ok){
+        // بعد اعتماد الأدمن للعميل تُنشأ حركات الخزنة التلقائية (auto_/auto2_) من الصفر —
+        // لم تكن موجودة قبل الاعتماد (syncClientLedgerEntry يمنع إنشاءها لسجل معلّق).
+        // أي قيود قديمة معلّقة لعملاء قدامى (سجّلها الاستقبال بنظام ما قبل هذا التعديل) تُحذف
+        // نهائياً هنا ولا تُعتمد إطلاقاً (رفض القيود القديمة)، ثم يُعاد إنشاؤها كقيود معتمدة
+        // جديدة — لأن السيرفر لا يغيّر origin/status عند تعديل سجل موجود (PUT upsert)، فالحذف
+        // ثم الإضافة هو الطريقة الوحيدة لتصبح القيود معتمدة فعلياً بمعرّفاتها نفسها.
+        const c = clients.find(x=>x.id===approveId);
+        if(c && typeof syncClientLedgerEntry==='function'){
+          // نَجمع معرّفات القيود القديمة من المصفوفة المحلية (vaultTx) ومن قائمة المعلّقات
+          // المحدثة (pendingApprovals — سجلات السيرفر الفعلية حتى لو لم تكن محمّلة محلياً)،
+          // ونحذفها كلها من السيرفر بدل اعتمادها — ثم يُعاد إنشاؤها معتمدة من الصفر أدناه.
+          const legacyIds = new Set();
+          vaultTx.forEach(t=>{ if(t.autoClientId===approveId) legacyIds.add(t.id); });
+          (typeof pendingApprovals==='object' && Array.isArray(pendingApprovals) ? pendingApprovals : []).forEach(p=>{
+            if(p.collection==='vaultTx' && p.obj && p.obj.autoClientId===approveId) legacyIds.add(p.id);
+          });
+          for(const legacyId of legacyIds){ if(typeof deleteOneRecordGeneric==='function') await deleteOneRecordGeneric('vaultTx', legacyId); }
+          syncClientLedgerEntry(c);
+          await saveVaultTx();
+        }
+        // بعد إعادة إنشاء القيود (القديمة حُذفت واستُبدلت بمعتمدة جديدة) نُحدّث قائمة المعلّقات
+        // حتى لا يحاول الاعتماد التسلسلي أدناه اعتماد قيود أُزيلت/استُبدلت للتو (فشل وهمي).
+        if(typeof refreshPendingApprovals==='function') await refreshPendingApprovals();
         const cascade = (typeof cascadeLinkedPendingRecords==='function') ? await cascadeLinkedPendingRecords(approveId, true) : {count:0, ok:0, fail:0};
         await logAudit('edit','العملاء', `تم اعتماد تسجيل الاستقبال للعميل "${c?.name||approveId}"${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر اعتماد ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
