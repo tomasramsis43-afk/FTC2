@@ -286,6 +286,53 @@ let _ftcRecordSyncPromise = null; // وعد الفلاش الجاري (single-fl
 // استدعاء متزامن (حدث online + الموقّت الدوري + بداية loadData/loadCollectionGeneric كلها تستدعي
 // هذه الدالة في نفس اللحظة)، فيُرسل نفس التعديلات المعلّقة مرتين متوازيتين — والثانية ترسل نسخة
 // قديمة فيرفضها السيرفر بـ409 ويُسقط التعديل من الطابور مع إشعار خاطئ رغم أن الأولى كانت ستنفذه.
+// ---- قرار آمن عند التعارض (بدل "إعادة الرفع القسري" التي كانت تكتب فوق تعديل الآخرين) ----
+// عند 409/conflict نحتاج أن نعرف: هل محتوى السجل على السيرفر حالياً ما زال مطابقاً لما بُني عليه
+// تعديلنا (الـ baseline) أم لا؟ لو مطابق → التعارض سببه انحراف في تتبع أرقام النسخ المحلية فقط
+// (لقطة قديمة، استعادة/مسح جزئي صفّر النسخ المحلية) وليس تعديلاً فعلياً من جهاز آخر → من الآمن
+// إعادة رفع تعديلنا بالنسخة الحالية. لو مختلف → شخص آخر غيّر السجل فعلاً → لا يجوز الكتابة فوقه
+// إطلاقاً (هذا كان الخطر الحرج: الواجهة كانت تعيد رفع التعديل القديم فوق بيانات الآخرين بصمت).
+// السيرفر لا يملك مفتاح التشفير فلا يستطيع مقارنة المحتوى — يُرجع القيمة الحالية (currentEnc)
+// مشفَّرة، ونحن من نفك تشفيرها ونقارنها بأساسنا. لو تعذّر فك التشفير أو غابت أي معلومة → نتعامل
+// مع التعارض كحقيقي (لا نكتب فوق أحد) — خط رجعة آمن دائماً.
+async function _recordBasePlain(collection, isClient, id){
+  try{
+    if(isClient){
+      if(_clientsSyncBaseline instanceof Map) return _clientsSyncBaseline.get(id) ?? null;
+      return null;
+    }
+    const b = _collectionSyncBaseline[collection];
+    if(b instanceof Map) return b.get(id) ?? null;
+    return null;
+  }catch(e){ return null; }
+}
+// يرجع true فقط لو أمكن إثبات أن محتوى السيرفر الحالي مطابق لأساس تعديلنا (بعد فك التشفير).
+async function _safeToApplyOnConflict(conflict, collection, isClient, id){
+  try{
+    if(!conflict || typeof conflict.currentEnc !== 'string') return false;
+    if(typeof conflict.currentVersion !== 'number') return false;
+    let serverPlain = null;
+    try{ serverPlain = await decryptValue(conflict.currentEnc); }catch(e){ serverPlain = null; }
+    if(typeof serverPlain !== 'string') return false;
+    const basePlain = await _recordBasePlain(collection, isClient, id);
+    if(typeof basePlain !== 'string') return false;
+    return serverPlain === basePlain;
+  }catch(e){ return false; }
+}
+// عند تعارض حقيقي (لا نستطيع الكتابة فوق الآخرين): نُحدّث النسخة المحلية المعروفة ونُزيل أي تعديل
+// معلّق لذلك السجل حتى لا يُعاد رفعه لاحقاً فوق بيانات أحدث — مع إشعار للمستخدم (رسالة الـ toast
+// يضيفها المتصل). نفس معاملة تعارضات kv تماماً.
+async function _dropRecordOnRealConflict(collection, isClient, id, conflict){
+  try{
+    if(isClient){
+      _clientRecordVersions[id] = (conflict && typeof conflict.currentVersion === 'number') ? conflict.currentVersion : (_clientRecordVersions[id] || 0);
+    }else if(_recordVersions[collection]){
+      _recordVersions[collection].set(id, (conflict && typeof conflict.currentVersion === 'number') ? conflict.currentVersion : 0);
+    }
+  }catch(e){}
+  await _pendingRecordDelete(collection, id);
+}
+
 async function flushPendingRecordWrites(){
   if(_ftcRecordSyncInFlight) return _ftcRecordSyncPromise;
   _ftcRecordSyncInFlight = true;
@@ -303,48 +350,48 @@ async function flushPendingRecordWrites(){
           const url = isClient ? `/api/client-records/${encodeURIComponent(item.id)}` : `/api/records/${encodeURIComponent(item.collection)}/${encodeURIComponent(item.id)}`;
           let res;
           if(item.op === 'delete'){
-            res = await serverFetch(url, { method: 'DELETE' });
+            // الحذف المعلّق يحمل أيضاً رقم النسخة المعروف محلياً: لو تغيّر السجل على السيرفر بعد
+            // آخر مشاهدة (تعديل من جهاز آخر)، يرفضه السيرفر بـ409 فيُسقط الطلب المعلّق دون حذف
+            // بيانات أحدث بصمت — نفس منطق حذف deleteOneRecordGeneric/deleteOneClientRecord.
+            const delVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
+            res = await serverFetch(url + `?version=${delVersion}`, { method: 'DELETE' });
           }else{
             const knownVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
             const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '' } : { enc: item.enc, version: knownVersion };
             res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
           }
           if(res.status === 409){
-            // نفس مشكلة "النسخة صفر/القديمة" التي عالجها مسار kv (flushPendingWrites) بتحضير أرقام
-            // النسخ من السيرفر قبل الرفع: تعديل معلّق هنا يُرفع بنسخة لا يعرفها هذا الجهاز فعلياً
-            // (لقطة محلية قديمة من آخر فتح، أو عنصر غائب عن _recordVersions هذه الجلسة بعد استعادة
-            // نسخة احتياطية/أول فتح — فيُرسَل version:0 وهو خاطئ) فيرفضه السيرفر بـ409 "تعارض" كاذب
-            // رغم عدم وجود أي تعديل فعلي من جهاز آخر — فقط لأن هذا الجهاز لم يكن يعرف الرقم الحقيقي.
-            // وبما أن طابور المعلّقات يمثّل تعديلات هذا الجهاز نفسه التي لم تصل للسيرفر بعد، نعيد
-            // المحاولة تلقائياً مرة واحدة بالنسخة الحالية التي أبلغنا بها السيرفر (currentVersion) —
-            // فيُطبَّق تعديلنا بدل سقوطه صامتاً مع إشعار خاطئ. فقط لو فشلت المحاولة الثانية أيضاً بـ409
-            // (تغيّر حقيقي لحظي على نفس البيانات أثناء إعادة المحاولة) نعتبرها تعارضاً حقيقياً:
-            // نتخلى عن التعديل المعلّق وننبّه المستخدم — نفس معاملة flushPendingWrites تماماً.
+            // تعارض: نحسم تلقائياً بأمان عبر مقارنة محتوى حقيقية بدل "إعادة الرفع القسري" القديمة
+            // التي كانت تعيد رفع تعديلنا القديم (enc) بالنسخة الحالية من السيرفر فيكتب فوق تعديل
+            // الشخص الآخر بصمت. الآن: لو محتوى السيرفر الحالي مطابق لأساس تعديلنا (انحراف تتبع
+            // نسخ محلي فقط) → نعيد الرفع مرة واحدة بالنسخة الحالية. لو مختلف أو تعذّر التحقق
+            // (تعديل فعلي من جهاز آخر) → لا نكتب فوقه إطلاقاً: نتخلى عن التعديل المعلّق وننبّه
+            // المستخدم — نفس معاملة تعارضات kv (flushPendingWrites) تماماً.
             const conflict = await res.json().catch(()=>({}));
-            const retryVersion = conflict.currentVersion || 0;
-            if(item.op === 'upsert' && retryVersion > 0){
-              const retryBody = isClient ? { enc: item.enc, version: retryVersion, clientId: item.clientId || '' } : { enc: item.enc, version: retryVersion };
+            const safeToRetry = item.op === 'upsert' && await _safeToApplyOnConflict(conflict, item.collection, isClient, item.id);
+            if(safeToRetry){
+              const retryBody = isClient ? { enc: item.enc, version: conflict.currentVersion, clientId: item.clientId || '' } : { enc: item.enc, version: conflict.currentVersion };
               const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify(retryBody) });
               if(retryRes.status === 409){
-                // تعارض حقيقي أثناء إعادة المحاولة — نكمل للمسار أدناه (إسقاط + إشعار)
-              }else if(!retryRes.ok){
-                return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
-              }else{
-                const retryData = await retryRes.json().catch(()=>({}));
-                if(isClient){
-                  _clientRecordVersions[item.id] = retryData.version || retryVersion;
-                  if(retryData.origin && retryData.status) clientRecordMeta[item.id] = { origin: retryData.origin, status: retryData.status };
-                }else{
-                  if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
-                  _recordVersions[item.collection].set(item.id, retryData.version || retryVersion);
-                }
-                await _pendingRecordDelete(item.collection, item.id);
+                // تغيّر حقيقي أثناء إعادة المحاولة — تعارض حقيقي (لا كتابة فوق)
+                const c2 = await retryRes.json().catch(()=>({}));
+                await _dropRecordOnRealConflict(item.collection, isClient, item.id, c2);
+                showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
                 return;
               }
+              if(!retryRes.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+              const retryData = await retryRes.json().catch(()=>({}));
+              if(isClient){
+                _clientRecordVersions[item.id] = retryData.version || conflict.currentVersion;
+                if(retryData.origin && retryData.status) clientRecordMeta[item.id] = { origin: retryData.origin, status: retryData.status };
+              }else{
+                if(!_recordVersions[item.collection]) _recordVersions[item.collection] = new Map();
+                _recordVersions[item.collection].set(item.id, retryData.version || conflict.currentVersion);
+              }
+              await _pendingRecordDelete(item.collection, item.id);
+              return;
             }
-            if(isClient) _clientRecordVersions[item.id] = conflict.currentVersion || _clientRecordVersions[item.id];
-            else if(_recordVersions[item.collection]) _recordVersions[item.collection].set(item.id, conflict.currentVersion || 0);
-            await _pendingRecordDelete(item.collection, item.id);
+            await _dropRecordOnRealConflict(item.collection, isClient, item.id, conflict);
             showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
             return;
           }
@@ -960,12 +1007,21 @@ async function deleteOneRecordGeneric(collection, id){
   _activeRecordSaves++;
   updateOfflineIndicator();
   try{
+    const knownVersion = (_recordVersions[collection] && _recordVersions[collection].get(id)) || 0;
     let res;
     try{
-      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}?version=${knownVersion}`, { method: 'DELETE' });
     }catch(e){
       await _pendingRecordPut(collection, id, { op:'delete' });
       return null;
+    }
+    if(res.status === 409){
+      // عُدِّل/تغيّر السجل على السيرفر من جهاز آخر بعد آخر مشاهدة — لا يجوز حذفه (حذف بيانات أحدث).
+      // نُحدّث رقم النسخة المحلي ونترك السجل على السيرفر كما هو، وننبّه المستخدم (نفس معاملة تعارض PUT).
+      const conflict = await res.json().catch(()=>({}));
+      if(_recordVersions[collection]) _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
+      showToast('⚠️ ' + (conflict.error || 'تعارض في الحذف: عُدِّلت هذه البيانات بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
+      return false;
     }
     // لازم نتحقق من res.ok: لو السيرفر رفض الحذف (مثال: 429 بسبب rate limiting، أو أي خطأ آخر)،
     // السجل لسه فعلياً موجود على السيرفر ولا يجوز اعتباره محذوفاً محلياً — وإلا سيرجع السجل
@@ -1045,12 +1101,11 @@ async function bulkUploadRecordsGeneric(collection, list){
     }
     const data = await res.json().catch(()=>({}));
     // تحديث النسخ المعروفة محلياً لكل سجل نجح. أما السجلات التي رفضها السيرفر بتعارض نسخ
-    // (conflicts مع currentVersion) فسببها غالباً انحراف في تتبع النسخ المحلية (لقطة قديمة، أو
-    // مسح/استعادة جزئية للبيانات — النسخة المحلية صارت قديمة/مصفّرة وليست تعديلاً فعلياً من جهاز
-    // آخر)، فلو تُرك السجل "متعارضاً" يبقى محلياً غير متزامن إلى الأبد مع إشعارات 409 متكررة عند
-    // كل حفظ لاحق. نعيد رفعه تلقائياً مرة واحدة بالنسخة الحالية من السيرفر (currentVersion) —
-    // نفس تصحيح flushPendingRecordWrites — فيُطبَّق تعديلنا ويُلتئم الانحراف فوراً. فقط لو فشلت
-    // إعادة المحاولة أيضاً بـ409 (تغيّر حقيقي لحظي أثناءها) يبقى السجل متعارضاً ويُبلَّغ عنه.
+    // (conflicts مع currentVersion) فتُحسم عبر مقارنة محتوى آمنة (انظر _safeToApplyOnConflict):
+    // فقط إن أمكن إثبات أن محتوى السيرفر ما زال مطابقاً لأساس تعديلنا (انحراف تتبع نسخ محلي:
+    // لقطة قديمة أو مسح/استعادة جزئية صفّر النسخ المحلية) نعيد الرفع مرة واحدة بالنسخة الحالية.
+    // لو كان تعارضاً حقيقياً (شخص آخر غيّر السجل فعلاً، أو تعذّر التحقق) لا نكتب فوقه إطلاقاً —
+    // نُسقطه ونُحدّث النسخة المحلية ونبلّغ المستخدم (نفس معاملة تعارضات kv).
     const conflictIdSet = new Set((data.conflicts||[]).map(c=>c.id));
     for(const item of chunk){
       if(!conflictIdSet.has(item.id)){
@@ -1062,34 +1117,47 @@ async function bulkUploadRecordsGeneric(collection, list){
     const conflicted = data.conflicts || [];
     const stillConflictIds = [];
     if(conflicted.length){
-      const retryRecords = [];
+      // نفصل المتعارضين: (1) من الآمن إعادة رفعه تلقائياً (محتوى السيرفر مطابق لأساس تعديلنا —
+      // انحراف تتبع نسخ محلي فقط، مقارنة عبر _safeToApplyOnConflict)، و(2) تعارض حقيقي (غيّره شخص
+      // آخر أو تعذّر التحقق) لا نكتب فوقه أبداً — نُسقطه ونحدّث النسخة المحلية ونبلّغ المستخدم.
+      const safeRetryRecords = [];
       for(const c of conflicted){
         const item = chunk.find(x=>x.id===c.id);
-        if(item) retryRecords.push({ id: item.id, enc: item.enc, version: c.currentVersion || 0 });
-      }
-      let retryRes = null;
-      try{
-        retryRes = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
-          method: 'POST',
-          body: JSON.stringify({ records: retryRecords }),
-        });
-      }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
-      if(retryRes && retryRes.ok){
-        const retryData = await retryRes.json().catch(()=>({}));
-        const retryConflicted = retryData.conflicts || [];
-        for(const rc of retryConflicted) versions.set(rc.id, rc.currentVersion || 0);
-        for(const r of retryRecords){
-          if(retryConflicted.some(rc=>rc.id===r.id)){
-            stillConflictIds.push(r.id);
-          }else{
-            versions.set(r.id, (r.version||0) + 1);
-            _setRecordMetaLocal(collection, r.id);
-            await _pendingRecordDelete(collection, r.id);
-          }
+        if(!item) continue;
+        if(await _safeToApplyOnConflict(c, collection, false, c.id)){
+          safeRetryRecords.push({ id: item.id, enc: item.enc, version: c.currentVersion || 0 });
+        }else{
+          stillConflictIds.push(c.id);
+          versions.set(c.id, c.currentVersion || 0);
+          await _pendingRecordDelete(collection, c.id);
         }
-      }else{
-        // فشل الاتصال أثناء إعادة المحاولة — نسجّل السجلات معلّقة ليُعاد رفعها لاحقاً تلقائياً
-        await Promise.all(retryRecords.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      }
+      if(safeRetryRecords.length){
+        let retryRes = null;
+        try{
+          retryRes = await serverFetch(`/api/records/${encodeURIComponent(collection)}/bulk-migrate`, {
+            method: 'POST',
+            body: JSON.stringify({ records: safeRetryRecords }),
+          });
+        }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
+        if(retryRes && retryRes.ok){
+          const retryData = await retryRes.json().catch(()=>({}));
+          const retryConflicted = retryData.conflicts || [];
+          for(const rc of retryConflicted) versions.set(rc.id, rc.currentVersion || 0);
+          for(const r of safeRetryRecords){
+            if(retryConflicted.some(rc=>rc.id===r.id)){
+              // تغيّر حقيقي أثناء إعادة المحاولة — نتركه متعارضاً (لا كتابة فوق)
+              stillConflictIds.push(r.id);
+            }else{
+              versions.set(r.id, (r.version||0) + 1);
+              _setRecordMetaLocal(collection, r.id);
+              await _pendingRecordDelete(collection, r.id);
+            }
+          }
+        }else{
+          // فشل الاتصال أثناء إعادة المحاولة — نسجّل السجلات معلّقة ليُعاد رفعها لاحقاً تلقائياً
+          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+        }
       }
     }
     if(stillConflictIds.length){
@@ -1497,12 +1565,20 @@ async function deleteOneClientRecord(id){
   _activeRecordSaves++;
   updateOfflineIndicator();
   try{
+    const knownVersion = _clientRecordVersions[id] || 0;
     let res;
     try{
-      res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      res = await serverFetch(`/api/client-records/${encodeURIComponent(id)}?version=${knownVersion}`, { method: 'DELETE' });
     }catch(e){
       await _pendingRecordPut('clients', id, { op:'delete' });
       return null;
+    }
+    if(res.status === 409){
+      // عُدِّل/تغيّر العميل على السيرفر من جهاز آخر بعد آخر مشاهدة — لا يجوز حذفه (نفس معاملة PUT).
+      const conflict = await res.json().catch(()=>({}));
+      _clientRecordVersions[id] = conflict.currentVersion || knownVersion;
+      showToast('⚠️ ' + (conflict.error || 'تعارض في الحذف: عُدِّلت بيانات هذا العميل بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
+      return false;
     }
     // نفس تصحيح deleteOneRecordGeneric: لازم نتحقق من res.ok قبل اعتبار الحذف ناجحاً محلياً،
     // وإلا عميل فشل حذفه فعلياً على السيرفر (429/خطأ) هيرجع يظهر تاني عند أي تحميل قادم.
@@ -1604,9 +1680,10 @@ async function bulkUploadClientRecords(clientsList){
     }
     const data = await res.json().catch(()=>({}));
     // نفس تصحيح bulkUploadRecordsGeneric بالضبط: أي عميل رفضه السيرفر بتعارض نسخ يُعاد رفعه
-    // تلقائياً مرة واحدة بالنسخة الحالية (currentVersion) — يلتئم أي انحراف في تتبع النسخ
-    // المحلية (استعادة/مسح جزئي/لقطة قديمة) بدل تراكم إشعارات تعارض دائمة، ويبقى متعارضاً فقط
-    // لو فشلت إعادة المحاولة أيضاً بـ409 (تغيّر حقيقي لحظي).
+    // تلقائياً فقط لو أثبتت مقارنة المحتوى (انظر _safeToApplyOnConflict) أن السيرفر ما زال يحمل
+    // أساس تعديلنا (انحراف تتبع نسخ محلي فقط: استعادة/مسح جزئي/لقطة قديمة). أي تعارض حقيقي
+    // (شخص آخر غيّر العميل فعلاً، أو تعذّر التحقق) لا نكتب فوقه أبداً — نُسقطه ونُحدّث النسخة
+    // المحلية ونبلّغ المستخدم.
     const conflictIdSet = new Set((data.conflicts||[]).map(x=>x.id));
     for(const c of chunk){
       if(!conflictIdSet.has(c.id)){
@@ -1617,32 +1694,45 @@ async function bulkUploadClientRecords(clientsList){
     const conflicted = data.conflicts || [];
     const stillConflictIds = [];
     if(conflicted.length){
-      const retryRecords = [];
+      // نفس معاملة bulkUploadRecordsGeneric بالضبط: نعيد الرفع تلقائياً فقط لما تكون مقارنة
+      // المحتوى (مقارنة أساس تعديلنا بما على السيرفر بعد فك التشفير) تُثبت أن لا أحد غيّر السجل
+      // فعلاً — أي تعارض حقيقي أو تعذّر تحقق نُسقطه ولا نكتب فوق بيانات الشخص الآخر أبداً.
+      const safeRetryRecords = [];
       for(const c of conflicted){
         const client = chunk.find(x=>x.id===c.id);
-        if(client) retryRecords.push({ id: client.id, enc: client.enc, clientId: client.clientId || '', version: c.currentVersion || 0 });
-      }
-      let retryRes = null;
-      try{
-        retryRes = await serverFetch('/api/client-records/bulk-migrate', {
-          method: 'POST',
-          body: JSON.stringify({ records: retryRecords }),
-        });
-      }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
-      if(retryRes && retryRes.ok){
-        const retryData = await retryRes.json().catch(()=>({}));
-        const retryConflicted = retryData.conflicts || [];
-        for(const rc of retryConflicted) _clientRecordVersions[rc.id] = rc.currentVersion || 0;
-        for(const r of retryRecords){
-          if(retryConflicted.some(rc=>rc.id===r.id)){
-            stillConflictIds.push(r.id);
-          }else{
-            _clientRecordVersions[r.id] = (r.version||0) + 1;
-            await _pendingRecordDelete('clients', r.id);
-          }
+        if(!client) continue;
+        if(await _safeToApplyOnConflict(c, 'clients', true, c.id)){
+          safeRetryRecords.push({ id: client.id, enc: client.enc, clientId: client.clientId || '', version: c.currentVersion || 0 });
+        }else{
+          stillConflictIds.push(c.id);
+          _clientRecordVersions[c.id] = c.currentVersion || 0;
+          await _pendingRecordDelete('clients', c.id);
         }
-      }else{
-        await Promise.all(retryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      }
+      if(safeRetryRecords.length){
+        let retryRes = null;
+        try{
+          retryRes = await serverFetch('/api/client-records/bulk-migrate', {
+            method: 'POST',
+            body: JSON.stringify({ records: safeRetryRecords }),
+          });
+        }catch(e){ /* لسه بدون اتصال فعلياً — تُحسم لاحقاً عبر طابور المعلّقات */ }
+        if(retryRes && retryRes.ok){
+          const retryData = await retryRes.json().catch(()=>({}));
+          const retryConflicted = retryData.conflicts || [];
+          for(const rc of retryConflicted) _clientRecordVersions[rc.id] = rc.currentVersion || 0;
+          for(const r of safeRetryRecords){
+            if(retryConflicted.some(rc=>rc.id===r.id)){
+              // تغيّر حقيقي أثناء إعادة المحاولة — نتركه متعارضاً (لا كتابة فوق)
+              stillConflictIds.push(r.id);
+            }else{
+              _clientRecordVersions[r.id] = (r.version||0) + 1;
+              await _pendingRecordDelete('clients', r.id);
+            }
+          }
+        }else{
+          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+        }
       }
     }
     if(stillConflictIds.length){
