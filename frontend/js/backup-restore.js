@@ -70,6 +70,14 @@ async function deleteServerBackup(id){
 }
 const RESTORE_RESYNC_FLAG_KEY = 'ftcPendingFullResyncAfterRestore';
 const RESTORE_OLD_SNAPSHOT_KEY = 'ftcPreRestoreSnapshotEnc';
+// كل المفاتيح التي يجب أن يضمها ملف النسخة الاحتياطية الكاملة (نفس ما يصدّره gatherFullBackupData).
+// الاستعادة تمسح بيانات السيرفر كاملة ثم تعيد رفع ما في الملف فقط — فأي مفتاح ناقص من الملف يعني
+// مسح هذا القسم من السيرفر للأبد بلا استرجاع. لذلك تُرفض الاستعادة قبل أي مسح لو نقص أي مفتاح.
+const RESTORE_REQUIRED_KEYS = [
+  'clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies',
+  'companyTransfers','journalEntries','bankStatementRows','suppliers','purchases','vaultDenomTx',
+  'manualSalesInvoices','zakatAdjustments','chartOfAccounts','journalDE','budgetEntries','scheduledVaultTx'
+];
 // حماية حلقة إعادة المزامنة اللانهائية: لو فشل التحقق من اكتمال رفع الاستعادة للسيرفر باستمرار
 // (أي سبب — انقطاع، تعديل متزامن من جهاز آخر غيّر الأعداد، تصنيف لا يُرفع)، فإبقاء علامة
 // RESTORE_RESYNC_FLAG_KEY تعني مسح السيرفر بالكامل + إعادة رفع ذاكرة هذا الجهاز كل مزامنة خلفية
@@ -263,8 +271,16 @@ async function restoreFullBackup(file){
     const text = await file.text();
     data = JSON.parse(text);
   }catch(e){ showToast('تعذّرت قراءة ملف النسخة الاحتياطية — تأكد أنه ملف JSON صحيح'); return; }
-  if(!data || typeof data!=='object' || !('clients' in data) || !('settings' in data)){
+  if(!data || typeof data!=='object'){
     showToast('هذا الملف لا يبدو نسخة احتياطية صحيحة لهذا البرنامج'); return;
+  }
+  // حماية حرجة: الاستعادة تمسح السيرفر بالكامل ثم تعيد رفع ما في الملف فقط. أي قسم ناقص من
+  // الملف (مثلاً من نسخة احتياطية قديمة بصيغة أقدم) كان يُمسح من السيرفر للأبد بلا استرجاع —
+  // لذلك نرفض الاستعادة قبل أي مسح ولو نقص مفتاح واحد من مفاتيح النسخة الكاملة.
+  const missingKeys = RESTORE_REQUIRED_KEYS.filter(k=> !(k in data));
+  if(missingKeys.length){
+    showToast('لا يمكن الاستعادة: الملف ناقص أقسام مهمة (' + missingKeys.join('، ') + ') — لن يُمسح أي شيء حفاظاً على بياناتك');
+    return;
   }
   if(!await customConfirm('سيتم استبدال كل البيانات الحالية في البرنامج (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) بمحتوى ملف النسخة الاحتياطية المختار.\n\nستُحفَظ نسخة من البيانات الحالية (قبل الاستبدال) محلياً وعلى السيرفر أيضاً، يمكن الرجوع إليها لاحقاً إذا احتجت التراجع. هل تريد المتابعة؟')){
     return;
@@ -292,6 +308,12 @@ async function restoreFullBackup(file){
   // shouldReload: يُفعَّل فقط عند الاكتمال — إعادة فتح البرنامج من السيرفر بالبيانات الجديدة
   let restoreVerified = false;
   let shouldReload = false;
+
+  // علامة إعادة المزامنة تُسجَّل قبل أي مسح فعلي للسيرفر: أي انقطاع أثناء الاستعادة (بين المسح
+  // وإعادة الرفع أو بعده) يجعل الفتح التالي يكمل الرفع تلقائياً عبر resyncRestoredDataWithServer،
+  // بدل أن يبقى السيرفر فارغاً بلا أي علامة تدل على استعادة ناقصة. لا تُزال إلا بعد التحقق من
+  // اكتمال رفع كل البيانات المستعادة (راجع الفرع المتصل أدناه).
+  try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
 
   // مسح فعلي لبيانات السيرفر وتصفير تتبّع المزامنة يحدث الآن فقط لو متصلين فعلاً؛ لو غير متصلين
   // نؤجّله بالكامل حتى عودة الاتصال (راجع resyncRestoredDataWithServer وcheckPendingRestoreResync
@@ -333,14 +355,13 @@ async function restoreFullBackup(file){
   if(wasOffline){
     // نسجّل أن هناك استعادة كاملة بانتظار مزامنتها الحقيقية مع السيرفر (مسح + رفع نظيف بلا تعارض)
     // بمجرد عودة الاتصال، بدل الاكتفاء بالمزامنة الجزئية العادية لطابور "التعديلات المعلَّقة".
-    try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
+    // (العلامة سُجِّلت بالفعل قبل المسح أعلاه، فتبقى حتى تكتمل المزامنة عند عودة الاتصال.)
   }else{
-    // متصلون: نُسجّل علامة إعادة المزامنة قبل الرفع — أي انقطاع أثناءه يُكمل تلقائياً لاحقاً
+    // متصلون: علامة إعادة المزامنة سُجِّلت قبل المسح، فأي انقطاع أثناء الرفع يُكمل تلقائياً لاحقاً
     // (راجع resyncRestoredDataWithServer)، ثم نتحقق من اكتمال رفع كل البيانات المستعادة إلى
     // السيرفر قبل أي "مسح كاش + إعادة فتح". فقط عند الاكتمال نمسح الكاش المحلي القديم (بيانات
     // ما قبل الاستعادة) ونعيد فتح البرنامج من السيرفر؛ لو بقيت بيانات الاستعادة القديمة في الكاش،
     // أي فتح تالٍ من الكاش (hasLocalCache → loadData(cacheOnly)) كان يُظهرها وكأنها ما زالت موجودة.
-    try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
     restoreVerified = await verifyRestoredDataOnServer();
     if(restoreVerified){
       try{ await _kvCacheClearKv(); }catch(e){ console.error('restoreFullBackup: تعذّر مسح الكاش المحلي', e); }
