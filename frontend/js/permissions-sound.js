@@ -481,7 +481,11 @@ async function loadData(cacheOnly){
   if(!cacheOnly) await syncBagStockIssues();
   vaultTx = await loadGeneric('vaultTx');
   deletedVaultTx = await loadGeneric('deletedVaultTx');
-  {
+  if(!cacheOnly){
+    // نفس مبدأ syncBagStockIssues أعلاه: كل الترحيلات/الإصلاحات التلقائية هنا تكتب على السيرفر،
+    // فلا تُنفَّذ في وضع الفتح السريع (cacheOnly) لأن الذاكرة فيها صورة محلية قديمة/ناقصة — أي
+    // ترقيم/حذف/توحيد مبني عليها كان يرفع نتائج خاطئة للسيرفر قبل اكتمال المزامنة. تُنفَّذ فقط
+    // عند التحميل الكامل المؤكد من السيرفر (cacheOnly===false)، فتلتئم كل التعديلات بلا تكرار.
     const renumberedCount = renumberVaultSeqChronologically();
     if(renumberedCount>0){
       await saveVaultTx();
@@ -536,31 +540,34 @@ async function loadData(cacheOnly){
   }
   companies = await loadGeneric('companies');
   companyTransfers = await loadGeneric('companyTransfers');
-  {
+  if(!cacheOnly){
+    // نفس المبدأ أعلاه: لا يُنفَّذ أي ترحيل/إصلاح تلقائي يكتب على السيرفر في وضع الفتح السريع من
+    // الكاش المحلي (cacheOnly=true) — الذاكرة قد تكون صورة قديمة/ناقصة، فتنفيذها كان يرفع نتائج
+    // خاطئة أو مكررة. كلها تُنفَّذ عند أول تحميل كامل مؤكد من السيرفر.
     const migratedCount = migrateCompanyTransfersToLumpSum();
     if(migratedCount>0){
       await saveVaultTx();
       await saveDeletedVaultTx();
       await logAudit('edit','تحويلات الشركات', `ترحيل تلقائي: تم توحيد القيود المالية لـ ${migratedCount} حوالة شركة قديمة في قيد واحد لكل حوالة`);
     }
-  }
-  {
-    const valuesMigratedCount = migrateCompanyTraineeValuesToClients();
-    if(valuesMigratedCount>0){
-      await saveClients();
-      await saveVaultTx(); // syncClientValueFromTraineeAllocation قد تكون حذفت قيوداً فردية قديمة تخص هؤلاء العملاء
-      await logAudit('edit','شيت العملاء', `مزامنة تلقائية: تم تحديث قيمة الدورة/الحقيبة/المدفوع لـ ${valuesMigratedCount} عميل من تخصيصهم في حوالات الشركات`);
-    }
-    const dupRemovedCount = cleanupDuplicateCompanyTraineeVaultEntries();
-    if(dupRemovedCount>0){
-      await saveVaultTx();
-      await saveDeletedVaultTx();
-      await logAudit('delete','الحركات المالية', `إصلاح تلقائي: تم حذف ${dupRemovedCount} قيد مالي مكرر لعملاء مُرحَّلة قيمتهم من حوالات الشركات (مبلغهم مُرحَّل بالفعل ضمن القيد الموحّد لكل حوالة)`);
-    }
-    const orphanFixedCount = await reconcileOrphanedCompanyTransferClients();
-    if(orphanFixedCount>0){
-      await saveClients();
-      await logAudit('edit','شيت العملاء', `إصلاح تلقائي: تم تصفير تخصيص ${orphanFixedCount} عميل كانوا معلَّمين كمُرحَّلين من حوالة شركة رغم عدم ارتباطهم بأي حوالة حالية (بيانات قديمة قبل حذف متدرب/حوالة)`);
+    {
+      const valuesMigratedCount = migrateCompanyTraineeValuesToClients();
+      if(valuesMigratedCount>0){
+        await saveClients();
+        await saveVaultTx(); // syncClientValueFromTraineeAllocation قد تكون حذفت قيوداً فردية قديمة تخص هؤلاء العملاء
+        await logAudit('edit','شيت العملاء', `مزامنة تلقائية: تم تحديث قيمة الدورة/الحقيبة/المدفوع لـ ${valuesMigratedCount} عميل من تخصيصهم في حوالات الشركات`);
+      }
+      const dupRemovedCount = cleanupDuplicateCompanyTraineeVaultEntries();
+      if(dupRemovedCount>0){
+        await saveVaultTx();
+        await saveDeletedVaultTx();
+        await logAudit('delete','الحركات المالية', `إصلاح تلقائي: تم حذف ${dupRemovedCount} قيد مالي مكرر لعملاء مُرحَّلة قيمتهم من حوالات الشركات (مبلغهم مُرحَّل بالفعل ضمن القيد الموحّد لكل حوالة)`);
+      }
+      const orphanFixedCount = await reconcileOrphanedCompanyTransferClients();
+      if(orphanFixedCount>0){
+        await saveClients();
+        await logAudit('edit','شيت العملاء', `إصلاح تلقائي: تم تصفير تخصيص ${orphanFixedCount} عميل كانوا معلَّمين كمُرحَّلين من حوالة شركة رغم عدم ارتباطهم بأي حوالة حالية (بيانات قديمة قبل حذف متدرب/حوالة)`);
+      }
     }
   }
   journalEntries = await loadGeneric('journalEntries');
@@ -579,26 +586,35 @@ async function loadData(cacheOnly){
   // يدوية): يُنفَّذ قبل الترحيل التلقائي الشامل أدناه حتى يعيد الأخير ترحيل أي وثيقة حية
   // فُقد قيدها (راجع cleanupOrphanedJournalDE في module-accounting.js). آمن للتكرار — يعمل
   // على الحالة الحالية فقط، فيصلح أي بقايا قديمة مرة واحدة عند أول تحميل بعد هذا التحديث.
-  try{
-    const cleanup = typeof cleanupOrphanedJournalDE==='function' ? cleanupOrphanedJournalDE() : null;
-    if(cleanup){
-      await saveJournalDE();
-      if(cleanup.pointersFixed>0){
-        await saveJournalEntries();
-        await saveClients();
+  // تنظيف القيود اليومية اليتيمة (قيد مُرحَّل تلقائياً لمصدر حُذف لاحقاً — فاتورة/قيد/مبيعات
+  // يدوية): يُنفَّذ قبل الترحيل التلقائي الشامل أدناه حتى يعيد الأخير ترحيل أي وثيقة حية
+  // فُقد قيدها (راجع cleanupOrphanedJournalDE في module-accounting.js). آمن للتكرار — يعمل
+  // على الحالة الحالية فقط، فيصلح أي بقايا قديمة مرة واحدة عند أول تحميل بعد هذا التحديث.
+  // لا يُنفَّذ في وضع الفتح السريع (cacheOnly) لأنه يكتب على السيرفر (نفس مبدأ بقية الترحيلات).
+  if(!cacheOnly){
+    try{
+      const cleanup = typeof cleanupOrphanedJournalDE==='function' ? cleanupOrphanedJournalDE() : null;
+      if(cleanup){
+        await saveJournalDE();
+        if(cleanup.pointersFixed>0){
+          await saveJournalEntries();
+          await saveClients();
+        }
+        await logAudit('delete','المحاسبة', `إصلاح تلقائي: تم حذف ${cleanup.removed} قيد يومية يتيم لوثائق محذوفة، وإعادة ربط ${cleanup.pointersFixed} وثيقة بقيدها المفقود`);
       }
-      await logAudit('delete','المحاسبة', `إصلاح تلقائي: تم حذف ${cleanup.removed} قيد يومية يتيم لوثائق محذوفة، وإعادة ربط ${cleanup.pointersFixed} وثيقة بقيدها المفقود`);
-    }
-  }catch(e){ console.error('فشل تنظيف القيود اليومية اليتيمة', e); }
+    }catch(e){ console.error('فشل تنظيف القيود اليومية اليتيمة', e); }
+  }
   try{
     const r = kv.zakatAdjustments;
     zakatAdjustments = r && r.value ? JSON.parse(r.value) : {};
   }catch(e){ zakatAdjustments = {}; }
   // ترحيل تلقائي شامل للقيد المزدوج: يشمل كل القيود اليدوية القديمة المعلّقة، وفواتير المشتريات
   // والمبيعات اليدوية وفواتير الدورات التي لم تُرحَّل بعد — بدل انتظار ضغط المستخدم على أزرار
-  // الترحيل اليدوية. يعمل تلقائياً في كل تحميل للبيانات (بداية التشغيل والمزامنة الخلفية)، وهو
-  // آمن للتكرار لأن كل دالة autoPost* تتحقق أولاً من عدم وجود ترحيل سابق لنفس السجل.
-  try{ await autoPostAllPendingDoubleEntries(); }catch(e){ /* لا نوقف تحميل البيانات بسبب فشل الترحيل */ }
+  // الترحيل اليدوية. يعمل تلقائياً في كل تحميل كامل مؤكد للبيانات (بداية التشغيل والمزامنة الخلفية)،
+  // وهو آمن للتكرار لأن كل دالة autoPost* تتحقق أولاً من عدم وجود ترحيل سابق لنفس السجل.
+  // لا يُنفَّذ في وضع الفتح السريع (cacheOnly) — نفس مبدأ بقية الترحيلات أعلاه: الكتابة على
+  // السيرفر بناءً على صورة محلية قديمة/ناقصة قد تولّد قيوداً مكررة أو خاطئة قبل اكتمال المزامنة.
+  if(!cacheOnly){ try{ await autoPostAllPendingDoubleEntries(); }catch(e){ /* لا نوقف تحميل البيانات بسبب فشل الترحيل */ } }
   if(!cacheOnly && typeof _persistAllSnapshotsAfterLoad==='function'){
     // بعد اكتمال تحميل حقيقي كامل: تحديث كل اللقطات المحلية حتى يبدأ أي فتح تالٍ (cacheOnly)
     // من آخر حالة مؤكدة مع baseline/أرقام نسخ صحيحة بدل شاشة فارغة ونافذة فقدان محتملة.
