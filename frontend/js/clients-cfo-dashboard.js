@@ -289,6 +289,10 @@ function renderCfoDashboard(){
   // === لوحة 8: أداء موظفي الاستقبال (تسجيلات + دخل هذه السنة) — للإدمن/المحاسب فقط ===
   const receptionPerf = receptionPerformance(8);
 
+  // === لوحة 9: توزيع طريقة الدفع (كاش/شبكة/بنك) خلال السنة الحالية ===
+  const clientsThisYear = clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(thisYear));
+  const channelDist = groupChannelAmounts(clientsThisYear);
+
   el.innerHTML = `
     <div data-cfo-tab="overview" class="cfo-panel accent-gold">
       <h3 class="cfo-panel-title">تحليل الدخل من الدورات</h3>
@@ -365,6 +369,12 @@ function renderCfoDashboard(){
       <div class="cfo-visual cfo-bars" id="cfo-bars-reception"></div>
     </div>` : ''}
 
+    <div data-cfo-tab="collection" class="cfo-panel accent-teal">
+      <h3 class="cfo-panel-title">توزيع طريقة الدفع ${thisYear}</h3>
+      <div class="cfo-caption">المبالغ المستلمة فعلياً من العملاء مقسّمة حسب طريقة الدفع (كاش/شبكة/بنك)</div>
+      <div class="cfo-visual" id="cfo-donut-channels"></div>
+    </div>
+
   `;
 
   drawLineChart('#cfo-trend-income', incomeTrend.labels, incomeTrend.series);
@@ -378,6 +388,7 @@ function renderCfoDashboard(){
   if(receptionPerf.length){
     drawBars('#cfo-bars-reception', receptionPerf.map(([name,d])=>[name, d.income]), 8, v=>fmt(v)+' ﷼');
   }
+  drawDonut('#cfo-donut-channels', channelDist, 10, v=>fmt(v)+' ﷼');
   applyCfoTabFilter();
 }
 /* تبويبات فرعية داخل لوحة التحكم: تعرض فقط بانلات التبويب النشط بدل نزول كل البانلات تحت بعض */
