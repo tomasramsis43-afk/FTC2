@@ -609,12 +609,25 @@ app.put('/api/role-permissions', requireAuth, requireRole('admin'), async (req, 
       }
       toSave[role] = [...new Set(views)];
     }
-    for (const role of EDITABLE_ROLE_PERMISSION_ROLES) {
-      await pool.query(
-        `INSERT INTO role_permissions (role, views, updated_by, updated_at) VALUES ($1, $2, $3, now())
-         ON CONFLICT (role) DO UPDATE SET views = EXCLUDED.views, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [role, JSON.stringify(toSave[role]), req.user.username]
-      );
+    // الحفظ في معاملة واحدة: كانت 3 تحديثات منفصلة (لا transaction) — لو فشل الثاني/الثالث
+    // تُترك قاعدة البيانات بصلاحيات نصف مطبّقة (دور محدّث ودوران قديمان) مع ذاكرة تخزين مؤقت
+    // مُعاد تحميلها من تلك الحالة المختلطة، وأي أدمنين يحفظان معاً قد ينتج حالة نهائية متشابكة.
+    const tx = await pool.connect();
+    try {
+      await tx.query('BEGIN');
+      for (const role of EDITABLE_ROLE_PERMISSION_ROLES) {
+        await tx.query(
+          `INSERT INTO role_permissions (role, views, updated_by, updated_at) VALUES ($1, $2, $3, now())
+           ON CONFLICT (role) DO UPDATE SET views = EXCLUDED.views, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+          [role, JSON.stringify(toSave[role]), req.user.username]
+        );
+      }
+      await tx.query('COMMIT');
+    } catch (e) {
+      await tx.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      tx.release();
     }
     await loadRolePermissionsCache();
     res.json({ rolePermissions: toSave });
@@ -874,6 +887,13 @@ async function wouldDowngradeEncryption(key, newValue) {
 app.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin, async (req, res) => {
   const { value } = req.body || {};
   const knownVersion = Number.isInteger(req.body?.version) ? req.body.version : 0;
+  // حارس سلامة حاسم: القيمة المخزَّنة لكل مفتاح يجب أن تكون نصاً (JSON مشفّر/غير مشفّر). لو وصلت
+  // قيمة غير نصية (null/مفقودة/كائن) يتم رفض الطلب قبل لمس قاعدة البيانات — كانت القيمة `null`
+  // تُكتب فعلياً في kv_store، وللمفتاح clients كانت تُشغّل مزامنة clients_rows التي تحذف جدول
+  // العملاء المُفهرس بالكامل (فقدان بيانات صامت لأي طلب تالف أو خطأ في الواجهة).
+  if (typeof value !== 'string' || !value) {
+    return res.status(400).json({ error: 'القيمة المرسلة غير صحيحة (يجب أن تكون نصاً غير فارغ) — أُوقف الحفظ قبل المساس بالبيانات' });
+  }
   try {
     if (await wouldDowngradeEncryption(req.params.key, value)) {
       console.error(`رُفض حفظ خطير: ${req.user.username} حاول استبدال بيانات مشفّرة بأخرى غير مشفّرة للمفتاح "${req.params.key}"`);
@@ -1109,10 +1129,11 @@ app.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res)
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
       return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     }
-    const current = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
+    const current = await pool.query('SELECT version, enc FROM client_records WHERE id = $1', [req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل بيانات هذا العميل من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
       currentVersion: current.rows[0] ? current.rows[0].version : 0,
+      currentEnc: current.rows[0] ? current.rows[0].enc : null,
     });
   } catch (e) {
     console.error(e);
@@ -1165,6 +1186,21 @@ app.post('/api/client-records/:id/reject', requireAuth, requireRole('admin'), as
 
 app.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   try {
+    // حارس حذف بفحص النسخة (نفس منطق /api/records/:collection/:id): الواجهة ترسل رقم النسخة الذي
+    // رآه الجهاز، ولو تغيّر السجل من جهاز آخر بعد آخر مشاهدة نرفض الحذف بـ409 بدل حذف بيانات أحدث.
+    const wantVersionRaw = req.query.version;
+    if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
+      const wantVersion = Number(wantVersionRaw);
+      if (Number.isFinite(wantVersion)){
+        const cur = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
+        if (cur.rows[0] && cur.rows[0].version !== wantVersion){
+          return res.status(409).json({
+            error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
+            currentVersion: cur.rows[0].version,
+          });
+        }
+      }
+    }
     // نفس حماية العزل: مستخدم الاستقبال يقدر يحذف فقط سجلاته هو شخصياً، وليس سجلات مستخدم استقبال آخر.
     // أي دور آخر (staff/accountant) يحذف فقط السجلات المعتمدة status='confirmed' (نفس شرط الرؤية)،
     // فلا يمس عبر طلب مباشر مسودات/سجلات الاستقبال المعلّقة التي لا يملك رؤيتها أصلاً.
@@ -1289,13 +1325,17 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
     // التعارضات = صفوف موجودة فعلاً تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
     await step('conf',
       `CREATE TEMP TABLE _conf ON COMMIT DROP AS
-       SELECT cr.id, cr.version AS current_version
+       SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
        FROM _inc i
        JOIN client_records cr ON cr.id = i.id
        WHERE cr.version <> i.known_version OR NOT (${guard})`
     );
-    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
-    await step('upsert',
+    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
+    // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق
+    // التحديث المتزامن: طلبان متزامنان لنفس العميل قد يمرّان معاً من فحص _conf (كلاهما يرى النسخة
+    // القديمة قبل أن يُثبّت الآخر تحديثه) — بدون الحارس الثاني كان يكتب فوق الأول صامتاً. الآن
+    // الثاني يفشل شرط WHERE فلا يُحدَّث ويُحتسب ضمن conflicts بدل الكتابة فوق.
+    const upsertRes = await step('upsert',
       `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
        SELECT i.id, i.enc, 1, $1, $2, $3, $1, i.client_id
        FROM _inc i
@@ -1303,13 +1343,25 @@ app.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, async 
        ORDER BY i.id
        ON CONFLICT (id) DO UPDATE SET
          enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id`,
+         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
+       WHERE client_records.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
+       RETURNING id`,
       [req.user.username, newOrigin, newStatus]
     );
-    const confRows = await step('conf-read', 'SELECT id, current_version FROM _conf');
-    const migrated = records.length - confRows.rows.length;
+    // التعارضات النهائية = كل معرّفات الدفعة التي لم تُدرج/تُحدَّث فعلياً (رفضها _conf أو فشل
+    // حارس النسخة أثناء السباق) — نحسبها من RETURNING بدل الاعتماد على _conf فقط، ونقرأ نسختها
+    // الحالية الحقيقية بعد الحفظ ليردّها السيرفر للواجهة.
+    const succeededIds = new Set(upsertRes.rows.map(r => r.id));
+    const allIds = (await step('ids', 'SELECT id FROM _inc')).rows.map(r => r.id);
+    const conflictedIds = allIds.filter(id => !succeededIds.has(id));
+    let conflictRows = [];
+    if (conflictedIds.length) {
+      const cr = await step('conf-final', 'SELECT id, version, enc FROM client_records WHERE id = ANY($1::text[])', [conflictedIds]);
+      conflictRows = cr.rows.map(r => ({ id: r.id, current_version: r.version, current_enc: r.enc }));
+    }
+    const migrated = records.length - conflictRows.length;
     await client.query('COMMIT');
-    res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
+    res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
   } catch (e) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
@@ -1513,10 +1565,11 @@ app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireVali
       broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
       return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     }
-    const current = await pool.query('SELECT version FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+    const current = await pool.query('SELECT version, enc FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
       currentVersion: current.rows[0] ? current.rows[0].version : 0,
+      currentEnc: current.rows[0] ? current.rows[0].enc : null,
     });
   } catch (e) {
     console.error(e);
@@ -1526,6 +1579,25 @@ app.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireVali
 
 app.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   try {
+    // حارس حذف بفحص النسخة: الواجهة ترسل رقم النسخة الذي رآه الجهاز (version في query). لو تغيّر
+    // السجل على السيرفر من جهاز آخر بعد آخر مشاهدة لهذا الجهاز، نرفض الحذف بـ409 بدل حذف بيانات
+    // أحدث بصمت (نفس منطق تعارضات PUT). غياب المعامل = طلبات قديمة تتصرف كما كانت من قبل.
+    const wantVersionRaw = req.query.version;
+    if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
+      const wantVersion = Number(wantVersionRaw);
+      if (Number.isFinite(wantVersion)){
+        const cur = await pool.query(
+          'SELECT version FROM collection_records WHERE collection = $1 AND id = $2',
+          [req.params.collection, req.params.id]
+        );
+        if (cur.rows[0] && cur.rows[0].version !== wantVersion){
+          return res.status(409).json({
+            error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
+            currentVersion: cur.rows[0].version,
+          });
+        }
+      }
+    }
     // نفس حماية عزل الاستقبال في مسار الحذف (كان الحذف بلا أي فحص — أي مستخدم مصادق يقدر
     // يحذف أي سجل يعرف معرّفه): الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون
     // المعتمد فقط، والأدمن بلا قيود.
@@ -1619,14 +1691,18 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
     // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
     await client.query(
       `CREATE TEMP TABLE _conf ON COMMIT DROP AS
-       SELECT cr.id, cr.version AS current_version
+       SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
        FROM _inc i
        JOIN collection_records cr ON cr.collection = $1 AND cr.id = i.id
        WHERE cr.version <> i.known_version OR NOT (${guard})`,
       [req.params.collection]
     );
-    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1
-    await client.query(
+    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
+    // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق
+    // التحديث المتزامن: طلبان متزامنان لنفس السجل قد يمرّان معاً من فحص _conf (كلاهما يرى النسخة
+    // القديمة قبل أن يُثبّت الآخر تحديثه) — بدون الحارس الثاني كان يكتب فوق الأول صامتاً. الآن
+    // الثاني يفشل شرط WHERE فلا يُحدَّث ويُحتسب ضمن conflicts بدل الكتابة فوق.
+    const upsertRes = await client.query(
       `INSERT INTO collection_records (collection, id, enc, version, updated_by, origin, status, created_by)
        SELECT $1, i.id, i.enc, 1, $2, $3, $4, $2
        FROM _inc i
@@ -1634,14 +1710,29 @@ app.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter, r
        ORDER BY i.id
        ON CONFLICT (collection, id) DO UPDATE SET
          enc = EXCLUDED.enc, version = collection_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by`,
+         updated_at = now(), updated_by = EXCLUDED.updated_by
+       WHERE collection_records.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
+       RETURNING id`,
       [req.params.collection, req.user.username, newOrigin, newStatus]
     );
-    const confRows = await client.query('SELECT id, current_version FROM _conf');
-    const migrated = records.length - confRows.rows.length;
+    // التعارضات النهائية = كل معرّفات الدفعة التي لم تُدرج/تُحدَّث فعلياً (رفضها _conf أو فشل
+    // حارس النسخة أثناء السباق) — نحسبها من RETURNING بدل الاعتماد على _conf فقط، ونقرأ نسختها
+    // الحالية الحقيقية بعد الحفظ ليردّها السيرفر للواجهة.
+    const succeededIds = new Set(upsertRes.rows.map(r => r.id));
+    const allIds = (await client.query('SELECT id FROM _inc')).rows.map(r => r.id);
+    const conflictedIds = allIds.filter(id => !succeededIds.has(id));
+    let conflictRows = [];
+    if (conflictedIds.length) {
+      const cr = await client.query(
+        'SELECT id, version, enc FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])',
+        [req.params.collection, conflictedIds]
+      );
+      conflictRows = cr.rows.map(r => ({ id: r.id, current_version: r.version, current_enc: r.enc }));
+    }
+    const migrated = records.length - conflictRows.length;
     await client.query('COMMIT');
     if (migrated > 0) broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
-    res.json({ migrated, conflicts: confRows.rows.map(r => ({ id: r.id, currentVersion: r.current_version })) });
+    res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
   } catch (e) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
@@ -1863,7 +1954,7 @@ async function extractInvoiceFile(f) {
   }
 }
 
-app.post('/api/ai/read-invoices', invoiceReadJsonParser, requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/ai/read-invoices', requireAuth, invoiceReadJsonParser, aiLimiter, async (req, res) => {
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
   if (!files.length) return res.status(400).json({ error: 'لم يتم إرسال أي ملفات' });
   if (files.length > 30) return res.status(400).json({ error: 'الحد الأقصى 30 ملفاً في المرة الواحدة' });
