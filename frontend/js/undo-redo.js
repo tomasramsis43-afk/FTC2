@@ -56,15 +56,46 @@ function updateUndoRedoButtons(){
     }
   }
 }
+// يدمج لقطة التراجع (حالة قديمة من ذاكرة هذا الجهاز) مع السجلات الموجودة حالياً في الذاكرة.
+// الهدف: منع التراجع من مسح/الكتابة فوق بيانات أضافها أو عدّلها مستخدمون آخرون بعد التقاط اللقطة.
+// - أي سجل في اللقطة → يُستعاد محتوى اللقطة (هذا هو جوهر التراجع).
+// - أي سجل موجود في الذاكرة الحالية لكنه غائب عن اللقطة → يُحفَظ لو كان مُؤكَّداً على السيرفر
+//   (isConfirmed=true، أي له رقم نسخة معروف أكبر من صفر — سجله جهاز آخر بعد اللقطة، أو سُجّل
+//   وحفظه جهاز آخر فعلياً): لا يُحذف حتى لا تمسح دوال الحفظ سجل غيره (saveClients/saveCollectionGeneric
+//   كانت تعتبر كل غائب عن المصفوفة سجلاً "مُزالاً" فتحذفه من السيرفر — كان هذا سبب فقدان بيانات
+//   الآخرين عند التراجع). سجل محلي بانتظار الرفع (isConfirmed=false، لا رقم نسخة بعد) يُسمح
+//   بتراجعه كالمعتاد لأنه من عمل هذا الجهاز نفسه ولم يصل السيرفر أصلاً.
+// تعديلُ سجل عُدِّل على السيرفر بعد اللقطة لن يُكتب فوقه أصلاً: دوال الحفظ الفردية ترسل رقم النسخة
+// المعروف، فترفضها السيرفر بـ409 وتُبقي نسخة الأحدث (راجع saveOneClientRecord/saveOneRecordGeneric).
+function _mergeSnapshotArrays(snapshotArr, currentArr, isConfirmed){
+  const snapshotList = Array.isArray(snapshotArr) ? snapshotArr : [];
+  const currentList = Array.isArray(currentArr) ? currentArr : [];
+  const byId = new Map();
+  for(const r of snapshotList){
+    if(r && r.id !== undefined && r.id !== null) byId.set(String(r.id), _deepClone(r));
+  }
+  for(const r of currentList){
+    if(r && r.id !== undefined && r.id !== null){
+      const id = String(r.id);
+      if(!byId.has(id) && !(typeof isConfirmed === 'function' && isConfirmed(id))){
+        // سجل من جهاز آخر ومُؤكَّد على السيرفر → يبقى (لا يُحذف بالتراجع).
+        byId.set(id, _deepClone(r));
+      }
+    }
+  }
+  return Array.from(byId.values());
+}
 async function applyStateSnapshot(entry){
-  clients = entry.clients;
-  vaultTx = entry.vaultTx;
-  bagStock = entry.bagStock;
-  courseSessions = entry.courseSessions;
-  settings = entry.settings;
-  users = entry.users;
-  companies = entry.companies || [];
-  companyTransfers = entry.companyTransfers || [];
+  // دمج بدل استبدال كلي: أي سجل من جهاز آخر (غائب عن اللقطة ومؤكَّد على السيرفر) يبقى، وأي سجل
+  // في اللقطة يُستعاد محتواه — التراجع لا يمسح بيانات الآخرين أبداً.
+  clients = _mergeSnapshotArrays(entry.clients, clients, id=> (_clientRecordVersions[id] || 0) > 0);
+  vaultTx = _mergeSnapshotArrays(entry.vaultTx, vaultTx, id=> (_recordVersions.vaultTx ? (_recordVersions.vaultTx.get(id) || 0) > 0 : false));
+  bagStock = _mergeSnapshotArrays(entry.bagStock, bagStock, id=> (_recordVersions.bagStock ? (_recordVersions.bagStock.get(id) || 0) > 0 : false));
+  courseSessions = _mergeSnapshotArrays(entry.courseSessions, courseSessions, id=> (_recordVersions.courseSessions ? (_recordVersions.courseSessions.get(id) || 0) > 0 : false));
+  settings = entry.settings === undefined ? settings : _deepClone(entry.settings);
+  users = entry.users === undefined ? users : _deepClone(entry.users);
+  companies = _mergeSnapshotArrays(entry.companies, companies, id=> (_recordVersions.companies ? (_recordVersions.companies.get(id) || 0) > 0 : false));
+  companyTransfers = _mergeSnapshotArrays(entry.companyTransfers, companyTransfers, id=> (_recordVersions.companyTransfers ? (_recordVersions.companyTransfers.get(id) || 0) > 0 : false));
   // عمداً saveClients(false) وليس saveClients(true): اللقطة المخزَّنة في مكدس التراجع التُقطت من
   // ذاكرة هذا الجهاز في لحظة سابقة، وقد تكون قديمة عن أي عملاء أضافهم مستخدمون آخرون على أجهزتهم
   // منذ ذلك الحين. allowDrop=true كان يمرّر allowLargeDrop لخط الرجعة القديم فيتخطّى حماية السيرفر
