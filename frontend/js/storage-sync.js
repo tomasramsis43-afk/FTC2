@@ -842,17 +842,25 @@ async function fetchAllRecordsGeneric(collection){
   const baseline = new Map();
   const versions = new Map();
   const metaMap = {};
-  for(const r of (data.records||[])){
+  const records = data.records || [];
+  for(const r of records){
     versions.set(r.id, r.version);
     metaMap[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
+  }
+  // فك التشفير بالتوازي بدل التتابع — نفس التحسين المطبَّق على fetchAllClientRecords، راجع
+  // تعليقها لشرح السبب (زمن الانتظار كان يتراكم خطياً مع عدد السجلات فى التصنيف).
+  const decrypted = await Promise.all(records.map(async r => {
     let plain;
     try{ plain = await _decryptOrFail(r.enc); }
     catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل، وليس تجاهلاً صامتاً
     try{
-      const obj = JSON.parse(plain);
-      list.push(obj);
-      baseline.set(r.id, plain);
-    }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل التصنيف */ }
+      return { id: r.id, obj: JSON.parse(plain), plain };
+    }catch(e){ return null; } // سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل التصنيف
+  }));
+  for(const d of decrypted){
+    if(!d) continue;
+    list.push(d.obj);
+    baseline.set(d.id, d.plain);
   }
   _recordVersions[collection] = versions;
   recordMeta[collection] = metaMap;
@@ -938,20 +946,25 @@ async function _fetchDeltaRecords(collection){
       versions.set(r.id, Number.isInteger(r.version) ? r.version : 0);
       if(r.origin || r.status) metaMap[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
     }
-    for(const id of fetchIds){
+    // فك التشفير بالتوازي بدل التتابع (نفس التحسين المطبَّق فى fetchAllRecordsGeneric) — هنا العدد
+    // محدود أصلاً بحد أقصى 500 سجل (راجع الشرط أعلى الدالة)، لكن يبقى تحسيناً حقيقياً على أي حجم
+    // تغييرات متوسط/كبير. منطق "استبدال فى مكانه أو إضافة" يبقى بعد فك التشفير بترتيب fetchIds
+    // الأصلي كما كان، فلا يتأثر بترتيب اكتمال التوازي.
+    const decrypted = await Promise.all(fetchIds.map(async id => {
       const r = byId.get(id);
-      if(!r) continue;
+      if(!r) return null;
       let plain;
       try{ plain = await _decryptOrFail(r.enc); }catch(e){ throw e; }
-      try{
-        const obj = JSON.parse(plain);
-        // نتأكد أنها قائمة القائمة: لو كانت هي نفسها موجودة مسبقًا من اللقطة نستبدل بقبل النسخة.
-        if(!removedIds.includes(id)){
-          const idx = finalItems.findIndex(x=>x.id===id);
-          if(idx>=0) finalItems[idx] = obj; else finalItems.push(obj);
-        }
-        baseline.set(id, plain);
-      }catch(e){ /* سجل تالف — نتجاهله */ }
+      try{ return { id, obj: JSON.parse(plain), plain }; }
+      catch(e){ return null; } // سجل تالف — نتجاهله
+    }));
+    for(const d of decrypted){
+      if(!d) continue;
+      if(!removedIds.includes(d.id)){
+        const idx = finalItems.findIndex(x=>x.id===d.id);
+        if(idx>=0) finalItems[idx] = d.obj; else finalItems.push(d.obj);
+      }
+      baseline.set(d.id, d.plain);
     }
   }
 
@@ -1443,19 +1456,22 @@ async function _fetchDeltaClientRecords(){
       _clientRecordVersions[r.id] = r.version;
       if(r.origin || r.status) clientRecordMeta[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
     }
-    for(const id of fetchIds){
+    // فك التشفير بالتوازي بدل التتابع (نفس التحسين المطبَّق فى fetchAllClientRecords/_fetchDeltaRecords).
+    const decrypted = await Promise.all(fetchIds.map(async id => {
       const r = byId.get(id);
-      if(!r) continue;
+      if(!r) return null;
       let plain;
       try{ plain = await _decryptOrFail(r.enc); }catch(e){ throw e; }
-      try{
-        const obj = JSON.parse(plain);
-        if(!removedIds.includes(id)){
-          const idx = finalItems.findIndex(x=>x.id===id);
-          if(idx>=0) finalItems[idx] = obj; else finalItems.push(obj);
-        }
-        baseline.set(id, plain);
-      }catch(e){ /* سجل تالف — نتجاهله */ }
+      try{ return { id, obj: JSON.parse(plain), plain }; }
+      catch(e){ return null; } // سجل تالف — نتجاهله
+    }));
+    for(const d of decrypted){
+      if(!d) continue;
+      if(!removedIds.includes(d.id)){
+        const idx = finalItems.findIndex(x=>x.id===d.id);
+        if(idx>=0) finalItems[idx] = d.obj; else finalItems.push(d.obj);
+      }
+      baseline.set(d.id, d.plain);
     }
   }
 
@@ -1482,17 +1498,28 @@ async function fetchAllClientRecords(){
   const list = [];
   const baseline = new Map();
   clientRecordMeta = {};
-  for(const r of (data.records||[])){
+  const records = data.records || [];
+  for(const r of records){
     _clientRecordVersions[r.id] = r.version;
     clientRecordMeta[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
+  }
+  // فك التشفير بالتوازي بدل التتابع (سجل وراء سجل) — كان يعني عملياً انتظار زمن فك تشفير واحد
+  // مضروباً في عدد العملاء (قد يكونوا آلافاً) بالتتابع الصرف، رغم أن كل عملية فك تشفير مستقلة
+  // تماماً عن الأخرى. راجع نفس الفكرة أعلى الملف فى _runWithConcurrency لطلبات الشبكة — هنا لا
+  // حاجة لحد أقصى للتوازي (concurrency cap) لأن العمل هنا حسابي محلي (Web Crypto) وليس طلبات
+  // شبكة فعلية، فـ Promise.all الكامل آمن ولا يضغط على أي حد معدل طلبات بالسيرفر.
+  const decrypted = await Promise.all(records.map(async r => {
     let plain;
     try{ plain = await _decryptOrFail(r.enc); }
     catch(e){ throw e; } // خطأ تشفير حقيقي يجب أن يوقف التحميل كباقي البرنامج، وليس تجاهلاً صامتاً
     try{
-      const obj = JSON.parse(plain);
-      list.push(obj);
-      baseline.set(r.id, plain);
-    }catch(e){ /* سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل العملاء */ }
+      return { id: r.id, obj: JSON.parse(plain), plain };
+    }catch(e){ return null; } // سجل تالف (JSON غير صالح) — نتجاهله بدل تعطيل تحميل كل العملاء
+  }));
+  for(const d of decrypted){
+    if(!d) continue;
+    list.push(d.obj);
+    baseline.set(d.id, d.plain);
   }
   // خط الأمان الأخير: أي تعديل عميل لسه معلّق فعلياً بعد محاولة الرفع أعلاه (يعني لسه بدون اتصال
   // حقيقي) لازم يظل ظاهراً فى الذاكرة رغم عدم تأكيده على السيرفر بعد — وإلا هيختفي من الشاشة فوراً
