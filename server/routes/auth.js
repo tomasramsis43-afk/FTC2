@@ -1,0 +1,430 @@
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const { pool } = require('../db');
+const { signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword,
+  verifyEmergencyAdmin, signEmergencyToken, generateTotpSecret, totpOtpauthUrl, verifyTotpToken,
+  generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('../auth');
+const { addClient: addSseClient, removeClient: removeSseClient } = require('../sse');
+const { authLimiter, licenseLimiter } = require('../rate-limiters');
+const { validateLicenseKey } = require('../license');
+
+// خطوة 1: توليد سر مؤقّت (pending) + رابط otpauth للـ QR — لا يُفعَّل فعلياً إلا بعد
+// تأكيد أول كود صحيح فى /verify (يمنع تفعيل غير مقصود لو المستخدم أغلق الصفحة قبل المسح).
+router.post('/api/2fa/setup', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const secret = generateTotpSecret();
+    await pool.query('UPDATE server_users SET totp_pending_secret = $1 WHERE username = $2', [secret, req.user.username]);
+    const otpauthUrl = totpOtpauthUrl(secret, req.user.username);
+    res.json({ secret, otpauthUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر بدء إعداد المصادقة الثنائية' });
+  }
+});
+// خطوة 2: تأكيد أول كود من تطبيق المصادقة — عند النجاح ينتقل السر من pending إلى الفعلي
+// وتُولَّد 10 أكواد احتياطية تُعرض للمستخدم مرة واحدة فقط (النص الصريح لا يُخزَّن أبداً).
+router.post('/api/2fa/verify-setup', requireAuth, requireRole('admin'), authLimiter, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT totp_pending_secret FROM server_users WHERE username = $1', [req.user.username]);
+    const pending = r.rows[0]?.totp_pending_secret;
+    if (!pending) return res.status(400).json({ error: 'ابدأ خطوة الإعداد أولاً' });
+    if (!verifyTotpToken(req.body?.totpCode, pending)) {
+      return res.status(401).json({ error: 'الكود غير صحيح، تأكد من مزامنة الوقت فى جهازك وحاول مجدداً' });
+    }
+    const backupCodes = generateBackupCodes(10);
+    const hashed = await hashBackupCodes(backupCodes);
+    await pool.query(
+      `UPDATE server_users SET totp_secret = $1, totp_pending_secret = NULL, totp_enabled = true,
+       totp_backup_codes = $2, token_version = token_version + 1 WHERE username = $3`,
+      [pending, JSON.stringify(hashed), req.user.username]
+    );
+    res.json({ enabled: true, backupCodes }); // النص الصريح لهذه الأكواد يُعرض مرة واحدة فقط هنا
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تفعيل المصادقة الثنائية' });
+  }
+});
+// إلغاء التفعيل — يتطلب كلمة المرور الحالية كتأكيد إضافي (مش مجرد ضغطة زر عابرة على حساب حساس)
+router.post('/api/2fa/disable', requireAuth, requireRole('admin'), authLimiter, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT password_hash FROM server_users WHERE username = $1', [req.user.username]);
+    const ok = r.rows[0] && await verifyPassword(req.body?.password || '', r.rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+    await pool.query(
+      `UPDATE server_users SET totp_secret = NULL, totp_pending_secret = NULL, totp_enabled = false,
+       totp_backup_codes = NULL WHERE username = $1`,
+      [req.user.username]
+    );
+    res.json({ enabled: false });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إلغاء المصادقة الثنائية' });
+  }
+});
+router.get('/api/2fa/status', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT totp_enabled FROM server_users WHERE username = $1', [req.user.username]);
+    res.json({ enabled: !!(r.rows[0] && r.rows[0].totp_enabled) });
+  } catch (e) {
+    res.status(500).json({ error: 'تعذّر جلب حالة المصادقة الثنائية' });
+  }
+});
+
+/* ---------------- تسجيل الدخول ---------------- */
+router.post('/api/auth/login', authLimiter, async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'أدخل اسم المستخدم وكلمة المرور' });
+  }
+  try {
+    // ملاحظة أمنية: لا نقرأ رأس X-Forwarded-For يدوياً إطلاقاً — كان يُسمح لأي عميل بتزييفه
+    // (spoofing) ليُسجَّل عنوان مزوّر في سجل الدخول. نعتمد على req.ip الذي يحسبه Express نفسه
+    // وفقاً لإعداد trust proxy أعلاه (يثق فقط بأول proxy — ترتيب Render)، ففي الحالة الطبيعية عبر
+    // الـ LB يُرجَع IP الزائر الحقيقي، وفي حالة الاتصال المباشر يُرجَع عنوان الاتصال الفعلي.
+    const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
+    // تحقق أولاً من حساب الطوارئ (مخزّن بالكامل في متغيرات البيئة، مستقل عن قاعدة
+    // البيانات) — يسمح بالدخول للنظام حتى لو قاعدة البيانات اتغيرت أو كانت فاضية
+    // تماماً أو معطّلة. لا يؤثر على حسابات جدول server_users العادية بأي شكل.
+    const isEmergencyLogin = await verifyEmergencyAdmin(username.trim(), password);
+    if (isEmergencyLogin) {
+      const token = signEmergencyToken(username.trim());
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
+        [username.trim(), 'admin', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+      return res.json({
+        token,
+        username: username.trim(),
+        role: 'admin',
+        user: { username: username.trim(), displayName: 'حساب الطوارئ', role: 'admin' },
+      });
+    }
+    const r = await pool.query('SELECT * FROM server_users WHERE username = $1', [username.trim()]);
+    const user = r.rows[0];
+    if (!user) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [username.trim(), null, loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
+    // قفل تلقائي مؤقت (بغض النظر عن IP المُستخدَم فى المحاولة الحالية) — يحمي من محاولة تخمين
+    // موزّعة على عدة أجهزة/شبكات تتفادى rate limiting العادي المبني على IP وحده.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(403).json({ error: `الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة، حاول بعد ${minutesLeft} دقيقة` });
+    }
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      // 5 محاولات فاشلة متتالية بكلمة المرور تقفل الحساب 15 دقيقة، ثم يُعاد العداد لصفر.
+      pool.query(
+        `UPDATE server_users SET
+           failed_login_count = CASE WHEN failed_login_count + 1 >= 5 THEN 0 ELSE failed_login_count + 1 END,
+           locked_until = CASE WHEN failed_login_count + 1 >= 5 THEN now() + INTERVAL '15 minutes' ELSE locked_until END
+         WHERE id = $1`,
+        [user.id]
+      ).catch(e => console.error('تعذّر تحديث عداد المحاولات الفاشلة:', e));
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
+    }
+    // حساب معطّل من طرف المدير: نرفض الدخول برسالة واضحة قبل إصدار أي توكن،
+    // حتى لو كانت كلمة المرور صحيحة.
+    if (user.is_active === false) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+      return res.status(403).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
+    }
+    // المصادقة الثنائية: كلمة المرور صحيحة والحساب مفعّل، لكن لو هذا المستخدم مفعّل عنده TOTP
+    // فلازم نتحقق من كود إضافي قبل إصدار أي توكن — بدون هذه الخطوة، كلمة المرور وحدها كانت كافية.
+    if (user.totp_enabled) {
+      const { totpCode, backupCode } = req.body || {};
+      if (!totpCode && !backupCode) {
+        // لسه محتاجين الخطوة التانية — مش خطأ، فقط إشارة للواجهة إنها تعرض حقل الكود.
+        // لا نُصدر أي توكن هنا إطلاقاً.
+        return res.json({ requires2FA: true, username: user.username });
+      }
+      let verified = false;
+      if (totpCode) {
+        verified = verifyTotpToken(totpCode, user.totp_secret);
+      } else if (backupCode) {
+        // استهلاك الكود الاحتياطي بشكل ذرّي (قفل الصف داخل معاملة قصيرة) — يُغلق نافذة TOCTOU
+        // التي كانت تسمح لطلبين متزامنين يحملان نفس الكود بالنجاح معاً قبل أن يلحق أيٌّ منهما
+        // بحفظ القائمة المحدَّثة (مقارنة bcrypt البطيئة توسّع النافذة). SELECT ... FOR UPDATE
+        // يجعل الطلب الثاني ينتظر حتى يُنفَّذ الأولُ ويُحفظ نتيجةَ الاستهلاك فيكتب فوقها،
+        // فيستهلك الكودَ طلبٌ واحد فقط مهما تزامن معه غيره.
+        let tx = null;
+        try {
+          tx = await pool.connect();
+          await tx.query('BEGIN');
+          const locked = await tx.query('SELECT totp_backup_codes FROM server_users WHERE id = $1 FOR UPDATE', [user.id]);
+          const result = await consumeBackupCode(locked.rows[0].totp_backup_codes, backupCode);
+          verified = result.ok;
+          if (result.ok) {
+            await tx.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
+          }
+          await tx.query('COMMIT');
+        } catch (e) {
+          if (tx) await tx.query('ROLLBACK').catch(() => {});
+          console.error(e);
+          verified = false;
+        } finally {
+          if (tx) tx.release();
+        }
+      }
+      if (!verified) {
+        pool.query(
+          'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+          [user.username, user.role || 'staff', loginIp, loginDevice]
+        ).catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+        return res.status(401).json({ error: 'كود التحقق غير صحيح' });
+      }
+    }
+    const token = signToken(user);
+    // نجاح كامل: تصفير عداد المحاولات الفاشلة وأي قفل مؤقت قائم لهذا الحساب.
+    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+      .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
+    // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
+    // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
+    pool.query(
+      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
+      [user.username, user.role || 'staff', loginIp, loginDevice]
+    ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+    // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات فاشلة متكررة) حصل منذ آخر مرة راجع فيها
+    // شاشة "سجل الدخول" ولسه ما شافوش، نُرجعه هنا فوراً بدل ما يفضل مدفون فى السجل لحد ما يفتحه
+    // بنفسه بالصدفة.
+    let suspiciousAlert = [];
+    if ((user.role || 'staff') === 'admin') {
+      try {
+        const since = user.last_login_history_seen_at || new Date(Date.now() - 24 * 3600 * 1000);
+        const sus = await pool.query(
+          `SELECT username, ip_address, COUNT(*)::int AS failed_count, MAX(logged_in_at) AS last_attempt
+           FROM login_history
+           WHERE success = false AND logged_in_at > $1
+           GROUP BY username, ip_address
+           HAVING COUNT(*) >= 3
+           ORDER BY failed_count DESC LIMIT 10`,
+          [since]
+        );
+        suspiciousAlert = sus.rows;
+      } catch (e) { console.error('تعذّر فحص النشاط المشبوه:', e); }
+    }
+    // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
+    // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
+    res.json({
+      token,
+      username: user.username,
+      role: user.role || 'staff',
+      user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
+      suspiciousAlert,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// POST /api/auth/logout -> إبطال فوري لكل توكنات هذا المستخدم (بما فيها التوكن
+// المُستخدَم في هذا الطلب نفسه)، بدل الاكتفاء بمسح التوكن من المتصفح فقط.
+router.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await pool.query('UPDATE server_users SET token_version = token_version + 1 WHERE id = $1', [req.user.sub]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تسجيل الخروج على الخادم' });
+  }
+});
+
+/* ---------------- بث الأحداث اللحظية (SSE) ----------------
+   اتصال يبقى مفتوحاً طوال الجلسة، يُخطِر كل الأجهزة المتصلة (أي دور) فوراً بأي تعديل/حذف/اعتماد
+   يحدث من مستخدم آخر — بدل انتظار الفحص الدوري كل دقيقتين فى الواجهة. لا نستخدم requireAuth
+   العادي هنا لأن EventSource فى المتصفح لا يدعم إرسال ترويسة Authorization إطلاقاً، فيصل نفس
+   التوكن المعتاد عبر query string بدلاً من ذلك (نفس آلية resolveUserFromToken المستخدمة داخلياً
+   فى requireAuth، فلا فرق فى قوة التحقق نفسها). خارج أي rate limiter لأنه اتصال واحد طويل لكل
+   جهاز وليس سلسلة طلبات متكررة.
+   ملاحظة: يظهر التوكن هنا فى الـ URL (سجلات الوصول المحتملة على السيرفر/الوسطاء) — تُقبَل هذه
+   نقطة الضعف الصغيرة لأن SSE لا يدعم ترويسات أصلاً، وتوكن الجلسة نفسه (30 يوماً صلاحية) لا
+   يتغيّر بذلك عن أي طلب GET آخر لو كان يُمرَّر بطريقة مشابهة. */
+router.get('/api/events/stream', async (req, res) => {
+  let user;
+  try {
+    user = await resolveUserFromToken(req.query.token);
+  } catch (e) {
+    return res.status(e.status || 401).end();
+  }
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    // يمنع أي وسيط شبكي (proxy) يقف بين المتصفح والسيرفر من تخزين الاستجابة مؤقتاً بدل بثها
+    // لحظياً — بدونه قد تصل الأحداث متأخرة أو دفعة واحدة بدل لحظياً حسب إعدادات الوسيط.
+    'X-Accel-Buffering': 'no',
+  });
+  // تعطيل خوارزمية Nagle على هذا الاتصال تحديداً: بدونها، Node/TCP قد يؤخر إرسال حزم صغيرة
+  // (مثل نبضة الحياة أو حدث تغيير واحد) بضع مئات المللي ثانية أملاً فى تجميعها مع بيانات أخرى —
+  // تأخير غير مقبول لقناة الغرض الوحيد منها السرعة اللحظية.
+  try { req.socket.setNoDelay(true); } catch (e) {}
+  res.flushHeaders();
+  res.write(': connected\n\n');
+  const clientId = addSseClient(res, user);
+  req.on('close', () => removeSseClient(clientId));
+});
+
+/* ---------------- إدارة المستخدمين (للمدير admin فقط) ----------------
+   بديل عن تشغيل seed-user.js يدوياً من الطرفية في كل مرة — نفس المنطق بالضبط لكن عبر API
+   محمي بـ requireRole('admin') على مستوى الخادم نفسه (مش مجرد إخفاء زر في الواجهة). */
+const VALID_SERVER_ROLES = ['admin', 'accountant', 'reception', 'staff'];
+
+// GET /api/users -> قائمة المستخدمين (بدون كلمات المرور المشفّرة أبداً)
+router.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT id, username, display_name, role, is_active, created_at FROM server_users ORDER BY created_at ASC'
+    );
+    res.json({ users: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب قائمة المستخدمين' });
+  }
+});
+
+// GET /api/users/reception -> قائمة مختصرة (اسم المستخدم + الاسم الظاهر فقط) بموظفي دور الاستقبال حصراً،
+// متاحة للمدير والمحاسب معاً (على عكس /api/users الكاملة المقصورة على المدير فقط) — تُستخدم فقط لتعبئة
+// فلتر "موظفي الاستقبال" في شيت العملاء وشيت الحركات المالية، ولا تُرجع أي بيانات حساسة أخرى.
+router.get('/api/users/reception', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT username, display_name FROM server_users WHERE role = 'reception' ORDER BY created_at ASC"
+    );
+    res.json({ users: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب قائمة موظفي الاستقبال' });
+  }
+});
+
+// POST /api/users  body: { username, password, displayName, role } -> إنشاء مستخدم جديد أو تحديث كلمة مرور/صلاحية مستخدم موجود
+router.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  const { username, password, displayName, role } = req.body || {};
+  if (!username || !username.trim()) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
+  if (!password || password.length < 6) return res.status(400).json({ error: 'كلمة المرور يجب ألا تقل عن 6 أحرف' });
+  const finalRole = VALID_SERVER_ROLES.includes(role) ? role : 'staff';
+  try {
+    const hash = await hashPassword(password);
+    const r = await pool.query(
+      `INSERT INTO server_users (username, password_hash, display_name, role)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash,
+         display_name = COALESCE(EXCLUDED.display_name, server_users.display_name),
+         role = EXCLUDED.role,
+         token_version = server_users.token_version + 1
+       RETURNING id, username, display_name, role, created_at`,
+      [username.trim(), hash, displayName || username.trim(), finalRole]
+    );
+    res.json({ user: r.rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حفظ المستخدم' });
+  }
+});
+
+// DELETE /api/users/:username -> حذف مستخدم (لا يمكن للمدير حذف حسابه الحالي بنفسه لتفادي فقدان الوصول بالخطأ)
+router.delete('/api/users/:username', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  if (target === req.user.username) {
+    return res.status(400).json({ error: 'لا يمكنك حذف حسابك الحالي وأنت مسجّل دخول به' });
+  }
+  try {
+    await pool.query('DELETE FROM server_users WHERE username = $1', [target]);
+    res.json({ username: target, deleted: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر حذف المستخدم' });
+  }
+});
+
+// GET /api/login-history -> آخر عمليات الدخول (ناجحة وفاشلة) لكل المستخدمين (admin فقط)، بالإضافة
+// لملخص "نشاط مشبوه" (تجميع محاولات فاشلة حسب اسم المستخدم/الـ IP خلال آخر ساعة)، حتى يلاحظ
+// المدير أي محاولات دخول غير مصرّح بها لم تصل لحد rate limiting نفسه (محاولات متفرقة بطيئة).
+router.get('/api/login-history', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      'SELECT username, role, ip_address, device_info, logged_in_at, success FROM login_history ORDER BY logged_in_at DESC LIMIT 300'
+    );
+    const suspicious = await pool.query(
+      `SELECT username, ip_address, COUNT(*)::int AS failed_count, MAX(logged_in_at) AS last_attempt
+       FROM login_history
+       WHERE success = false AND logged_in_at > now() - INTERVAL '1 hour'
+       GROUP BY username, ip_address
+       HAVING COUNT(*) >= 3
+       ORDER BY failed_count DESC`
+    );
+    // تسجيل أن هذا الأدمن راجع الشاشة الآن — يمنع تكرار نفس التنبيه الاستباقي عند دخوله لاحقاً
+    // لو مفيش نشاط جديد بعد هذه اللحظة.
+    pool.query('UPDATE server_users SET last_login_history_seen_at = now() WHERE username = $1', [req.user.username])
+      .catch(e => console.error('تعذّر تحديث وقت آخر مراجعة لسجل الدخول:', e));
+    res.json({ history: r.rows, suspiciousActivity: suspicious.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر جلب سجل الدخول' });
+  }
+});
+
+// POST /api/users/:username/force-logout -> تسجيل خروج فوري لهذا المستخدم من كل الأجهزة/الجلسات
+// دفعة واحدة (عبر زيادة token_version، بنفس آلية /api/auth/logout الحالية)، بدون حاجة لكلمة مروره.
+router.post('/api/users/:username/force-logout', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  try {
+    const r = await pool.query('UPDATE server_users SET token_version = token_version + 1 WHERE username = $1 RETURNING username', [target]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    res.json({ username: target, loggedOut: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر إنهاء جلسات هذا المستخدم' });
+  }
+});
+
+// POST /api/users/:username/toggle-active -> تعطيل/تفعيل حساب مستخدم (بدون حذفه).
+// عند التعطيل: يُرفض دخوله فوراً من الآن فصاعداً، وأي جلسة مفتوحة له حالياً تُقطع
+// فوراً أيضاً (نزيد token_version بنفس آلية force-logout، بالإضافة لتحقق is_active
+// في requireAuth). لا يمكن للمدير تعطيل حسابه الحالي بنفسه لتفادي فقدان الوصول بالخطأ.
+router.post('/api/users/:username/toggle-active', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = req.params.username;
+  if (target === req.user.username) {
+    return res.status(400).json({ error: 'لا يمكنك تعطيل حسابك الحالي وأنت مسجّل دخول به' });
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE server_users
+       SET is_active = NOT is_active, token_version = token_version + 1
+       WHERE username = $1
+       RETURNING username, is_active`,
+      [target]
+    );
+    if (!r.rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    res.json({ username: r.rows[0].username, isActive: r.rows[0].is_active });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'تعذّر تغيير حالة المستخدم' });
+  }
+});
+
+/* ---------------- التحقق من كود الترخيص (لا يتطلب تسجيل دخول) ---------------- */
+router.post('/api/license/validate', licenseLimiter, (req, res) => {
+  const { licenseKey } = req.body || {};
+  const result = validateLicenseKey(licenseKey);
+  res.json(result);
+});
+
+module.exports = router;
