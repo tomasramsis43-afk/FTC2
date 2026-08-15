@@ -10,6 +10,12 @@ const { pool, ensureSchema } = require('./db');
 const { signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode } = require('./auth');
 const { addClient: addSseClient, removeClient: removeSseClient, broadcastRecordChanged } = require('./sse');
+const { centralErrorHandler } = require('./errors');
+const { authLimiter, licenseLimiter, storageLimiter, aiLimiter } = require('./rate-limiters');
+const backupsRouter = require('./routes/backups');
+const aiRouter = require('./routes/ai');
+const zatcaRouter = require('./routes/zatca');
+const healthRouter = require('./routes/health');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -74,39 +80,6 @@ app.use(compression({
 app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
 
 /* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
-   تسجيل دخول مسبق. نحدّد بالـ IP لأن هذين المسارين تحديداً هما هدف مباشر
-   لأي محاولة تخمين آلية (كلمة مرور أو كود ترخيص). */
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 20, // 20 محاولة كحد أقصى لكل IP خلال النافذة الزمنية
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'محاولات كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
-});
-const licenseLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'محاولات كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
-});
-
-const storageLimiter = rateLimit({
-  windowMs: 60 * 1000, // نافذة دقيقة واحدة
-  max: 120,            // 120 عملية حفظ كحد أقصى لكل IP في الدقيقة — يكفي دفعات "مسح + رفع استعادة" كاملة
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'طلبات حفظ كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
-});
-// نقاط الذكاء الاصطناعي (قراءة فواتير OCR / تصنيف مصروفات) هي الوحيدة فى كل السيرفر التي تستدعي
-// Anthropic API خارجياً بتكلفة فعلية لكل طلب — بدون حد لمعدل الطلبات، حساب مُخترَق أو مسيء يقدر
-// يستهلك رصيد الـ API بسرعة (خصوصاً read-invoices اللي بتقبل حتى 30 ملف فى الطلب الواحد).
-const aiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20, // 20 طلب لكل IP خلال 15 دقيقة (كل طلب read-invoices قد يحتوي حتى 30 ملف بالفعل)
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'طلبات ذكاء اصطناعي كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
 
 
@@ -1783,61 +1756,7 @@ app.delete('/api/records/:collection', requireAuth, requireRole('admin'), requir
     res.status(500).json({ error: 'تعذّر حذف البيانات' });
   }
 });
-
-// ---------------- النسخ الاحتياطية الكاملة المُجدوَلة (مشفّرة من طرف العميل، أدمن فقط) ----------------
-// الحد الأقصى لعدد النسخ المحفوظة فى نفس الوقت — أي نسخة جديدة تتخطى الحد تحذف أقدم نسخة تلقائياً،
-// بحيث لا يتضخم الجدول بلا نهاية (خصوصاً مع "auto" التي قد تتكرر كل أسبوع لسنوات).
-const MAX_BACKUPS_RETAINED = 30;
-app.post('/api/backups', requireAuth, storageLimiter, requireRole('admin'), async (req, res) => {
-  const enc = req.body?.enc;
-  const kind = req.body?.kind === 'manual' ? 'manual' : 'auto';
-  if (typeof enc !== 'string' || !enc.length) return res.status(400).json({ error: 'بيانات النسخة الاحتياطية مفقودة' });
-  try {
-    const ins = await pool.query(
-      `INSERT INTO app_backups (kind, enc, size_bytes, created_by) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
-      [kind, enc, Buffer.byteLength(enc, 'utf8'), req.user.username]
-    );
-    // تنظيف: الاحتفاظ بآخر MAX_BACKUPS_RETAINED نسخة فقط
-    await pool.query(
-      `DELETE FROM app_backups WHERE id NOT IN (SELECT id FROM app_backups ORDER BY created_at DESC LIMIT $1)`,
-      [MAX_BACKUPS_RETAINED]
-    );
-    res.json({ id: ins.rows[0].id, createdAt: ins.rows[0].created_at });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر حفظ النسخة الاحتياطية' });
-  }
-});
-// قائمة النسخ (بيانات وصفية فقط — بدون المحتوى المشفّر نفسه، تفادياً لردّ ثقيل)
-app.get('/api/backups', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const r = await pool.query('SELECT id, kind, size_bytes, created_by, created_at FROM app_backups ORDER BY created_at DESC LIMIT 100');
-    res.json(r.rows);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر جلب قائمة النسخ الاحتياطية' });
-  }
-});
-// محتوى نسخة واحدة كاملاً (للتنزيل/الاستعادة) — يفكّه المتصفح بمفتاحه محلياً، السيرفر يمرّره كما هو فقط
-app.get('/api/backups/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const r = await pool.query('SELECT id, kind, enc, created_at FROM app_backups WHERE id = $1', [req.params.id]);
-    if (!r.rows[0]) return res.status(404).json({ error: 'النسخة غير موجودة' });
-    res.json(r.rows[0]);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر جلب النسخة الاحتياطية' });
-  }
-});
-app.delete('/api/backups/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    await pool.query('DELETE FROM app_backups WHERE id = $1', [req.params.id]);
-    res.json({ deleted: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر حذف النسخة الاحتياطية' });
-  }
-});
+app.use(backupsRouter);
 
 // auditLog وdeletedVaultTx وdeletedInvoices تتراكم بلا حد أقصى بمرور الوقت (سجل تاريخي، وليس بيانات
 // تشغيلية حالية). لا يوجد حذف تلقائي مجدوَل عمداً — القرار يُترك للأدمن صراحةً فى كل مرة، خصوصاً أن
@@ -1888,259 +1807,10 @@ app.get('/api/records/:collection/prune-preview', requireAuth, requireRole('admi
   }
 });
 
-/* ---------------- قراءة فواتير الدورات من ملفات حقيقية (PDF/صور) بالذكاء الاصطناعي ----------------
-   تستقبل مجموعة ملفات (Base64)، وترسل كل ملف لـ Claude API لاستخراج البيانات المطبوعة داخله فقط
-   (رقم الهوية، رقم الفاتورة، تاريخ الفاتورة، القيمة الفعلية). لا شيء يُحفظ هنا في قاعدة البيانات —
-   فقط استخراج وإرجاع النتائج للواجهة، التي تعرضها للمراجعة اليدوية قبل الحفظ النهائي (بنفس منطق
-   ونموذج التحقق المستخدم أصلاً في "تحديث/استيراد فواتير الدورات دفعة واحدة"). */
-const invoiceReadJsonParser = express.json({ limit: '40mb' });
+app.use(aiRouter);
+app.use(healthRouter);
+app.use(zatcaRouter);
 
-const CI_EXTRACT_SYSTEM_PROMPT = `أنت مساعد استخراج بيانات من فواتير/إيصالات دورات تدريبية سعودية.
-سيصلك ملف فاتورة أو إيصال واحد (صورة أو PDF). استخرج منه فقط ما هو مكتوب صراحةً داخل الملف:
-- nationalId: رقم الهوية/الإقامة للمتدرب إن وُجد مكتوباً بوضوح (أرقام فقط بدون مسافات أو رموز)
-- invoiceNo: رقم الفاتورة أو رقم الإيصال
-- date: تاريخ إصدار الفاتورة بصيغة YYYY-MM-DD
-- actualValue: القيمة الإجمالية الفعلية المدفوعة (رقم فقط بدون رمز عملة)
-- clientNameOnInvoice: اسم العميل كما هو مكتوب في الفاتورة إن وُجد
-لا تخترع أي قيمة غير موجودة فعلياً في الملف — إن لم يظهر حقل بوضوح اجعله null.
-أجب بصيغة JSON فقط بدون أي نص أو علامات \`\`\`json، بالشكل التالي بالضبط:
-{"nationalId": "...", "invoiceNo": "...", "date": "...", "actualValue": 0, "clientNameOnInvoice": "...", "confidence": "high|medium|low"}`;
-
-async function extractInvoiceFile(f) {
-  const mime = String(f.mimeType || '').toLowerCase();
-  const isPdf = mime === 'application/pdf';
-  const isImage = mime.startsWith('image/');
-  const fileName = f.name || 'ملف';
-  if (!f.dataBase64 || (!isPdf && !isImage)) {
-    return { fileName, error: 'صيغة ملف غير مدعومة (يجب أن تكون صورة أو PDF)' };
-  }
-  const contentBlock = isPdf
-    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.dataBase64 } }
-    : { type: 'image', source: { type: 'base64', media_type: mime, data: f.dataBase64 } };
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 500,
-        system: CI_EXTRACT_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'استخرج البيانات من هذه الفاتورة.' }] }],
-      }),
-    });
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
-      return { fileName, error: `تعذّرت قراءة الملف (HTTP ${r.status})`, detail: errText.slice(0, 200) };
-    }
-    const data = await r.json();
-    const rawText = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = rawText.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    return {
-      fileName,
-      nationalId: parsed.nationalId ? String(parsed.nationalId).trim() : null,
-      invoiceNo: parsed.invoiceNo ? String(parsed.invoiceNo).trim() : null,
-      date: parsed.date || null,
-      actualValue: parsed.actualValue !== null && parsed.actualValue !== undefined && parsed.actualValue !== '' ? Number(parsed.actualValue) : null,
-      clientNameOnInvoice: parsed.clientNameOnInvoice || null,
-      confidence: parsed.confidence || 'unknown',
-    };
-  } catch (e) {
-    return { fileName, error: 'تعذّر تحليل استجابة الذكاء الاصطناعي' };
-  }
-}
-
-app.post('/api/ai/read-invoices', requireAuth, invoiceReadJsonParser, aiLimiter, async (req, res) => {
-  const files = Array.isArray(req.body?.files) ? req.body.files : [];
-  if (!files.length) return res.status(400).json({ error: 'لم يتم إرسال أي ملفات' });
-  if (files.length > 30) return res.status(400).json({ error: 'الحد الأقصى 30 ملفاً في المرة الواحدة' });
-  // حد أقصى 8 ميجابايت لكل ملف على حدة (أكثر من كافٍ لأي فاتورة/إيصال ممسوح ضوئياً) — دفاع إضافي
-  // بجانب حد الـ 40 ميجابايت الإجمالي لكل الطلب، بدل الاعتماد على الحد الكلي فقط.
-  const MAX_FILE_BYTES = 8 * 1024 * 1024;
-  for (const f of files) {
-    const approxBytes = f?.dataBase64 ? Math.ceil(f.dataBase64.length * 0.75) : 0;
-    if (approxBytes > MAX_FILE_BYTES) {
-      return res.status(400).json({ error: `الملف "${f.name || 'بدون اسم'}" أكبر من الحد المسموح (8 ميجابايت للملف الواحد)` });
-    }
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
-  }
-  // معالجة بحد أقصى 3 ملفات بالتوازي في نفس الوقت لتفادي إغراق الـ API
-  const results = [];
-  const queue = [...files];
-  async function worker() {
-    while (queue.length) {
-      const f = queue.shift();
-      results.push(await extractInvoiceFile(f));
-    }
-  }
-  try {
-    await Promise.all([worker(), worker(), worker()]);
-    res.json({ results });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّرت معالجة الملفات' });
-  }
-});
-
-/* ---------------- تصنيف المصروفات بالذكاء الاصطناعي (عبر الخادم) ----------------
-   تستقبل اسم المستلم/الملاحظات/رقم المستند/المبلغ + قائمة التصنيفات المتاحة،
-   وتطلب من Claude اقتراح أنسب تصنيف (موجود أو جديد) مع سبب الاختيار.
-   المفتاح يبقى في process.env.ANTHROPIC_API_KEY فقط ولا يُكشف للواجهة. */
-const AI_CLASSIFY_SYSTEM_PROMPT = 'أنت مساعد تصنيف مصروفات لمركز تدريب سعودي. سيصلك اسم مستلم مبلغ و/أو ملاحظة و/أو رقم مستند و/أو مبلغ مصروف. اختر أنسب تصنيف من قائمة "availableCategories" المُرسلة فقط إن وجد تصنيف مناسباً فعلياً. إن لم توجد أي تصنيف مناسب في القائمة، اقترح اسم تصنيف عربي جديد قصير (كلمة أو كلمتان) يصلح لتكرار هذا النوع من المصروفات مستقبلاً. أجب بصيغة JSON فقط بدون أي نص أو علامات ```json، بالشكل التالي بالضبط: {"category":"...", "isNew": true أو false, "reason":"جملة قصيرة توضح سبب الاختيار"}';
-
-app.post('/api/ai/classify-expense', requireAuth, aiLimiter, async (req, res) => {
-  const { recipientName, notes, documentRef, amount, availableCategories } = req.body || {};
-  if (!recipientName && !notes && !documentRef) {
-    return res.status(400).json({ error: 'أدخل اسم مستلم المبلغ أو ملاحظة أو رقم مستند أولاً' });
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
-  }
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        system: AI_CLASSIFY_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: JSON.stringify({ recipientName: recipientName || null, notes: notes || null, documentRef: documentRef || null, amount: amount || null, availableCategories: availableCategories || [] }) }],
-      }),
-    });
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
-      return res.status(502).json({ error: `تعذّر الاتصال بخدمة الذكاء الاصطناعي (HTTP ${r.status})`, detail: errText.slice(0, 200) });
-    }
-    const data = await r.json();
-    const rawText = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = rawText.replace(/```json|```/g, '').trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (parseErr) {
-      return res.status(502).json({ error: 'استجابة الذكاء الاصطناعي غير صالحة (ليست JSON)' });
-    }
-    res.json({ category: String(parsed.category || '').trim(), isNew: !!parsed.isNew, reason: parsed.reason || '' });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر الحصول على اقتراح التصنيف' });
-  }
-});
-
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-/* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
-const zatca = require('./zatca/lib');
-const { centralErrorHandler } = require('./errors');
-
-// حالة التسجيل الحالية (بدون أي بيانات حسّاسة) — تُستخدم لعرض حالة الربط في الواجهة
-app.get('/api/zatca/status', requireAuth, async (req, res) => {
-  const environment = req.query.environment || 'sandbox';
-  try {
-    const row = await zatca.loadActiveEgsRow(environment);
-    res.json(zatca.publicStatus(row));
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر جلب حالة الربط مع الهيئة' });
-  }
-});
-
-// تسجيل/تحديث EGS والحصول على شهادة الامتثال (compliance CSID) — يتطلب OTP من بوابة فاتورة
-app.post('/api/zatca/onboard', requireAuth, requireRole('admin'), async (req, res) => {
-  const { environment = 'sandbox', otp, orgProfile } = req.body || {};
-  if (!otp || !orgProfile) return res.status(400).json({ error: 'يلزم إرسال OTP وبيانات المنشأة (orgProfile)' });
-  try {
-    const result = await zatca.onboard({ environment, otp, orgProfile });
-    res.json(result);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'فشل التسجيل مع الهيئة', detail: e.message });
-  }
-});
-
-// طلب شهادة الإنتاج (PCSID) بعد اجتياز فحوصات التوافق
-app.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), async (req, res) => {
-  const { environment = 'sandbox', complianceRequestId } = req.body || {};
-  if (!complianceRequestId) return res.status(400).json({ error: 'يلزم إرسال complianceRequestId' });
-  try {
-    const result = await zatca.issueProductionCsid({ environment, complianceRequestId });
-    res.json(result);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'فشل الحصول على شهادة الإنتاج', detail: e.message });
-  }
-});
-
-// إرسال فاتورة مبيعات (تُبنى من الواجهة الأمامية بنفس أرقام الفاتورة المطبوعة)
-// مقيَّدة على الأدوار التي تملك فعلياً شاشة الخزنة/العملاء التي تُرسل منها (admin/accountant/staff) —
-// الاستقبال محروم لعدم امتلاكه أي من هذه الشاشات أصلاً، ويمنع إرسال فواتير/سجلات ضريبية مزوّرة
-// عبر طلب مباشر بأقل صلاحية (إغلاق ثغرة غياب رقابة الدور على هذه النقطة).
-app.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
-  const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime } = req.body || {};
-  if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
-    return res.status(400).json({ error: 'بيانات الفاتورة غير مكتملة' });
-  }
-  try {
-    if (clientType === 'company') {
-      await zatca.logUnsupportedStandardInvoice({ sourceRef, documentType: 'invoice', createdBy: req.user.username });
-      return res.json({ status: 'not_supported_yet', message: 'الفواتير الضريبية القياسية (B2B) غير مفعّلة بعد في هذا الربط' });
-    }
-    const result = await zatca.submitSimplifiedInvoice({
-      environment, sourceRef, documentType: 'invoice', lineItems, issueDate, issueTime,
-      createdBy: req.user.username,
-    });
-    res.json(result);
-  } catch (e) {
-    if (e.isValidation) return res.status(400).json({ error: e.message });
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر إرسال الفاتورة للهيئة', detail: e.message });
-  }
-});
-
-// إرسال إشعار دائن (مردود مبيعات) — نفس رقابة الدور أعلاه (ممنوع عن الاستقبال).
-app.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
-  const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime, canceledInvoiceNumber, reason } = req.body || {};
-  if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
-    return res.status(400).json({ error: 'بيانات المردود غير مكتملة' });
-  }
-  try {
-    if (clientType === 'company') {
-      await zatca.logUnsupportedStandardInvoice({ sourceRef, documentType: 'credit_note', createdBy: req.user.username });
-      return res.json({ status: 'not_supported_yet', message: 'إشعارات الدائن القياسية (B2B) غير مفعّلة بعد في هذا الربط' });
-    }
-    const result = await zatca.submitSimplifiedInvoice({
-      environment, sourceRef, documentType: 'credit_note', lineItems, issueDate, issueTime,
-      cancelation: {
-        canceled_invoice_number: canceledInvoiceNumber || '',
-        payment_method: zatca.ZATCAPaymentMethods.CASH,
-        reason: reason || 'مردود مبيعات',
-      },
-      createdBy: req.user.username,
-    });
-    res.json(result);
-  } catch (e) {
-    if (e.isValidation) return res.status(400).json({ error: e.message });
-    console.error(e);
-    res.status(500).json({ error: 'تعذّر إرسال المردود للهيئة', detail: e.message });
-  }
-});
-
-/* ---------------- استضافة واجهة البرنامج (نفس ملف HTML) ---------------- */
-// نمنع المتصفح من تخزين app.html في الكاش لفترة طويلة، حتى يصل أي تحديث جديد
-// للمستخدمين فوراً بعد كل نشر (deploy) بدل ما يفضلوا شايفين نسخة قديمة مخزّنة.
-// بدون maxAge، يعتمد express.static على ETag/Last-Modified: المتصفح يتأكد من السيرفر
-// في كل مرة (رد سريع 304 لو الملف لم يتغيّر فعلياً)، فنحافظ على معظم فائدة الكاش
-// (تفادي إعادة تحميل المحتوى نفسه) دون خطر تقديم نسخة قديمة بعد كل نشر جديد.
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
