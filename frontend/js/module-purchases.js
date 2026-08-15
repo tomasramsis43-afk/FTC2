@@ -1,6 +1,5 @@
 /* ================= المشتريات (موردون + فواتير شراء) ================= */
 // معدل الضريبة مركزي في core-utils.js (VAT_RATE) — أي تعديل على المعدل يُطبَّق هنا تلقائياً
-function purchaseVat(gross){ return vatFromGross(gross); }
 function purchaseTax(subtotal){ return subtotal * VAT_RATE; }
 function purchaseMatchesFilters(p){
   const q = ($('#purchase-search')?.value||'').trim().toLowerCase();

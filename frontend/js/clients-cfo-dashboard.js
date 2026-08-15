@@ -405,11 +405,6 @@ $('#cfo-tabs')?.addEventListener('click', e=>{
   document.querySelectorAll('#cfo-tabs .cfo-tab-btn').forEach(b=> b.classList.toggle('active', b===btn));
   applyCfoTabFilter();
 });
-function groupCount(list, field){
-  const map = {};
-  list.forEach(x=>{ const k = x[field] || 'غير محدد'; map[k]=(map[k]||0)+1; });
-  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
-}
 /* توزيع "طريقة الدفع" الفعلي: يجمع المبالغ المستلمة فعلياً (paid + paid2) على كل طريقة دفع مسجّلة،
    بحيث يُحتسب كل جزء من الدفعة المقسّمة (channel/channel2) على حدة بمبلغه الحقيقي، وليس مجرد عدّ
    العملاء حسب أول طريقة دفع فقط — فتُطابق النتيجة ما هو موجود فعلياً في بيانات العملاء. */
