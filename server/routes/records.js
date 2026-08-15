@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { pool } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { storageLimiter } = require('../rate-limiters');
-const { restrictKeyToAdmin, roleCanAccessView } = require('../permissions');
+const { restrictKeyToAdmin, roleCanAccessView, RESTRICTED_STORAGE_KEYS } = require('../permissions');
 const { broadcastRecordChanged } = require('../sse');
 
 // (خصومات، دفعات جزئية...) موجودة فقط بمنطق الواجهة الأمامية — تلك الحالات تستمر تُحسب من
