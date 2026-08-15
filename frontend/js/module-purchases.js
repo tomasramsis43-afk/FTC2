@@ -590,7 +590,11 @@ document.addEventListener('click', async e=>{
 // متوقع)، كل الخطوات التالية لها كانت تتوقف تماماً ولا تُنفَّذ إطلاقاً — وهو ما كان يجعل فلتر
 // السنة (وأي شاشة أخرى) يبدو "معطَّلاً" بلا أي سبب ظاهر لمجرد فشل صامت في خطوة سابقة له.
 function safeStep(fn, label){
-  try{ return fn(); }
+  try{
+    const r = fn();
+    if(r && typeof r.then==='function') r.catch(e => console.error(`renderAllViewsAfterLoad: فشلت خطوة "${label}"`, e));
+    return r;
+  }
   catch(e){ console.error(`renderAllViewsAfterLoad: فشلت خطوة "${label}"`, e); }
 }
 async function renderAllViewsAfterLoad(){
@@ -727,16 +731,14 @@ async function startApp(){
     return;
   }
   updateOfflineIndicator();
-  await renderAllViewsAfterLoad();
-  // إظهار الواجهة (#app-wrap) يجب أن يحدث هنا مباشرة بعد الرسم، قبل أي خطوة إضافية (نسخة احتياطية
-  // تلقائية / صوت الدخول)، حتى لو فشلت إحدى هاتين الخطوتين لاحقاً بخطأ غير متوقع، لا يبقى المستخدم
-  // أمام شاشة سوداء بلا واجهة — كان استثناء غير مُعالَج داخل maybeRunAutoBackup (مثلاً فشل رفع النسخة
-  // للسيرفر) يمنع الوصول لـ autoSignInLocalUser() نهائياً ويسبب بالضبط هذه المشكلة.
-  // إخفاء شاشة التحميل وإظهار الواجهة الرئيسية (#app-wrap) — يجب أن يحدث هنا مباشرة بعد
-  // الرسم، قبل أي خطوة إضافية (نسخة احتياطية تلقائية / صوت الدخول)، حتى لو فشلت إحدى
-  // هاتين الخطوتين لاحقاً بخطأ غير متوقع، لا يبقى المستخدم أمام شاشة سوداء/محمل طوال الوقت.
+  // إخفاء شاشة التحميل وإظهار الواجهة الرئيسية (#app-wrap) فوراً — قبل أي عملية رسم
+  // أو أي خطوة إضافية، حتى لو فشلت إحدى هذه الخطوات لاحقاً بخطأ غير متوقع لا يبقى المستخدم
+  // أمام شاشة سوداء/محمل طوال الوقت. الـ safeStep داخل renderAllViewsAfterLoad تحمي كل خطوة
+  // رسم بمعزل عن الأخرى، لكنها لا تحمي من رفع استثناء غير متوقع من itself (Promise مرفوض غير
+  // مُعالَج) — لذا نغلفها try/catch إضافي هنا كطبقة أمان أخيرة.
   hideAppLoadingOverlay();
   $('#app-wrap').style.display = '';
+  try{ await renderAllViewsAfterLoad(); }catch(e){ console.error('startApp: فشلت خطوة "renderAllViewsAfterLoad"', e); }
   autoSignInLocalUser();
   // تشغيل النسخ الاحتياطي التلقائي في الخلفية — لا ننتظره لأنه قد يستغرق وقتاً طويلاً
   // (تنزيل وتشفير ورفع كل بيانات البرنامج) ولا يجب أن يعرقل ظهور الواجهة أو تفاعلها.
