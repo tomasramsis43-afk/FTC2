@@ -716,7 +716,7 @@ async function startApp(){
   const _loadWatchdog = setTimeout(()=>{
     console.warn('[startApp] انتهت مهلة التحميل الاحتياطية — إظهار الواجهة قسراً لتفادي دائرة تحميل لا تنتهي');
     hideAppLoadingOverlay();
-    try{ $('#app-wrap').style.display = ''; }catch(e){}
+    try{ $('#app-wrap').style.display = 'block'; }catch(e){}
   }, 70000);
   try{
     const localFirst = await hasLocalCache();
@@ -747,7 +747,7 @@ async function startApp(){
   // رسم بمعزل عن الأخرى، لكنها لا تحمي من رفع استثناء غير متوقع من itself (Promise مرفوض غير
   // مُعالَج) — لذا نغلفها try/catch إضافي هنا كطبقة أمان أخيرة.
   hideAppLoadingOverlay();
-  $('#app-wrap').style.display = '';
+  $('#app-wrap').style.display = 'block';
   try{ await renderAllViewsAfterLoad(); }catch(e){ console.error('startApp: فشلت خطوة "renderAllViewsAfterLoad"', e); }
   autoSignInLocalUser();
   // تشغيل النسخ الاحتياطي التلقائي في الخلفية — لا ننتظره لأنه قد يستغرق وقتاً طويلاً
