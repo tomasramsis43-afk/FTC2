@@ -709,6 +709,15 @@ async function startApp(){
   // شاشة الدخول أُخفيت بالفعل — نعرض "جاري تحميل البيانات..." فوراً حتى لا يبقى المستخدم أمام
   // شاشة سوداء صامتة بينما اكتمال التحميل قد يستغرق وقتاً (سيرفر بطيء/أول فتح كامل بعد استعادة).
   showAppLoadingOverlay();
+  // شبكة أمان أخيرة: لو أي خطوة علقت لأي سبب (كاش قديم للـ Service Worker يمنع وصول
+  // ملفات JS المحدّثة، طلب شبكة عالق تجاوز مهلة serverFetch，إلخ)， نُجبر إخفاء شاشة التحميل
+  // وإظهار الواجهة بعد مهلة بدل ترك المستخدم أمام "دائرة تحميل لا تنتهي" للأبد. المهلة (70ث)
+  // أطول من مهلة serverFetch (60ث) فلا تتداخل مع سلوك الفشل الطبيعي لتحميل البيانات.
+  const _loadWatchdog = setTimeout(()=>{
+    console.warn('[startApp] انتهت مهلة التحميل الاحتياطية — إظهار الواجهة قسراً لتفادي دائرة تحميل لا تنتهي');
+    hideAppLoadingOverlay();
+    try{ $('#app-wrap').style.display = ''; }catch(e){}
+  }, 70000);
   try{
     const localFirst = await hasLocalCache();
     if(localFirst){
@@ -731,6 +740,7 @@ async function startApp(){
     return;
   }
   updateOfflineIndicator();
+  clearTimeout(_loadWatchdog);
   // إخفاء شاشة التحميل وإظهار الواجهة الرئيسية (#app-wrap) فوراً — قبل أي عملية رسم
   // أو أي خطوة إضافية، حتى لو فشلت إحدى هذه الخطوات لاحقاً بخطأ غير متوقع لا يبقى المستخدم
   // أمام شاشة سوداء/محمل طوال الوقت. الـ safeStep داخل renderAllViewsAfterLoad تحمي كل خطوة
