@@ -45,7 +45,8 @@ async function serverLogin(username, password, totpCode){
   }catch(e){ console.error('[Auth] Failed to store session token:', e); }
   // نحفظ (بشكل غير قابل للعكس) تجزئة لكلمة المرور محلياً على هذا الجهاز فقط، حتى يمكن لاحقاً
   // فتح البرنامج بلا إنترنت إطلاقاً بنفس اسم المستخدم/كلمة المرور — راجع tryOfflineLogin أسفله.
-  await cacheOfflineLogin(SERVER_AUTH_USERNAME, password, SERVER_AUTH_ROLE);
+  // تعمل في الخلفية (fire-and-forget) لتجنب تأخير ظهور الواجهة بـ PBKDF2 بـ 100000 تكرار.
+  cacheOfflineLogin(SERVER_AUTH_USERNAME, password, SERVER_AUTH_ROLE).catch(e => console.error('[Auth] Failed to cache offline login:', e));
   return data;
 }
 

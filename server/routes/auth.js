@@ -200,14 +200,27 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
       [user.username, user.role || 'staff', loginIp, loginDevice]
     ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
-    // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات فاشلة متكررة) حصل منذ آخر مرة راجع فيها
-    // شاشة "سجل الدخول" ولسه ما شافوش، نُرجعه هنا فوراً بدل ما يفضل مدفون فى السجل لحد ما يفتحه
-    // بنفسه بالصدفة.
-    let suspiciousAlert = [];
-    if ((user.role || 'staff') === 'admin') {
-      try {
+    // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
+    // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدلاً من أي قائمة محلية داخل البرنامج.
+    // الاستجابة تُرسل فوراً — بدون الانتظار في استعلام الأنشطة المشتبكة للمدراء.
+    res.json({
+      token,
+      username: user.username,
+      role: user.role || 'staff',
+      user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
+      suspiciousAlert: [],
+    });
+    // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات دخول مشبوهة) حصل منذ آخر مرة راجع
+    // فيها شاشة "سجل الدخول"، نُرجعه على شاشة الإعدادات — لا نُبطئ تسجيل الدخول بفحصه
+    // مباشرة في استجابة التركيب. يعمل الاستعلام وتحديث last_login_history_seen_at في الخلفية.
+    setImmediate(() => {
+      if ((user.role || 'staff') === 'admin') {
         const since = user.last_login_history_seen_at || new Date(Date.now() - 24 * 3600 * 1000);
-        const sus = await pool.query(
+        pool.query(
+          `UPDATE server_users SET last_login_history_seen_at = now() WHERE id = $1`,
+          [user.id]
+        ).catch(e => console.error('تعذّر تحديث وقت آخر مراجعة لسجل الدخول:', e));
+        pool.query(
           `SELECT username, ip_address, COUNT(*)::int AS failed_count, MAX(logged_in_at) AS last_attempt
            FROM login_history
            WHERE success = false AND logged_in_at > $1
@@ -215,18 +228,8 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
            HAVING COUNT(*) >= 3
            ORDER BY failed_count DESC LIMIT 10`,
           [since]
-        );
-        suspiciousAlert = sus.rows;
-      } catch (e) { console.error('تعذّر فحص النشاط المشبوه:', e); }
-    }
-    // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
-    // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدل أي قائمة محلية داخل البرنامج.
-    res.json({
-      token,
-      username: user.username,
-      role: user.role || 'staff',
-      user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
-      suspiciousAlert,
+        ).catch(e => console.error('تعذّر فحص النشاط المشبوه:', e));
+      }
     });
   } catch (e) {
     console.error(e);

@@ -733,7 +733,9 @@ async function startApp(){
   // أمام شاشة سوداء بلا واجهة — كان استثناء غير مُعالَج داخل maybeRunAutoBackup (مثلاً فشل رفع النسخة
   // للسيرفر) يمنع الوصول لـ autoSignInLocalUser() نهائياً ويسبب بالضبط هذه المشكلة.
   autoSignInLocalUser();
-  try{ await maybeRunAutoBackup(); }catch(e){ console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e); }
+  // تشغيل النسخ الاحتياطي التلقائي في الخلفية — لا ننتظره لأنه قد يستغرق وقتاً طويلاً
+  // (تنزيل وتشفير ورفع كل بيانات البرنامج) ولا يجب أن يعرقل ظهور الواجهة أو تفاعلها.
+  maybeRunAutoBackup().catch(e => console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e));
   try{ SoundFX.login(); }catch(e){ console.error('startApp: فشلت خطوة "SoundFX.login"', e); }
   backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج (الأخطاء القاتلة تُعالَج داخلها)
   // اتصال البث اللحظي (SSE): لو متصل بالسيرفر فعلياً (SERVER_AUTH_TOKEN موجود)، أي تعديل لاحق
@@ -809,12 +811,9 @@ $('#server-login-form').addEventListener('submit', async e=>{
     const loginData = await serverLogin(uname, upass, totpCode || undefined);
     $('#server-login-screen').style.display = 'none';
     await startApp();
-    // تنبيه استباقي: لو السيرفر رجّع نشاط دخول مشبوه (محاولات فاشلة متكررة) لم يشاهده هذا
-    // الأدمن بعد، نعرضه فوراً هنا بدل انتظار فتحه شاشة الإعدادات بنفسه بالصدفة.
-    if(Array.isArray(loginData?.suspiciousAlert) && loginData.suspiciousAlert.length && typeof showToast==='function'){
-      const s = loginData.suspiciousAlert[0];
-      showToast(`⚠️ نشاط دخول مشبوه: ${s.failed_count} محاولة فاشلة على حساب "${s.username}" من ${s.ip_address||'IP غير معروف'} — راجع سجل الدخول فى الإعدادات`);
-    }
+    // ملاحظة: كان يُظهر تنبيه الأنشطة المشتبكة هنا مباشرة بعد تسجيل الدخول، لكنه
+    // أُزيل لتجنب تأخيل استجابة تسجيل الدخول على الخادم — الآن يُفحص في الخلفية
+    // على الخادم، ويمكن للمدير مراجعته من شاشة "سجل الدخول" في الإعدادات.
   }catch(err){
     if(err && err.requires2FA){
       $('#server-login-2fa-field').style.display = 'block';
