@@ -167,4 +167,5 @@ module.exports = {
   loadRolePermissionsCache,
   roleCanAccessView,
   restrictKeyToAdmin,
+  RESTRICTED_STORAGE_KEYS,
 };
