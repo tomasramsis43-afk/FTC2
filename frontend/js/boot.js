@@ -81,6 +81,18 @@ $('#btn-sound-toggle').addEventListener('click', async ()=>{
   if(settings.soundEnabled) SoundFX.click();
   await saveSettings();
 });
+// اختصار كيبورد Alt+L لتسجيل خروج سريع — مفيد للأجهزة المشتركة بين عدة موظفين (كشك استقبال
+// مثلاً) لتبديل المستخدم بسرعة دون الحاجة للبحث عن الزر داخل القائمة المنسدلة فى كل مرة.
+document.addEventListener('keydown', e=>{
+  if(e.altKey && (e.key === 'l' || e.key === 'L')){
+    const wrap = document.getElementById('app-wrap');
+    const logoutBtn = $('#btn-logout');
+    if(wrap && wrap.style.display !== 'none' && logoutBtn){
+      e.preventDefault();
+      logoutBtn.click();
+    }
+  }
+});
 $('#btn-logout').addEventListener('click', async ()=>{
   if(await customConfirm('تأكيد تسجيل الخروج؟')){
     // التأكد من رفع كل البيانات قبل تسجيل الخروج: ننتظر اكتمال الحفظ الجاري، ونرفع أي
