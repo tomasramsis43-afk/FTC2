@@ -331,6 +331,13 @@ router.get('/api/client-records', requireAuth, async (req, res) => {
     const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
     let sql = `SELECT id, enc, version, origin, status FROM client_records ${where}`;
     const sqlParams = [...params];
+    // هل يوجد شرط WHERE بالفعل؟ (فارغ فقط عندما role==='admin' — لا قيود على رؤيته). أي شرط
+    // إضافي لاحق (ids=) يجب أن يبدأ بـ WHERE لو لم يوجد شرط سابق، أو AND لو وُجد — وإلا نحصل على
+    // "... FROM client_records  AND id = ANY(...)" بلا WHERE قبلها، وهو خطأ syntax فى بوستجرس
+    // كان يفشل دائماً تحديداً لحالة الأدمن (الدور الوحيد الذي يُرجع where فارغاً)، فيمنعه هذا
+    // الخطأ من مزامنة أي سجل عميل جديد/معدَّل تزايدياً عبر _fetchDeltaClientRecords فى الواجهة —
+    // العميل الجديد كان يظل غير مرئي للأدمن حتى لو نجحت كل خطوات المزامنة الأخرى.
+    let hasWhere = /\bwhere\b/i.test(where);
     // جلب الفروق فقط (delta): نفس فكرة GET /api/records/:collection?ids= بالضبط — لو المُستدعي
     // أرسل ids= (قائمة ids مفصولة بفواصل) نرجع هذه السجلات فقط بدل جدول العملاء كامل. هذا هو
     // الأساس الذي بنيت عليه _fetchDeltaClientRecords فى الواجهة لتفادي إعادة تنزيل كل عميل فى
@@ -340,8 +347,9 @@ router.get('/api/client-records', requireAuth, async (req, res) => {
     if (typeof idsParam === 'string' && idsParam.length) {
       const idList = idsParam.split(',').map(s => s && s.trim()).filter(Boolean);
       if (idList.length) {
-        sql += ` AND id = ANY($${sqlParams.length + 1}::text[])`;
+        sql += ` ${hasWhere ? 'AND' : 'WHERE'} id = ANY($${sqlParams.length + 1}::text[])`;
         sqlParams.push(idList);
+        hasWhere = true;
       }
     }
     if (Number.isInteger(page) && page >= 1) {
