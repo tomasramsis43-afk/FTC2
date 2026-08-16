@@ -40,18 +40,41 @@
 <!-- SERVER LOGIN (تسجيل الدخول على الخادم المركزي — يظهر بعد التحقق من الترخيص وقبل تحميل بيانات البرنامج) -->
 <div id="server-login-screen" style="position: fixed; inset: 0px; z-index: 215; display: none; align-items: center; justify-content: center; padding: 20px;">
   <div class="login-container">
+    <button type="button" id="login-theme-toggle" class="login-theme-toggle-btn" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي/النهاري">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path></svg>
+    </button>
     <div class="login-logo-panel"><img src="assets/img/logo.png" alt="FTC" loading="lazy"></div>
     <div class="login-box">
       <h2>تسجيل الدخول</h2>
       <p class="sub">أدخل بيانات حسابك على خادم المركز المركزي</p>
       <form id="server-login-form">
         <div class="field"><label>اسم المستخدم</label><input type="text" id="server-login-user" autocomplete="username" required=""></div>
-        <div class="field"><label>كلمة المرور</label><input type="password" id="server-login-pass" autocomplete="current-password" required=""></div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <div class="password-field-wrap">
+            <input type="password" id="server-login-pass" autocomplete="current-password" required="">
+            <button type="button" id="server-login-pass-toggle" class="password-toggle-btn" title="إظهار كلمة المرور" aria-label="إظهار كلمة المرور">
+              <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+            </button>
+          </div>
+        </div>
+        <div class="field login-remember-field">
+          <label class="login-remember">
+            <input type="checkbox" id="server-login-remember">
+            <span>تذكر اسم المستخدم على هذا الجهاز</span>
+          </label>
+        </div>
         <div class="field" id="server-login-2fa-field" style="display:none;">
           <label>كود المصادقة الثنائية (من تطبيق المصادقة، أو كود احتياطي)</label>
           <input type="text" id="server-login-2fa" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
         </div>
         <button type="submit" class="btn btn-primary">دخول</button>
+        <button id="btn-install-app-login" type="button" class="login-install-btn" style="display:none;" title="تثبيت البرنامج كتطبيق مستقل على هذا الجهاز — يعمل بأيقونة خاصة به وبدون اتصال بالإنترنت">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg>
+          <span>تثبيت البرنامج على هذا الجهاز</span>
+        </button>
         <div class="login-error" id="server-login-error" style="display:none;"></div>
       </form>
     </div>
