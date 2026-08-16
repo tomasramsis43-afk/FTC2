@@ -816,6 +816,67 @@ async function ensureServerLoginThenStart(){
   // ضد السيرفر ثم محلياً فقط إن تعذّر الوصول إليه إطلاقاً).
   showServerLoginScreen(null);
 }
+// الوضع الليلي/النهاري على شاشة الدخول نفسها، قبل تسجيل الدخول أصلاً — تفضيل خاص
+// بهذا الجهاز فقط (مستقل عن تفضيل المستخدم المحفوظ على السيرفر، والذي يتفوّق عليه
+// تلقائياً بمجرد نجاح الدخول عبر startApp -> applyTheme(settings.darkMode)).
+const LOGIN_THEME_KEY = 'ftcLoginThemeDark';
+(function(){
+  try{
+    if(localStorage.getItem(LOGIN_THEME_KEY) === '1') document.body.classList.add('dark-theme');
+  }catch(e){ console.error('[Auth] Failed to load login theme preference:', e); }
+  const themeBtn = $('#login-theme-toggle');
+  if(themeBtn){
+    const syncIcons = ()=>{
+      const isDark = document.body.classList.contains('dark-theme');
+      const moonIcon = themeBtn.querySelector('.icon-moon');
+      const sunIcon = themeBtn.querySelector('.icon-sun');
+      if(moonIcon) moonIcon.style.display = isDark ? 'none' : '';
+      if(sunIcon) sunIcon.style.display = isDark ? '' : 'none';
+    };
+    syncIcons();
+    themeBtn.addEventListener('click', ()=>{
+      const isDark = document.body.classList.toggle('dark-theme');
+      try{ localStorage.setItem(LOGIN_THEME_KEY, isDark ? '1' : '0'); }catch(e){ console.error('[Auth] Failed to save login theme preference:', e); }
+      syncIcons();
+    });
+  }
+})();
+
+// إظهار/إخفاء كلمة المرور في شاشة الدخول (لا تُخزَّن أي بيانات، مجرد تبديل نوع الحقل)
+(function(){
+  const toggleBtn = $('#server-login-pass-toggle');
+  const passInput = $('#server-login-pass');
+  if(toggleBtn && passInput){
+    toggleBtn.addEventListener('click', ()=>{
+      const showing = passInput.type === 'text';
+      passInput.type = showing ? 'password' : 'text';
+      const eyeIcon = toggleBtn.querySelector('.icon-eye');
+      const eyeOffIcon = toggleBtn.querySelector('.icon-eye-off');
+      if(eyeIcon) eyeIcon.style.display = showing ? '' : 'none';
+      if(eyeOffIcon) eyeOffIcon.style.display = showing ? 'none' : '';
+      toggleBtn.title = showing ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور';
+      toggleBtn.setAttribute('aria-label', toggleBtn.title);
+      passInput.focus();
+    });
+  }
+})();
+
+// تذكّر اسم المستخدم فقط (وليس كلمة المرور إطلاقاً) على هذا الجهاز، لتسريع الدخول لاحقاً
+const REMEMBER_USERNAME_KEY = 'ftcRememberedUsername';
+(function(){
+  try{
+    const remembered = localStorage.getItem(REMEMBER_USERNAME_KEY);
+    if(remembered){
+      const uField = $('#server-login-user');
+      const rCheck = $('#server-login-remember');
+      if(uField) uField.value = remembered;
+      if(rCheck) rCheck.checked = true;
+      const passEl = $('#server-login-pass');
+      if(passEl) setTimeout(()=> passEl.focus(), 0);
+    }
+  }catch(e){ console.error('[Auth] Failed to load remembered username:', e); }
+})();
+
 $('#server-login-form').addEventListener('submit', async e=>{
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
@@ -826,8 +887,26 @@ $('#server-login-form').addEventListener('submit', async e=>{
   if(btn) btn.disabled = true;
   try{
     const loginData = await serverLogin(uname, upass, totpCode || undefined);
+    try{
+      const rCheck = $('#server-login-remember');
+      if(rCheck && rCheck.checked) localStorage.setItem(REMEMBER_USERNAME_KEY, uname);
+      else localStorage.removeItem(REMEMBER_USERNAME_KEY);
+    }catch(e){ console.error('[Auth] Failed to persist remembered username:', e); }
     $('#server-login-screen').style.display = 'none';
     await startApp();
+    // رسالة ترحيب حسب توقيت اليوم، باسم المستخدم الظاهر إن وُجد
+    const displayName = (loginData && loginData.user && loginData.user.displayName) || uname;
+    showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
+    // آخر دخول ناجح سابق لهذا الحساب + تنبيه لو هذا أول دخول من هذا الجهاز تحديداً (لرصد أي
+    // دخول غريب) — تُعرض كرسالة تالية بعد رسالة الترحيب (showToast تعرض رسالة واحدة فقط فى
+    // كل مرة وتستبدل أي رسالة سابقة لسه ظاهرة، فنؤجلها قليلاً بدل استبدال الترحيب فوراً).
+    const lastLoginNote = (loginData && loginData.lastLogin && loginData.lastLogin.at)
+      ? `آخر دخول سابق: ${new Date(loginData.lastLogin.at).toLocaleString('ar-SA-u-nu-latn', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}${loginData.lastLogin.ip ? ' من ' + loginData.lastLogin.ip : ''}`
+      : null;
+    const newDeviceNote = (loginData && loginData.newDeviceAlert) ? '⚠️ أول دخول من هذا الجهاز لهذا الحساب' : null;
+    if(lastLoginNote || newDeviceNote){
+      setTimeout(()=> showToast([newDeviceNote, lastLoginNote].filter(Boolean).join(' — ')), 2700);
+    }
     // ملاحظة: كان يُظهر تنبيه الأنشطة المشتبكة هنا مباشرة بعد تسجيل الدخول، لكنه
     // أُزيل لتجنب تأخيل استجابة تسجيل الدخول على الخادم — الآن يُفحص في الخلفية
     // على الخادم، ويمكن للمدير مراجعته من شاشة "سجل الدخول" في الإعدادات.
