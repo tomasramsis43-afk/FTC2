@@ -167,6 +167,11 @@ CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(or
 -- حتى لو حرّره الأدمن لاحقاً. للسجلات القديمة قبل هذا العمود نملأها افتراضياً من updated_by.
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS created_by TEXT;
 UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
+-- فهرس مركّب لتسريع استعلامات الاستقبال (clientRecordsVisibilitySql: WHERE origin='reception'
+-- AND created_by=$2): بدون هذا الفهرس، عمود created_by وحده غير مفهرس، فيضطر بوستجرس لفحص كل
+-- الصفوف التي origin='reception' (تتزايد مع الوقت) بحثاً عن مطابقة created_by بدل القفز مباشرة
+-- لسجلات هذا المستخدم فقط. مفيد خصوصاً مع نمو عدد العملاء وتعدد مستخدمي الاستقبال.
+CREATE INDEX IF NOT EXISTS idx_client_records_origin_created_by ON client_records(origin, created_by);
 -- رقم الهوية بنص صريح (غير مشفّر) لغرض واحد فقط: كشف التكرار عبر كل مستخدمي النظام (بما فيهم
 -- الاستقبال المعزول عادةً عن رؤية باقي البيانات) قبل الحفظ، دون كشف أي بيانات أخرى عن العميل
 -- (الاسم/الهاتف/المبالغ...) تبقى بالكامل داخل enc المشفّر كما هي تماماً بلا أي تغيير.
@@ -211,6 +216,9 @@ ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS created_by TEXT;
 -- بعضهم مهما عُدِّل السجل أو اُعتمد) — القيم القديمة تُملأ من آخر من حدّث السجل كما هو متاح.
 UPDATE collection_records SET created_by = updated_by WHERE created_by IS NULL;
 CREATE INDEX IF NOT EXISTS idx_collection_records_origin_status ON collection_records(origin, status);
+-- نفس فهرس created_by المضاف لـ client_records أعلاه وبنفس السبب: يسرّع فلترة عزل الاستقبال
+-- (WHERE collection=X AND origin='reception' AND created_by=$2) فى recordsVisibilitySql.
+CREATE INDEX IF NOT EXISTS idx_collection_records_origin_created_by ON collection_records(origin, created_by);
 
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
