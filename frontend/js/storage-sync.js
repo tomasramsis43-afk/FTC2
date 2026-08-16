@@ -162,43 +162,47 @@ window.addEventListener('beforeunload', (e)=>{
 // ---------------- تثبيت البرنامج كتطبيق (PWA) على الجهاز ----------------
 // يلتقط حدث beforeinstallprompt (مدعوم في Chrome/Edge/Android) ويُظهر زر "تثبيت البرنامج"
 // في الشريط العلوي بدل الاعتماد على خيار مخفي داخل قائمة المتصفح قد لا ينتبه له المستخدم.
+// نفس الزر يظهر أيضاً على شاشة الدخول نفسها (قبل الدخول أصلاً)، حتى يقدر المستخدم يثبّت
+// البرنامج على جهازه من أول مرة يفتحه فيها دون الحاجة لتسجيل الدخول أولاً.
 // على iOS/Safari (اللي مبيدعمش الحدث ده إطلاقاً) بيوضّح للمستخدم الطريقة اليدوية بدلاً من ذلك.
 let _deferredInstallPrompt = null;
 function isRunningAsInstalledApp(){
   return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
 }
+function setInstallButtonsVisible(visible){
+  ['btn-install-app', 'btn-install-app-login'].forEach(id=>{
+    const btn = document.getElementById(id);
+    if(btn) btn.style.display = visible ? '' : 'none';
+  });
+}
 window.addEventListener('beforeinstallprompt', e=>{
   e.preventDefault();
   _deferredInstallPrompt = e;
-  if(!isRunningAsInstalledApp()){
-    const btn = document.getElementById('btn-install-app');
-    if(btn) btn.style.display = '';
-  }
+  if(!isRunningAsInstalledApp()) setInstallButtonsVisible(true);
 });
 window.addEventListener('appinstalled', ()=>{
   _deferredInstallPrompt = null;
-  const btn = document.getElementById('btn-install-app');
-  if(btn) btn.style.display = 'none';
+  setInstallButtonsVisible(false);
   showToast('تم تثبيت البرنامج على الجهاز بنجاح ✅ — هتلاقيه دلوقتي كأيقونة مستقلة زي أي برنامج تاني');
 });
-(function(){
-  const btn = document.getElementById('btn-install-app');
-  if(!btn) return;
-  btn.addEventListener('click', async ()=>{
-    if(_deferredInstallPrompt){
-      _deferredInstallPrompt.prompt();
-      const {outcome} = await _deferredInstallPrompt.userChoice;
-      _deferredInstallPrompt = null;
-      btn.style.display = 'none';
-      if(outcome!=='accepted') showToast('تمام، تقدر تثبّته لاحقاً من نفس الزر لو غيّرت رأيك');
-    }else{
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      showToast(isIOS
-        ? 'لتثبيت البرنامج على آيفون/آيباد: من Safari اضغط زر المشاركة (⬆️) ثم "إضافة إلى الشاشة الرئيسية"'
-        : 'المتصفح الحالي لسه بيجهّز خيار التثبيت — جرّب تاني بعد شوية، أو من قائمة المتصفح (⋮) اختر "تثبيت التطبيق"');
-    }
-  });
-})();
+async function handleInstallButtonClick(){
+  if(_deferredInstallPrompt){
+    _deferredInstallPrompt.prompt();
+    const {outcome} = await _deferredInstallPrompt.userChoice;
+    _deferredInstallPrompt = null;
+    setInstallButtonsVisible(false);
+    if(outcome!=='accepted') showToast('تمام، تقدر تثبّته لاحقاً من نفس الزر لو غيّرت رأيك');
+  }else{
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    showToast(isIOS
+      ? 'لتثبيت البرنامج على آيفون/آيباد: من Safari اضغط زر المشاركة (⬆️) ثم "إضافة إلى الشاشة الرئيسية"'
+      : 'المتصفح الحالي لسه بيجهّز خيار التثبيت — جرّب تاني بعد شوية، أو من قائمة المتصفح (⋮) اختر "تثبيت التطبيق"');
+  }
+}
+['btn-install-app', 'btn-install-app-login'].forEach(id=>{
+  const btn = document.getElementById(id);
+  if(btn) btn.addEventListener('click', handleInstallButtonClick);
+});
 // يحاول رفع كل التعديلات المعلّقة محلياً إلى السيرفر — يُستدعى عند استعادة الاتصال (حدث online)،
 // وأيضاً بشكل دوري احتياطاً (بعض الأجهزة لا تُطلق حدث online بدقة، خصوصاً على الجوال).
 async function flushPendingWrites(){
