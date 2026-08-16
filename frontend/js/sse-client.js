@@ -31,3 +31,17 @@ function disconnectRealtimeEvents(){
   try{ if(_sseConnection) _sseConnection.close(); }catch(e){}
   _sseConnection = null;
 }
+
+// ثغرة كانت موجودة: لو تاب المستخدم فضل مفتوح بعيداً عن الشاشة لفترة (مثال: أدمن سايب الجهاز)
+// واتقطع اتصال SSE فى الخلفية (نوم السيرفر على استضافة مجانية بعد خمول، أو أي انقطاع شبكة
+// مؤقت)، كان المستخدم يرجع للتاب فيلاقي شاشة قديمة، ولا يعرف إلا لو استنى للفحص الدوري
+// (دقيقتين) أو عمل تحديث يدوي بنفسه. الحل: أول ما التاب يرجع مرئياً (visibilitychange)، نُشغّل
+// فحص مزامنة فوري فى نفس اللحظة — وأيضاً نتأكد أن اتصال SSE نفسه ما زال مفتوحاً (لو أُغلق تماماً
+// دون أن يعيد EventSource فتحه لأي سبب) ونعيد فتحه احتياطاً.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  if(typeof backgroundSyncCheck === 'function') backgroundSyncCheck().catch(()=>{});
+  if(SERVER_AUTH_TOKEN && (!_sseConnection || _sseConnection.readyState === EventSource.CLOSED)){
+    connectRealtimeEvents();
+  }
+});
