@@ -190,6 +190,33 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
         return res.status(401).json({ error: 'كود التحقق غير صحيح' });
       }
     }
+    // نجلب آخر عملية دخول ناجحة سابقة لهذا المستخدم قبل تسجيل عملية الدخول الحالية في السجل
+    // (يجب أن يحدث هذا الاستعلام قبل الـ INSERT أسفل، وإلا سيُرجع الدخول الحالي نفسه بدل السابق له).
+    // best-effort: فشل هذا الاستعلام لا يجب أن يمنع المستخدم من الدخول فعلياً.
+    let lastLogin = null;
+    let isNewDevice = false;
+    try {
+      const prevLogin = await pool.query(
+        `SELECT logged_in_at, ip_address, device_info FROM login_history
+         WHERE username = $1 AND success = true
+         ORDER BY logged_in_at DESC LIMIT 1`,
+        [user.username]
+      );
+      lastLogin = prevLogin.rows[0] || null;
+      // "جهاز جديد": نفس بصمة الجهاز (User-Agent) لم تُستخدم من قبل مع هذا الحساب في أي دخول
+      // ناجح سابق — تقريب بسيط بدون أي مكتبة بصمة إضافية، كافٍ لتنبيه المستخدم/المدير بدخول
+      // من متصفح/جهاز لم يره من قبل. لا يُحتسب "جديد" لو كانت هذه أول مرة يدخل فيها الحساب
+      // إطلاقاً (lastLogin فارغ)، لتفادي تنبيه لا فائدة منه عند أول تسجيل دخول.
+      if (lastLogin && loginDevice) {
+        const deviceSeen = await pool.query(
+          `SELECT 1 FROM login_history WHERE username = $1 AND success = true AND device_info = $2 LIMIT 1`,
+          [user.username, loginDevice]
+        );
+        isNewDevice = deviceSeen.rows.length === 0;
+      }
+    } catch (e) {
+      console.error('تعذّر جلب آخر عملية دخول سابقة أو التحقق من الجهاز:', e);
+    }
     const token = signToken(user);
     // نجاح كامل: تصفير عداد المحاولات الفاشلة وأي قفل مؤقت قائم لهذا الحساب.
     pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
@@ -209,6 +236,8 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       role: user.role || 'staff',
       user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
       suspiciousAlert: [],
+      lastLogin: lastLogin ? { at: lastLogin.logged_in_at, ip: lastLogin.ip_address, device: lastLogin.device_info } : null,
+      newDeviceAlert: isNewDevice,
     });
     // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات دخول مشبوهة) حصل منذ آخر مرة راجع
     // فيها شاشة "سجل الدخول"، نُرجعه على شاشة الإعدادات — لا نُبطئ تسجيل الدخول بفحصه
