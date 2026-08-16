@@ -620,6 +620,7 @@ async function printReturnInvoice(id){
       <div class="info-box">
         <h4>بيانات المردود / Return Details</h4>
         ${client?.invoice ? `<div class="info-row"><span>رقم فاتورة الدورة<br>Course Invoice No.:</span><b>${escapeHtml(client.invoice)}</b></div>` : ''}
+        ${client?.receiptIssueDate ? `<div class="info-row"><span>تاريخ فاتورة الدورة<br>Course Invoice Date:</span><b>${escapeHtml(formatDateDisplay(client.receiptIssueDate))}</b></div>` : ''}
         <div class="info-row"><span>حساب الصرف / Payment Account:</span><b>${escapeHtml(destLabel(tx.destination||'vault'))} / ${escapeHtml(destLabelEn(tx.destination||'vault'))}</b></div>
         <div class="info-row"><span>طريقة الاسترجاع / Return Method:</span><b>${escapeHtml(tx.method || '—')}${methodLabelEn(tx.method) ? ' / ' + escapeHtml(methodLabelEn(tx.method)) : ''}</b></div>
         <div class="info-row"><span>ملاحظات / Notes:</span><b>${escapeHtml(tx.notes || '—')}</b></div>
