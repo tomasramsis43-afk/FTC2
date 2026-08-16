@@ -1,3 +1,12 @@
+/* رسالة ترحيب حسب توقيت اليوم الحالي على جهاز المستخدم (وقت محلي، بدون أي اتصال بالسيرفر) */
+function arabicTimeGreeting(){
+  const hour = new Date().getHours();
+  if(hour >= 5 && hour < 12) return 'صباح الخير';
+  if(hour >= 12 && hour < 17) return 'نهارك سعيد';
+  if(hour >= 17 && hour < 22) return 'مساء الخير';
+  return 'تصبح على خير'; // دخول في وقت متأخر من الليل
+}
+
 /* ---------------- شاشة الدخول على الخادم المركزي (منفصلة عن نظام المستخدمين الداخلي للبرنامج) ---------------- */
 function showServerLoginScreen(errorMsg){
   const el = document.getElementById('server-login-screen');
