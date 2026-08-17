@@ -13,6 +13,8 @@ const zatcaRouter = require('./routes/zatca');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const webauthnRouter = require('./routes/webauthn');
+const magicLinkRouter = require('./routes/magic-link');
+const qrLoginRouter = require('./routes/qr-login');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter, syncClientsRows } = require('./routes/records');
 
@@ -85,6 +87,8 @@ app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كامل�
 /* ---------------- المصادقة الثنائية (TOTP) — أدمن فقط حالياً ---------------- */
 app.use(authRouter);
 app.use(webauthnRouter);
+app.use(magicLinkRouter);
+app.use(qrLoginRouter);
 
 
 /* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */
