@@ -789,6 +789,7 @@ function renderSettings(){
   renderReceptionRestrictionsPanel();
   renderPruneRecordsPanel();
   renderTfaPanel();
+  loadWebauthnDevicesList();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -988,6 +989,60 @@ async function renderTfaPanel(){
     $('#btn-tfa-enable')?.addEventListener('click', startTfaSetup);
   }
 }
+/* ---------------- الدخول بالبصمة / Face ID — عرض الأجهزة المسجَّلة وتسجيل جهاز جديد ---------------- */
+async function loadWebauthnDevicesList(){
+  const listEl = $('#webauthn-devices-list');
+  const registerBtn = $('#btn-webauthn-register');
+  if(!listEl) return;
+  if(registerBtn && !registerBtn.dataset.bound){
+    registerBtn.dataset.bound = '1';
+    registerBtn.addEventListener('click', async ()=>{
+      registerBtn.disabled = true;
+      try{ await webauthnRegisterThisDevice(); } finally { registerBtn.disabled = false; }
+    });
+  }
+  if(!webauthnSupported()){
+    listEl.innerHTML = `<div class="hint hint-info">هذا المتصفح/الجهاز لا يدعم الدخول بالبصمة.</div>`;
+    if(registerBtn) registerBtn.style.display = 'none';
+    return;
+  }
+  try{
+    const res = await serverFetch('/api/auth/webauthn/credentials');
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر جلب القائمة');
+    const rows = data.credentials || [];
+    if(!rows.length){
+      listEl.innerHTML = `<div class="hint hint-info">لا يوجد أي جهاز مسجَّل بعد للدخول بالبصمة.</div>`;
+      return;
+    }
+    listEl.innerHTML = rows.map(r => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid var(--border-soft, #e5e7eb); border-radius:10px; margin-bottom:6px;">
+        <div>
+          <div style="font-weight:600;">${escapeHtml(r.nickname || 'جهاز غير مسمّى')}</div>
+          <div style="font-size:12px; color:var(--text-muted);">
+            سُجِّل: ${new Date(r.created_at).toLocaleString('ar-SA-u-nu-latn')}
+            ${r.last_used_at ? ' — آخر استخدام: ' + new Date(r.last_used_at).toLocaleString('ar-SA-u-nu-latn') : ''}
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-webauthn-remove="${r.id}">🗑️ إزالة</button>
+      </div>`).join('');
+  }catch(e){
+    console.error('[WebAuthn] فشل تحميل قائمة الأجهزة:', e);
+    listEl.innerHTML = `<div class="hint" style="color:var(--danger,#dc2626);">تعذّر تحميل قائمة الأجهزة المسجّلة</div>`;
+  }
+}
+if($('#webauthn-devices-list')) $('#webauthn-devices-list').addEventListener('click', async e=>{
+  const btn = e.target.closest('[data-webauthn-remove]');
+  if(!btn) return;
+  if(!await customConfirm('إزالة هذا الجهاز من قائمة الدخول بالبصمة؟ لن تقدر تدخل به بالبصمة بعد كده إلا لو سجّلته من جديد.')) return;
+  try{
+    const res = await serverFetch('/api/auth/webauthn/credentials/' + encodeURIComponent(btn.dataset.webauthnRemove), { method:'DELETE' });
+    if(!res.ok){ const d = await res.json(); throw new Error(d.error || 'فشل الحذف'); }
+    showToast('تم إزالة الجهاز');
+    loadWebauthnDevicesList();
+  }catch(e){ showToast('⚠️ ' + e.message); }
+});
+
 async function startTfaSetup(){
   const controls = $('#tfa-controls');
   try{
