@@ -7,6 +7,7 @@
 // ============================================================
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { pool } = require('../db');
 const { requireAuth, signToken } = require('../auth');
 const {
@@ -60,7 +61,10 @@ router.post('/api/auth/webauthn/register-options', requireAuth, async (req, res)
       userDisplayName: req.user.username,
       attestationType: 'none',
       excludeCredentials: existing.rows.map(r => ({ id: r.credential_id })),
-      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      // residentKey: 'required' يجعل البصمة "قابلة للاكتشاف" (discoverable) من المتصفح نفسه —
+      // هذا ما يُمكّن لاحقاً من الدخول بالبصمة مباشرة دون كتابة اسم مستخدم إطلاقاً (راجع
+      // login-options أسفل)، لأن المتصفح يقدر يعرض للمستخدم بصماته المسجَّلة لهذا الموقع بنفسه.
+      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred', requireResidentKey: true },
     });
     storeChallenge('register:' + req.user.username, options.challenge);
     res.json(options);
@@ -134,20 +138,23 @@ router.delete('/api/auth/webauthn/credentials/:id', requireAuth, async (req, res
 
 /* ---------------- الدخول بالبصمة (بدون كلمة مرور) ---------------- */
 
+/* ---------------- الدخول بالبصمة (بدون كلمة مرور، وبدون كتابة اسم مستخدم إطلاقاً) ----------------
+   يعتمد على "البصمات القابلة للاكتشاف" (discoverable credentials) — المتصفح نفسه يعرض للمستخدم
+   قائمة بصماته المسجَّلة لهذا الموقع فيختار منها مباشرة، فنعرف صاحب الحساب من الاستجابة نفسها
+   (عبر credential_id الفريد) دون الحاجة لأي اسم مستخدم مُدخَل يدوياً. */
+
 router.post('/api/auth/webauthn/login-options', async (req, res) => {
   try {
-    const username = (req.body.username || '').toString().trim();
-    if (!username) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
     const { rpID } = getRpIdAndOrigin(req);
-    const creds = await pool.query('SELECT credential_id, transports FROM webauthn_credentials WHERE username = $1', [username]);
-    if (!creds.rows.length) return res.status(404).json({ error: 'لا توجد بصمة مسجّلة لهذا الحساب على هذا الخادم' });
+    // لا نحدد allowCredentials إطلاقاً هنا عمداً — ده اللي بيخلي المتصفح يعرض كل البصمات
+    // المسجَّلة على هذا الجهاز لهذا الموقع بنفسه (usernameless / discoverable flow).
     const options = await generateAuthenticationOptions({
       rpID,
       userVerification: 'preferred',
-      allowCredentials: creds.rows.map(r => ({ id: r.credential_id, transports: JSON.parse(r.transports || '[]') })),
     });
-    storeChallenge('login:' + username, options.challenge);
-    res.json(options);
+    const requestId = crypto.randomBytes(16).toString('base64url');
+    storeChallenge('login:' + requestId, options.challenge);
+    res.json({ ...options, requestId });
   } catch (e) {
     console.error('تعذّر توليد خيارات الدخول بالبصمة:', e);
     res.status(500).json({ error: 'تعذّر بدء الدخول بالبصمة' });
@@ -156,15 +163,17 @@ router.post('/api/auth/webauthn/login-options', async (req, res) => {
 
 router.post('/api/auth/webauthn/login-verify', async (req, res) => {
   try {
-    const { username, response } = req.body || {};
-    if (!username || !response) return res.status(400).json({ error: 'بيانات ناقصة' });
+    const { requestId, response } = req.body || {};
+    if (!requestId || !response) return res.status(400).json({ error: 'بيانات ناقصة' });
     const { rpID, origin } = getRpIdAndOrigin(req);
-    const expectedChallenge = takeChallenge('login:' + username);
+    const expectedChallenge = takeChallenge('login:' + requestId);
     if (!expectedChallenge) return res.status(400).json({ error: 'انتهت صلاحية محاولة الدخول، حاول من جديد' });
 
-    const credRow = await pool.query('SELECT * FROM webauthn_credentials WHERE credential_id = $1 AND username = $2', [response.id, username]);
-    if (!credRow.rows.length) return res.status(400).json({ error: 'بصمة غير معروفة لهذا الحساب' });
+    // نتعرّف على صاحب الحساب من credential_id نفسه (الاستجابة لا تحمل اسم مستخدم إطلاقاً).
+    const credRow = await pool.query('SELECT * FROM webauthn_credentials WHERE credential_id = $1', [response.id]);
+    if (!credRow.rows.length) return res.status(400).json({ error: 'هذه البصمة غير مسجَّلة على هذا الحساب' });
     const cred = credRow.rows[0];
+    const username = cred.username;
 
     const verification = await verifyAuthenticationResponse({
       response,
