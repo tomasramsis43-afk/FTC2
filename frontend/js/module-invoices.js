@@ -807,6 +807,7 @@ async function renderUsersList(){
         <span>👤 ${escapeHtml(u.display_name||u.username)} (${escapeHtml(u.username)})${u.username===currentUser ? ' — أنت' : ''}
           <span class="mono" style="font-size:10.5px; color:${u.role==='admin'?'var(--gold-dark)':'var(--text-muted)'}; margin-right:6px;">${SERVER_ROLE_LABELS[u.role]||u.role}</span>
           ${disabled ? '<span class="mono" style="font-size:10.5px; color:var(--red); margin-right:6px;">⛔ معطّل</span>' : ''}
+          ${u.email ? `<span class="mono" style="font-size:10.5px; color:var(--text-muted); margin-right:6px;">✉️ ${escapeHtml(u.email)}</span>` : ''}
         </span>
         <span style="display:flex; gap:6px;">
           <button data-rt="${escapeHtml(u.username)}" data-rt-active="${disabled ? '0' : '1'}" class="btn btn-sm ${disabled ? '' : 'btn-danger'}" ${u.username===currentUser ? 'disabled title="لا يمكنك تعطيل حسابك الحالي"' : ''}>${disabled ? '✅ تفعيل' : '⛔ تعطيل'}</button>
@@ -1494,18 +1495,19 @@ $('#btn-add-user')?.addEventListener('click', async ()=>{
   const uname = $('#new-user-name').value.trim();
   const upass = $('#new-user-pass').value;
   const urole = $('#new-user-role').value;
+  const uemail = $('#new-user-email') ? $('#new-user-email').value.trim() : '';
   if(!uname || !upass){ showToast('أدخل اسم المستخدم وكلمة المرور'); return; }
   if(upass.length < 6){ showToast('كلمة المرور يجب ألا تقل عن 6 أحرف'); return; }
   try{
     const res = await fetch(API_BASE + '/api/users', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
-      body: JSON.stringify({ username: uname, password: upass, displayName: uname, role: urole })
+      body: JSON.stringify({ username: uname, password: upass, displayName: uname, role: urole, email: uemail || undefined })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'تعذّر إضافة المستخدم');
     await logAudit('add','المستخدمون', `تمت إضافة/تحديث مستخدم على الخادم: ${uname} (${SERVER_ROLE_LABELS[urole]||urole})`);
-    $('#new-user-name').value=''; $('#new-user-pass').value='';
+    $('#new-user-name').value=''; $('#new-user-pass').value=''; if($('#new-user-email')) $('#new-user-email').value='';
     await renderUsersList();
     showToast('تمت إضافة المستخدم');
   }catch(e){
