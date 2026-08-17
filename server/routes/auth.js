@@ -365,7 +365,7 @@ const VALID_SERVER_ROLES = ['admin', 'accountant', 'reception', 'staff'];
 router.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, username, display_name, role, is_active, created_at FROM server_users ORDER BY created_at ASC'
+      'SELECT id, username, display_name, role, is_active, email, created_at FROM server_users ORDER BY created_at ASC'
     );
     res.json({ users: r.rows });
   } catch (e) {
@@ -389,23 +389,25 @@ router.get('/api/users/reception', requireAuth, requireRole('admin', 'accountant
   }
 });
 
-// POST /api/users  body: { username, password, displayName, role } -> إنشاء مستخدم جديد أو تحديث كلمة مرور/صلاحية مستخدم موجود
+// POST /api/users  body: { username, password, displayName, role, email } -> إنشاء مستخدم جديد أو تحديث كلمة مرور/صلاحية مستخدم موجود
 router.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
-  const { username, password, displayName, role } = req.body || {};
+  const { username, password, displayName, role, email } = req.body || {};
   if (!username || !username.trim()) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
   if (!password || password.length < 6) return res.status(400).json({ error: 'كلمة المرور يجب ألا تقل عن 6 أحرف' });
   const finalRole = VALID_SERVER_ROLES.includes(role) ? role : 'staff';
+  const finalEmail = (email || '').trim() || null;
   try {
     const hash = await hashPassword(password);
     const r = await pool.query(
-      `INSERT INTO server_users (username, password_hash, display_name, role)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO server_users (username, password_hash, display_name, role, email)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash,
          display_name = COALESCE(EXCLUDED.display_name, server_users.display_name),
          role = EXCLUDED.role,
+         email = COALESCE(EXCLUDED.email, server_users.email),
          token_version = server_users.token_version + 1
-       RETURNING id, username, display_name, role, created_at`,
-      [username.trim(), hash, displayName || username.trim(), finalRole]
+       RETURNING id, username, display_name, role, email, created_at`,
+      [username.trim(), hash, displayName || username.trim(), finalRole, finalEmail]
     );
     res.json({ user: r.rows[0] });
   } catch (e) {
