@@ -842,6 +842,36 @@ const LOGIN_THEME_KEY = 'ftcLoginThemeDark';
   }
 })();
 
+// الدخول بالبصمة/Face ID بدل كلمة المرور — يظهر الزر فقط لو المتصفح/الجهاز يدعم WebAuthn
+// أصلاً (window.PublicKeyCredential)، ويعتمد على وجود اسم مستخدم مكتوب فى الحقل لمعرفة
+// أي حساب يُراد الدخول به (نفس آلية "تذكر اسم المستخدم" أعلاه تُسهّل ذلك تلقائياً فى الغالب).
+(function(){
+  const waBtn = $('#btn-webauthn-login');
+  if(!waBtn) return;
+  if(typeof webauthnSupported === 'function' && webauthnSupported()) waBtn.style.display = '';
+  waBtn.addEventListener('click', async ()=>{
+    const uname = $('#server-login-user').value.trim();
+    if(!uname){ $('#server-login-user').focus(); showToast('اكتب اسم المستخدم أولاً'); return; }
+    waBtn.disabled = true;
+    $('#server-login-error').style.display = 'none';
+    try{
+      const loginData = await webauthnLogin(uname);
+      $('#server-login-screen').style.display = 'none';
+      await startApp();
+      const displayName = (loginData && loginData.user && loginData.user.displayName) || uname;
+      showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
+    }catch(e){
+      console.error('[WebAuthn] فشل الدخول بالبصمة:', e);
+      if(e.name !== 'NotAllowedError'){
+        $('#server-login-error').textContent = e.message || 'تعذّر الدخول بالبصمة';
+        $('#server-login-error').style.display = 'block';
+      }
+    }finally{
+      waBtn.disabled = false;
+    }
+  });
+})();
+
 // إظهار/إخفاء كلمة المرور في شاشة الدخول (لا تُخزَّن أي بيانات، مجرد تبديل نوع الحقل)
 (function(){
   const toggleBtn = $('#server-login-pass-toggle');
@@ -904,8 +934,13 @@ $('#server-login-form').addEventListener('submit', async e=>{
       ? `آخر دخول سابق: ${new Date(loginData.lastLogin.at).toLocaleString('ar-SA-u-nu-latn', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}${loginData.lastLogin.ip ? ' من ' + loginData.lastLogin.ip : ''}`
       : null;
     const newDeviceNote = (loginData && loginData.newDeviceAlert) ? '⚠️ أول دخول من هذا الجهاز لهذا الحساب' : null;
-    if(lastLoginNote || newDeviceNote){
-      setTimeout(()=> showToast([newDeviceNote, lastLoginNote].filter(Boolean).join(' — ')), 2700);
+    // تنبيه دولة غير معتادة (geoAlert لا يُرسَل من السيرفر إلا لو اختلفت دولة الدخول الحالي عن
+    // الدولة الأكثر تكراراً لدخولات هذا الحساب السابقة — راجع geolocateIp فى server/auth.js).
+    const geoNote = (loginData && loginData.geoAlert && loginData.geoAlert.country)
+      ? `⚠️ دخول من دولة غير معتادة: ${loginData.geoAlert.country}${loginData.geoAlert.city ? ' - ' + loginData.geoAlert.city : ''} (المعتاد: ${loginData.geoAlert.usualCountry})`
+      : null;
+    if(lastLoginNote || newDeviceNote || geoNote){
+      setTimeout(()=> showToast([newDeviceNote, geoNote, lastLoginNote].filter(Boolean).join(' — ')), 2700);
     }
     // ملاحظة: كان يُظهر تنبيه الأنشطة المشتبكة هنا مباشرة بعد تسجيل الدخول، لكنه
     // أُزيل لتجنب تأخيل استجابة تسجيل الدخول على الخادم — الآن يُفحص في الخلفية
