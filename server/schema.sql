@@ -234,6 +234,30 @@ ALTER TABLE login_history ADD COLUMN IF NOT EXISTS device_info TEXT;
 -- محاولات الدخول الفاشلة (اسم مستخدم خطأ/كلمة مرور خطأ/حساب معطّل) — لرصد أنماط brute-force
 -- أو محاولات دخول غير مصرّح بها لم تكتشفها rate limiting وحدها (مثال: محاولات متفرقة بطيئة).
 ALTER TABLE login_history ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT true;
+-- الدولة/المدينة المستنتجة من عنوان IP وقت الدخول (عبر خدمة geolocation خارجية، best-effort —
+-- قد تكون NULL لو تعذّر الاستعلام أو كان العنوان محلياً/خاصاً). تُستخدم لتنبيه المستخدم لو حصل
+-- دخول من دولة غير معتادة لحسابه (راجع geolocateIp فى auth.js).
+ALTER TABLE login_history ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE login_history ADD COLUMN IF NOT EXISTS city TEXT;
+
+-- بصمات/Face ID المسجَّلة لكل حساب (WebAuthn) — تمكّن الدخول بدون كتابة كلمة المرور من نفس
+-- الجهاز لاحقاً. public_key هو "مفتاح عام" فقط لا يمكن استخدامه للتنكر بدون الجهاز الفعلي
+-- نفسه؛ لا تُخزَّن أي بيانات بيومترية (بصمة/وجه) على السيرفر إطلاقاً بأي شكل — تلك تبقى
+-- محلية داخل الجهاز نفسه فقط، وفق معيار WebAuthn القياسي.
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id            SERIAL PRIMARY KEY,
+  username      TEXT NOT NULL,
+  credential_id TEXT UNIQUE NOT NULL,
+  public_key    TEXT NOT NULL,
+  counter       BIGINT NOT NULL DEFAULT 0,
+  device_type   TEXT,
+  backed_up     BOOLEAN NOT NULL DEFAULT false,
+  transports    TEXT,
+  nickname      TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_username ON webauthn_credentials(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
 CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;
