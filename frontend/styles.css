@@ -2222,6 +2222,35 @@ body.dark-theme #server-login-screen {
   cursor: pointer;
 }
 
+.login-webauthn-btn {
+  width: 100%;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--auth-cyan);
+  border-radius: 12px;
+  color: var(--auth-cyan);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.login-webauthn-btn:hover,
+.login-webauthn-btn:focus-visible {
+  opacity: 0.85;
+}
+
+.login-webauthn-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
 .login-install-btn {
   width: 100%;
   margin-top: 10px;
