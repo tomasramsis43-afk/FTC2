@@ -870,24 +870,22 @@ const LOGIN_THEME_KEY = 'ftcLoginThemeDark';
   }
 })();
 
-// الدخول بالبصمة/Face ID بدل كلمة المرور — يظهر الزر فقط لو المتصفح/الجهاز يدعم WebAuthn
-// أصلاً (window.PublicKeyCredential)، ويعتمد على وجود اسم مستخدم مكتوب فى الحقل لمعرفة
-// أي حساب يُراد الدخول به (نفس آلية "تذكر اسم المستخدم" أعلاه تُسهّل ذلك تلقائياً فى الغالب).
+// الدخول بالبصمة/Face ID بدل كلمة المرور — بدون كتابة اسم مستخدم إطلاقاً، بضغطة واحدة. يظهر
+// الزر فقط لو المتصفح/الجهاز يدعم WebAuthn أصلاً (window.PublicKeyCredential). المتصفح نفسه
+// يعرض للمستخدم بصماته المسجَّلة لهذا الموقع فيختار منها مباشرة (discoverable credentials).
 (function(){
   const waBtn = $('#btn-webauthn-login');
   if(!waBtn) return;
   if(typeof webauthnSupported === 'function' && webauthnSupported()) waBtn.style.display = '';
   waBtn.addEventListener('click', async ()=>{
-    const uname = $('#server-login-user').value.trim();
-    if(!uname){ $('#server-login-user').focus(); showToast('اكتب اسم المستخدم أولاً'); return; }
     waBtn.disabled = true;
     $('#server-login-error').style.display = 'none';
     try{
-      const loginData = await webauthnLogin(uname);
+      const loginData = await webauthnLogin();
       $('#server-login-screen').style.display = 'none';
       await startApp();
       checkPendingQrLoginApproval();
-      const displayName = (loginData && loginData.user && loginData.user.displayName) || uname;
+      const displayName = (loginData && loginData.user && loginData.user.displayName) || loginData.username;
       showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
     }catch(e){
       console.error('[WebAuthn] فشل الدخول بالبصمة:', e);
