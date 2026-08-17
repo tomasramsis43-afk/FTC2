@@ -71,6 +71,10 @@
           <input type="text" id="server-login-2fa" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
         </div>
         <button type="submit" class="btn btn-primary">دخول</button>
+        <button type="button" id="btn-webauthn-login" class="login-webauthn-btn" style="display:none;" title="الدخول ببصمتك أو Face ID بدل كتابة كلمة المرور (لازم تكون سجّلت هذا الجهاز من قبل)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0-3 2-5 5-5"></path><path d="M12 11a5 5 0 0 0-9 3"></path><path d="M12 11v7"></path><path d="M8.5 21c-1-2-1.5-4-1.5-6"></path><path d="M15.5 21c1-2 1.5-4 1.5-6"></path><circle cx="12" cy="6" r="3"></circle></svg>
+          <span>دخول بالبصمة</span>
+        </button>
         <button id="btn-install-app-login" type="button" class="login-install-btn" style="display:none;" title="تثبيت البرنامج كتطبيق مستقل على هذا الجهاز — يعمل بأيقونة خاصة به وبدون اتصال بالإنترنت">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg>
           <span>تثبيت البرنامج على هذا الجهاز</span>
@@ -3914,6 +3918,14 @@
         <span id="tfa-status-badge" class="hint hint-info">جارٍ التحقق من الحالة...</span>
       </div>
       <div id="tfa-controls" style="margin-top:10px;"></div>
+    </div>
+    <div class="panel" id="panel-webauthn">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0-3 2-5 5-5"></path><path d="M12 11a5 5 0 0 0-9 3"></path><path d="M12 11v7"></path><path d="M8.5 21c-1-2-1.5-4-1.5-6"></path><path d="M15.5 21c1-2 1.5-4 1.5-6"></path><circle cx="12" cy="6" r="3"></circle></svg></span> الدخول بالبصمة / Face ID</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">سجّل هذا الجهاز مرة واحدة لتقدر تدخل لاحقاً ببصمتك أو ببصمة الوجه بدل كتابة كلمة المرور كل مرة. التسجيل خاص بكل جهاز على حدة، والبصمة نفسها لا تُرسَل أو تُخزَّن على السيرفر إطلاقاً — تبقى محلية داخل جهازك فقط.</p>
+      <div id="webauthn-controls">
+        <button class="btn btn-primary btn-sm" id="btn-webauthn-register">➕ تسجيل هذا الجهاز</button>
+      </div>
+      <div id="webauthn-devices-list" style="margin-top:12px;"></div>
     </div>
     <div class="panel" id="panel-prune-records">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3 4.5 12.5"></path><path d="M13 8l5.5 5.5-3 3-2.3-1"></path><path d="M9.5 15.5 4 21l1.5-5.5"></path></svg></span> تنظيف السجلات القديمة (سجل المراجعة والمحذوفات)</h3>
