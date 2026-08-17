@@ -258,6 +258,24 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
   last_used_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_username ON webauthn_credentials(username);
+
+-- إيميل كل مستخدم (اختياري) — مطلوب فقط لمن يريد استخدام "الدخول عبر رابط بالإيميل" (magic
+-- link)؛ باقي النظام لا يعتمد عليه إطلاقاً. يُملأ من شاشة "المستخدمون وكلمات المرور" فى الإعدادات.
+ALTER TABLE server_users ADD COLUMN IF NOT EXISTS email TEXT;
+
+-- روابط الدخول المؤقتة المرسلة بالإيميل (magic link) — نخزّن تجزئة (hash) الرابط فقط وليس
+-- الرابط نفسه، تماماً كأكواد المصادقة الثنائية الاحتياطية، حتى لو تسرّبت قاعدة البيانات لا يقدر
+-- أحد استخدام هذه الصفوف للدخول مباشرة. كل رابط صالح لمرة واحدة فقط ولمدة 15 دقيقة (راجع
+-- server/routes/magic-link.js).
+CREATE TABLE IF NOT EXISTS magic_link_tokens (
+  id          SERIAL PRIMARY KEY,
+  username    TEXT NOT NULL,
+  token_hash  TEXT NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_username ON magic_link_tokens(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
 CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;
