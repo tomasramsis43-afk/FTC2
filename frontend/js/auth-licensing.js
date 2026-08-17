@@ -112,6 +112,39 @@ async function webauthnLogin(username){
   return data;
 }
 
+/* ---------------- الدخول عبر رابط بالإيميل (Magic Link) ---------------- */
+
+/* طلب رابط دخول جديد يُرسَل على الإيميل المسجَّل لهذا الحساب (لو موجود) — الرد دائماً برسالة
+   عامة واحدة سواء كان الحساب/الإيميل موجوداً أم لا، حماية لخصوصية المستخدمين (نفس منطق
+   السيرفر — راجع server/routes/magic-link.js). */
+async function magicLinkRequest(username){
+  const res = await fetch(API_BASE + '/api/auth/magic-link/request', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }),
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || 'تعذّر إرسال الرابط');
+  return data;
+}
+
+/* التحقق من رابط دخول تم الضغط عليه من الإيميل، وإتمام الدخول تلقائياً عند النجاح — يُرجع نفس
+   شكل بيانات serverLogin() عند النجاح. */
+async function magicLinkVerify(username, token){
+  const res = await fetch(API_BASE + '/api/auth/magic-link/verify', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, token }),
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || 'تعذّر الدخول عبر الرابط');
+  SERVER_AUTH_TOKEN = data.token;
+  SERVER_AUTH_USERNAME = data.username || username;
+  SERVER_AUTH_ROLE = normalizeRole(data.role);
+  try{
+    sessionStorage.setItem('serverAuthToken', data.token);
+    sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
+    sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
+  }catch(e){ console.error('[Auth] Failed to store session token:', e); }
+  return data;
+}
+
 /* ---------------- شاشة الدخول على الخادم المركزي (منفصلة عن نظام المستخدمين الداخلي للبرنامج) ---------------- */
 function showServerLoginScreen(errorMsg){
   const el = document.getElementById('server-login-screen');
