@@ -68,15 +68,17 @@ async function webauthnRegisterThisDevice(){
   }
 }
 
-/* الدخول ببصمة/Face ID مسجَّلة مسبقاً على هذا الجهاز، بدل كلمة المرور — يُستدعى من زر
-   "دخول بالبصمة" فى شاشة الدخول نفسها. يُرجع نفس شكل بيانات serverLogin() عند النجاح. */
-async function webauthnLogin(username){
-  if(!username) throw new Error('أدخل اسم المستخدم أولاً');
+/* الدخول ببصمة/Face ID مسجَّلة مسبقاً على هذا الجهاز، بدل كلمة المرور وبدون كتابة اسم مستخدم
+   إطلاقاً — المتصفح نفسه يعرض للمستخدم بصماته المسجَّلة لهذا الموقع (discoverable credentials)
+   فيختار منها مباشرة. يُستدعى من زر "دخول بالبصمة" فى شاشة الدخول. يُرجع نفس شكل بيانات
+   serverLogin() عند النجاح. */
+async function webauthnLogin(){
   const optsRes = await fetch(API_BASE + '/api/auth/webauthn/login-options', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }),
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}),
   });
   const options = await optsRes.json();
-  if(!optsRes.ok) throw new Error(options.error || 'لا توجد بصمة مسجّلة لهذا الحساب على هذا الجهاز');
+  if(!optsRes.ok) throw new Error(options.error || 'تعذّر بدء الدخول بالبصمة');
+  const requestId = options.requestId;
   options.challenge = base64urlToBuffer(options.challenge);
   if(Array.isArray(options.allowCredentials)){
     options.allowCredentials = options.allowCredentials.map(c => ({...c, id: base64urlToBuffer(c.id)}));
@@ -97,12 +99,12 @@ async function webauthnLogin(username){
   };
   const verifyRes = await fetch(API_BASE + '/api/auth/webauthn/login-verify', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ username, response: responsePayload }),
+    body: JSON.stringify({ requestId, response: responsePayload }),
   });
   const data = await verifyRes.json();
   if(!verifyRes.ok) throw new Error(data.error || 'تعذّر الدخول بالبصمة');
   SERVER_AUTH_TOKEN = data.token;
-  SERVER_AUTH_USERNAME = data.username || username;
+  SERVER_AUTH_USERNAME = data.username;
   SERVER_AUTH_ROLE = normalizeRole(data.role);
   try{
     sessionStorage.setItem('serverAuthToken', data.token);
