@@ -12,6 +12,7 @@ const aiRouter = require('./routes/ai');
 const zatcaRouter = require('./routes/zatca');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const webauthnRouter = require('./routes/webauthn');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter, syncClientsRows } = require('./routes/records');
 
@@ -83,6 +84,7 @@ app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كامل�
 
 /* ---------------- المصادقة الثنائية (TOTP) — أدمن فقط حالياً ---------------- */
 app.use(authRouter);
+app.use(webauthnRouter);
 
 
 /* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */
