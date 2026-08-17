@@ -214,13 +214,17 @@ function applyYearFilterToAllViews(){
 let yearFilterListenerBound = false;
 function initYearFilter(){
   populateYearFilterSelect();
-  applyYearFilterToAllViews();
   // ملاحظة مهمة: هذه الدالة تُستدعى أكثر من مرة (عند فتح البرنامج أولاً، وأيضاً بعد كل
-  // مزامنة خلفية تجلب تغييرات فعلية من السحابة — راجع renderAllViewsAfterLoad). بدون هذا
-  // الحارس (guard)، كان يُضاف مستمع 'change' جديد على #year-filter في كل مرة دون إزالة
-  // القديم، فيتراكم عدد المستمعين مع الوقت ويتكرر تنفيذ applyYearFilterToAllViews() ورسالة
-  // التنبيه عدة مرات لكل اختيار سنة واحد — وهو ما كان يجعل فلتر السنة يبدو "معطَّلاً" أو بطيئاً.
+  // مزامنة خلفية تجلب تغييرات فعلية من السحابة — راجع renderAllViewsAfterLoad، وتحدث بعد أي
+  // تعديل من أي مستخدم فى النظام كله عبر SSE، وأيضاً كل دقيقتين تلقائياً). applyYearFilterToAllViews()
+  // كانت تُستدعى من هنا فى كل مرة دون شرط، فكانت تُعيد ضبط كل حقول فلتر التاريخ (v-from/v-to
+  // وبقية YEAR_FILTER_DATE_PAIRS) على حدود فلتر السنة العلوي — فتمحو أي فلتر تاريخ مخصص كتبه
+  // المستخدم يدوياً فى أي شاشة (حركات مالية، عملاء، تقارير...) خلال ثوانٍ من كتابته، دون أي فعل
+  // منه. الحل: نطبّق فلتر السنة على الحقول مرة واحدة فقط عند أول فتح للبرنامج (بنفس حارس ربط
+  // المستمع أدناه)؛ أما بعد ذلك فتطبيقه يحدث فقط لما المستخدم يختار سنة فعلياً من القائمة
+  // (مستمع 'change' أدناه) — لا يتكرر تلقائياً مع كل مزامنة خلفية.
   if(yearFilterListenerBound) return;
+  applyYearFilterToAllViews();
   yearFilterListenerBound = true;
   $('#year-filter').addEventListener('change', e=>{
     selectedYearFilter = e.target.value;
