@@ -7,6 +7,111 @@ function arabicTimeGreeting(){
   return 'تصبح على خير'; // دخول في وقت متأخر من الليل
 }
 
+/* ---------------- الدخول بالبصمة / Face ID (WebAuthn) ----------------
+   يعتمد على واجهة navigator.credentials القياسية فى المتصفح مباشرة (بدون مكتبة خارجية على
+   الفرونت إند) — البصمة نفسها لا تغادر الجهاز أبداً، السيرفر يتعامل فقط مع "مفتاح عام" لكل جهاز. */
+function webauthnSupported(){
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create && navigator.credentials.get);
+}
+function bufferToBase64url(buffer){
+  const bytes = new Uint8Array(buffer);
+  let str = '';
+  for(const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64urlToBuffer(base64url){
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4));
+  const str = atob(base64 + pad);
+  const bytes = new Uint8Array(str.length);
+  for(let i=0; i<str.length; i++) bytes[i] = str.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/* تسجيل هذا الجهاز (يتطلب أن يكون المستخدم قد سجّل دخوله عادياً بالفعل) — يُستدعى من زر
+   "تسجيل هذا الجهاز" فى شاشة الإعدادات (panel-webauthn). */
+async function webauthnRegisterThisDevice(){
+  if(!webauthnSupported()){ showToast('⚠️ هذا المتصفح/الجهاز لا يدعم الدخول بالبصمة'); return; }
+  try{
+    const optsRes = await serverFetch('/api/auth/webauthn/register-options', { method:'POST' });
+    const options = await optsRes.json();
+    if(!optsRes.ok) throw new Error(options.error || 'تعذّر بدء التسجيل');
+    options.challenge = base64urlToBuffer(options.challenge);
+    options.user.id = base64urlToBuffer(options.user.id);
+    if(Array.isArray(options.excludeCredentials)){
+      options.excludeCredentials = options.excludeCredentials.map(c => ({...c, id: base64urlToBuffer(c.id)}));
+    }
+    const credential = await navigator.credentials.create({ publicKey: options });
+    const attestation = credential.response;
+    const deviceLabel = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || 'هذا الجهاز';
+    const payload = {
+      id: credential.id,
+      rawId: bufferToBase64url(credential.rawId),
+      type: credential.type,
+      response: {
+        attestationObject: bufferToBase64url(attestation.attestationObject),
+        clientDataJSON: bufferToBase64url(attestation.clientDataJSON),
+        transports: attestation.getTransports ? attestation.getTransports() : [],
+      },
+      clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
+      nickname: deviceLabel,
+    };
+    const verifyRes = await serverFetch('/api/auth/webauthn/register-verify', { method:'POST', body: JSON.stringify(payload) });
+    const verifyData = await verifyRes.json();
+    if(!verifyRes.ok) throw new Error(verifyData.error || 'تعذّر إتمام التسجيل');
+    showToast('تم تسجيل هذا الجهاز بنجاح ✅ — تقدر تدخل بالبصمة من المرة الجاية');
+    if(typeof loadWebauthnDevicesList === 'function') loadWebauthnDevicesList();
+  }catch(e){
+    console.error('[WebAuthn] فشل تسجيل الجهاز:', e);
+    // المستخدم لغى نافذة البصمة نفسها (NotAllowedError) — ليست حالة خطأ حقيقية تستحق تنبيهاً مزعجاً.
+    if(e.name !== 'NotAllowedError') showToast('⚠️ تعذّر تسجيل الجهاز: ' + (e.message || 'خطأ غير متوقع'));
+  }
+}
+
+/* الدخول ببصمة/Face ID مسجَّلة مسبقاً على هذا الجهاز، بدل كلمة المرور — يُستدعى من زر
+   "دخول بالبصمة" فى شاشة الدخول نفسها. يُرجع نفس شكل بيانات serverLogin() عند النجاح. */
+async function webauthnLogin(username){
+  if(!username) throw new Error('أدخل اسم المستخدم أولاً');
+  const optsRes = await fetch(API_BASE + '/api/auth/webauthn/login-options', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }),
+  });
+  const options = await optsRes.json();
+  if(!optsRes.ok) throw new Error(options.error || 'لا توجد بصمة مسجّلة لهذا الحساب على هذا الجهاز');
+  options.challenge = base64urlToBuffer(options.challenge);
+  if(Array.isArray(options.allowCredentials)){
+    options.allowCredentials = options.allowCredentials.map(c => ({...c, id: base64urlToBuffer(c.id)}));
+  }
+  const assertion = await navigator.credentials.get({ publicKey: options });
+  const authResp = assertion.response;
+  const responsePayload = {
+    id: assertion.id,
+    rawId: bufferToBase64url(assertion.rawId),
+    type: assertion.type,
+    response: {
+      authenticatorData: bufferToBase64url(authResp.authenticatorData),
+      clientDataJSON: bufferToBase64url(authResp.clientDataJSON),
+      signature: bufferToBase64url(authResp.signature),
+      userHandle: authResp.userHandle ? bufferToBase64url(authResp.userHandle) : undefined,
+    },
+    clientExtensionResults: assertion.getClientExtensionResults ? assertion.getClientExtensionResults() : {},
+  };
+  const verifyRes = await fetch(API_BASE + '/api/auth/webauthn/login-verify', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username, response: responsePayload }),
+  });
+  const data = await verifyRes.json();
+  if(!verifyRes.ok) throw new Error(data.error || 'تعذّر الدخول بالبصمة');
+  SERVER_AUTH_TOKEN = data.token;
+  SERVER_AUTH_USERNAME = data.username || username;
+  SERVER_AUTH_ROLE = normalizeRole(data.role);
+  try{
+    sessionStorage.setItem('serverAuthToken', data.token);
+    sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
+    sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
+  }catch(e){ console.error('[Auth] Failed to store session token:', e); }
+  return data;
+}
+
 /* ---------------- شاشة الدخول على الخادم المركزي (منفصلة عن نظام المستخدمين الداخلي للبرنامج) ---------------- */
 function showServerLoginScreen(errorMsg){
   const el = document.getElementById('server-login-screen');
