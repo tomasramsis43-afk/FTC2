@@ -9,6 +9,27 @@ const { addClient: addSseClient, removeClient: removeSseClient } = require('../s
 const { authLimiter, licenseLimiter } = require('../rate-limiters');
 const { validateLicenseKey } = require('../license');
 
+// تحديد الدولة/المدينة تقريبياً من عنوان IP، عبر خدمة ipwho.is المجانية (بدون مفتاح API).
+// best-effort بالكامل: أي فشل (شبكة/انتهاء مهلة/عنوان محلي) يُرجع null بهدوء دون كسر تسجيل
+// الدخول نفسه أبداً. مهلة قصيرة (2.5 ثانية) حتى لا تُبطئ استجابة الدخول بشكل ملحوظ لو تعذّر
+// الوصول للخدمة الخارجية.
+async function geolocateIp(ip) {
+  if (!ip) return null;
+  // تجاهل عناوين IP المحلية/الخاصة — الاستعلام عنها لن يعطي نتيجة مفيدة على أي حال.
+  if (/^(127\.|10\.|192\.168\.|::1$|::ffff:127\.|fc00:|fe80:)/.test(ip)) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const resp = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await resp.json();
+    if (!data || data.success === false) return null;
+    return { country: data.country || null, city: data.city || null };
+  } catch (e) {
+    return null;
+  }
+}
+
 // خطوة 1: توليد سر مؤقّت (pending) + رابط otpauth للـ QR — لا يُفعَّل فعلياً إلا بعد
 // تأكيد أول كود صحيح فى /verify (يمنع تفعيل غير مقصود لو المستخدم أغلق الصفحة قبل المسح).
 router.post('/api/2fa/setup', requireAuth, requireRole('admin'), async (req, res) => {
@@ -217,6 +238,27 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
     } catch (e) {
       console.error('تعذّر جلب آخر عملية دخول سابقة أو التحقق من الجهاز:', e);
     }
+    // تحديد دولة/مدينة الدخول الحالي تقريبياً من عنوان IP، ومقارنتها بالدولة الأكثر تكراراً فى
+    // دخولات هذا الحساب الناجحة السابقة — لتنبيه المستخدم لو الدخول الحالي من دولة غير معتادة له.
+    // best-effort بالكامل: لا يمنع الدخول أبداً حتى لو فشلت خدمة الـ geolocation أو كانت بطيئة.
+    const currentGeo = await geolocateIp(loginIp);
+    let geoAlert = null;
+    try {
+      if (currentGeo && currentGeo.country) {
+        const usual = await pool.query(
+          `SELECT country, COUNT(*)::int AS cnt FROM login_history
+           WHERE username = $1 AND success = true AND country IS NOT NULL
+           GROUP BY country ORDER BY cnt DESC LIMIT 1`,
+          [user.username]
+        );
+        const usualCountry = usual.rows[0]?.country || null;
+        if (usualCountry && usualCountry !== currentGeo.country) {
+          geoAlert = { country: currentGeo.country, city: currentGeo.city, usualCountry };
+        }
+      }
+    } catch (e) {
+      console.error('تعذّر تحديد الدولة المعتادة لهذا الحساب:', e);
+    }
     const token = signToken(user);
     // نجاح كامل: تصفير عداد المحاولات الفاشلة وأي قفل مؤقت قائم لهذا الحساب.
     pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
@@ -224,8 +266,8 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
     // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
     // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
     pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
-      [user.username, user.role || 'staff', loginIp, loginDevice]
+      'INSERT INTO login_history (username, role, ip_address, device_info, country, city) VALUES ($1, $2, $3, $4, $5, $6)',
+      [user.username, user.role || 'staff', loginIp, loginDevice, currentGeo?.country || null, currentGeo?.city || null]
     ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
     // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
     // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدلاً من أي قائمة محلية داخل البرنامج.
@@ -238,6 +280,7 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       suspiciousAlert: [],
       lastLogin: lastLogin ? { at: lastLogin.logged_in_at, ip: lastLogin.ip_address, device: lastLogin.device_info } : null,
       newDeviceAlert: isNewDevice,
+      geoAlert,
     });
     // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات دخول مشبوهة) حصل منذ آخر مرة راجع
     // فيها شاشة "سجل الدخول"، نُرجعه على شاشة الإعدادات — لا نُبطئ تسجيل الدخول بفحصه
