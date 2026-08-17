@@ -770,6 +770,32 @@ function showLicenseScreen(errorMsg){
 }
 
 async function ensureServerLoginThenStart(){
+  // دخول تلقائي عبر رابط بالإيميل (Magic Link) لو الرابط الحالي يحتوي على معطيات الرابط
+  // (?magicToken=...&u=...) — يُفحص هذا أولاً وقبل أي جلسة محفوظة، لأن ضغط رابط جديد من الإيميل
+  // يجب أن يأخذ الأولوية دائماً. نُزيل المعطيات من شريط العنوان فوراً بغض النظر عن النتيجة، حتى
+  // لا يُعاد استخدام نفس الرابط بالخطأ (تحديث الصفحة مثلاً) — الرابط أصلاً صالح لمرة واحدة فقط.
+  try{
+    const params = new URLSearchParams(window.location.search);
+    const magicToken = params.get('magicToken');
+    const magicUser = params.get('u');
+    if(magicToken && magicUser){
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+      try{
+        const loginData = await magicLinkVerify(magicUser, magicToken);
+        $('#server-login-screen').style.display = 'none';
+        await startApp();
+        checkPendingQrLoginApproval();
+        const displayName = (loginData && loginData.user && loginData.user.displayName) || magicUser;
+        showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
+        return;
+      }catch(e){
+        console.error('[MagicLink] فشل الدخول عبر الرابط:', e);
+        showServerLoginScreen('تعذّر الدخول عبر هذا الرابط: ' + (e.message || 'رابط غير صالح أو منتهي الصلاحية') + ' — جرّب الدخول العادي أو اطلب رابطاً جديداً');
+        return;
+      }
+    }
+  }catch(e){ console.error('[MagicLink] خطأ أثناء فحص رابط الدخول:', e); }
+
   const saved = (()=>{ try{ return sessionStorage.getItem('serverAuthToken'); }catch(e){ return null; } })();
   if(saved){
     SERVER_AUTH_TOKEN = saved;
@@ -782,6 +808,7 @@ async function ensureServerLoginThenStart(){
         }catch(e){ SERVER_AUTH_ROLE = 'staff'; }
         $('#server-login-screen').style.display = 'none';
         await startApp();
+        checkPendingQrLoginApproval();
         return;
       }
       // رد صريح من السيرفر (401/403 غالباً) بأن الجلسة نفسها لم تعد صالحة — هنا فقط نطلب دخولاً
@@ -806,6 +833,7 @@ async function ensureServerLoginThenStart(){
       showToast('⚠️ تعذّر الاتصال بالسيرفر — تم المتابعة تلقائياً بوضع العمل من الجهاز فقط');
       $('#server-login-screen').style.display = 'none';
       await startApp();
+      checkPendingQrLoginApproval();
       return;
     }
   }
@@ -858,6 +886,7 @@ const LOGIN_THEME_KEY = 'ftcLoginThemeDark';
       const loginData = await webauthnLogin(uname);
       $('#server-login-screen').style.display = 'none';
       await startApp();
+      checkPendingQrLoginApproval();
       const displayName = (loginData && loginData.user && loginData.user.displayName) || uname;
       showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
     }catch(e){
@@ -868,6 +897,117 @@ const LOGIN_THEME_KEY = 'ftcLoginThemeDark';
       }
     }finally{
       waBtn.disabled = false;
+    }
+  });
+})();
+
+// دخول بمسح الكود (QR، زي واتساب ويب) — يولّد الديسكتوب رمز QR يحتوي على رابط لهذا البرنامج
+// نفسه بمعرّف جلسة مؤقت، يمسحه المستخدم بكاميرا موبايله العادية وهو مسجّل دخول بالفعل على
+// موبايله، فيوافق هناك، فيدخل الديسكتوب تلقائياً — بدون الحاجة لأي ماسح QR داخل البرنامج نفسه.
+let _qrLoginPollTimer = null;
+function stopQrLoginPolling(){
+  if(_qrLoginPollTimer){ clearInterval(_qrLoginPollTimer); _qrLoginPollTimer = null; }
+}
+async function openQrLoginModal(){
+  const modal = $('#qr-login-modal');
+  const statusEl = $('#qr-login-status');
+  if(!modal) return;
+  modal.style.display = 'flex';
+  statusEl.textContent = 'جارٍ توليد الكود...';
+  try{
+    const res = await fetch(API_BASE + '/api/auth/qr-login/create', { method:'POST' });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'تعذّر توليد الكود');
+    const loginUrl = window.location.origin + window.location.pathname + '?qrLoginSession=' + encodeURIComponent(data.sessionId);
+    if(typeof QRious !== 'undefined'){
+      new QRious({ element: $('#qr-login-canvas'), value: loginUrl, size: 220, level: 'M' });
+    }
+    statusEl.textContent = 'فى انتظار المسح والموافقة من موبايلك...';
+    stopQrLoginPolling();
+    const expiresAtMs = data.expiresAt ? new Date(data.expiresAt).getTime() : (Date.now() + 3*60*1000);
+    _qrLoginPollTimer = setInterval(async ()=>{
+      if(Date.now() > expiresAtMs){
+        stopQrLoginPolling();
+        statusEl.textContent = 'انتهت صلاحية الكود — اضغط الزر تحت لتوليد كود جديد';
+        return;
+      }
+      try{
+        const pollRes = await fetch(API_BASE + '/api/auth/qr-login/status/' + encodeURIComponent(data.sessionId));
+        const pollData = await pollRes.json();
+        if(pollData.status === 'approved'){
+          stopQrLoginPolling();
+          SERVER_AUTH_TOKEN = pollData.token;
+          SERVER_AUTH_USERNAME = pollData.username;
+          SERVER_AUTH_ROLE = normalizeRole(pollData.role);
+          try{
+            sessionStorage.setItem('serverAuthToken', pollData.token);
+            sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
+            sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
+          }catch(e){ console.error('[QR Login] Failed to store session token:', e); }
+          modal.style.display = 'none';
+          $('#server-login-screen').style.display = 'none';
+          await startApp();
+          const displayName = (pollData.user && pollData.user.displayName) || pollData.username;
+          showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
+        }else if(pollData.status === 'rejected'){
+          stopQrLoginPolling();
+          statusEl.textContent = 'تم رفض طلب الدخول من الموبايل';
+        }else if(pollData.status === 'expired'){
+          stopQrLoginPolling();
+          statusEl.textContent = 'انتهت صلاحية الكود — اضغط الزر تحت لتوليد كود جديد';
+        }
+      }catch(e){ console.error('[QR Login] فشل التحقق من حالة الكود:', e); }
+    }, 2000);
+  }catch(e){
+    console.error('[QR Login] فشل توليد كود الدخول:', e);
+    statusEl.textContent = '⚠️ تعذّر توليد الكود، حاول مرة أخرى';
+  }
+}
+(function(){
+  const openBtn = $('#btn-qr-login-open');
+  const closeBtn = $('#btn-qr-login-close');
+  if(openBtn) openBtn.addEventListener('click', openQrLoginModal);
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{
+    stopQrLoginPolling();
+    $('#qr-login-modal').style.display = 'none';
+  });
+})();
+
+// دخول بمسح الكود (QR) — لو هذا الجهاز فتح رابط QR وُلِّد من جهاز آخر (بعد تسجيل الدخول هنا
+// بأي طريقة)، نعرض تأكيداً بسيطاً قبل الموافقة على تسجيل دخول الجهاز الآخر بنفس هذا الحساب.
+// يُستدعى بعد كل نجاح فى تسجيل الدخول على هذا الجهاز (راجع نداءات checkPendingQrLoginApproval
+// المضافة بعد كل await startApp() فى هذا الملف).
+async function checkPendingQrLoginApproval(){
+  let sessionId = null;
+  try{ sessionId = sessionStorage.getItem('pendingQrLoginSession'); }catch(e){ return; }
+  if(!sessionId) return;
+  try{ sessionStorage.removeItem('pendingQrLoginSession'); }catch(e){ console.error('[QR Login] Failed to clear pending session:', e); }
+  const approve = await customConfirm('فيه جهاز تاني عايز يدخل بحسابك عن طريق مسح الكود — توافق؟');
+  try{
+    const res = await fetch(API_BASE + '/api/auth/qr-login/' + (approve ? 'approve' : 'reject') + '/' + encodeURIComponent(sessionId), {
+      method: 'POST', headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+    });
+    if(res.ok) showToast(approve ? 'تم تسجيل دخول الجهاز الآخر بحسابك ✅' : 'تم رفض طلب الدخول');
+    else showToast('⚠️ تعذّر الرد على طلب الدخول (انتهت صلاحية الكود على الأرجح)');
+  }catch(e){ console.error('[QR Login] فشل الرد على طلب الدخول:', e); }
+}
+
+// طلب رابط دخول بالإيميل — يحتاج فقط اسم المستخدم المكتوب فى الحقل (نفس منطق زر البصمة أعلاه).
+(function(){
+  const magicBtn = $('#btn-magic-link-request');
+  if(!magicBtn) return;
+  magicBtn.addEventListener('click', async ()=>{
+    const uname = $('#server-login-user').value.trim();
+    if(!uname){ $('#server-login-user').focus(); showToast('اكتب اسم المستخدم أولاً'); return; }
+    magicBtn.disabled = true;
+    try{
+      const result = await magicLinkRequest(uname);
+      showToast(result.message || 'لو الحساب موجود وعنده إيميل مسجَّل، هيوصله رابط دخول خلال دقائق');
+    }catch(e){
+      console.error('[MagicLink] فشل طلب رابط الدخول:', e);
+      showToast('⚠️ تعذّر إرسال الرابط، حاول لاحقاً');
+    }finally{
+      magicBtn.disabled = false;
     }
   });
 })();
@@ -924,6 +1064,7 @@ $('#server-login-form').addEventListener('submit', async e=>{
     }catch(e){ console.error('[Auth] Failed to persist remembered username:', e); }
     $('#server-login-screen').style.display = 'none';
     await startApp();
+    checkPendingQrLoginApproval();
     // رسالة ترحيب حسب توقيت اليوم، باسم المستخدم الظاهر إن وُجد
     const displayName = (loginData && loginData.user && loginData.user.displayName) || uname;
     showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
@@ -967,6 +1108,7 @@ $('#server-login-form').addEventListener('submit', async e=>{
         showToast('⚠️ تعذّر الاتصال بالسيرفر — تم الدخول بوضع العمل من الجهاز فقط ببيانات هذا المستخدم المحفوظة محلياً');
         $('#server-login-screen').style.display = 'none';
         await startApp();
+        checkPendingQrLoginApproval();
         return;
       }
       $('#server-login-error').textContent = 'تعذّر الاتصال بالسيرفر، ولا يوجد تسجيل دخول محفوظ بهذا الاسم/كلمة المرور على هذا الجهاز';
