@@ -1,3 +1,19 @@
+// دخول بمسح الكود (QR، زي واتساب ويب): لو فُتح هذا الرابط من مسح كود QR ظاهر على جهاز آخر
+// (شاشة الدخول تولّد رابطاً يحتوي على qrLoginSession=...)، نحفظ معرّف الجلسة فوراً قبل أي شيء
+// آخر، ونزيله من شريط العنوان. لاحقاً — بعد أي تسجيل دخول ناجح على هذا الجهاز (بأي طريقة: كلمة
+// مرور، بصمة، رابط إيميل، أو جلسة محفوظة بالفعل) — نعرض تأكيداً بسيطاً لربط الجهاز الآخر بنفس
+// الحساب (راجع checkPendingQrLoginApproval فى module-purchases.js).
+(function(){
+  try{
+    const params = new URLSearchParams(window.location.search);
+    const qrSession = params.get('qrLoginSession');
+    if(qrSession){
+      sessionStorage.setItem('pendingQrLoginSession', qrSession);
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    }
+  }catch(e){ console.error('[QR Login] Failed to capture qrLoginSession param:', e); }
+})();
+
 (async function bootWithLicense(){
   try{
     if(!(window.crypto && window.crypto.subtle)){
