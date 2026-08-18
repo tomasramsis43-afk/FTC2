@@ -451,7 +451,6 @@ async function printInvoice(id){
   const invNoLabel = formatInvoiceNo(invNo);
   await logAudit('edit','العملاء', `تمت طباعة فاتورة رقم ${invNoLabel} للعميل: ${c.name}`);
 
-  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const income = centerIncome(c);
   const bag = bagAmount(c);
   const paid = paidTotal(c);
@@ -464,24 +463,37 @@ async function printInvoice(id){
   const totalInclVat = income + (bagShown ? bag : 0);
   const vat = vatFromGross(totalInclVat);
   const grand = totalInclVat - vat; // القيمة الفعلية بدون الضريبة
-  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
+  // جسم الفاتورة (نفس قالب الطباعة) — يُستخدم للطباعة ولرفقه كملف PDF في الإيميل.
+  const invoiceBodyHtml = buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand});
+
+  const win = openPrintTarget();
+  win.document.write(`${printDocHead('فاتورة ' + invNoLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy})}<body>${invoiceBodyHtml}${printDocFooterButton()}</body></html>`);
+  finishPrintDoc(win);
+  renderTable();
+  // إرسال تلقائي فور إصدار الفاتورة لو للعميل إيميل محفوظ — best-effort بالكامل (فشل الإرسال
+  // لا يوقف الطباعة، ولا يُظهر خطأً مزعجاً؛ تنبيه بسيط فقط عبر showToast لو فشل).
+  if(c.email){
+    sendInvoiceEmailNow(c, invNoLabel, {grand, vat, paid, rem}, {silent:true});
+  }
+}
+
+/* يبني جسم (body) فاتورة العميل بنفس قالب الطباعة — يُستخدم للطباعة ولرفقه كملف PDF
+   في الإيميل بدل إرسال البيانات كنص داخل جسم الرسالة. */
+function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand}){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   // قرار عمل صريح: هذه الفاتورة (تُطبَع من شيت العملاء) لم تعد تُرسَل لهيئة الزكاة والضريبة إطلاقاً —
   // أصبحت "فاتورة مبسطة" داخلية فقط (رمز QR مُولَّد محلياً كما كان دائماً فى الحالة العادية أدناه،
   // بدون أي اتصال بالسيرفر/الهيئة). هذا هو ما سمح أيضاً بالسماح للاستقبال بطباعتها قبل اعتماد الأدمن
   // (راجع طلب المستخدم) بأمان — لم يعد هناك رقم رسمي يُستهلك فعلياً لدى الهيئة يصعب التراجع عنه.
   const zatcaResult = null;
-
   const rowsHtml = `
     <tr><td>رسوم الدورة التدريبية${c.courseType ? ' — '+escapeHtml(c.courseType) : ''}</td><td class="num">${fmt(num(c.coursePrice))}</td></tr>
     ${num(c.discount)>0 ? `<tr><td>الخصم</td><td class="num">-${fmt(num(c.discount))}</td></tr>` : ''}
     ${bagShown ? `<tr><td>قيمة الحقيبة التدريبية</td><td class="num">${fmt(bag)}</td></tr>` : ''}
   `;
-
-  const win = openPrintTarget();
-  win.document.write(`
-  ${printDocHead('فاتورة ' + invNoLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy})}
-  <body>
+  return `
     <div class="inv-head">
       <div style="display:flex; gap:14px; align-items:center;">
         <img class="logo" src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
@@ -539,45 +551,60 @@ async function printInvoice(id){
     <div style="margin:14px 0 22px; padding:12px 14px; border:1px solid #DDE3EA; border-radius:8px; background:#F7F9FB; font-size:12.5px; text-align:center;">
       <b>المبلغ كتابةً:</b> ${escapeHtml(numberToArabicWords(grand+vat))}
     </div>
-    ${zatcaStatusBadge(zatcaResult)}
-
-    ${printDocFooterButton()}
-  </body></html>`);
-  finishPrintDoc(win);
-  renderTable();
-  // إرسال تلقائي فور إصدار الفاتورة لو للعميل إيميل محفوظ — best-effort بالكامل (فشل الإرسال
-  // لا يوقف الطباعة، ولا يُظهر خطأً مزعجاً؛ تنبيه بسيط فقط عبر showToast لو فشل).
-  if(c.email){
-    sendInvoiceEmailNow(c, invNoLabel, {grand, vat, paid, rem}, {silent:true});
-  }
+    ${zatcaStatusBadge(zatcaResult)}`;
 }
 
-// إرسال الفاتورة بالإيميل فعلياً عبر السيرفر. body HTML بسيط (وليس نسخة كاملة من قالب
-// الطباعة) لضمان توافقه مع عملاء البريد المختلفة. silent=true تُستخدم للإرسال التلقائي
-// بعد الطباعة مباشرة (رسالة نجاح خفيفة فقط، بدون إزعاج فى حال الفشل).
+// إرسال الفاتورة بالإيميل فعلياً عبر السيرفر. جسم الإيميل بسيط (تحية + إشارة للمرفق) لضمان
+// توافقه مع عملاء البريد المختلفة، والفاتورة نفسها تُرفق كملف PDF (نفس قالب الطباعة) بدل
+// إرسال البيانات كنص داخل جسم الرسالة. silent=true تُستخدم للإرسال التلقائي بعد الطباعة مباشرة
+// (رسالة نجاح خفيفة فقط، بدون إزعاج فى حال الفشل). إن فشل توليد الـ PDF نُرسل الإيميل بدونه.
 async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
   const {grand, vat, paid, rem} = totals;
+  // إعادة حساب نفس قيم الفاتورة المطبوعة لبناء جسمها (نفس القالب) في الإيميل.
+  const income = centerIncome(c);
+  const bag = bagAmount(c);
+  const bagShown = bag>0 && paid >= (income + bag);
+  const totalInclVat = income + (bagShown ? bag : 0);
+  const invoiceBodyHtml = buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand});
+  // توليد ملف PDF للفاتورة (نفس قالب الطباعة) لرفقه بالمرفقات بدل إرسال البيانات كنص فقط.
+  let attachment = null;
+  try{
+    const pdfFile = await htmlBodyToPdfFile(invoiceBodyHtml, {
+      title: 'فاتورة ' + invNoLabel,
+      filename: 'فاتورة_' + invNoLabel.replace(/[^\w\u0600-\u06FF-]+/g,'_') + '.pdf',
+      variant: 'full',
+      accent: PRINT_PALETTE.gold,
+      borderColor: PRINT_PALETTE.navy,
+    });
+    attachment = { b64: await fileToBase64(pdfFile), name: pdfFile.name, type: pdfFile.type };
+  }catch(e){
+    console.error('تعذّر توليد PDF الفاتورة للإيميل:', e);
+  }
   const bodyHtml = `
     <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9; color:#222;">
       <p>مرحباً ${escapeHtml(c.name)}،</p>
-      <p>مرفق تفاصيل فاتورتكم رقم <b>${invNoLabel}</b>:</p>
-      <table style="border-collapse:collapse; width:100%; max-width:420px;">
-        <tr><td style="padding:6px 0;">القيمة (بدون ضريبة)</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand)}</b> ﷼</td></tr>
-        <tr><td style="padding:6px 0;">ضريبة القيمة المضافة</td><td style="padding:6px 0; text-align:left;"><b>${fmt(vat)}</b> ﷼</td></tr>
-        <tr style="border-top:1px solid #ddd;"><td style="padding:6px 0;">الإجمالي</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand+vat)}</b> ﷼</td></tr>
-        <tr><td style="padding:6px 0;">المدفوع</td><td style="padding:6px 0; text-align:left;">${fmt(paid)} ﷼</td></tr>
-        <tr><td style="padding:6px 0;">المتبقي</td><td style="padding:6px 0; text-align:left;">${fmt(rem)} ﷼</td></tr>
-      </table>
+      ${attachment
+        ? `<p>مرفق فاتورتكم رقم <b>${invNoLabel}</b> كملف PDF في هذا البريد.</p>`
+        : `<p>إليكم بيانات فاتورتكم رقم <b>${invNoLabel}</b>:</p>
+           <table style="border-collapse:collapse; width:100%; max-width:420px;">
+             <tr><td style="padding:6px 0;">القيمة (بدون ضريبة)</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand)}</b> ﷼</td></tr>
+             <tr><td style="padding:6px 0;">ضريبة القيمة المضافة</td><td style="padding:6px 0; text-align:left;"><b>${fmt(vat)}</b> ﷼</td></tr>
+             <tr style="border-top:1px solid #ddd;"><td style="padding:6px 0;">الإجمالي</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand+vat)}</b> ﷼</td></tr>
+             <tr><td style="padding:6px 0;">المدفوع</td><td style="padding:6px 0; text-align:left;">${fmt(paid)} ﷼</td></tr>
+             <tr><td style="padding:6px 0;">المتبقي</td><td style="padding:6px 0; text-align:left;">${fmt(rem)} ﷼</td></tr>
+           </table>`}
       <p style="color:#888; font-size:13px; margin-top:16px;">شكراً لتعاملكم معنا.</p>
     </div>`;
+  const payload = { to: c.email, clientName: c.name, invoiceNo: invNoLabel, bodyHtml };
+  if(attachment) Object.assign(payload, { attachmentBase64: attachment.b64, attachmentName: attachment.name, attachmentType: attachment.type });
   try{
     const res = await serverFetch('/api/email/invoice', {
       method:'POST',
-      body: JSON.stringify({ to: c.email, clientName: c.name, invoiceNo: invNoLabel, bodyHtml }),
+      body: JSON.stringify(payload),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال الفاتورة بالإيميل إلى ${c.email}`);
-      await logAudit('edit','العملاء', `تم إرسال فاتورة رقم ${invNoLabel} بالإيميل للعميل: ${c.name} (${c.email})`);
+      showToast(`✉️ تم إرسال الفاتورة بالإيميل إلى ${c.email}${attachment ? ' (مع مرفق PDF)' : ''}`);
+      await logAudit('edit','العملاء', `تم إرسال فاتورة رقم ${invNoLabel} بالإيميل للعميل: ${c.name} (${c.email})${attachment ? ' مع مرفق PDF' : ''}`);
     }else{
       const data = await res.json().catch(()=>({}));
       if(!silent) showToast(`⚠️ تعذّر إرسال الفاتورة بالإيميل: ${data.error || 'خطأ غير معروف'}`);
@@ -586,6 +613,16 @@ async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
     console.error('فشل إرسال إيميل الفاتورة:', e);
     if(!silent) showToast('⚠️ تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
   }
+}
+
+// تحويل File إلى base64 (بدون بادئة data:...) لإرفاقه مع طلب الإيميل.
+function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const r = new FileReader();
+    r.onload = ()=> resolve(String(r.result).split(',')[1] || '');
+    r.onerror = ()=> reject(new Error('تعذّر قراءة الملف'));
+    r.readAsDataURL(file);
+  });
 }
 
 // زرار الإرسال اليدوي: لو العميل معندوش إيميل محفوظ، نطلبه مرة واحدة (بدون حفظه فى بيانات

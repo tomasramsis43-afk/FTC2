@@ -193,11 +193,11 @@ function renderReportToOffscreenIframe(fullHtml){
   });
 }
 /* تحويل محتوى HTML لتقرير (نفس تنسيق تقارير الطباعة الحالية) إلى ملف PDF حقيقي متعدد الصفحات عند اللزوم */
-async function htmlBodyToPdfFile(bodyHtml, {title, filename, variant='table'} = {}){
+async function htmlBodyToPdfFile(bodyHtml, {title, filename, variant='table', accent, borderColor, amountColor} = {}){
   if(typeof html2canvas==='undefined' || !window.jspdf){
     throw new Error('مكتبة توليد PDF غير متوفرة (تحقق من الاتصال بالإنترنت)');
   }
-  const fullHtml = `${printDocHead(title, {variant})}<body>${bodyHtml}</body></html>`;
+  const fullHtml = `${printDocHead(title, {variant, accent, borderColor, amountColor})}<body>${bodyHtml}</body></html>`;
   const iframe = await renderReportToOffscreenIframe(fullHtml);
   try{
     await new Promise(r=> setTimeout(r, 200)); // مهلة قصيرة لضبط التخطيط قبل الالتقاط
