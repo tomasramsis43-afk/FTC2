@@ -316,12 +316,10 @@ header.top p {
   align-items: center;
   gap: 10px;
   text-align: start;
-  background: color-mix(in srgb, var(--surface-alt) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-alt) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 7px 16px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .quickstats .qs-icon {
@@ -783,12 +781,10 @@ nav.tabs button:focus-visible {
   gap: 6px;
   font-size: 12.5px;
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-alt) 75%, transparent);
+  background: color-mix(in srgb, var(--surface-alt) 92%, transparent);
   border: 1px solid var(--border);
   padding: 5px 12px;
   border-radius: 20px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1661,8 +1657,6 @@ body.density-compact .stamp {
 
 tbody tr {
   transition: background 0.12s ease;
-  animation: rowIn 0.28s ease both;
-  will-change: background;
 }
 
 tbody tr:hover {
@@ -2513,9 +2507,7 @@ td select:hover:not(:focus) {
 }
 
 .cfo-hero-item {
-  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 14px;
@@ -2616,9 +2608,7 @@ td select:hover:not(:focus) {
 }
 
 .cfo-panel {
-  background: color-mix(in srgb, var(--surface-solid) 68%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow);
@@ -2797,13 +2787,11 @@ body.dark-theme .hint-warn {
 
 /* ============= شيت العملاء — تصميم مخصص ============= */
 #view-clients .toolbar-card {
-  background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 #view-clients .client-stats {
