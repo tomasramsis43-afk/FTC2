@@ -1,15 +1,21 @@
 // ============================================================
 // خدمة إرسال الإيميلات المركزية — نقطة واحدة لكل أنواع الإيميلات فى النظام
-// (روابط الدخول، الفواتير، التقارير، تنبيهات الأمان). تُبنى فوق نفس منطق
-// الـ transporter القديم (كان محصوراً فى magic-link.js) بدون أي تغيير فى
-// سلوكه، فقط انتقل هنا ليُعاد استخدامه من كل المسارات الأخرى.
+// (روابط الدخول، الفواتير، التقارير، تنبيهات الأمان).
 // ============================================================
+// ملاحظة مهمة عن مزوّد الإرسال: خطط Render المجانية تمنع أي اتصال صادر على بورتات
+// SMTP (25/465/587) بالكامل، فأي محاولة اتصال بـ smtp.gmail.com (أو أي SMTP تاني)
+// من خدمة مجانية على Render هتتعلّق لحد ما تنتهي المهلة (timeout) بدون أي رد واضح.
+// لذلك المزوّد الافتراضي هنا هو Resend عبر HTTPS API عادي (بورت 443 مش محجوب
+// أبداً حتى على الخطط المجانية) — ولو حابب تستخدم SMTP بدلاً منه (بعد ترقية خطة
+// Render لخطة مدفوعة مثلاً)، سيب RESEND_API_KEY فاضي وحط بيانات SMTP_* بدلاً منه.
 const nodemailer = require('nodemailer');
+
+function isConfigured() {
+  return !!process.env.RESEND_API_KEY || !!getTransporter();
+}
 
 let cachedTransporter = null;
 let cachedTransporterKey = null;
-// نعيد بناء الـ transporter فقط لو تغيّرت متغيرات البيئة فعلياً (نادر جداً أثناء تشغيل
-// السيرفر)، بدل إعادة الاتصال بـ SMTP فى كل طلب — أسرع وأقل حملاً على خادم البريد.
 function getTransporter() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
@@ -27,21 +33,60 @@ function getTransporter() {
   return cachedTransporter;
 }
 
-function isConfigured() {
-  return !!getTransporter();
+// إرسال عبر Resend (HTTPS API) — المسار الافتراضي والموصى به على Render.
+async function sendViaResend({ recipients, subject, html, text, attachments }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.SMTP_FROM || process.env.RESEND_FROM;
+  if (!from) {
+    console.error('RESEND_FROM (أو SMTP_FROM) غير مضبوط — لازم عنوان "من" صالح لإرسال Resend');
+    return { ok: false, reason: 'no_from_address' };
+  }
+  const payload = {
+    from,
+    to: recipients,
+    subject,
+    html,
+    text,
+  };
+  if (attachments && attachments.length) {
+    payload.attachments = attachments.map(a => ({
+      filename: a.filename,
+      content: a.content, // base64 بالفعل من parseAttachment فى routes/email.js
+    }));
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '');
+      console.error(`فشل إرسال إيميل "${subject}" عبر Resend (${resp.status}):`, errBody);
+      return { ok: false, reason: 'send_failed', error: `Resend ${resp.status}: ${errBody}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    console.error(`فشل إرسال إيميل "${subject}" عبر Resend:`, e.message);
+    return { ok: false, reason: 'send_failed', error: e.message };
+  }
 }
 
-// غلاف عام لإرسال أي إيميل. يرجّع { ok: true } أو { ok: false, reason } بدل ما يرمي
-// استثناء دايماً — عشان المسارات اللي بتستخدمه (خصوصاً التنبيهات الخلفية) تقدر تكمل
-// شغلها بأمان حتى لو فشل الإرسال، وتسجّل السبب فى اللوج فقط.
-async function sendEmail({ to, subject, html, text, attachments }) {
+// إرسال عبر SMTP التقليدي (nodemailer) — يُستخدم فقط لو RESEND_API_KEY غير مضبوط.
+async function sendViaSmtp({ recipients, subject, html, text, attachments }) {
   const transport = getTransporter();
   if (!transport) {
-    console.error(`تعذّر إرسال إيميل "${subject}": إعدادات SMTP غير مكتملة على السيرفر`);
-    return { ok: false, reason: 'smtp_not_configured' };
+    console.error(`تعذّر إرسال إيميل "${subject}": لا يوجد RESEND_API_KEY ولا إعدادات SMTP كاملة`);
+    return { ok: false, reason: 'not_configured' };
   }
-  const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
-  if (recipients.length === 0) return { ok: false, reason: 'no_recipient' };
   try {
     await transport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
@@ -49,13 +94,27 @@ async function sendEmail({ to, subject, html, text, attachments }) {
       subject,
       html,
       text,
-      attachments,
+      attachments: attachments && attachments.length
+        ? attachments.map(a => ({ filename: a.filename, content: a.content, encoding: 'base64', contentType: a.contentType }))
+        : undefined,
     });
     return { ok: true };
   } catch (e) {
     console.error(`فشل إرسال إيميل "${subject}" إلى ${recipients.join(',')}:`, e.message);
     return { ok: false, reason: 'send_failed', error: e.message };
   }
+}
+
+// غلاف عام لإرسال أي إيميل. يرجّع { ok: true } أو { ok: false, reason } بدل ما يرمي
+// استثناء دايماً — عشان المسارات اللي بتستخدمه (خصوصاً التنبيهات الخلفية) تقدر تكمل
+// شغلها بأمان حتى لو فشل الإرسال، وتسجّل السبب فى اللوج فقط.
+async function sendEmail({ to, subject, html, text, attachments }) {
+  const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
+  if (recipients.length === 0) return { ok: false, reason: 'no_recipient' };
+  if (process.env.RESEND_API_KEY) {
+    return sendViaResend({ recipients, subject, html, text, attachments });
+  }
+  return sendViaSmtp({ recipients, subject, html, text, attachments });
 }
 
 function wrapHtml(bodyHtml) {

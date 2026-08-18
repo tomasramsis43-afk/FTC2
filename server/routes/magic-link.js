@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const { pool } = require('../db');
 const { signToken } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
-const { getTransporter } = require('../services/email');
+const { sendEmail, isConfigured } = require('../services/email');
 
 function getOrigin(req) {
   return req.headers.origin || `https://${req.headers.host}`;
@@ -27,9 +27,8 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
     const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [username]);
     const user = userResult.rows[0];
     if (!user || !user.email || user.is_active === false) return res.json(GENERIC_RESPONSE);
-    const transport = getTransporter();
-    if (!transport) {
-      console.error('تعذّر إرسال رابط الدخول: إعدادات SMTP (SMTP_HOST/SMTP_USER/SMTP_PASS) غير مكتملة على السيرفر');
+    if (!isConfigured()) {
+      console.error('تعذّر إرسال رابط الدخول: لا يوجد RESEND_API_KEY ولا إعدادات SMTP كاملة على السيرفر');
       return res.json(GENERIC_RESPONSE); // لا نكشف تفاصيل إعداد السيرفر لطالب الرابط
     }
     const rawToken = crypto.randomBytes(32).toString('base64url');
@@ -40,8 +39,7 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
       [user.username, tokenHash, expiresAt]
     );
     const link = `${getOrigin(req)}/?magicToken=${rawToken}&u=${encodeURIComponent(user.username)}`;
-    await transport.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    await sendEmail({
       to: user.email,
       subject: 'رابط الدخول إلى نظام إدارة المركز',
       html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.8;">
