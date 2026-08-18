@@ -1408,3 +1408,438 @@ $('#acc-journal-body')?.addEventListener('click', async e=>{
   showToast('تم حذف القيد');
 });
 
+/* ================================================================
+   إرسال التقارير بالإيميل من لوحة التحكم (جدول التقارير + التقرير اليومي)
+   ================================================================ */
+// إرسال أي تقرير كملف PDF بالإيميل — دالة عامة لجدول التقارير في لوحة التحكم.
+async function emailPdfReport(subject, bodyHtml, filename){
+  const to = await customPrompt('اكتب الإيميل (أو عدة إيميلات مفصولة بفاصلة) لإرسال التقرير إليه:', {title:'إرسال التقرير بالإيميل', required:true, placeholder:'admin@mail.com'});
+  if(!to) return;
+  const recipients = to.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!recipients.length || recipients.some(r=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))){ showToast('صيغة الإيميل غير صحيحة'); return; }
+  let pdfFile;
+  try{
+    pdfFile = await htmlBodyToPdfFile(bodyHtml, { title: subject, filename });
+  }catch(e){
+    console.error(e);
+    showToast('تعذّر توليد PDF — تأكد من الاتصال بالإنترنت ثم أعد المحاولة');
+    return;
+  }
+  const attachmentBase64 = await fileToBase64(pdfFile);
+  const emailBodyHtml = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9;"><p>مرفق التقرير المطلوب: <b>${escapeHtml(subject)}</b></p></div>`;
+  try{
+    const res = await serverFetch('/api/email/report', {
+      method:'POST',
+      body: JSON.stringify({ to: recipients, subject, bodyHtml: emailBodyHtml, attachmentBase64, attachmentName: pdfFile.name, attachmentType: 'application/pdf' }),
+    });
+    if(res.ok){
+      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.join(', ')}`);
+      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.join(', ')}`);
+    }else{
+      const data = await res.json().catch(()=>({}));
+      showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+    }
+  }catch(e){
+    console.error('فشل إرسال إيميل التقرير:', e);
+    showToast('⚠️ تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+  }
+}
+
+/* ---- قائمة التقارير المتاحة في جدول لوحة التحكم ---- */
+const EMAIL_REPORTS_DEFS = [
+  {
+    id:'daily', label:'التقرير اليومي',
+    desc:'كل عمليات اليوم: العملاء الجدد بأسمائهم ومبالغهم وطرق الدفع، المبالغ المحصّلة، المصروفات، المشتريات، شراء/إضافة الحقائب، مردودات المبيعات، وتعديل/حذف العملاء القدام.',
+    param:{type:'date', label:'تاريخ اليوم'}
+  },
+  {
+    id:'monthly', label:'التقرير الشهري (تسجيلات ومبالغ)',
+    desc:'عدد العملاء المسجّلين والمبالغ المدفوعة (نقدي/شبكة/بنك) لكل يوم من الشهر.',
+    param:{type:'month', label:'الشهر'}
+  },
+  {
+    id:'vault-out', label:'الحركات المالية الصادرة',
+    desc:'كل المصروفات (صادر) خلال الشهر، عدا ما يخص تمويل/شراء الحقائب.',
+    param:{type:'month', label:'الشهر'}
+  },
+  {
+    id:'bags', label:'الحقائب المشتراة',
+    desc:'حقائب أضافها المركز للمخزون + عملاء اشتروا حقائبهم (مباشرة أو من المخزون) خلال الشهر.',
+    param:{type:'month', label:'الشهر'}
+  },
+  {
+    id:'vat', label:'الإقرار الضريبي (ضريبة القيمة المضافة)',
+    desc:'إقرار ربع سنوي: المبيعات والمردودات والمشتريات وصافي الضريبة المستحقة للهيئة.',
+    param:{type:'quarter', label:'الفترة'}
+  },
+  {
+    id:'period', label:'الإيرادات والمصروفات حسب الفترة',
+    desc:'إجمالي الإيرادات والمصروفات وصافي الفترة وعدد العملاء المسجّلين، مع تفصيل الوارد والصادر.',
+    param:{type:'range', label:'الفترة'}
+  },
+];
+function emailReportsParamHtml(def){
+  const p = def.param;
+  if(!p) return '<span style="color:var(--text-muted);">—</span>';
+  if(p.type==='date'){
+    return `<div class="field" style="max-width:175px;"><label>${escapeHtml(p.label)}</label><input type="date" data-er-date value="${todayISO()}"></div>`;
+  }
+  if(p.type==='month'){
+    return `<div class="field" style="max-width:175px;"><label>${escapeHtml(p.label)}</label><input type="month" data-er-month value="${lastCompleteMonthKey()}"></div>`;
+  }
+  if(p.type==='quarter'){
+    const year = new Date().getFullYear();
+    const curQ = Math.floor(new Date().getMonth()/3) + 1;
+    const qOptions = [1,2,3,4].map(q=>`<option value="${q}"${q===curQ?' selected':''}>الربع ${q}${q===1?' (يناير–مارس)':q===2?' (أبريل–يونيو)':q===3?' (يوليو–سبتمبر)':' (أكتوبر–ديسمبر)'}</option>`).join('');
+    return `<div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="field" style="max-width:110px;"><label>السنة</label><input type="number" data-er-year value="${year}" min="2020" max="2100" style="font-family:var(--font-mono);"></div>
+      <div class="field" style="max-width:200px;"><label>${escapeHtml(p.label)}</label><select data-er-quarter>${qOptions}</select></div>
+    </div>`;
+  }
+  if(p.type==='range'){
+    const now = new Date();
+    const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    return `<div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="field" style="max-width:155px;"><label>من تاريخ</label><input type="date" data-er-from value="${firstOfMonth}"></div>
+      <div class="field" style="max-width:155px;"><label>إلى تاريخ</label><input type="date" data-er-to value="${todayISO()}"></div>
+    </div>`;
+  }
+  return '<span style="color:var(--text-muted);">—</span>';
+}
+function renderReportsEmailList(){
+  const tbody = $('#reports-email-list');
+  if(!tbody) return;
+  tbody.innerHTML = EMAIL_REPORTS_DEFS.map(def=>`
+    <tr>
+      <td style="min-width:280px;"><b>${escapeHtml(def.label)}</b><div style="font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.5;">${escapeHtml(def.desc)}</div></td>
+      <td style="min-width:230px;">${emailReportsParamHtml(def)}</td>
+      <td style="text-align:left; white-space:nowrap;"><button class="btn btn-ghost btn-sm" data-emailreport="${def.id}">✉️ إرسال بالإيميل</button></td>
+    </tr>`).join('');
+}
+// يبني { subject, filename, bodyHtml } للتقرير المختار من جدول لوحة التحكم حسب الفترة في صفه.
+function buildDashboardEmailReport(id, rowEl){
+  const val = sel => { const el = rowEl.querySelector(sel); return el ? el.value : ''; };
+  switch(id){
+    case 'daily': {
+      const dateStr = val('[data-er-date]') || todayISO();
+      return { subject:'التقرير اليومي — ' + formatDateDisplay(dateStr), filename:`التقرير_اليومي_${dateStr}.pdf`, bodyHtml: buildDailyReportBodyHtml(dateStr) };
+    }
+    case 'monthly': {
+      const ym = val('[data-er-month]') || lastCompleteMonthKey();
+      const label = monthLabelAr(ym);
+      return { subject:'التقرير الشهري — '+label, filename:`تقرير_شهري_تسجيلات_ومبالغ_${ym}.pdf`, bodyHtml: monthlyClientsReportBodyHtml(ym) };
+    }
+    case 'vault-out': {
+      const ym = val('[data-er-month]') || lastCompleteMonthKey();
+      const [yStr, mStr] = ym.split('-');
+      const daysInMonth = new Date(Number(yStr), Number(mStr), 0).getDate();
+      const from = `${ym}-01`, to = `${ym}-${String(daysInMonth).padStart(2,'0')}`;
+      const label = monthLabelAr(ym);
+      return { subject:'الحركات المالية الصادرة — '+label, filename:`الحركات_الصادرة_${ym}.pdf`, bodyHtml: vaultOutReportBodyHtml(from, to, label) };
+    }
+    case 'bags': {
+      const ym = val('[data-er-month]') || lastCompleteMonthKey();
+      const [yStr, mStr] = ym.split('-');
+      const daysInMonth = new Date(Number(yStr), Number(mStr), 0).getDate();
+      const from = `${ym}-01`, to = `${ym}-${String(daysInMonth).padStart(2,'0')}`;
+      const label = monthLabelAr(ym);
+      return { subject:'الحقائب المشتراة — '+label, filename:`الحقائب_المشتراة_${ym}.pdf`, bodyHtml: bagsPurchasedReportBodyHtml(from, to, label) };
+    }
+    case 'vat': {
+      const year = val('[data-er-year]') || String(new Date().getFullYear());
+      const q = val('[data-er-quarter]') || '1';
+      const { from, to, label } = quarterDateRange(year, q);
+      const r = buildVatReturn(from, to);
+      return { subject:'الإقرار الضريبي — '+label, filename:`الاقرار_الضريبي_${year}_Q${q}.pdf`, bodyHtml: vatReturnReportBodyHtml(r, from, to, label) };
+    }
+    case 'period': {
+      const from = val('[data-er-from]') || todayISO();
+      const to = val('[data-er-to]') || todayISO();
+      return { subject:'الإيرادات والمصروفات حسب الفترة', filename:`تقرير_الفترة_${from}_${to}.pdf`, bodyHtml: buildPeriodReportBodyHtml(from, to) };
+    }
+  }
+  return null;
+}
+document.addEventListener('click', async e=>{
+  const btn = e.target.closest('[data-emailreport]');
+  if(!btn) return;
+  const def = EMAIL_REPORTS_DEFS.find(r=>r.id===btn.dataset.emailreport);
+  if(!def) return;
+  const rowEl = btn.closest('tr');
+  const rep = buildDashboardEmailReport(def.id, rowEl);
+  if(!rep){ showToast('تعذّر تجهيز التقرير'); return; }
+  await emailPdfReport(rep.subject, rep.bodyHtml, rep.filename);
+});
+
+/* ---- التقرير اليومي: كل عمليات اليوم ---- */
+const DAILY_REPORT_EDIT_OLD_DAYS = 2;   // تعديل "عميل قديم": سجّله أقدم من هذه المدة (بالأيام)
+const DAILY_REPORT_DELETE_OLD_DAYS = 1; // حذف "عميل قديم": سجّله أقدم من هذه المدة (بالأيام)
+// من سجل العمليات (auditLog)، نستخرج تعديلات/حذف العملاء التي وقعت فعلاً على عملاء قدام
+// (سُجّلوا قبل المدة المحددة) — قدَم العميل يُعرف من createdAt مباشرة أو من تاريخ آخر
+// "إضافة" لنفس الاسم في سجل العمليات (للعملاء المحذوفين الذين لم يعودوا موجودين).
+function dailyReportOldClientEntries(dateStr, kind){
+  const dayStart = Date.parse(dateStr+'T00:00:00');
+  const dayEnd = dayStart + 24*3600*1000;
+  const days = kind==='edit' ? DAILY_REPORT_EDIT_OLD_DAYS : DAILY_REPORT_DELETE_OLD_DAYS;
+  const entries = auditLog.filter(a=> a.action===kind && a.section==='العملاء' && a.ts>=dayStart && a.ts<dayEnd);
+  const nameFrom = desc => { const m = /(?:بيانات العميل):\s*(.*)$/.exec(desc||''); return m ? m[1].trim() : ''; };
+  const addedAtOf = name => {
+    if(!name) return null;
+    const c = clients.find(x=>x.name===name);
+    if(c && c.createdAt) return c.createdAt;
+    for(let i=auditLog.length-1; i>=0; i--){
+      const a = auditLog[i];
+      if(a.action==='add' && a.section==='العملاء' && a.description && a.description.includes(name)) return a.ts;
+    }
+    return null;
+  };
+  return entries.filter(a=>{
+    const at = addedAtOf(nameFrom(a.description));
+    return at && (a.ts - at) > days*24*3600*1000;
+  });
+}
+function buildDailyReportBodyHtml(dateStr){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
+  const weekday = WEEKDAY_NAMES_AR[new Date(dateStr+'T00:00:00').getDay()];
+  const dateLabel = `${formatDateDisplay(dateStr)} (${weekday})`;
+
+  const newClients = clients.filter(c=>c.date===dateStr);
+  const dayIn = vaultTx.filter(t=>t.type==='in' && !t.isReturn && t.date===dateStr);
+  const dayExp = vaultTx.filter(t=>t.type==='out' && !t.isReturn && t.date===dateStr && !String(t.category||'').includes('حقائب'));
+  const dayBagFund = vaultTx.filter(t=>t.type==='out' && !t.isReturn && t.date===dateStr && String(t.category||'').includes('حقائب'));
+  const dayReturns = vaultTx.filter(t=>t.isReturn && t.date===dateStr);
+  const dayPurchases = (typeof purchases!=='undefined'?purchases:[]).filter(p=>p.date===dateStr);
+  const bagStockDay = bagStock.filter(b=> b.type!=='issue' && b.date===dateStr);
+  const bagBuyers = clients.filter(c=> ((c.bagSource==='buy'&&c.bagStatus==='purchased')||c.bagSource==='stock') && c.bagPurchaseDate===dateStr);
+  const oldEdits = dailyReportOldClientEntries(dateStr, 'edit');
+  const oldDeletes = dailyReportOldClientEntries(dateStr, 'delete');
+
+  const income = dayIn.reduce((s,t)=>s+num(t.amount),0);
+  const expense = dayExp.reduce((s,t)=>s+num(t.amount),0);
+  const returnsTotal = dayReturns.reduce((s,t)=>s+num(t.amount),0);
+  const purchTotal = dayPurchases.reduce((s,p)=>s+num(p.total),0);
+  const bagFundTotal = dayBagFund.reduce((s,t)=>s+num(t.amount),0);
+  const stockQty = bagStockDay.reduce((s,b)=>s+num(b.qty),0);
+  const bagValue = bagBuyers.reduce((s,c)=>s+num(c.bagPrice),0);
+  const cash = dayIn.filter(t=>(t.destination||'vault')==='vault').reduce((s,t)=>s+num(t.amount),0);
+  const network = dayIn.filter(t=>(t.destination||'vault')==='network').reduce((s,t)=>s+num(t.amount),0);
+  const bank = dayIn.filter(t=>(t.destination||'vault')==='bank').reduce((s,t)=>s+num(t.amount),0);
+
+  const row = (label, value, opts={}) => `<tr${opts.total?` style="font-weight:800; background:#F1F4F7;"`:''}><td>${label}</td><td class="mono" style="text-align:left;">${value}</td></tr>`;
+  const emptyRow = (colspan, msg)=> `<tr><td colspan="${colspan}" style="text-align:center; color:#8A94A3; padding:14px;">${msg}</td></tr>`;
+  const sumRow = (colspan, label, value) => `<tr style="font-weight:800; background:#F1F4F7;"><td colspan="${colspan}">${label}</td><td class="mono">${value}</td></tr>`;
+
+  const newClientsHtml = newClients.length ? newClients.map(c=>`
+    <tr>
+      <td>${escapeHtml(c.name||'—')}</td>
+      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
+      <td>${escapeHtml(c.courseType||'—')}</td>
+      <td class="mono">${fmt(num(c.coursePrice))}</td>
+      <td class="mono">${num(c.discount)>0? '-'+fmt(num(c.discount)) : '—'}</td>
+      <td class="mono">${fmt(paidTotal(c))}</td>
+      <td>${escapeHtml(paymentChannelsLabel(c)||'—')}</td>
+      <td class="mono">${fmt(remaining(c))}</td>
+    </tr>`).join('') : emptyRow(8, 'لا يوجد عملاء جدد في هذا اليوم');
+
+  const expRows = dayExp.length ? dayExp.map(t=>`
+    <tr>
+      <td>${escapeHtml(t.category||'—')}</td>
+      <td>${escapeHtml(t.recipientName||'—')}</td>
+      <td>${escapeHtml(t.method||'—')}</td>
+      <td class="mono">${escapeHtml(t.referenceNo||'—')}</td>
+      <td class="mono">${fmt(num(t.amount))}</td>
+    </tr>`).join('') : emptyRow(5, 'لا توجد مصروفات في هذا اليوم');
+
+  const purchRows = dayPurchases.length ? dayPurchases.map(p=>`
+    <tr>
+      <td>${escapeHtml(p.supplierName||'—')}</td>
+      <td class="mono">${escapeHtml(p.invoiceNo||'—')}</td>
+      <td>${escapeHtml(p.method||'—')}</td>
+      <td class="mono">${fmt(num(p.total))}</td>
+    </tr>`).join('') : emptyRow(4, 'لا توجد مشتريات في هذا اليوم');
+
+  const bagStockType = b => (b.type==='withdraw' ? 'سحب' : (b.type==='deposit' ? 'إيداع' : 'إضافة يدوية')) + (b.manualQty ? ' (عدد فعلي)' : '');
+  const bagStockRows = bagStockDay.length ? bagStockDay.map(b=>`
+    <tr>
+      <td>${escapeHtml(bagStockType(b))}</td>
+      <td class="mono">${fmt(num(b.amount!==undefined?b.amount:num(b.qty)*num(b.unitPrice)))}</td>
+      <td class="mono">${num(b.qty)>0?'+':''}${num(b.qty)}</td>
+      <td>${escapeHtml(b.method||'—')}</td>
+    </tr>`).join('') : emptyRow(4, 'لا توجد عمليات إضافة لمخزون الحقائب في هذا اليوم');
+
+  const bagBuyerRows = bagBuyers.length ? bagBuyers.map(c=>`
+    <tr>
+      <td>${escapeHtml(c.name||'—')}</td>
+      <td class="mono">${escapeHtml(c.clientId||'—')}</td>
+      <td>${c.bagSource==='stock' ? 'من المخزون' : 'شراء مباشر'}</td>
+      <td class="mono">${escapeHtml(c.bagInvoice||'—')}</td>
+      <td class="mono">${fmt(num(c.bagPrice))}</td>
+    </tr>`).join('') : emptyRow(5, 'لا يوجد عملاء اشتروا حقائبهم في هذا اليوم');
+
+  const returnRows = dayReturns.length ? dayReturns.map(t=>`
+    <tr>
+      <td>${escapeHtml(t.clientName||t.clientId||'—')}</td>
+      <td>${escapeHtml(t.method||'—')}</td>
+      <td class="mono">${fmt(num(t.amount))}</td>
+    </tr>`).join('') : emptyRow(3, 'لا توجد مردودات مبيعات في هذا اليوم');
+
+  const auditRow = a => `<tr>
+      <td>${escapeHtml((a.description||'').replace(/^تم (تعديل|حذف) بيانات العميل:\s*/, '') || '—')}</td>
+      <td>${escapeHtml(a.user || 'غير معروف')}</td>
+      <td class="mono">${escapeHtml(new Date(a.ts).toLocaleString('ar-EG'))}</td>
+    </tr>`;
+  const oldEditRows = oldEdits.length ? oldEdits.map(auditRow).join('') : emptyRow(3, 'لا يوجد تعديل على عملاء قدام في هذا اليوم');
+  const oldDeleteRows = oldDeletes.length ? oldDeletes.map(auditRow).join('') : emptyRow(3, 'لا يوجد حذف لعملاء قدام في هذا اليوم');
+
+  return `
+    <div class="head">
+      <div><h2>التقرير اليومي</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)} — ${escapeHtml(dateLabel)}</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">تاريخ الطباعة: ${escapeHtml(today)}<br>عدد العملاء الإجمالي بالنظام: ${clients.length} عميل</div>
+
+    <h3 style="margin:18px 0 8px;">١. ملخص اليوم</h3>
+    <table>
+      <tbody>
+        ${row('عملاء جدد', String(newClients.length))}
+        ${row('المبالغ المحصّلة (وارد)', fmt(income)+' ﷼')}
+        ${row('المصروفات', fmt(expense)+' ﷼')}
+        ${row('مردودات المبيعات', fmt(returnsTotal)+' ﷼')}
+        ${row('المشتريات', fmt(purchTotal)+' ﷼')}
+        ${row('حقائب اشتراها عملاء', fmt(bagValue)+' ﷼')}
+        ${row('إضافة/تمويل مخزون الحقائب', fmt(bagFundTotal)+' ﷼')}
+        ${row('تعديل عملاء قدام (أقدم من '+DAILY_REPORT_EDIT_OLD_DAYS+' يوم)', String(oldEdits.length))}
+        ${row('حذف عملاء قدام (أقدم من '+DAILY_REPORT_DELETE_OLD_DAYS+' يوم)', String(oldDeletes.length), {total:true})}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٢. العملاء الجدد (${newClients.length})</h3>
+    <table>
+      <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>الدورة</th><th>سعر الدورة</th><th>الخصم</th><th>المدفوع</th><th>طريقة الدفع</th><th>المتبقي</th></tr></thead>
+      <tbody>
+        ${newClientsHtml}
+        ${newClients.length ? sumRow(5, 'إجمالي قيم العملاء الجدد', fmt(newClients.reduce((s,c)=>s+centerIncome(c),0))+' ﷼') : ''}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٣. المبالغ المحصّلة اليوم (${dayIn.length} حركة)</h3>
+    <table>
+      <tbody>
+        ${row('نقدي (كاش)', fmt(cash)+' ﷼')}
+        ${row('شبكة', fmt(network)+' ﷼')}
+        ${row('بنك', fmt(bank)+' ﷼')}
+        ${row('الإجمالي المحصّل', fmt(income)+' ﷼', {total:true})}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٤. المصروفات اليوم (${dayExp.length})</h3>
+    <table>
+      <thead><tr><th>التصنيف</th><th>مستلم المبلغ</th><th>طريقة الدفع</th><th>رقم المستند</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        ${expRows}
+        ${dayExp.length ? sumRow(4, 'إجمالي المصروفات', fmt(expense)+' ﷼') : ''}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٥. المشتريات اليوم (${dayPurchases.length})</h3>
+    <table>
+      <thead><tr><th>المورد</th><th>رقم الفاتورة</th><th>طريقة الدفع</th><th>الإجمالي (شامل الضريبة)</th></tr></thead>
+      <tbody>
+        ${purchRows}
+        ${dayPurchases.length ? sumRow(3, 'إجمالي المشتريات', fmt(purchTotal)+' ﷼') : ''}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٦. الحقائب</h3>
+    <div style="font-size:13px; color:#66707E; margin:6px 0;">أولاً: إضافة/تمويل مخزون الحقائب (${bagStockDay.length} عملية)</div>
+    <table>
+      <thead><tr><th>نوع العملية</th><th>المبلغ</th><th>عدد الحقائب (+/-)</th><th>طريقة الدفع</th></tr></thead>
+      <tbody>
+        ${bagStockRows}
+        ${bagStockDay.length ? sumRow(2, 'إجمالي عدد الحقائب المضافة للمخزون', (stockQty>0?'+':'')+stockQty) : ''}
+      </tbody>
+    </table>
+    <div style="font-size:13px; color:#66707E; margin:12px 0 6px;">ثانياً: عملاء اشتروا حقائبهم اليوم (${bagBuyers.length})</div>
+    <table>
+      <thead><tr><th>الاسم</th><th>رقم الهوية</th><th>المصدر</th><th>رقم فاتورة الحقيبة</th><th>القيمة</th></tr></thead>
+      <tbody>
+        ${bagBuyerRows}
+        ${bagBuyers.length ? sumRow(4, 'إجمالي قيمة حقائب العملاء', fmt(bagValue)+' ﷼') : ''}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٧. مردودات المبيعات اليوم (${dayReturns.length})</h3>
+    <table>
+      <thead><tr><th>العميل</th><th>طريقة الدفع</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        ${returnRows}
+        ${dayReturns.length ? sumRow(2, 'إجمالي المردودات', fmt(returnsTotal)+' ﷼') : ''}
+      </tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٨. تعديل عملاء قدام (سُجّلوا منذ أكثر من ${DAILY_REPORT_EDIT_OLD_DAYS} يوم — ${oldEdits.length})</h3>
+    <table>
+      <thead><tr><th>العميل</th><th>بواسطة</th><th>الوقت</th></tr></thead>
+      <tbody>${oldEditRows}</tbody>
+    </table>
+
+    <h3 style="margin:22px 0 8px;">٩. حذف عملاء قدام (سُجّلوا منذ أكثر من ${DAILY_REPORT_DELETE_OLD_DAYS} يوم — ${oldDeletes.length})</h3>
+    <table>
+      <thead><tr><th>العميل</th><th>بواسطة</th><th>الوقت</th></tr></thead>
+      <tbody>${oldDeleteRows}</tbody>
+    </table>`;
+}
+/* ---- تقرير الإيرادات والمصروفات حسب الفترة (نسخة PDF لجدول لوحة التحكم) ---- */
+function buildPeriodReportBodyHtml(from, to){
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
+  const vIn = vaultTx.filter(t=>t.type==='in' && !t.isReturn && inRange(t.date, from, to));
+  const vOut = vaultTx.filter(t=>t.type==='out' && !t.isReturn && inRange(t.date, from, to));
+  const income = vIn.reduce((s,t)=>s+num(t.amount),0);
+  const expense = vOut.reduce((s,t)=>s+num(t.amount),0);
+  const cInPeriod = clients.filter(c=>inRange(c.date, from, to));
+  const row = (label, value, opts={}) => `<tr${opts.total?` style="font-weight:800; background:#F1F4F7;"`:''}><td>${label}</td><td class="mono" style="text-align:left;">${value}</td></tr>`;
+  const emptyRow = (colspan, msg)=> `<tr><td colspan="${colspan}" style="text-align:center; color:#8A94A3; padding:14px;">${msg}</td></tr>`;
+  const rowsHtml = (rows, isIn)=> rows.length ? [...rows].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(t=>`
+    <tr>
+      <td class="mono">${escapeHtml(formatDateDisplay(t.date)||t.date||'—')}</td>
+      <td>${escapeHtml(t.clientName||t.manual||t.category||'—')}</td>
+      <td>${escapeHtml(t.method||'—')}</td>
+      <td>${escapeHtml(t.destination?destLabel(t.destination):'—')}</td>
+      <td class="mono">${isIn? '+':'−'}${fmt(num(t.amount))}</td>
+    </tr>`).join('') : emptyRow(5, 'لا توجد حركات في هذه الفترة');
+  return `
+    <div class="head">
+      <div><h2>الإيرادات والمصروفات حسب الفترة</h2><div style="font-size:13px; color:#66707E;">${escapeHtml(ci.name)}</div></div>
+      <img src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+    </div>
+    <div class="meta">الفترة: ${escapeHtml(formatDateDisplay(from))} إلى ${escapeHtml(formatDateDisplay(to))}<br>تاريخ الطباعة: ${escapeHtml(today)}</div>
+    <h3 style="margin:16px 0 8px;">ملخص الفترة</h3>
+    <table>
+      <tbody>
+        ${row('إجمالي الإيرادات', fmt(income)+' ﷼')}
+        ${row('إجمالي المصروفات', fmt(expense)+' ﷼')}
+        ${row('صافي الفترة', fmt(income-expense)+' ﷼', {total:true})}
+        ${row('عدد العملاء المسجّلين', String(cInPeriod.length))}
+      </tbody>
+    </table>
+    <h3 style="margin:20px 0 8px;">تفصيل الوارد (${vIn.length} حركة)</h3>
+    <table>
+      <thead><tr><th>التاريخ</th><th>البيان</th><th>طريقة الدفع</th><th>الوجهة</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        ${rowsHtml(vIn, true)}
+        ${vIn.length ? `<tr style="font-weight:800; background:#F1F4F7;"><td colspan="4">إجمالي الوارد (${vIn.length} حركة)</td><td class="mono">+${fmt(income)}</td></tr>` : ''}
+      </tbody>
+    </table>
+    <h3 style="margin:20px 0 8px;">تفصيل الصادر (${vOut.length} حركة)</h3>
+    <table>
+      <thead><tr><th>التاريخ</th><th>البيان</th><th>طريقة الدفع</th><th>الوجهة</th><th>المبلغ</th></tr></thead>
+      <tbody>
+        ${rowsHtml(vOut, false)}
+        ${vOut.length ? `<tr style="font-weight:800; background:#F1F4F7;"><td colspan="4">إجمالي الصادر (${vOut.length} حركة)</td><td class="mono">−${fmt(expense)}</td></tr>` : ''}
+      </tbody>
+    </table>`;
+}
+renderReportsEmailList();
+
