@@ -7,7 +7,7 @@ const express = require('express');
 const PORT = 17532;
 // عنوان السيرفر — يمكن تغييره بدون إعادة بناء التطبيق عبر ملف config.json
 // بجانب main.js (في مجلد التثبيت). لو الملف غير موجود يُستخدم العنوان الافتراضي.
-let REMOTE_BASE = 'https://ftc-6d0s.onrender.com';
+let REMOTE_BASE = 'https://ftc2-z4av.onrender.com';
 try {
   const cfgPath = require('path').join(__dirname, 'config.json');
   if (require('fs').existsSync(cfgPath)) {
