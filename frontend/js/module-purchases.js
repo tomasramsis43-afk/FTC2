@@ -482,6 +482,18 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
     autoPostPurchase(newPurchase);
     await saveJournalDE();
     await logAudit('add','المشتريات', `فاتورة شراء جديدة: ${invoiceNo||'—'} — ${supplier.name} (${fmt(total)} ﷼ شامل الضريبة)`);
+    // تنبيه إيميل فوري للإدارة عند تسجيل فاتورة شراء جديدة.
+    notifyAdminAlert(
+      `فاتورة شراء جديدة: ${invoiceNo || '—'}`,
+      `<p>تم تسجيل فاتورة شراء جديدة بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+       <table style="border-collapse:collapse; width:100%; max-width:400px; font-size:13px;">
+         <tr><td style="padding:4px 0; color:#66707E;">المورد</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(supplier.name)}</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">رقم الفاتورة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(invoiceNo || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">الإجمالي (شامل الضريبة)</td><td style="padding:4px 0; text-align:left;"><b>${fmt(total)} ﷼</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">التاريخ</td><td style="padding:4px 0; text-align:left;">${escapeHtml(date || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(method || '—')}</td></tr>
+       </table>`
+    );
   }
 
   await savePurchases();

@@ -637,23 +637,19 @@ async function logAudit(action, section, description){
     description
   });
   await saveAuditLog();
-  // تنبيه إيميل تلقائي للإدارة عند أي إضافة/تعديل/حذف على شيت العملاء من أي مستخدم —
-  // best-effort بالكامل (لا يوقف العمل ولا يُظهر أخطاء لو فشل الإرسال).
-  if(section === 'العملاء' && (action === 'add' || action === 'edit' || action === 'delete')){
-    notifyClientSheetAudit(action, section, description).catch(()=>{});
-  }
 }
 
-// يُرسل تنبيه الإيميل الفوري للإدارة (ADMIN_ALERT_EMAILS على السيرفر) فور حدوث أي عملية
-// على شيت العملاء. المستلمون مُعرَّفون على السيرفر وليس هنا — نفس قائمة تنبيهات الأمان.
-async function notifyClientSheetAudit(action, section, description){
+// يرسل تنبيه إيميل فوري للإدارة (ADMIN_ALERT_EMAILS على السيرفر) للأحداث المهمة: إضافة عميل
+// جديد، شراء حقيبة، فاتورة شراء، تسجيل مصروف. المستلمون مُعرَّفون على السيرفر وليس هنا — نفس
+// قائمة تنبيهات الأمان. best-effort بالكامل: لا يوقف العمل ولا يُظهر أخطاءً لو فشل الإرسال.
+async function notifyAdminAlert(subject, bodyHtml){
   try{
-    const res = await serverFetch('/api/email/audit-alert', {
+    const res = await serverFetch('/api/email/admin-alert', {
       method:'POST',
-      body: JSON.stringify({ action, section, description, user: currentUser || 'غير معروف' }),
+      body: JSON.stringify({ subject, bodyHtml }),
     });
-    if(!res.ok) console.error('فشل تنبيه شيت العملاء بالإيميل:', await res.json().catch(()=>({})));
-  }catch(e){ console.error('فشل تنبيه شيت العملاء بالإيميل:', e); }
+    if(!res.ok) console.error('فشل تنبيه الإدارة بالإيميل:', await res.json().catch(()=>({})));
+  }catch(e){ console.error('فشل تنبيه الإدارة بالإيميل:', e); }
 }
 // allowDrop=true تُستخدم فقط عند حذف عملاء دفعة واحدة عن قصد (بعد تأكيد المستخدم صراحة عبر
 // customConfirm)، لتخطّي حماية "رفض الحذف المفاجئ الكبير" على السيرفر (راجع PUT /api/storage/:key)

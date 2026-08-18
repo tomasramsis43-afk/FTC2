@@ -989,6 +989,17 @@ $('#bag-purchase-form').addEventListener('submit', async e=>{
     if($('#bp-invoice').value.trim()) clients[idx].bagInvoice = $('#bp-invoice').value.trim();
     await saveClients();
     await logAudit('edit','مخزون الحقائب', `تم تسجيل شراء حقيبة للعميل: ${clients[idx].name}`);
+    // تنبيه إيميل فوري للإدارة عند شراء حقيبة.
+    notifyAdminAlert(
+      `شراء حقيبة: ${clients[idx].name}`,
+      `<p>تم تسجيل شراء حقيبة للعميل <b>${escapeHtml(clients[idx].name)}</b> بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+       <table style="border-collapse:collapse; width:100%; max-width:400px; font-size:13px;">
+         <tr><td style="padding:4px 0; color:#66707E;">سعر الحقيبة</td><td style="padding:4px 0; text-align:left;"><b>${fmt(num(clients[idx].bagPrice))} ﷼</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml($('#bp-method').value || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">رقم فاتورة الحقيبة</td><td style="padding:4px 0; text-align:left;">${escapeHtml($('#bp-invoice').value.trim() || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">التاريخ</td><td style="padding:4px 0; text-align:left;">${escapeHtml($('#bp-date').value || '—')}</td></tr>
+       </table>`
+    );
   }
   $('#bag-overlay').classList.remove('show');
   bagPurchaseTargetId = null;
@@ -1026,6 +1037,11 @@ document.addEventListener('change', async e=>{
   await saveBagStock();
   await saveSettings();
   await logAudit('edit','مخزون الحقائب', `تم تسليم حقيبة من المخزون المتوفر للعميل: ${clients[idx].name} (من خانة الشراء السريعة)`);
+  // تنبيه إيميل فوري للإدارة عند تسليم حقيبة من المخزون.
+  notifyAdminAlert(
+    `تسليم حقيبة من المخزون: ${clients[idx].name}`,
+    `<p>تم تسليم حقيبة من المخزون المتوفر للعميل <b>${escapeHtml(clients[idx].name)}</b> بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b> (من خانة الشراء السريعة).</p>`
+  );
   renderBags(); renderTable(); renderCourses(); renderMissingCourse();
   showToast('تم تسليم الحقيبة من المخزون');
 });

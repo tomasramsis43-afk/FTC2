@@ -1461,6 +1461,22 @@ $('#vault-form').addEventListener('submit', async e=>{
   const txLabel = isReturn ? 'مردود مبيعات' : (savedTx.type==='in'?'وارد':'صادر');
   const txDesc = `${txLabel} بمبلغ ${fmt(num(savedTx.amount))} (${destLabel(savedTx.destination||'vault')}) - ${savedTx.clientName||savedTx.manual||savedTx.category||''}`;
   await logAudit(wasVaultEdit ? 'edit' : 'add', 'الحركات المالية', `${wasVaultEdit ? 'تم تعديل حركة' : 'تمت إضافة حركة'} رقم تسلسلي #${savedTx.seq||'—'}: ${txDesc}`);
+  // تنبيه إيميل فوري للإدارة عند تسجيل مصروف جديد (حركة صادر جديدة) مع تفاصيله.
+  if(!wasVaultEdit && isOut){
+    notifyAdminAlert(
+      `مصروف جديد: ${fmt(num(savedTx.amount))} ﷼`,
+      `<p>تم تسجيل مصروف جديد بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+       <table style="border-collapse:collapse; width:100%; max-width:420px; font-size:13px;">
+         <tr><td style="padding:4px 0; color:#66707E;">التصنيف</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(savedTx.category || '—')}</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">المبلغ</td><td style="padding:4px 0; text-align:left;"><b>${fmt(num(savedTx.amount))} ﷼</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">مستلم المبلغ</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.recipientName || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.method || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">رقم المستند/المرفق</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.referenceNo || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">البيان</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.notes || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">الوجهة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(destLabel(savedTx.destination || 'vault'))}</td></tr>
+       </table>`
+    );
+  }
 
   // عند تسجيل مرتجع (مردود مبيعات) لعميل، يُحوَّل تلقائياً إلى "ملغى" (بالإضافة إلى إيقافه كسابقاً)
   // فيختفي من شيت الدورات ومخزون الحقائب ولا يُحتسب ضمن إجمالي المتبقي على العملاء،

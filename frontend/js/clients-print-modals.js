@@ -890,6 +890,22 @@ $('#client-form').addEventListener('submit', async e=>{
   await saveSettings();
   await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
   if(!wasEdit){
+    // تنبيه إيميل فوري للإدارة عند إضافة عميل جديد مع بيانات الدفع (المدفوع/طريقة الدفع/المتبقي).
+    notifyAdminAlert(
+      `عميل جديد: ${savedClient.name}`,
+      `<p>تمت إضافة عميل جديد بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+       <table style="border-collapse:collapse; width:100%; max-width:460px; font-size:13px;">
+         <tr><td style="padding:4px 0; color:#66707E;">الاسم</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(savedClient.name)}</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">رقم الهوية</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.clientId || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">نوع الدورة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.courseType || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">سعر الدورة</td><td style="padding:4px 0; text-align:left;">${fmt(num(savedClient.coursePrice))} ﷼</td></tr>
+         ${num(savedClient.discount)>0 ? `<tr><td style="padding:4px 0; color:#66707E;">الخصم</td><td style="padding:4px 0; text-align:left;">-${fmt(num(savedClient.discount))} ﷼</td></tr>` : ''}
+         <tr><td style="padding:4px 0; color:#66707E;">الحقيبة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.bagSource==='stock' ? 'من المخزون' : (savedClient.bagSource==='own' ? 'خاصة (بدون سعر)' : (num(savedClient.bagPrice)>0 ? fmt(num(savedClient.bagPrice))+' ﷼' : '—')))}</td></tr>
+         <tr style="border-top:1px solid #ddd;"><td style="padding:4px 0; color:#66707E;">المدفوع</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidTotal(savedClient))} ﷼</b></td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
+         <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
+       </table>`
+    );
     sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
   }
   if(savedClient.courseNumber && savedClient.courseNumber!==prevCourseNumberForEvent){
