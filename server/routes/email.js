@@ -14,7 +14,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
 const { emailLimiter } = require('../rate-limiters');
-const { sendEmail, wrapHtml } = require('../services/email');
+const { sendEmail, wrapHtml, alertAdmins, getAdminAlertEmails } = require('../services/email');
 
 const MAX_ATTACHMENT_BASE64_CHARS = 15 * 1024 * 1024; // ~15MB بعد الترميز، يكفي أي فاتورة/تقرير PDF بمساحة
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -94,6 +94,34 @@ router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => 
     res.json({ ok: true });
   } catch (e) {
     console.error('فشل إرسال إيميل التقرير:', e);
+    res.status(500).json({ error: 'تعذّر إتمام الإرسال' });
+  }
+});
+
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// POST /api/email/audit-alert — تنبيه إيميل فوري للإدارة عند تنفيذ أي عملية إضافة/تعديل/حذف
+// على شيت العملاء من أي مستخدم. يُستدعى من الواجهة فور حدوث العملية (نفس لحظة كتابة سجل
+// logAudit). best-effort تماماً: فشل الإرسال لا يوقف تدفق العمل ولا يُظهر خطأً للمستخدم،
+// والمستلمون هم نفس قائمة ADMIN_ALERT_EMAILS المستخدمة في تنبيهات الأمان. إن لم تُضبط
+// القائمة على السيرفر يُتجاوز الإرسال بصمت (skipped).
+router.post('/api/email/audit-alert', requireAuth, emailLimiter, async (req, res) => {
+  try {
+    const { action, section, description, user } = req.body || {};
+    if (getAdminAlertEmails().length === 0) return res.json({ ok: true, skipped: true });
+    const actionLabels = { add: 'إضافة', edit: 'تعديل', delete: 'حذف', other: 'عملية' };
+    const html = `<p>تم تنفيذ عملية على شيت <b>${escapeHtml(section || '')}</b> بواسطة المستخدم <b>${escapeHtml(user || 'غير معروف')}</b>:</p>
+      <p><b>${actionLabels[action] || escapeHtml(action || '')}</b></p>
+      <p style="border:1px solid #D8DEE6; border-radius:8px; padding:12px 14px; background:#F7F9FB;">${escapeHtml(description || '')}</p>
+      <p style="color:#888; font-size:12px;">الوقت: ${new Date().toLocaleString('ar-EG')}</p>`;
+    await alertAdmins('سجل عمليات شيت العملاء', html);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('فشل إرسال تنبيه عمليات شيت العملاء:', e);
     res.status(500).json({ error: 'تعذّر إتمام الإرسال' });
   }
 });
