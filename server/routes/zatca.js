@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole } = require('../auth');
 const zatca = require('../zatca/lib');
+const { alertAdmins } = require('../services/email');
 
 /* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
 
@@ -65,6 +66,12 @@ router.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant'
   } catch (e) {
     if (e.isValidation) return res.status(400).json({ error: e.message });
     console.error(e);
+    // فشل إرسال فاتورة للهيئة هو خلل امتثال حقيقي (وليس مجرد خطأ عابر) — بيانات الفاتورة هنا
+    // (رقم مرجعي، بيئة) غير مشفّرة أصلاً (تُرسل صراحة فى هذا الطلب)، فيصح تنبيه الإدارة فورياً.
+    alertAdmins(
+      'فشل إرسال فاتورة لهيئة الزكاة والضريبة',
+      `<p>تعذّر إرسال فاتورة (المرجع: ${sourceRef}) فى بيئة ${environment}.</p><p>الخطأ: ${e.message}</p>`
+    ).catch(() => {});
     res.status(500).json({ error: 'تعذّر إرسال الفاتورة للهيئة', detail: e.message });
   }
 });

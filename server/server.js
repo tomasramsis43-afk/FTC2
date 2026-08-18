@@ -15,6 +15,7 @@ const authRouter = require('./routes/auth');
 const webauthnRouter = require('./routes/webauthn');
 const magicLinkRouter = require('./routes/magic-link');
 const qrLoginRouter = require('./routes/qr-login');
+const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter, syncClientsRows } = require('./routes/records');
 
@@ -89,6 +90,7 @@ app.use(authRouter);
 app.use(webauthnRouter);
 app.use(magicLinkRouter);
 app.use(qrLoginRouter);
+app.use(emailRouter);
 
 
 /* ---------------- مخزن المفاتيح/القيم (يطابق واجهة window.storage) ---------------- */

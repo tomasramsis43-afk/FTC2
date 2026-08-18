@@ -545,6 +545,70 @@ async function printInvoice(id){
   </body></html>`);
   finishPrintDoc(win);
   renderTable();
+  // إرسال تلقائي فور إصدار الفاتورة لو للعميل إيميل محفوظ — best-effort بالكامل (فشل الإرسال
+  // لا يوقف الطباعة، ولا يُظهر خطأً مزعجاً؛ تنبيه بسيط فقط عبر showToast لو فشل).
+  if(c.email){
+    sendInvoiceEmailNow(c, invNoLabel, {grand, vat, paid, rem}, {silent:true});
+  }
+}
+
+// إرسال الفاتورة بالإيميل فعلياً عبر السيرفر. body HTML بسيط (وليس نسخة كاملة من قالب
+// الطباعة) لضمان توافقه مع عملاء البريد المختلفة. silent=true تُستخدم للإرسال التلقائي
+// بعد الطباعة مباشرة (رسالة نجاح خفيفة فقط، بدون إزعاج فى حال الفشل).
+async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
+  const {grand, vat, paid, rem} = totals;
+  const bodyHtml = `
+    <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9; color:#222;">
+      <p>مرحباً ${escapeHtml(c.name)}،</p>
+      <p>مرفق تفاصيل فاتورتكم رقم <b>${invNoLabel}</b>:</p>
+      <table style="border-collapse:collapse; width:100%; max-width:420px;">
+        <tr><td style="padding:6px 0;">القيمة (بدون ضريبة)</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand)}</b> ﷼</td></tr>
+        <tr><td style="padding:6px 0;">ضريبة القيمة المضافة</td><td style="padding:6px 0; text-align:left;"><b>${fmt(vat)}</b> ﷼</td></tr>
+        <tr style="border-top:1px solid #ddd;"><td style="padding:6px 0;">الإجمالي</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand+vat)}</b> ﷼</td></tr>
+        <tr><td style="padding:6px 0;">المدفوع</td><td style="padding:6px 0; text-align:left;">${fmt(paid)} ﷼</td></tr>
+        <tr><td style="padding:6px 0;">المتبقي</td><td style="padding:6px 0; text-align:left;">${fmt(rem)} ﷼</td></tr>
+      </table>
+      <p style="color:#888; font-size:13px; margin-top:16px;">شكراً لتعاملكم معنا.</p>
+    </div>`;
+  try{
+    const res = await serverFetch('/api/email/invoice', {
+      method:'POST',
+      body: JSON.stringify({ to: c.email, clientName: c.name, invoiceNo: invNoLabel, bodyHtml }),
+    });
+    if(res.ok){
+      showToast(`✉️ تم إرسال الفاتورة بالإيميل إلى ${c.email}`);
+      await logAudit('edit','العملاء', `تم إرسال فاتورة رقم ${invNoLabel} بالإيميل للعميل: ${c.name} (${c.email})`);
+    }else{
+      const data = await res.json().catch(()=>({}));
+      if(!silent) showToast(`⚠️ تعذّر إرسال الفاتورة بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+    }
+  }catch(e){
+    console.error('فشل إرسال إيميل الفاتورة:', e);
+    if(!silent) showToast('⚠️ تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
+  }
+}
+
+// زرار الإرسال اليدوي: لو العميل معندوش إيميل محفوظ، نطلبه مرة واحدة (بدون حفظه فى بيانات
+// العميل — ده يتم فقط من فورم تعديل العميل نفسه)، وإلا نُرسل مباشرة على الإيميل المحفوظ.
+async function sendInvoiceEmailManual(c){
+  if(!c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل بعد'); return; }
+  let email = c.email;
+  if(!email){
+    email = await customPrompt(`لا يوجد إيميل محفوظ للعميل "${c.name}". اكتب الإيميل لإرسال الفاتورة إليه (لحفظه بشكل دائم، عدّل بيانات العميل):`, {title:'إرسال الفاتورة بالإيميل', required:true, placeholder:'example@mail.com'});
+    if(!email) return;
+    email = email.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showToast('صيغة الإيميل غير صحيحة'); return; }
+  }
+  const invNoLabel = formatInvoiceNo(c.taxInvoiceNo);
+  const income = centerIncome(c);
+  const bag = bagAmount(c);
+  const paid = paidTotal(c);
+  const rem = remaining(c);
+  const bagShown = bag>0 && paid >= (income + bag);
+  const totalInclVat = income + (bagShown ? bag : 0);
+  const vat = vatFromGross(totalInclVat);
+  const grand = totalInclVat - vat;
+  await sendInvoiceEmailNow({...c, email}, invNoLabel, {grand, vat, paid, rem}, {silent:false});
 }
 
 /* ---------------- Return Invoice (مردودات المبيعات) ---------------- */

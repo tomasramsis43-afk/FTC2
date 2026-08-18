@@ -3124,6 +3124,7 @@
         <div class="field" style="max-width:170px;"><label>إلى تاريخ</label><input type="date" id="rp-to"></div>
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" id="btn-export-report">تصدير تقرير الفترة CSV</button>
+        <button class="btn btn-ghost btn-sm" id="btn-email-report">✉️ إرسال بالإيميل</button>
       </div>
       <div class="hint hint-info">اترك الحقلين فارغين لعرض كل البيانات منذ البداية. الإيرادات والمصروفات محسوبة من تاريخ الحركة في "الحركات المالية"، وعدد العملاء محسوب من تاريخ تسجيل العميل.</div>
     </div>
@@ -3996,6 +3997,7 @@
         <div class="field"><label>الاسم *</label><input required="" id="f-name" type="text"></div>
         <div class="field"><label>رقم المرجع</label><input id="f-refer" type="text"></div>
         <div class="field"><label>رقم الجوال</label><input id="f-phone" type="text"></div>
+        <div class="field"><label>الإيميل (لإرسال الفاتورة تلقائياً)</label><input id="f-email" type="email" placeholder="example@mail.com"></div>
         <div class="field"><label>الجنسية</label><select id="f-nat"></select></div>
         <div class="field"><label>نوع العميل</label>
           <select id="f-clienttype">

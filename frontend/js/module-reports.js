@@ -637,6 +637,54 @@ $('#btn-export-report').addEventListener('click', ()=>{
   a.click();
 });
 
+// إرسال أي تقرير CSV بالإيميل — دالة عامة تُستخدم لكل أزرار "إرسال بالإيميل" فى شاشة التقارير.
+// تحوّل النص إلى base64 وتبعته للسيرفر كمرفق CSV مع سطر ملخص فى متن الرسالة.
+async function emailCsvReport(filename, csv, subject, summaryLines){
+  const to = await customPrompt('اكتب الإيميل (أو عدة إيميلات مفصولة بفاصلة) لإرسال التقرير إليه:', {title:'إرسال التقرير بالإيميل', required:true, placeholder:'admin@mail.com'});
+  if(!to) return;
+  const recipients = to.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!recipients.length || recipients.some(r=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))){ showToast('صيغة الإيميل غير صحيحة'); return; }
+  const attachmentBase64 = btoa(unescape(encodeURIComponent(csv)));
+  const bodyHtml = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9;">
+    <p>مرفق التقرير المطلوب: <b>${escapeHtml(subject)}</b></p>
+    ${summaryLines ? `<ul>${summaryLines.map(l=>`<li>${escapeHtml(l)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+  try{
+    const res = await serverFetch('/api/email/report', {
+      method:'POST',
+      body: JSON.stringify({ to: recipients, subject, bodyHtml, attachmentBase64, attachmentName: filename, attachmentType: 'text/csv' }),
+    });
+    if(res.ok){
+      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.join(', ')}`);
+      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.join(', ')}`);
+    }else{
+      const data = await res.json().catch(()=>({}));
+      showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+    }
+  }catch(e){
+    console.error('فشل إرسال إيميل التقرير:', e);
+    showToast('⚠️ تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+  }
+}
+$('#btn-email-report')?.addEventListener('click', ()=>{
+  const rows = periodFilteredVaultTx();
+  const income = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
+  const expense = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
+  const cInPeriod = clientsInPeriod();
+  const from = $('#rp-from').value || 'البداية';
+  const to = $('#rp-to').value || 'الآن';
+  const summary = [
+    ['الفترة', `من ${from} إلى ${to}`],
+    ['إجمالي الإيرادات', income],
+    ['إجمالي المصروفات', expense],
+    ['صافي الفترة', income-expense],
+    ['عدد العملاء المسجّلين بالفترة', cInPeriod.length],
+    ['متوسط الإيراد لكل عميل', cInPeriod.length ? Math.round((income/cInPeriod.length)*100)/100 : 0],
+  ];
+  const csv = '\uFEFF'+summary.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  emailCsvReport(`تقرير_الفترة_${from}_${to}.csv`, csv, `تقرير الفترة من ${from} إلى ${to}`, summary.map(r=>`${r[0]}: ${r[1]}`));
+});
+
 /* ================================================================
    المحاسبة — قوائم مالية على أساس الاستحقاق (دخل / ميزانية / ميزان مراجعة)
    ================================================================ */

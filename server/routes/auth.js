@@ -8,6 +8,7 @@ const { signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword,
 const { addClient: addSseClient, removeClient: removeSseClient } = require('../sse');
 const { authLimiter, licenseLimiter } = require('../rate-limiters');
 const { validateLicenseKey } = require('../license');
+const { alertAdmins, wrapHtml } = require('../services/email');
 
 // تحديد الدولة/المدينة تقريبياً من عنوان IP، عبر خدمة ipwho.is المجانية (بدون مفتاح API).
 // best-effort بالكامل: أي فشل (شبكة/انتهاء مهلة/عنوان محلي) يُرجع null بهدوء دون كسر تسجيل
@@ -282,6 +283,22 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       newDeviceAlert: isNewDevice,
       geoAlert,
     });
+    // تنبيه إيميل فوري للإدارة عند دخول من جهاز جديد أو دولة غير معتادة لأي حساب (وليس فقط
+    // الأدمن نفسه) — بخلاف تنبيه "المحاولات الفاشلة" أسفله (خاص بلوحة الأدمن فقط)، هذا يُرسل
+    // فعلياً بالإيميل لحظة حدوثه لأن بيانات login_history غير مشفّرة ومتاحة للسيرفر بالكامل.
+    // best-effort تماماً: لا يُبطئ الاستجابة (أُرسلت أعلاه) ولا يفشل تسجيل الدخول لو تعذّر الإرسال.
+    if (isNewDevice || geoAlert) {
+      const reasonLines = [
+        isNewDevice ? '<li>تسجيل دخول من جهاز/متصفح لم يُستخدم من قبل مع هذا الحساب</li>' : '',
+        geoAlert ? `<li>تسجيل دخول من دولة غير معتادة (${geoAlert.country || 'غير معروفة'}) بينما المعتاد هو ${geoAlert.usualCountry}</li>` : '',
+      ].filter(Boolean).join('');
+      alertAdmins(
+        `دخول مشبوه للحساب "${user.username}"`,
+        `<p>تم رصد ما يلي عند تسجيل دخول الحساب <b>${user.username}</b> (${user.role || 'staff'}):</p>
+         <ul>${reasonLines}</ul>
+         <p style="color:#888; font-size:13px;">IP: ${loginIp || 'غير معروف'} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      ).catch(() => {});
+    }
     // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات دخول مشبوهة) حصل منذ آخر مرة راجع
     // فيها شاشة "سجل الدخول"، نُرجعه على شاشة الإعدادات — لا نُبطئ تسجيل الدخول بفحصه
     // مباشرة في استجابة التركيب. يعمل الاستعلام وتحديث last_login_history_seen_at في الخلفية.
@@ -300,7 +317,14 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
            HAVING COUNT(*) >= 3
            ORDER BY failed_count DESC LIMIT 10`,
           [since]
-        ).catch(e => console.error('تعذّر فحص النشاط المشبوه:', e));
+        ).then(r => {
+          // نُرسل إيميلاً فقط لو فيه صفوف جديدة فعلاً (تُكتشف أول مرة بعد هذا الدخول تحديداً)،
+          // لتفادي إرسال نفس التنبيه بالإيميل مع كل دخول أدمن جديد طول ما نفس المحاولات قائمة.
+          if (r.rows.length > 0) {
+            const rows = r.rows.map(x => `<li>${x.username} من ${x.ip_address || 'IP غير معروف'} — ${x.failed_count} محاولة فاشلة</li>`).join('');
+            alertAdmins('محاولات دخول فاشلة متكررة', `<p>تم رصد محاولات دخول فاشلة متكررة:</p><ul>${rows}</ul>`).catch(() => {});
+          }
+        }).catch(e => console.error('تعذّر فحص النشاط المشبوه:', e));
       }
     });
   } catch (e) {

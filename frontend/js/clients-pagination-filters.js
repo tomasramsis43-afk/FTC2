@@ -189,6 +189,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize){
           <div class="row-menu-panel" role="menu">
             ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض هذا التسجيل المعلّق — يبقى ظاهراً للاستقبال 15 يوماً ثم يُحذف نهائياً تلقائياً">✖ رفض</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
+            ${c.taxInvoiceNo ? `<button class="btn btn-ghost btn-sm" data-emailinvoice="${c.id}" title="إرسال الفاتورة بالإيميل للعميل">✉️ إرسال بالإيميل</button>` : ''}
             ${(c.taxInvoiceNo && canDeleteClientRecord(c)) ? `<button class="btn btn-danger btn-sm" data-delinvoice="${c.id}" title="حذف الفاتورة الضريبية الصادرة لهذا العميل (حذف منطقي مع الاحتفاظ بالرقم التسلسلي)">حذف الفاتورة</button>` : ''}
             ${canReceptionEditClient(c) ? `<button class="btn btn-ghost btn-sm" data-edit="${c.id}">${tr('edit')}</button>` : `<span class="btn btn-ghost btn-sm" style="opacity:.5;cursor:not-allowed" title="انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن">${tr('edit')} 🔒</span>`}
             ${c.suspended

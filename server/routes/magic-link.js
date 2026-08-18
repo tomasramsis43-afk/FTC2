@@ -7,31 +7,10 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const { pool } = require('../db');
 const { signToken } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
-
-let cachedTransporter = null;
-let cachedTransporterKey = null;
-// نعيد بناء الـ transporter فقط لو تغيّرت متغيرات البيئة فعلياً (نادر جداً أثناء تشغيل السيرفر)،
-// بدل إعادة الاتصال بـ SMTP فى كل طلب — أسرع وأقل حملاً على خادم البريد.
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
-  const key = `${host}|${user}|${process.env.SMTP_PORT || ''}`;
-  if (cachedTransporter && cachedTransporterKey === key) return cachedTransporter;
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: { user, pass },
-  });
-  cachedTransporterKey = key;
-  return cachedTransporter;
-}
+const { getTransporter } = require('../services/email');
 
 function getOrigin(req) {
   return req.headers.origin || `https://${req.headers.host}`;

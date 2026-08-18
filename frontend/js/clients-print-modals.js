@@ -190,6 +190,7 @@ document.addEventListener('click', async e=>{
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
   const invId = e.target.dataset.invoice;
+  const emailInvoiceId = e.target.dataset.emailinvoice;
   const suspendId = e.target.dataset.suspend;
   const unsuspendId = e.target.dataset.unsuspend;
   const cancelBagId = e.target.dataset.cancelbag;
@@ -265,6 +266,12 @@ document.addEventListener('click', async e=>{
       return;
     }
     await printInvoice(invId); return;
+  }
+  if(emailInvoiceId){
+    const c = clients.find(x=>x.id===emailInvoiceId);
+    if(!c){ showToast('تعذر إيجاد بيانات العميل'); return; }
+    await sendInvoiceEmailManual(c);
+    return;
   }
   if(delInvoiceId){
     const c = clients.find(x=>x.id===delInvoiceId);
@@ -443,6 +450,7 @@ function openModal(id){
   $('#f-name').value = c?.name || '';
   $('#f-id').value = c?.clientId || '';
   $('#f-phone').value = c?.phone || '';
+  $('#f-email').value = c?.email || '';
   $('#f-nat').value = c?.nationality || '';
   $('#f-clienttype').value = c?.clientType || 'center';
   populateClientCompanySelect(c?.companyName || '');
@@ -780,6 +788,7 @@ $('#client-form').addEventListener('submit', async e=>{
     name: $('#f-name').value.trim(),
     clientId: $('#f-id').value.trim(),
     phone: $('#f-phone').value.trim(),
+    email: $('#f-email').value.trim(),
     nationality: $('#f-nat').value,
     clientType: $('#f-clienttype').value,
     companyName: $('#f-clienttype').value==='company' ? $('#f-company').value.trim() : '',
