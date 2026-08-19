@@ -233,7 +233,14 @@ function renderBags(){
     </table>
     </div>` : `<div class="empty-state" style="padding:20px;">لا توجد حقائب معلّقة — كل الحقائب المطلوبة تم شراؤها 👍</div>`;
 
-  const bagStockRows = bagStockFiltered().slice().reverse();
+  // الترتيب بحسب تاريخ العملية الفعلي (date) تنازلياً — الأحدث أولاً — وليس بحسب ترتيب الإدخال في المصفوفة
+  // (كان .reverse() يعتمد فقط على ترتيب الإضافة، فتظهر عملية بتاريخ قديم أُضيفت مؤخراً في أول السجل خطأً).
+  // عند تساوي التاريخ، الأحدث إدخالاً (createdAt) يظهر أولاً للحفاظ على ترتيب ثابت ومتوقع.
+  const bagStockRows = bagStockFiltered().slice().sort((a,b)=>{
+    const d = (b.date||'').localeCompare(a.date||'');
+    if(d !== 0) return d;
+    return (b.createdAt||0)-(a.createdAt||0);
+  });
   if($('#bagstock-period-deposit-total')){
     const periodNetQty = bagStockFiltered().reduce((s,b)=> isBagStockRecordPending(b) ? s : s+num(b.qty), 0);
     $('#bagstock-period-deposit-total').textContent = periodNetQty;
