@@ -522,9 +522,66 @@ router.post('/api/users/:username/toggle-active', requireAuth, requireRole('admi
 });
 
 /* ---------------- التحقق من كود الترخيص (لا يتطلب تسجيل دخول) ---------------- */
-router.post('/api/license/validate', licenseLimiter, (req, res) => {
-  const { licenseKey } = req.body || {};
+// ربط الترخيص بالجهاز: عند كل تحقق ناجح، نقارن IP الاتصال الحالي (يُحسب من الاتصال نفسه على
+// السيرفر تماماً كما فى تسجيل الدخول أعلاه، وليس من أي رأس يمكن للعميل تزييفه) وبصمة الجهاز
+// (deviceFingerprint، مُشتقة على الفرونت-إند من خصائص العتاد/المتصفح الفعلية عبر Web Crypto،
+// وليست قيمة مخزَّنة فى كاش المتصفح) بالقيم المرتبطة أصلاً بهذا الترخيص (clientId). أول تحقق
+// ناجح لأي clientId يُسجَّل كـ"الجهاز الأصلي" تلقائياً. أي اختلاف لاحق (IP أو بصمة أو الاثنين)
+// يُسجَّل فى license_activity ويُرسَل تنبيه بالإيميل للإدارة فقط — best-effort بالكامل، لا يمنع
+// التحقق من النجاح إطلاقاً حتى لو فشل أي جزء من هذا المنطق.
+router.post('/api/license/validate', licenseLimiter, async (req, res) => {
+  const { licenseKey, deviceFingerprint } = req.body || {};
   const result = validateLicenseKey(licenseKey);
+  if (!result.valid || !result.clientId) {
+    return res.json(result);
+  }
+  try {
+    const ip = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    const fp = (deviceFingerprint || '').toString().slice(0, 200);
+    const existing = await pool.query(
+      'SELECT bound_ip, bound_fingerprint FROM license_bindings WHERE client_id = $1',
+      [result.clientId]
+    );
+    let isNewIp = false, isNewDevice = false;
+    if (existing.rows[0]) {
+      const bound = existing.rows[0];
+      isNewIp = !!(ip && bound.bound_ip && ip !== bound.bound_ip);
+      isNewDevice = !!(fp && bound.bound_fingerprint && fp !== bound.bound_fingerprint);
+      await pool.query(
+        'UPDATE license_bindings SET last_ip = $2, last_fingerprint = $3, last_seen_at = now() WHERE client_id = $1',
+        [result.clientId, ip, fp]
+      );
+    } else {
+      // أول تحقق ناجح لهذا الترخيص على الإطلاق — يُسجَّل كـ"الجهاز الأصلي" المرجعي.
+      await pool.query(
+        `INSERT INTO license_bindings (client_id, bound_ip, bound_fingerprint, last_ip, last_fingerprint)
+         VALUES ($1, $2, $3, $2, $3)
+         ON CONFLICT (client_id) DO NOTHING`,
+        [result.clientId, ip, fp]
+      );
+    }
+    if (isNewIp || isNewDevice) {
+      const geo = await geolocateIp(ip);
+      pool.query(
+        `INSERT INTO license_activity (client_id, ip_address, device_fingerprint, country, city, is_new_ip, is_new_device)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [result.clientId, ip, fp, geo?.country || null, geo?.city || null, isNewIp, isNewDevice]
+      ).catch(e => console.error('تعذّر تسجيل نشاط ربط الترخيص:', e));
+      const reasonLines = [
+        isNewIp ? '<li>تحقق من الترخيص من عنوان IP مختلف عن الجهاز المرتبط به أصلاً</li>' : '',
+        isNewDevice ? '<li>تحقق من الترخيص من بصمة جهاز مختلفة عن الجهاز المرتبط به أصلاً</li>' : '',
+      ].filter(Boolean).join('');
+      alertAdmins(
+        `استخدام الترخيص من جهاز/موقع مختلف (${result.clientId})`,
+        `<p>تم رصد ما يلي عند التحقق من كود الترخيص الخاص بـ <b>${result.clientId}</b>:</p>
+         <ul>${reasonLines}</ul>
+         <p style="color:#888; font-size:13px;">IP: ${ip || 'غير معروف'}${geo?.country ? ` (${geo.city ? geo.city + '، ' : ''}${geo.country})` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      ).catch(() => {});
+    }
+  } catch (e) {
+    // فشل منطق الربط لا يجب أبداً أن يمنع تحقق ترخيص صحيح من النجاح.
+    console.error('تعذّر التحقق من ربط الترخيص بالجهاز:', e);
+  }
   res.json(result);
 });
 
