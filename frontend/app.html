@@ -3789,6 +3789,21 @@
         <button class="btn btn-ghost btn-sm" id="btn-save-vat-wa-numbers">حفظ هذه الأرقام</button>
       </div>
     </div>
+    <div class="panel" style="border-right:4px solid var(--accent-teal, #14B8A6);">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="m4 6 8 7 8-7"></path></svg></span> إرسال التقارير بالإيميل</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+        اضبط الإيميل هنا مرة واحدة — كل أزرار "إرسال بالإيميل" فى شاشة التقارير ستستخدمه تلقائياً بدون سؤالك فى كل مرة. تقدر تغيّره وقتما تحب من هنا فقط. حقل CC اختياري لإرسال نفس الرسالة لمجموعة (افصل بينهم بفاصلة).
+      </p>
+      <div class="formgrid" style="align-items:end;">
+        <div class="field full"><label>البريد الرئيسي (To)</label><input type="text" id="set-report-email-to" placeholder="admin@mail.com" dir="ltr"></div>
+      </div>
+      <div class="formgrid" style="align-items:end; margin-top:4px;">
+        <div class="field full"><label>نسخة إلى — CC (اختياري، إيميلات مفصولة بفاصلة)</label><input type="text" id="set-report-email-cc" placeholder="a@mail.com, b@mail.com" dir="ltr"></div>
+      </div>
+      <div class="formgrid" style="align-items:end; margin-top:4px;">
+        <button class="btn btn-ghost btn-sm" id="btn-save-report-email">حفظ إعدادات الإيميل</button>
+      </div>
+    </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.5 0l3-3a4 4 0 0 0-5.5-5.5l-1.2 1.2"></path><path d="M14 10a4 4 0 0 0-5.5 0l-3 3a4 4 0 0 0 5.5 5.5l1.2-1.2"></path></svg></span> ربط Power Automate (Webhooks)</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>

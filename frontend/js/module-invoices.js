@@ -879,6 +879,8 @@ function renderSettings(){
   if($('#set-monthly-wa-number')) $('#set-monthly-wa-number').value = settings.monthlyReportWhatsapp || '';
   if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
   if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
+  if($('#set-report-email-to')) $('#set-report-email-to').value = settings.reportEmailTo || '';
+  if($('#set-report-email-cc')) $('#set-report-email-cc').value = settings.reportEmailCC || '';
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA-u-nu-latn')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
@@ -1536,6 +1538,21 @@ $('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي الإقرار الضريبي (${cleaned.length} رقم)`);
   showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
+});
+$('#btn-save-report-email')?.addEventListener('click', async ()=>{
+  const to = ($('#set-report-email-to').value||'').trim();
+  const ccRaw = ($('#set-report-email-cc').value||'');
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if(to && !EMAIL_RE.test(to)){ showToast('صيغة البريد الرئيسي غير صحيحة'); return; }
+  const ccList = ccRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  if(ccList.some(e=>!EMAIL_RE.test(e))){ showToast('صيغة أحد إيميلات CC غير صحيحة'); return; }
+  settings.reportEmailTo = to;
+  settings.reportEmailCC = ccList.join(', ');
+  if($('#set-report-email-to')) $('#set-report-email-to').value = settings.reportEmailTo;
+  if($('#set-report-email-cc')) $('#set-report-email-cc').value = settings.reportEmailCC;
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث إعدادات إيميل التقارير: To=${to||'—'}${ccList.length ? `, CC=${ccList.join(', ')}` : ''}`);
+  showToast('تم حفظ إعدادات الإيميل');
 });
 $('#btn-backup-now')?.addEventListener('click', ()=>{
   downloadFullBackup(false);

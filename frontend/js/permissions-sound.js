@@ -418,6 +418,8 @@ async function loadData(cacheOnly){
     if(settings.monthlyReportWhatsapp===undefined) settings.monthlyReportWhatsapp = '';
     if(settings.monthlyPdfReportsWhatsappNumbers===undefined) settings.monthlyPdfReportsWhatsappNumbers = '';
     if(settings.vatPdfReportWhatsappNumbers===undefined) settings.vatPdfReportWhatsappNumbers = '';
+    if(settings.reportEmailTo===undefined) settings.reportEmailTo = '';
+    if(settings.reportEmailCC===undefined) settings.reportEmailCC = '';
     if(settings.lastMonthlyReportPromptMonth===undefined) settings.lastMonthlyReportPromptMonth = null;
     if(!settings.autoBackupIntervalDays) settings.autoBackupIntervalDays = 7;
     if(settings.lastAutoBackupAt===undefined) settings.lastAutoBackupAt = null;

@@ -34,7 +34,7 @@ function getTransporter() {
 }
 
 // إرسال عبر Resend (HTTPS API) — المسار الافتراضي والموصى به على Render.
-async function sendViaResend({ recipients, subject, html, text, attachments }) {
+async function sendViaResend({ recipients, cc, subject, html, text, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.SMTP_FROM || process.env.RESEND_FROM;
   if (!from) {
@@ -48,6 +48,7 @@ async function sendViaResend({ recipients, subject, html, text, attachments }) {
     html,
     text,
   };
+  if (cc && cc.length) payload.cc = cc;
   if (attachments && attachments.length) {
     payload.attachments = attachments.map(a => ({
       filename: a.filename,
@@ -81,7 +82,7 @@ async function sendViaResend({ recipients, subject, html, text, attachments }) {
 }
 
 // إرسال عبر SMTP التقليدي (nodemailer) — يُستخدم فقط لو RESEND_API_KEY غير مضبوط.
-async function sendViaSmtp({ recipients, subject, html, text, attachments }) {
+async function sendViaSmtp({ recipients, cc, subject, html, text, attachments }) {
   const transport = getTransporter();
   if (!transport) {
     console.error(`تعذّر إرسال إيميل "${subject}": لا يوجد RESEND_API_KEY ولا إعدادات SMTP كاملة`);
@@ -91,6 +92,7 @@ async function sendViaSmtp({ recipients, subject, html, text, attachments }) {
     await transport.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: recipients.join(','),
+      cc: cc && cc.length ? cc.join(',') : undefined,
       subject,
       html,
       text,
@@ -108,13 +110,14 @@ async function sendViaSmtp({ recipients, subject, html, text, attachments }) {
 // غلاف عام لإرسال أي إيميل. يرجّع { ok: true } أو { ok: false, reason } بدل ما يرمي
 // استثناء دايماً — عشان المسارات اللي بتستخدمه (خصوصاً التنبيهات الخلفية) تقدر تكمل
 // شغلها بأمان حتى لو فشل الإرسال، وتسجّل السبب فى اللوج فقط.
-async function sendEmail({ to, subject, html, text, attachments }) {
+async function sendEmail({ to, cc, subject, html, text, attachments }) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean);
+  const ccList = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? [cc].filter(Boolean) : []);
   if (recipients.length === 0) return { ok: false, reason: 'no_recipient' };
   if (process.env.RESEND_API_KEY) {
-    return sendViaResend({ recipients, subject, html, text, attachments });
+    return sendViaResend({ recipients, cc: ccList, subject, html, text, attachments });
   }
-  return sendViaSmtp({ recipients, subject, html, text, attachments });
+  return sendViaSmtp({ recipients, cc: ccList, subject, html, text, attachments });
 }
 
 function wrapHtml(bodyHtml) {

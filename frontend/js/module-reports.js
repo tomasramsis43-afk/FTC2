@@ -637,13 +637,25 @@ $('#btn-export-report').addEventListener('click', ()=>{
   a.click();
 });
 
+// يبني مستلمي التقارير (To أساسي + CC) من الإعداد الموحّد فى شاشة الإعدادات بدل سؤال
+// المستخدم فى كل مرة. يرجع {to, cc} أو null (مع toast توجيهي) لو لم يُضبط بريد رئيسي بعد.
+function reportEmailRecipients(){
+  const to = (settings.reportEmailTo||'').trim();
+  if(!to){
+    showToast('⚠️ لم يتم ضبط بريد استلام التقارير بعد — اضبطه من الإعدادات ← إرسال التقارير بالإيميل');
+    return null;
+  }
+  const cc = (settings.reportEmailCC||'').split(',').map(s=>s.trim()).filter(Boolean);
+  return { to, cc, all: [to, ...cc] };
+}
+
 // إرسال أي تقرير CSV بالإيميل — دالة عامة تُستخدم لكل أزرار "إرسال بالإيميل" فى شاشة التقارير.
+// المستلمون (To + CC) يُقرأون تلقائياً من إعداد "إرسال التقارير بالإيميل" الموحّد فى شاشة
+// الإعدادات (settings.reportEmailTo / reportEmailCC) بدل سؤال المستخدم فى كل مرة.
 // تحوّل النص إلى base64 وتبعته للسيرفر كمرفق CSV مع سطر ملخص فى متن الرسالة.
 async function emailCsvReport(filename, csv, subject, summaryLines){
-  const to = await customPrompt('اكتب الإيميل (أو عدة إيميلات مفصولة بفاصلة) لإرسال التقرير إليه:', {title:'إرسال التقرير بالإيميل', required:true, placeholder:'admin@mail.com'});
-  if(!to) return;
-  const recipients = to.split(',').map(s=>s.trim()).filter(Boolean);
-  if(!recipients.length || recipients.some(r=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))){ showToast('صيغة الإيميل غير صحيحة'); return; }
+  const recipients = reportEmailRecipients();
+  if(!recipients) return;
   const attachmentBase64 = btoa(unescape(encodeURIComponent(csv)));
   const bodyHtml = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9;">
     <p>مرفق التقرير المطلوب: <b>${escapeHtml(subject)}</b></p>
@@ -652,11 +664,11 @@ async function emailCsvReport(filename, csv, subject, summaryLines){
   try{
     const res = await serverFetch('/api/email/report', {
       method:'POST',
-      body: JSON.stringify({ to: recipients, subject, bodyHtml, attachmentBase64, attachmentName: filename, attachmentType: 'text/csv' }),
+      body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml, attachmentBase64, attachmentName: filename, attachmentType: 'text/csv' }),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.join(', ')}`);
-      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.join(', ')}`);
+      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
     }else{
       const data = await res.json().catch(()=>({}));
       showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
@@ -1411,12 +1423,11 @@ $('#acc-journal-body')?.addEventListener('click', async e=>{
 /* ================================================================
    إرسال التقارير بالإيميل من لوحة التحكم (جدول التقارير + التقرير اليومي)
    ================================================================ */
-// إرسال أي تقرير كملف PDF بالإيميل — دالة عامة لجدول التقارير في لوحة التحكم.
+// إرسال أي تقرير كملف PDF بالإيميل — دالة عامة لجدول التقارير في لوحة التحكم. المستلمون
+// (To + CC) يُقرأون تلقائياً من إعداد "إرسال التقارير بالإيميل" الموحّد فى شاشة الإعدادات.
 async function emailPdfReport(subject, bodyHtml, filename){
-  const to = await customPrompt('اكتب الإيميل (أو عدة إيميلات مفصولة بفاصلة) لإرسال التقرير إليه:', {title:'إرسال التقرير بالإيميل', required:true, placeholder:'admin@mail.com'});
-  if(!to) return;
-  const recipients = to.split(',').map(s=>s.trim()).filter(Boolean);
-  if(!recipients.length || recipients.some(r=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))){ showToast('صيغة الإيميل غير صحيحة'); return; }
+  const recipients = reportEmailRecipients();
+  if(!recipients) return;
   let pdfFile;
   try{
     pdfFile = await htmlBodyToPdfFile(bodyHtml, { title: subject, filename });
@@ -1430,11 +1441,11 @@ async function emailPdfReport(subject, bodyHtml, filename){
   try{
     const res = await serverFetch('/api/email/report', {
       method:'POST',
-      body: JSON.stringify({ to: recipients, subject, bodyHtml: emailBodyHtml, attachmentBase64, attachmentName: pdfFile.name, attachmentType: 'application/pdf' }),
+      body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml: emailBodyHtml, attachmentBase64, attachmentName: pdfFile.name, attachmentType: 'application/pdf' }),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.join(', ')}`);
-      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.join(', ')}`);
+      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
     }else{
       const data = await res.json().catch(()=>({}));
       showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);

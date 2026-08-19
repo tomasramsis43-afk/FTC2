@@ -72,10 +72,14 @@ router.post('/api/email/invoice', requireAuth, emailLimiter, async (req, res) =>
 // bodyHtml, attachmentBase64, attachmentName, attachmentType }.
 router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => {
   try {
-    const { to, subject, bodyHtml } = req.body || {};
+    const { to, cc, subject, bodyHtml } = req.body || {};
     const recipients = Array.isArray(to) ? to : [to];
     if (recipients.some(r => !r || !EMAIL_RE.test(r))) {
       return res.status(400).json({ error: 'إيميل غير صالح ضمن قائمة المستلمين' });
+    }
+    const ccList = (Array.isArray(cc) ? cc : (cc ? [cc] : [])).filter(Boolean);
+    if (ccList.some(r => !EMAIL_RE.test(r))) {
+      return res.status(400).json({ error: 'إيميل غير صالح ضمن قائمة CC' });
     }
     let attachment;
     try {
@@ -86,6 +90,7 @@ router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => 
     const html = bodyHtml || wrapHtml(`<p>مرفق التقرير المطلوب.</p>`);
     const result = await sendEmail({
       to: recipients,
+      cc: ccList,
       subject: subject || 'تقرير من نظام إدارة المركز',
       html,
       attachments: attachment ? [attachment] : undefined,

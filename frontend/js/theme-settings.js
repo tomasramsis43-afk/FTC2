@@ -36,6 +36,12 @@ const DEFAULT_SETTINGS = {
   monthlyReportWhatsapp: '',
   monthlyPdfReportsWhatsappNumbers: '',
   vatPdfReportWhatsappNumbers: '',
+  // بريد استلام التقارير الموحّد — يُستخدم تلقائياً من كل أزرار "إرسال بالإيميل" فى شاشة
+  // التقارير (وأي مكان آخر يرسل تقارير مستقبلاً) بدل سؤال المستخدم عن الإيميل فى كل مرة.
+  // reportEmailTo: المستلم الرئيسي (إيميل واحد). reportEmailCC: نسخة إلى — مجموعة إيميلات
+  // إضافية مفصولة بفاصلة تستقبل نفس الرسالة.
+  reportEmailTo: '',
+  reportEmailCC: '',
   lastMonthlyReportPromptMonth: null,
   nextVaultSeq: 1,
   // عداد تسلسلي منفصل ومستقل لكل حساب/وجهة (الخزنة كاش / البنك / الشبكة / أخرى) — كل حساب له
@@ -753,6 +759,7 @@ const SETTINGS_EXPORT_KEYS = [
   'courses','nationalities','channels','bagPrice','priceSaudi','priceNonSaudi','expenseCategories',
   'centerInfo','darkMode','soundEnabled','autoBackupEnabled','autoBackupIntervalDays','lowBalanceThreshold',
   'bagOverdueDays','monthlyReportWhatsapp','monthlyPdfReportsWhatsappNumbers','vatPdfReportWhatsappNumbers',
+  'reportEmailTo','reportEmailCC',
   'bagFinanceLinkEnabled','powerAutomate'
 ];
 function exportSettingsToFile(){
