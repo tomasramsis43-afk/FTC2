@@ -325,3 +325,39 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by   TEXT
 );
+
+-- ============================================================
+-- ربط كود الترخيص بالجهاز (IP + بصمة الجهاز) عند التحقق منه
+-- ============================================================
+-- صف واحد لكل clientId (المُستخرَج من داخل كود الترخيص نفسه) يحفظ "الجهاز الأصلي" الذي
+-- فُعِّل عليه الترخيص أول مرة (bound_ip / bound_fingerprint)، بالإضافة لآخر IP/بصمة استُخدما
+-- فعلياً (last_ip / last_fingerprint) لمتابعة النشاط الحالي. هذا الربط مصدره كامل من السيرفر
+-- (IP يُحسب من الاتصال نفسه، بصمة الجهاز تُشتق من خصائص العتاد/المتصفح الفعلية عبر Web Crypto
+-- في كل مرة يعمل فيها التطبيق) — لا علاقة له إطلاقاً بأي قيمة مخزَّنة في كاش/تخزين المتصفح،
+-- فمسح الكاش أو localStorage لا يغيّر هذا الربط بأي شكل.
+CREATE TABLE IF NOT EXISTS license_bindings (
+  client_id          TEXT PRIMARY KEY,
+  bound_ip           TEXT,
+  bound_fingerprint  TEXT,
+  last_ip            TEXT,
+  last_fingerprint   TEXT,
+  first_seen_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- سجل كل مرة اختلف فيها IP أو بصمة الجهاز عن القيم المرتبطة أصلاً بالترخيص — تنبيه/تسجيل فقط
+-- (best-effort بالكامل)، لا يمنع التحقق من كود الترخيص من النجاح في أي حالة. يُستخدم لمتابعة
+-- استخدام الترخيص من أكثر من موقع/جهاز لاحقاً من شاشة الإعدادات لو لزم الأمر مستقبلاً.
+CREATE TABLE IF NOT EXISTS license_activity (
+  id                  SERIAL PRIMARY KEY,
+  client_id           TEXT NOT NULL,
+  ip_address          TEXT,
+  device_fingerprint  TEXT,
+  country             TEXT,
+  city                TEXT,
+  is_new_ip           BOOLEAN NOT NULL DEFAULT false,
+  is_new_device       BOOLEAN NOT NULL DEFAULT false,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_license_activity_client_id ON license_activity(client_id);
+CREATE INDEX IF NOT EXISTS idx_license_activity_created_at ON license_activity(created_at DESC);
