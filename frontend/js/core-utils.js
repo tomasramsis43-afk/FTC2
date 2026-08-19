@@ -67,15 +67,62 @@ function base64ToBytes(b64){
   return bytes;
 }
 
+/* بصمة الجهاز — تُشتق حياً فى كل مرة من خصائص العتاد والمتصفح الفعلية (نوع المعالج/الذاكرة/دقة
+   الشاشة/توقيع Canvas وWebGL...)، وليست قيمة تُقرأ من أي تخزين محلي (localStorage/IndexedDB) —
+   فمسح كاش المتصفح لا يغيّرها إطلاقاً طالما نفس الجهاز والمتصفح نفسه. تُرسَل للسيرفر مع كل تحقق
+   من كود الترخيص (راجع validateLicenseKey أسفل) ليقارنها بالبصمة المرتبطة أصلاً بالترخيص. تُحسب
+   مرة واحدة فقط لكل جلسة تشغيل (مخبّأة فى متغيّر بالذاكرة فقط، تُعاد حسابها من الصفر عند أي فتح
+   جديد للتطبيق) لتفادي إعادة حساب Canvas/WebGL فى كل استدعاء.
+   ملاحظة: هذه بصمة "متصفح تقريبية" وليست MAC Address حقيقياً — المتصفح لا يسمح لأي موقع بقراءة
+   عنوان MAC الفعلي للجهاز إطلاقاً (قيد أمني ثابت فى كل المتصفحات)، فهذه أقرب بديل عملي متاح. */
+let _deviceFingerprintCache = null;
+async function getDeviceFingerprint(){
+  if(_deviceFingerprintCache) return _deviceFingerprintCache;
+  try{
+    const parts = [];
+    parts.push(navigator.userAgent || '');
+    parts.push(navigator.language || '');
+    parts.push(String(navigator.hardwareConcurrency || ''));
+    parts.push(String(navigator.deviceMemory || ''));
+    parts.push(String(screen.width) + 'x' + String(screen.height) + 'x' + String(screen.colorDepth));
+    try{ parts.push(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); }catch(e){}
+    try{
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = '14px Arial';
+      ctx.fillText('FTC2-device-fp', 2, 2);
+      parts.push(canvas.toDataURL());
+    }catch(e){}
+    try{
+      const canvas2 = document.createElement('canvas');
+      const gl = canvas2.getContext('webgl') || canvas2.getContext('experimental-webgl');
+      if(gl){
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        if(dbg){
+          parts.push(String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || ''));
+          parts.push(String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || ''));
+        }
+      }
+    }catch(e){}
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(parts.join('||')));
+    _deviceFingerprintCache = bytesToBase64(new Uint8Array(digest));
+  }catch(e){
+    _deviceFingerprintCache = 'fp-unavailable';
+  }
+  return _deviceFingerprintCache;
+}
+
 /* يستدعي مسار التحقق على السيرفر بدل حساب أي شيء محلياً. يرجع نفس شكل
    النتيجة المستخدم سابقاً في باقي الكود (valid/reason/clientId/expiryDate/expired)
    بالإضافة إلى encKeyRaw (base64) عند النجاح، ليتم استيرادها كـ CryptoKey. */
 async function validateLicenseKey(rawKey){
   try{
+    const deviceFingerprint = await getDeviceFingerprint();
     const res = await fetch(API_BASE + '/api/license/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ licenseKey: rawKey }),
+      body: JSON.stringify({ licenseKey: rawKey, deviceFingerprint }),
     });
     let data = null;
     try{ data = await res.json(); }catch(e){ data = null; }
