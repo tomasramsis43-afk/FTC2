@@ -3173,13 +3173,71 @@ thead th.sortable:hover {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 40px 80px -30px rgba(0, 0, 0, 0.6), 0 8px 24px -8px rgba(0, 0, 0, 0.35);
 }
 
+/* ---------- حقول الفورم في التولبار: عمق داخلي أنعم بدل الحد المسطّح ---------- */
+.toolbar input,
+.toolbar select {
+  box-shadow: var(--pro-shadow-ambient);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.toolbar input:focus,
+.toolbar select:focus {
+  transform: translateY(-1px);
+}
+
+/* ---------- بطاقة تسجيل الدخول: توهج نابض هادئ حول الختم ---------- */
+.login-box .seal {
+  animation: nabdSealPulse 3.4s ease-in-out infinite;
+}
+
+@keyframes nabdSealPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15), 0 0 24px rgba(240, 168, 87, 0.25); }
+  50% { box-shadow: 0 0 0 5px rgba(240, 168, 87, 0.2), 0 0 34px rgba(240, 168, 87, 0.4); }
+}
+
+.login-container,
+.login-box {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 32px 80px -30px rgba(23, 26, 43, 0.45), 0 0 50px rgba(240, 168, 87, 0.08) inset;
+}
+
+/* ---------- شارة المستخدم العلوية: عمق زجاجي خفيف ---------- */
+.user-pill {
+  background: var(--surface);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: var(--pro-shadow-ambient);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.user-pill:hover {
+  border-color: color-mix(in srgb, var(--navy) 35%, var(--border));
+}
+
+/* ---------- صفوف الجداول: انتقال ناعم بدل التغيير المفاجئ ---------- */
+tbody tr {
+  transition: background 0.15s ease;
+}
+
+/* ---------- حالة الفراغ: أيقونة بتوهج خافت بدل التسطيح الكامل ---------- */
+.empty-state .big {
+  filter: drop-shadow(0 6px 18px color-mix(in srgb, var(--navy) 30%, transparent));
+}
+
+/* ---------- الوسوم (.tag): عمق خفيف يطابق باقي البادجات ---------- */
+.tag {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 6px -3px rgba(0, 0, 0, 0.25);
+}
+
 /* ---------- تفضيل الحركة المخفّضة ---------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
   .panel,
   .btn-primary,
   .btn-gold,
-  nav.tabs button {
+  nav.tabs button,
+  .toolbar input,
+  .toolbar select,
+  .login-box .seal {
     transition: none !important;
     animation: none !important;
   }
@@ -3187,7 +3245,9 @@ thead th.sortable:hover {
   .card:hover,
   .close-entity-card:hover,
   .btn-primary:hover,
-  .btn-gold:hover {
+  .btn-gold:hover,
+  .toolbar input:focus,
+  .toolbar select:focus {
     transform: none !important;
   }
 }
