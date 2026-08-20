@@ -340,10 +340,15 @@ document.addEventListener('click', async e=>{
       snapshotState(`حذف عميل: ${removedClient?.name || delId}`);
       clients = clients.filter(c=>c.id!==delId);
       removeClientLedgerEntries(delId);
-      await saveClients(); await saveVaultTx();
-      await logAudit('delete','العملاء', `تم حذف بيانات العميل: ${removedClient?.name || delId}`);
+      // عرض فوري (نفس مبدأ الإضافة أعلاه): العميل اتشال بالفعل من المصفوفة المحلية، فنحدّث
+      // الشاشة على طول بدل انتظار رفع الحذف للسيرفر + حفظ الخزنة + سجل التدقيق.
       renderTable(); renderDashboard(); renderBags();
       showToast('تم حذف السجل');
+      (async ()=>{
+        await saveClients(); await saveVaultTx();
+        await logAudit('delete','العملاء', `تم حذف بيانات العميل: ${removedClient?.name || delId}`);
+        renderTable(); renderDashboard(); renderBags();
+      })().catch(e=>console.error('فشل فى إكمال حذف العميل فى الخلفية:', e));
     }
   }
 });
@@ -868,50 +873,61 @@ $('#client-form').addEventListener('submit', async e=>{
     showToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
-  if(!wasEdit && !_clientsSyncBaseline){
-    // مزامنة العملاء الحقيقية الأولى لسه ماكملتش هذه الجلسة (سيرفر بطيء/نائم لتوّه) — بدل
-    // استدعاء saveClients() العام (الذي كان سيرفع -فى غياب baseline مؤكد- كل قائمة العملاء
-    // المحلية دفعة واحدة اعتماداً على لقطة قد تكون قديمة)، نحفظ هذا العميل الجديد تحديداً فقط
-    // كسجل واحد مباشر: آمن دائماً لأن معرّفه (id) جديد فعلاً برقم نسخة صفر، ولا يوجد أي خطر من
-    // تعارضه مع بيانات موجودة على السيرفر. لو تعذّر الاتصال فعلياً، يُسجَّل تلقائياً فى طابور
-    // "المعلّقات" (pendingRecords) ويُعاد رفعه أول ما الاتصال يرجع أو أول ما المزامنة الخلفية تكتمل.
-    const ok = await saveOneClientRecord(savedClient, JSON.stringify(savedClient));
-    if(ok){
-      if(!_clientsSyncBaseline) _clientsSyncBaseline = new Map();
-      _clientsSyncBaseline.set(savedClient.id, JSON.stringify(savedClient));
-    }
-    if(typeof _scheduleClientsSnapPersist==='function') _scheduleClientsSnapPersist();
-  }else{
-    await saveClients();
-  }
-  syncClientLedgerEntry(savedClient);
-  await syncBagStockIssues();
-  await saveVaultTx();
-  await saveSettings();
-  await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
-  if(!wasEdit){
-    // تنبيه إيميل فوري للإدارة عند إضافة عميل جديد مع بيانات الدفع (المدفوع/طريقة الدفع/المتبقي).
-    notifyAdminAlert(
-      `عميل جديد: ${savedClient.name}`,
-      `<p>تمت إضافة عميل جديد بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
-       <table style="border-collapse:collapse; width:100%; max-width:460px; font-size:13px;">
-         <tr><td style="padding:4px 0; color:#66707E;">الاسم</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(savedClient.name)}</b></td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">رقم الهوية</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.clientId || '—')}</td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">نوع الدورة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.courseType || '—')}</td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">سعر الدورة</td><td style="padding:4px 0; text-align:left;">${fmt(num(savedClient.coursePrice))} ﷼</td></tr>
-         ${num(savedClient.discount)>0 ? `<tr><td style="padding:4px 0; color:#66707E;">الخصم</td><td style="padding:4px 0; text-align:left;">-${fmt(num(savedClient.discount))} ﷼</td></tr>` : ''}
-         <tr><td style="padding:4px 0; color:#66707E;">الحقيبة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.bagSource==='stock' ? 'من المخزون' : (savedClient.bagSource==='own' ? 'خاصة (بدون سعر)' : (num(savedClient.bagPrice)>0 ? fmt(num(savedClient.bagPrice))+' ﷼' : '—')))}</td></tr>
-         <tr style="border-top:1px solid #ddd;"><td style="padding:4px 0; color:#66707E;">المدفوع</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidTotal(savedClient))} ﷼</b></td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
-       </table>`
-    );
-    sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
-  }
-  if(savedClient.courseNumber && savedClient.courseNumber!==prevCourseNumberForEvent){
-    sendPowerAutomateEvent('course_number_updated', {clientId: savedClient.clientId, name: savedClient.name, courseNumber: savedClient.courseNumber, courseType: savedClient.courseType||''});
-  }
+  // ---- عرض فوري (Optimistic UI): العميل بالفعل موجود فى المصفوفة المحلية من فوق، فنعرضه على
+  // الشاشة الآن مباشرة بدل ما ننتظر سلسلة طلبات الحفظ للسيرفر (رفع السجل/الحقائب/الخزنة/الإعدادات/
+  // سجل التدقيق) اللي كانت تُنفَّذ الواحدة وراء التانية (await متتالية) وتؤخر ظهور العميل فعلياً على
+  // شاشة الاستقبال نفسه اللي أضافه لثوانٍ طويلة لو السيرفر بطيء/نائم (استضافة مجانية). كل خطوات
+  // الحفظ تحتها فعلاً محمية بطابور "معلّقات" (pendingRecords) تلقائي لو فشل الاتصال، فتأجيلها للخلفية
+  // لا يضيف أي خطر فقدان بيانات جديد.
   closeModal(); renderTable(); renderDashboard(); refreshFilterOptions(); renderCourses(); renderBags();
+  (async ()=>{
+    if(!wasEdit && !_clientsSyncBaseline){
+      // مزامنة العملاء الحقيقية الأولى لسه ماكملتش هذه الجلسة (سيرفر بطيء/نائم لتوّه) — بدل
+      // استدعاء saveClients() العام (الذي كان سيرفع -فى غياب baseline مؤكد- كل قائمة العملاء
+      // المحلية دفعة واحدة اعتماداً على لقطة قد تكون قديمة)، نحفظ هذا العميل الجديد تحديداً فقط
+      // كسجل واحد مباشر: آمن دائماً لأن معرّفه (id) جديد فعلاً برقم نسخة صفر، ولا يوجد أي خطر من
+      // تعارضه مع بيانات موجودة على السيرفر. لو تعذّر الاتصال فعلياً، يُسجَّل تلقائياً فى طابور
+      // "المعلّقات" (pendingRecords) ويُعاد رفعه أول ما الاتصال يرجع أو أول ما المزامنة الخلفية تكتمل.
+      const ok = await saveOneClientRecord(savedClient, JSON.stringify(savedClient));
+      if(ok){
+        if(!_clientsSyncBaseline) _clientsSyncBaseline = new Map();
+        _clientsSyncBaseline.set(savedClient.id, JSON.stringify(savedClient));
+      }
+      if(typeof _scheduleClientsSnapPersist==='function') _scheduleClientsSnapPersist();
+    }else{
+      await saveClients();
+    }
+    syncClientLedgerEntry(savedClient);
+    await syncBagStockIssues();
+    await saveVaultTx();
+    await saveSettings();
+    await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
+    if(!wasEdit){
+      // تنبيه إيميل فوري للإدارة عند إضافة عميل جديد مع بيانات الدفع (المدفوع/طريقة الدفع/المتبقي).
+      notifyAdminAlert(
+        `عميل جديد: ${savedClient.name}`,
+        `<p>تمت إضافة عميل جديد بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+         <table style="border-collapse:collapse; width:100%; max-width:460px; font-size:13px;">
+           <tr><td style="padding:4px 0; color:#66707E;">الاسم</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(savedClient.name)}</b></td></tr>
+           <tr><td style="padding:4px 0; color:#66707E;">رقم الهوية</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.clientId || '—')}</td></tr>
+           <tr><td style="padding:4px 0; color:#66707E;">نوع الدورة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.courseType || '—')}</td></tr>
+           <tr><td style="padding:4px 0; color:#66707E;">سعر الدورة</td><td style="padding:4px 0; text-align:left;">${fmt(num(savedClient.coursePrice))} ﷼</td></tr>
+           ${num(savedClient.discount)>0 ? `<tr><td style="padding:4px 0; color:#66707E;">الخصم</td><td style="padding:4px 0; text-align:left;">-${fmt(num(savedClient.discount))} ﷼</td></tr>` : ''}
+           <tr><td style="padding:4px 0; color:#66707E;">الحقيبة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.bagSource==='stock' ? 'من المخزون' : (savedClient.bagSource==='own' ? 'خاصة (بدون سعر)' : (num(savedClient.bagPrice)>0 ? fmt(num(savedClient.bagPrice))+' ﷼' : '—')))}</td></tr>
+           <tr style="border-top:1px solid #ddd;"><td style="padding:4px 0; color:#66707E;">المدفوع</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidTotal(savedClient))} ﷼</b></td></tr>
+           <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
+           <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
+         </table>`
+      );
+      sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
+    }
+    if(savedClient.courseNumber && savedClient.courseNumber!==prevCourseNumberForEvent){
+      sendPowerAutomateEvent('course_number_updated', {clientId: savedClient.clientId, name: savedClient.name, courseNumber: savedClient.courseNumber, courseType: savedClient.courseType||''});
+    }
+    // إعادة رسم نهائية بعد اكتمال الحفظ الفعلي: تعكس أي تحديث وصل من السيرفر فى هذه الأثناء
+    // (حالة الاعتماد status/origin، تصحيح مخزون الحقائب، قيود الخزنة التلقائية...).
+    renderTable(); renderDashboard(); refreshFilterOptions(); renderCourses(); renderBags();
+  })().catch(e=>console.error('فشل فى إكمال حفظ العميل فى الخلفية:', e));
 });
 
 /* ---------------- إضافة عدة عملاء دفعة واحدة (جدول) ---------------- */
