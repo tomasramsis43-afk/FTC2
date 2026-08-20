@@ -78,16 +78,16 @@ function renderApprovalNoticesBanner(){
   if(!notices.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel panel-accent panel-accent-navy" style="margin-bottom:10px;">
     <h3 style="margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-      <span>🔔 نتائج اعتماد عملياتك</span>
+      <span><span class="msi">notifications</span> نتائج اعتماد عملياتك</span>
       <button class="btn btn-ghost btn-sm" id="btn-approval-notices-clear" title="إخفاء كل هذه الإشعارات">إخفاء الكل</button>
     </h3>
     <div>${notices.map(n=> `
       <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border);">
-        <span style="font-size:16px;">${n.decision==='approved' ? '✅' : '⛔'}</span>
+        <span class="msi" style="font-size:16px;">${n.decision==='approved' ? 'check_circle' : 'block'}</span>
         <span style="font-size:13px; color:${n.decision==='approved' ? 'var(--teal)' : 'var(--red)'};">
           ${n.decision==='approved' ? 'تم اعتماد عمليتك' : 'تم رفض وحذف عمليتك'} (${escapeHtml(pendingCollectionLabel(n.collection))}): ${escapeHtml(n.desc||'')}
         </span>
-        <button class="btn btn-ghost btn-sm" data-approval-notice-dismiss="${escapeHtml(n.id)}" title="إخفاء هذا الإشعار">✕</button>
+        <button class="btn btn-ghost btn-sm" data-approval-notice-dismiss="${escapeHtml(n.id)}" title="إخفاء هذا الإشعار"><span class="msi">close</span></button>
       </div>`).join('')}
     </div>
   </div>`;
@@ -161,8 +161,8 @@ function renderPendingApprovalsPanel(){
     <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${visiblePendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد. (حركات الخزنة/الحقائب المرتبطة بعميل معلّق تُعتمد أو تُرفض تلقائياً مع العميل من شيت العملاء)</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">✅ اعتماد الكل (${visiblePendingApprovals.length})</button>
-      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع">✖ رفض الكل (${visiblePendingApprovals.length})</button>
+      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير"><span class="msi">check_circle</span> اعتماد الكل (${visiblePendingApprovals.length})</button>
+      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع"><span class="msi">cancel</span> رفض الكل (${visiblePendingApprovals.length})</button>
     </div>
     <div class="table-scroll cards-mobile">
     <table>
@@ -174,8 +174,8 @@ function renderPendingApprovalsPanel(){
           <td data-label="سجّلها">${escapeHtml(item.createdBy||'—')}</td>
           <td class="mono" data-label="التاريخ">${item.updatedAt ? escapeHtml(new Date(item.updatedAt).toLocaleString('ar-EG-u-nu-latn')) : '—'}</td>
           <td class="card-full" data-label="" style="white-space:nowrap;">
-            <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير">✅ اعتماد</button>
-            <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>
+            <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير"><span class="msi">check_circle</span> اعتماد</button>
+            <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً"><span class="msi">cancel</span> رفض</button>
           </td>
         </tr>`).join('')}</tbody>
     </table>
@@ -210,8 +210,8 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
     if(ok>0){
       await logAudit(isApprove ? 'edit' : 'delete', 'عمليات الاستقبال', `تم ${bulkLabel}: اعتماد/رفض ${ok} عملية معلّقة ${fail>0 ? ` (فشل ${fail})` : ''}`);
     }
-    if(fail===0) showToast(`✅ تم ${isApprove ? 'اعتماد' : 'رفض'} كل العمليات (${ok})`);
-    else showToast(`⚠️ تم ${isApprove ? 'اعتماد' : 'رفض'} ${ok} عملية — فشل ${fail} عملية (تحقق من الاتصال)`);
+    if(fail===0) showToast(`تم ${isApprove ? 'اعتماد' : 'رفض'} كل العمليات (${ok})`);
+    else showToast(`تم ${isApprove ? 'اعتماد' : 'رفض'} ${ok} عملية — فشل ${fail} عملية (تحقق من الاتصال)`);
     refreshEverything();
     refreshPendingApprovals();
     return;
@@ -228,9 +228,9 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
       await logAudit('edit', pendingCollectionLabel(collection), `تم اعتماد عملية الاستقبال: ${desc}`);
       addApprovalNotice(item && item.createdBy, 'approved', collection, desc);
       refreshEverything();
-      showToast('✅ تم اعتماد العملية');
+      showToast('تم اعتماد العملية');
     }else{
-      showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+      showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
     }
   }else{
     if(!await customConfirm(`رفض وحذف هذه العملية (${desc}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
@@ -241,7 +241,7 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
       refreshEverything();
       showToast('تم رفض العملية وحذفها');
     }else{
-      showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+      showToast('تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
     }
   }
   refreshPendingApprovals();
@@ -266,7 +266,7 @@ function renderSmartAlerts(){
     const pendingClientsCount = pendingClientIdSet().size;
     const totalPending = pendingClientsCount + visiblePendingApprovals.length;
     if(totalPending){
-      alerts.push({level:'red', icon:'🛂', text:`${totalPending} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
+      alerts.push({level:'red', icon:'badge', text:`${totalPending} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
     }
   }
 
@@ -274,7 +274,7 @@ function renderSmartAlerts(){
   const overdueDays = settings.bagOverdueDays || 14;
   const overdueBags = clients.filter(c=> c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended && daysSinceDate(c.date) > overdueDays);
   if(overdueBags.length){
-    alerts.push({level:'red', icon:'👜', text:`${overdueBags.length} حقيبة مطلوب شراؤها تجاوزت ${overdueDays} يوم بدون شراء`, view:'clients'});
+    alerts.push({level:'red', icon:'shopping_bag', text:`${overdueBags.length} حقيبة مطلوب شراؤها تجاوزت ${overdueDays} يوم بدون شراء`, view:'clients'});
   }
 
   // ٢) انخفاض رصيد الخزنة + البنك عن الحد الأدنى
@@ -282,14 +282,14 @@ function renderSmartAlerts(){
   const liquid = balanceOfAsOf('vault', today) + balanceOfAsOf('bank', today);
   const threshold = settings.lowBalanceThreshold ?? 5000;
   if(liquid < threshold){
-    alerts.push({level:'red', icon:'💰', text:`رصيد الخزنة والبنك (${fmt(liquid)}) أقل من الحد الأدنى المحدد (${fmt(threshold)})`, view:'vault'});
+    alerts.push({level:'red', icon:'payments', text:`رصيد الخزنة والبنك (${fmt(liquid)}) أقل من الحد الأدنى المحدد (${fmt(threshold)})`, view:'vault'});
   }
 
   // ٣) اقتراب انتهاء الترخيص
   if(LICENSE_EXPIRY_DATE){
     const daysLeft = Math.ceil((new Date(LICENSE_EXPIRY_DATE).getTime() - Date.now()) / 86400000);
     if(daysLeft <= 14 && daysLeft >= 0){
-      alerts.push({level:'gold', icon:'🔑', text:`ترخيص البرنامج سينتهي خلال ${daysLeft} يوم — يُرجى التجديد قريباً`});
+      alerts.push({level:'gold', icon:'vpn_key', text:`ترخيص البرنامج سينتهي خلال ${daysLeft} يوم — يُرجى التجديد قريباً`});
     }
   }
 
@@ -303,13 +303,13 @@ function renderSmartAlerts(){
       return ratio >= 0.8 && enrolled < s.capacity;
     });
     if(nearFull.length){
-      alerts.push({level:'gold', icon:'📚', text:`${nearFull.length} دورة اقتربت من اكتمال العدد (80% فأكثر)`, view:'courses'});
+      alerts.push({level:'gold', icon:'menu_book', text:`${nearFull.length} دورة اقتربت من اكتمال العدد (80% فأكثر)`, view:'courses'});
     }
   }
 
   // ٥) تذكير بالنسخ الاحتياطي التلقائي (لو معطّل أو متأخر بشكل غير متوقع)
   if(!settings.autoBackupEnabled){
-    alerts.push({level:'gold', icon:'💾', text:'النسخ الاحتياطي التلقائي معطّل حالياً — يُفضّل تفعيله من الإعدادات', view:'settings'});
+    alerts.push({level:'gold', icon:'save', text:'النسخ الاحتياطي التلقائي معطّل حالياً — يُفضّل تفعيله من الإعدادات', view:'settings'});
   }
 
   // ٦) ملخص الشهر الماضي جاهز للإرسال عبر واتساب (يظهر أول 7 أيام من الشهر الجديد فقط ولمرة واحدة لكل شهر)
@@ -317,7 +317,7 @@ function renderSmartAlerts(){
     const key = lastCompleteMonthKey();
     const dayOfMonth = new Date().getDate();
     if(dayOfMonth<=7 && settings.lastMonthlyReportPromptMonth!==key){
-      alerts.push({level:'gold', icon:'📤', text:`ملخص ${monthLabelAr(key)} جاهز — اضغط لإرساله عبر واتساب`, action:'monthly-wa', actionKey:key});
+      alerts.push({level:'gold', icon:'ios_share', text:`ملخص ${monthLabelAr(key)} جاهز — اضغط لإرساله عبر واتساب`, action:'monthly-wa', actionKey:key});
     }
   }
 
@@ -326,7 +326,7 @@ function renderSmartAlerts(){
   el.innerHTML = `<div class="panel panel-accent panel-accent-red">
     <h3 style="margin:0 0 8px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> تنبيهات تحتاج انتباهك</h3>
     ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
-      <span style="font-size:18px;">${a.icon}</span>
+      <span class="msi" style="font-size:18px;">${a.icon}</span>
       <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
     </div>`).join('')}
   </div>`;

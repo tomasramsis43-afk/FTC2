@@ -3572,6 +3572,21 @@ tbody tr {
 .panel-accent-red { border-inline-end-color: var(--red); }
 .panel-accent-teal { border-inline-end-color: var(--teal); }
 
+/* ---------- أيقونة Material Symbols داخل النص (أزرار/تنبيهات) — بديل الإيموجي ---------- */
+.msi {
+  font-family: 'Material Symbols Outlined';
+  font-weight: 400;
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  font-size: 1.1em;
+  line-height: 1;
+  vertical-align: -0.15em;
+  display: inline-block;
+}
+
+.msi.msi-outline {
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
 /* ---------- توسيع مساحة اللمس على الموبايل (Accessibility) ---------- */
 @media (max-width: 600px) {
   .btn,

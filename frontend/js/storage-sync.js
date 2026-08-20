@@ -252,7 +252,7 @@ async function flushPendingWrites(){
             const conflict = await res.json().catch(()=>({}));
             _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
             await _pendingDelete(item.key);
-            showToast(`⚠️ تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+            showToast(`تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
             return;
           }
           if(!res.ok) return; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
@@ -380,7 +380,7 @@ async function flushPendingRecordWrites(){
                 // تغيّر حقيقي أثناء إعادة المحاولة — تعارض حقيقي (لا كتابة فوق)
                 const c2 = await retryRes.json().catch(()=>({}));
                 await _dropRecordOnRealConflict(item.collection, isClient, item.id, c2);
-                showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+                showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
                 return;
               }
               if(!retryRes.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
@@ -396,7 +396,7 @@ async function flushPendingRecordWrites(){
               return;
             }
             await _dropRecordOnRealConflict(item.collection, isClient, item.id, conflict);
-            showToast(`⚠️ تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+            showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
             return;
           }
           if(!res.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
@@ -640,7 +640,7 @@ window.storage = {
         if(res.status === 409){
           const conflict = await res.json();
           _kvVersions[key] = conflict.currentVersion || _kvVersions[key];
-          showToast('⚠️ ' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
+          showToast('' + (conflict.error || 'تعارض في الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
           return null;
         }
         if(res.status === 422){
@@ -648,7 +648,7 @@ window.storage = {
           // بسبب جهاز يعمل بنسخة قديمة من البيانات في الذاكرة). لا نطبّق التعديل محلياً ولا نضعه
           // في طابور الرفع، حتى لا نُصر على تكرار نفس الحفظ الخطير تلقائياً لاحقاً.
           const guard = await res.json().catch(()=>({}));
-          showToast('⛔ ' + (guard.error || 'تم رفض هذا الحفظ وقائياً لأنه سيحذف عدداً كبيراً من السجلات دفعة واحدة — يرجى تحديث الصفحة (Ctrl+Shift+R) والتأكد من آخر بيانات قبل إعادة المحاولة'));
+          showToast('' + (guard.error || 'تم رفض هذا الحفظ وقائياً لأنه سيحذف عدداً كبيراً من السجلات دفعة واحدة — يرجى تحديث الصفحة (Ctrl+Shift+R) والتأكد من آخر بيانات قبل إعادة المحاولة'));
           return null;
         }
         if(!res.ok) throw new Error('save request failed');
@@ -1001,7 +1001,7 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
-      showToast('⚠️ ' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
+      showToast('' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
       return false;
     }
     if(!res.ok){
@@ -1037,7 +1037,7 @@ async function deleteOneRecordGeneric(collection, id){
       // نُحدّث رقم النسخة المحلي ونترك السجل على السيرفر كما هو، وننبّه المستخدم (نفس معاملة تعارض PUT).
       const conflict = await res.json().catch(()=>({}));
       if(_recordVersions[collection]) _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
-      showToast('⚠️ ' + (conflict.error || 'تعارض في الحذف: عُدِّلت هذه البيانات بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
+      showToast('' + (conflict.error || 'تعارض في الحذف: عُدِّلت هذه البيانات بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
       return false;
     }
     // لازم نتحقق من res.ok: لو السيرفر رفض الحذف (مثال: 429 بسبب rate limiting، أو أي خطأ آخر)،
@@ -1179,7 +1179,7 @@ async function bulkUploadRecordsGeneric(collection, list){
     }
     if(stillConflictIds.length){
       allConflictIds.push(...stillConflictIds);
-      showToast(`⚠️ تعذّر رفع ${stillConflictIds.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
+      showToast(`تعذّر رفع ${stillConflictIds.length} سجل من "${collection}" بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
   return allConflictIds; // معرّفات السجلات التي فشل رفعها فعلياً — لا يجوز اعتبارها مُتزامنة
@@ -1559,7 +1559,7 @@ async function saveOneClientRecord(client, plainJson){
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _clientRecordVersions[client.id] = conflict.currentVersion || _clientRecordVersions[client.id];
-      showToast(`⚠️ تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة لمراجعتها`);
+      showToast(`تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة لمراجعتها`);
       return false;
     }
     if(!res.ok){
@@ -1608,7 +1608,7 @@ async function deleteOneClientRecord(id){
       // عُدِّل/تغيّر العميل على السيرفر من جهاز آخر بعد آخر مشاهدة — لا يجوز حذفه (نفس معاملة PUT).
       const conflict = await res.json().catch(()=>({}));
       _clientRecordVersions[id] = conflict.currentVersion || knownVersion;
-      showToast('⚠️ ' + (conflict.error || 'تعارض في الحذف: عُدِّلت بيانات هذا العميل بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
+      showToast('' + (conflict.error || 'تعارض في الحذف: عُدِّلت بيانات هذا العميل بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف'));
       return false;
     }
     // نفس تصحيح deleteOneRecordGeneric: لازم نتحقق من res.ok قبل اعتبار الحذف ناجحاً محلياً،
@@ -1768,7 +1768,7 @@ async function bulkUploadClientRecords(clientsList){
     }
     if(stillConflictIds.length){
       allConflictIds.push(...stillConflictIds);
-      showToast(`⚠️ تعذّر رفع ${stillConflictIds.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
+      showToast(`تعذّر رفع ${stillConflictIds.length} عميل بسبب تعديل آخر لنفس البيانات أثناء الترحيل — يرجى تحديث الصفحة ومراجعتها`);
     }
   }
   return allConflictIds; // معرّفات العملاء التي فشل رفعها فعلياً بسبب تعارض حقيقي — لا يجوز اعتبارها مُتزامنة

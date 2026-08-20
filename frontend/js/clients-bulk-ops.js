@@ -540,8 +540,8 @@ $('#btn-bulk-delete-save').addEventListener('click', async ()=>{
   if(!matchedAll.length){ showToast('لم يتم العثور على أي عميل بأرقام الهوية المدخلة'); return; }
   const matched = matchedAll.filter(c=>canDeleteClientRecord(c));
   const blockedCount = matchedAll.length - matched.length;
-  if(!matched.length){ showToast(`🔒 كل السجلات المطابقة (${matchedAll.length}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك`); return; }
-  if(blockedCount) showToast(`⚠️ تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
+  if(!matched.length){ showToast(`كل السجلات المطابقة (${matchedAll.length}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك`); return; }
+  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
   const namesPreview = matched.slice(0,5).map(c=>c.name).join('، ');
   const extra = matched.length>5 ? ` وآخرين (${matched.length-5})` : '';
   const notFoundMsg = notFoundCount ? `\n(تنبيه: ${notFoundCount} رقم هوية غير موجودين أصلاً بالنظام وسيتم تجاهلهم)` : '';

@@ -603,15 +603,15 @@ async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
       body: JSON.stringify(payload),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال الفاتورة بالإيميل إلى ${c.email}${attachment ? ' (مع مرفق PDF)' : ''}`);
+      showToast(`تم إرسال الفاتورة بالإيميل إلى ${c.email}${attachment ? ' (مع مرفق PDF)' : ''}`);
       await logAudit('edit','العملاء', `تم إرسال فاتورة رقم ${invNoLabel} بالإيميل للعميل: ${c.name} (${c.email})${attachment ? ' مع مرفق PDF' : ''}`);
     }else{
       const data = await res.json().catch(()=>({}));
-      if(!silent) showToast(`⚠️ تعذّر إرسال الفاتورة بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+      if(!silent) showToast(`تعذّر إرسال الفاتورة بالإيميل: ${data.error || 'خطأ غير معروف'}`);
     }
   }catch(e){
     console.error('فشل إرسال إيميل الفاتورة:', e);
-    if(!silent) showToast('⚠️ تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
+    if(!silent) showToast('تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
   }
 }
 
@@ -972,7 +972,7 @@ if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventList
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'تعذّر حفظ صلاحيات الأدوار على الخادم');
   }catch(e){
-    showToast('❌ تعذّر حفظ الصلاحيات على الخادم: ' + (e.message||''));
+    showToast('تعذّر حفظ الصلاحيات على الخادم: ' + (e.message||''));
     return;
   }
   settings.rolePermissions = newRp; // نسخة محلية احتياطية فقط، بعد نجاح الحفظ الفعلي على الخادم
@@ -1086,7 +1086,7 @@ async function renderTfaPanel(){
         if(!res.ok) throw new Error(data.error||'فشل الإلغاء');
         showToast('تم إلغاء تفعيل المصادقة الثنائية');
         renderTfaPanel();
-      }catch(e){ showToast('⚠️ '+e.message); }
+      }catch(e){ showToast(''+e.message); }
     });
   } else {
     controls.innerHTML = `<button class="btn btn-gold btn-sm" id="btn-tfa-enable">تفعيل المصادقة الثنائية الآن</button>`;
@@ -1144,7 +1144,7 @@ if($('#webauthn-devices-list')) $('#webauthn-devices-list').addEventListener('cl
     if(!res.ok){ const d = await res.json(); throw new Error(d.error || 'فشل الحذف'); }
     showToast('تم إزالة الجهاز');
     loadWebauthnDevicesList();
-  }catch(e){ showToast('⚠️ ' + e.message); }
+  }catch(e){ showToast('' + e.message); }
 });
 
 async function startTfaSetup(){
@@ -1179,9 +1179,9 @@ async function startTfaSetup(){
             ${data2.backupCodes.map(c=>escapeHtml(c)).join(' &nbsp; ')}
           </div>`;
         showToast('تم تفعيل المصادقة الثنائية');
-      }catch(e){ showToast('⚠️ '+e.message); }
+      }catch(e){ showToast(''+e.message); }
     });
-  }catch(e){ showToast('⚠️ '+e.message); }
+  }catch(e){ showToast(''+e.message); }
 }
 
 function formatDeviceInfo(ua){

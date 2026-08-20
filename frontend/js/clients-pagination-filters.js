@@ -253,7 +253,7 @@ $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
   const ids = allIds.filter(id=>canDeleteClientRecord(clients.find(c=>c.id===id)));
   const blockedCount = allIds.length - ids.length;
   if(!ids.length){ showToast(blockedCount ? `🔒 كل السجلات المحددة (${blockedCount}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك` : 'لا يوجد عملاء محددين'); return; }
-  if(blockedCount) showToast(`⚠️ تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
+  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
   const namesPreview = clients.filter(c=>ids.includes(c.id)).slice(0,5).map(c=>c.name).join('، ');
   const extra = ids.length>5 ? ` وآخرين (${ids.length-5})` : '';
   if(!await customConfirm(`تأكيد حذف ${ids.length} عميل دفعة واحدة؟ (${namesPreview}${extra})\nسيُحذف أيضاً أي ترحيل مالي تلقائي مرتبط بكل عميل منهم. هذا الإجراء لا يمكن التراجع عنه.`)) return;

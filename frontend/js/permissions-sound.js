@@ -329,7 +329,7 @@ async function loadData(cacheOnly){
             await bulkUploadClientRecords(legacyClients);
             clients = legacyClients;
             _clientsSyncBaseline = new Map(legacyClients.map(c=>[c.id, JSON.stringify(c)]));
-            showToast('✅ تم ترحيل بيانات العملاء لنظام تخزين أسرع (مرة واحدة فقط)');
+            showToast('تم ترحيل بيانات العملاء لنظام تخزين أسرع (مرة واحدة فقط)');
           }catch(e){
             // فشل الترحيل (مثال: انقطع الاتصال أثناءه) — نكمل بالبيانات القديمة فى الذاكرة، ولا
             // خطر من إعادة محاولة الترحيل تلقائياً فى المرة القادمة online (نفس البيانات فقط تُرفع تاني).

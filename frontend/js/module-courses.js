@@ -527,9 +527,9 @@ $('#courses-sessions-list').addEventListener('click', async e=>{
       if(ok){
         await logAudit('edit','الدورات', `تم اعتماد تسجيل الاستقبال للدورة رقم ${s?.courseNumber||id}`);
         refreshEverything();
-        showToast('✅ تم اعتماد الدورة');
+        showToast('تم اعتماد الدورة');
       }else{
-        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -545,7 +545,7 @@ $('#courses-sessions-list').addEventListener('click', async e=>{
         refreshEverything();
         showToast('تم رفض التسجيل وحذفه');
       }else{
-        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;

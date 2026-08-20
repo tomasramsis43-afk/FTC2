@@ -54,7 +54,7 @@
             const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
             if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
               await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
-              showToast('⚠️ تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
+              showToast('تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
               return;
             }
           }

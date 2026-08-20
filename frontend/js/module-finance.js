@@ -1556,9 +1556,9 @@ document.addEventListener('click', async e=>{
       if(ok){
         await logAudit('edit','الحركات المالية', `تم اعتماد عملية الاستقبال: ${desc}`);
         refreshEverything();
-        showToast('✅ تم اعتماد العملية');
+        showToast('تم اعتماد العملية');
       }else{
-        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -1575,7 +1575,7 @@ document.addEventListener('click', async e=>{
         refreshEverything();
         showToast('تم رفض التسجيل وحذفه');
       }else{
-        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;

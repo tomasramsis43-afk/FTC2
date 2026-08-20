@@ -31,7 +31,7 @@ function base64urlToBuffer(base64url){
 /* تسجيل هذا الجهاز (يتطلب أن يكون المستخدم قد سجّل دخوله عادياً بالفعل) — يُستدعى من زر
    "تسجيل هذا الجهاز" فى شاشة الإعدادات (panel-webauthn). */
 async function webauthnRegisterThisDevice(){
-  if(!webauthnSupported()){ showToast('⚠️ هذا المتصفح/الجهاز لا يدعم الدخول بالبصمة'); return; }
+  if(!webauthnSupported()){ showToast('هذا المتصفح/الجهاز لا يدعم الدخول بالبصمة'); return; }
   try{
     const optsRes = await serverFetch('/api/auth/webauthn/register-options', { method:'POST' });
     const options = await optsRes.json();
@@ -64,7 +64,7 @@ async function webauthnRegisterThisDevice(){
   }catch(e){
     console.error('[WebAuthn] فشل تسجيل الجهاز:', e);
     // المستخدم لغى نافذة البصمة نفسها (NotAllowedError) — ليست حالة خطأ حقيقية تستحق تنبيهاً مزعجاً.
-    if(e.name !== 'NotAllowedError') showToast('⚠️ تعذّر تسجيل الجهاز: ' + (e.message || 'خطأ غير متوقع'));
+    if(e.name !== 'NotAllowedError') showToast('تعذّر تسجيل الجهاز: ' + (e.message || 'خطأ غير متوقع'));
   }
 }
 

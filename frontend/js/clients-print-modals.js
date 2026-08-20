@@ -234,7 +234,7 @@ document.addEventListener('click', async e=>{
         if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
         showToast(cascade.count ? `✅ تم اعتماد العميل مع ${cascade.ok} عملية مرتبطة` : '✅ تم اعتماد العميل');
       }else{
-        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -252,7 +252,7 @@ document.addEventListener('click', async e=>{
         if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
         showToast(cascade.count ? `تم رفض التسجيل مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل');
       }else{
-        showToast('⚠️ تعذّر الرفض — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الرفض — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -275,7 +275,7 @@ document.addEventListener('click', async e=>{
   }
   if(delInvoiceId){
     const c = clients.find(x=>x.id===delInvoiceId);
-    if(!canDeleteClientRecord(c)){ showToast('🔒 غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
+    if(!canDeleteClientRecord(c)){ showToast('غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
     if(!c || !c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل'); return; }
     const invLabel = formatInvoiceNo(c.taxInvoiceNo);
     const reason = await customPrompt(`توثيقاً للمعايير المحاسبية، لا يمكن حذف رقم الفاتورة التسلسلي (${invLabel}) نهائياً أو إعادة استخدامه — سيتم حذف الفاتورة من سجل العميل "${c.name}" فقط مع الاحتفاظ بالرقم والسبب في سجل الفواتير المحذوفة. عند طباعة فاتورة جديدة لهذا العميل لاحقاً سيُمنح رقماً تسلسلياً جديداً.\nيرجى كتابة سبب الحذف (إلزامي):`, {title:'سبب حذف الفاتورة', required:true, placeholder:'اكتب سبب الحذف هنا...'});
@@ -334,7 +334,7 @@ document.addEventListener('click', async e=>{
     }
   }
   if(delId){
-    if(!canDeleteClientRecord(clients.find(c=>c.id===delId))){ showToast('🔒 غير مسموح لصلاحيتك بحذف هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
+    if(!canDeleteClientRecord(clients.find(c=>c.id===delId))){ showToast('غير مسموح لصلاحيتك بحذف هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
     if(await customConfirm('تأكيد حذف هذا السجل؟ سيُحذف أيضاً أي ترحيل مالي مرتبط به.')){
       const removedClient = clients.find(c=>c.id===delId);
       snapshotState(`حذف عميل: ${removedClient?.name || delId}`);

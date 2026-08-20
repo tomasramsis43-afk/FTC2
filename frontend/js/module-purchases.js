@@ -855,7 +855,7 @@ async function ensureServerLoginThenStart(){
         SERVER_AUTH_ROLE = normalizeRole(sessionStorage.getItem('serverAuthRole'));
       }catch(e2){ SERVER_AUTH_ROLE = 'staff'; }
       setManualOfflineMode(true);
-      showToast('⚠️ تعذّر الاتصال بالسيرفر — تم المتابعة تلقائياً بوضع العمل من الجهاز فقط');
+      showToast('تعذّر الاتصال بالسيرفر — تم المتابعة تلقائياً بوضع العمل من الجهاز فقط');
       $('#server-login-screen').style.display = 'none';
       await startApp();
       checkPendingQrLoginApproval();
@@ -1011,7 +1011,7 @@ async function checkPendingQrLoginApproval(){
       method: 'POST', headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
     });
     if(res.ok) showToast(approve ? 'تم تسجيل دخول الجهاز الآخر بحسابك ✅' : 'تم رفض طلب الدخول');
-    else showToast('⚠️ تعذّر الرد على طلب الدخول (انتهت صلاحية الكود على الأرجح)');
+    else showToast('تعذّر الرد على طلب الدخول (انتهت صلاحية الكود على الأرجح)');
   }catch(e){ console.error('[QR Login] فشل الرد على طلب الدخول:', e); }
 }
 
@@ -1028,7 +1028,7 @@ async function checkPendingQrLoginApproval(){
       showToast(result.message || 'لو الحساب موجود وعنده إيميل مسجَّل، هيوصله رابط دخول خلال دقائق');
     }catch(e){
       console.error('[MagicLink] فشل طلب رابط الدخول:', e);
-      showToast('⚠️ تعذّر إرسال الرابط، حاول لاحقاً');
+      showToast('تعذّر إرسال الرابط، حاول لاحقاً');
     }finally{
       magicBtn.disabled = false;
     }
@@ -1128,7 +1128,7 @@ $('#server-login-form').addEventListener('submit', async e=>{
         SERVER_AUTH_USERNAME = offline.username;
         SERVER_AUTH_ROLE = normalizeRole(offline.role);
         setManualOfflineMode(true);
-        showToast('⚠️ تعذّر الاتصال بالسيرفر — تم الدخول بوضع العمل من الجهاز فقط ببيانات هذا المستخدم المحفوظة محلياً');
+        showToast('تعذّر الاتصال بالسيرفر — تم الدخول بوضع العمل من الجهاز فقط ببيانات هذا المستخدم المحفوظة محلياً');
         $('#server-login-screen').style.display = 'none';
         await startApp();
         checkPendingQrLoginApproval();

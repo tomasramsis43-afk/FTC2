@@ -444,7 +444,7 @@ function downloadFilesAndOpenWhatsapp(files, numbersRaw, waText, setStatus, file
     a.click();
     a.remove();
   });
-  showToast(`✅ تم تنزيل ${filesLabel} لجهازك`);
+  showToast(`تم تنزيل ${filesLabel} لجهازك`);
   const numbers = (numbersRaw||'').split(',').map(s=>s.trim()).filter(Boolean);
   if(numbers.length){
     setStatus(`✅ تم تنزيل ${filesLabel}. جارٍ فتح محادثة واتساب لـ ${numbers.length} رقم — أرفق الملفات من مجلد التنزيلات في كل محادثة ثم أرسل.`);
@@ -642,7 +642,7 @@ $('#btn-export-report').addEventListener('click', ()=>{
 function reportEmailRecipients(){
   const to = (settings.reportEmailTo||'').trim();
   if(!to){
-    showToast('⚠️ لم يتم ضبط بريد استلام التقارير بعد — اضبطه من الإعدادات ← إرسال التقارير بالإيميل');
+    showToast('لم يتم ضبط بريد استلام التقارير بعد — اضبطه من الإعدادات ← إرسال التقارير بالإيميل');
     return null;
   }
   const cc = (settings.reportEmailCC||'').split(',').map(s=>s.trim()).filter(Boolean);
@@ -667,15 +667,15 @@ async function emailCsvReport(filename, csv, subject, summaryLines){
       body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml, attachmentBase64, attachmentName: filename, attachmentType: 'text/csv' }),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+      showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
       await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
     }else{
       const data = await res.json().catch(()=>({}));
-      showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+      showToast(`تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
     }
   }catch(e){
     console.error('فشل إرسال إيميل التقرير:', e);
-    showToast('⚠️ تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+    showToast('تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
   }
 }
 $('#btn-email-report')?.addEventListener('click', ()=>{
@@ -1444,15 +1444,15 @@ async function emailPdfReport(subject, bodyHtml, filename){
       body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml: emailBodyHtml, attachmentBase64, attachmentName: pdfFile.name, attachmentType: 'application/pdf' }),
     });
     if(res.ok){
-      showToast(`✉️ تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+      showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
       await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
     }else{
       const data = await res.json().catch(()=>({}));
-      showToast(`⚠️ تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
+      showToast(`تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
     }
   }catch(e){
     console.error('فشل إرسال إيميل التقرير:', e);
-    showToast('⚠️ تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+    showToast('تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
   }
 }
 

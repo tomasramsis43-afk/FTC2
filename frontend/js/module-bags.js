@@ -914,9 +914,9 @@ document.addEventListener('click', async e=>{
         await saveBagStock();
         await saveSettings();
         refreshEverything();
-        showToast('✅ تم اعتماد العملية');
+        showToast('تم اعتماد العملية');
       }else{
-        showToast('⚠️ تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -932,7 +932,7 @@ document.addEventListener('click', async e=>{
         refreshEverything();
         showToast('تم رفض التسجيل وحذفه');
       }else{
-        showToast('⚠️ تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
+        showToast('تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
