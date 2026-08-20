@@ -3047,3 +3047,147 @@ input[type="checkbox"]:checked::after {
   background: #fff;
   transform: translateX(-10px);
 }
+
+/* ============================================================================
+   نبض PRO — طبقة لمسات بريميم إضافية (عمق، زجاجية، لمعان، حركة ناعمة).
+   تُبنى فوق نفس متغيرات ونظام نبض الحالي، ولا تغيّر أي كلاس أو سلوك جافاسكربت،
+   فقط تُنقّح المظهر البصري لعناصر موجودة بالفعل (كروت، لوحات، أزرار، القائمة
+   الجانبية، الجداول، البادجز، المودالز).
+   ============================================================================ */
+
+:root {
+  --pro-glass-blur: blur(22px) saturate(1.35);
+  --pro-shadow-ambient: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 48px -28px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.25);
+  --pro-shadow-ambient-hover: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 30px 60px -26px color-mix(in srgb, var(--navy) 35%, transparent), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
+  --pro-glow-line: linear-gradient(90deg, transparent, color-mix(in srgb, var(--navy) 70%, transparent), color-mix(in srgb, var(--teal) 55%, transparent), transparent);
+}
+
+body:not(.dark-theme) {
+  --pro-shadow-ambient: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 20px 40px -26px rgba(32, 26, 46, 0.16), 0 2px 6px -2px rgba(32, 26, 46, 0.06);
+  --pro-shadow-ambient-hover: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 26px 50px -24px color-mix(in srgb, var(--navy) 22%, transparent), 0 2px 8px -2px rgba(32, 26, 46, 0.08);
+}
+
+/* ---------- كروت الإحصائيات: زجاجية + عمق طبقي + خط توهج علوي ---------- */
+.card,
+.close-entity-card {
+  background: var(--surface);
+  backdrop-filter: var(--pro-glass-blur);
+  -webkit-backdrop-filter: var(--pro-glass-blur);
+  box-shadow: var(--pro-shadow-ambient);
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  height: 1px;
+  width: 100%;
+  background: var(--pro-glow-line);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.card:hover,
+.close-entity-card:hover {
+  box-shadow: var(--pro-shadow-ambient-hover);
+}
+
+/* ---------- اللوحات (.panel): نفس المعاملة الزجاجية ---------- */
+.panel {
+  background: var(--surface);
+  backdrop-filter: var(--pro-glass-blur);
+  -webkit-backdrop-filter: var(--pro-glass-blur);
+  box-shadow: var(--pro-shadow-ambient);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.panel:hover {
+  box-shadow: var(--pro-shadow-ambient-hover);
+}
+
+/* ---------- الأزرار: لمعة زجاجية علوية + رفعة خفيفة عند الهوفر ---------- */
+.btn-primary,
+.btn-gold {
+  box-shadow: var(--pro-shadow-ambient), 0 4px 18px -4px color-mix(in srgb, var(--navy) 55%, transparent);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease, filter 0.12s ease;
+}
+
+.btn-primary::before,
+.btn-gold::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
+}
+
+.btn-primary:hover,
+.btn-gold:hover {
+  transform: translateY(-2px);
+}
+
+.btn-primary:active,
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+/* ---------- القائمة الجانبية: عنصر نشط بتدرّج + توهج، وحركة دخول أنعم ---------- */
+nav.tabs {
+  background: var(--sidebar-bg);
+  box-shadow: var(--pro-shadow-ambient);
+}
+
+nav.tabs button.active {
+  background: linear-gradient(135deg, var(--sidebar-active-bg) 0%, color-mix(in srgb, var(--sidebar-active-bg) 78%, var(--gold)) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 1px color-mix(in srgb, var(--sidebar-active-bg) 55%, transparent),
+    0 10px 26px -8px color-mix(in srgb, var(--sidebar-active-bg) 60%, transparent);
+}
+
+nav.tabs button:not(.active) {
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+nav.tabs button:not(.active):hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+
+/* ---------- رؤوس الجداول: خط توهج سفلي رفيع بدل الحد البسيط ---------- */
+.table-scroll thead th {
+  box-shadow: 0 1px 0 var(--border), 0 2px 8px -4px color-mix(in srgb, var(--navy) 25%, transparent);
+}
+
+thead th.sortable:hover {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--navy) 55%, transparent);
+}
+
+/* ---------- البادجز/الأختام: عمق خفيف بدل التسطيح الكامل ---------- */
+.stamp {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 6px -3px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- المودالز: عمق أعمق يميّزها كطبقة عائمة عليا ---------- */
+.modal {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 40px 80px -30px rgba(0, 0, 0, 0.6), 0 8px 24px -8px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- تفضيل الحركة المخفّضة ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .panel,
+  .btn-primary,
+  .btn-gold,
+  nav.tabs button {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .card:hover,
+  .close-entity-card:hover,
+  .btn-primary:hover,
+  .btn-gold:hover {
+    transform: none !important;
+  }
+}
