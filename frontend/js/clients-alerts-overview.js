@@ -76,7 +76,7 @@ function renderApprovalNoticesBanner(){
   if(!el) return;
   const notices = (settings.approvalNotices || []).filter(n=> n.createdBy === currentUser);
   if(!notices.length){ el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--navy); margin-bottom:10px;">
+  el.innerHTML = `<div class="panel panel-accent panel-accent-navy" style="margin-bottom:10px;">
     <h3 style="margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
       <span>🔔 نتائج اعتماد عملياتك</span>
       <button class="btn btn-ghost btn-sm" id="btn-approval-notices-clear" title="إخفاء كل هذه الإشعارات">إخفاء الكل</button>
@@ -157,7 +157,7 @@ function renderPendingApprovalsPanel(){
     el.innerHTML = '';
     return;
   }
-  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--gold);">
+  el.innerHTML = `<div class="panel panel-accent panel-accent-gold">
     <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${visiblePendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد. (حركات الخزنة/الحقائب المرتبطة بعميل معلّق تُعتمد أو تُرفض تلقائياً مع العميل من شيت العملاء)</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
@@ -323,7 +323,7 @@ function renderSmartAlerts(){
 
   window.__openAlertsCount = alerts.length;
   if(!alerts.length){ el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="panel" style="border-right:4px solid var(--red);">
+  el.innerHTML = `<div class="panel panel-accent panel-accent-red">
     <h3 style="margin:0 0 8px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> تنبيهات تحتاج انتباهك</h3>
     ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
       <span style="font-size:18px;">${a.icon}</span>

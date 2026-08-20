@@ -3562,6 +3562,16 @@ tbody tr {
   margin-top: 4px;
 }
 
+/* ---------- لوحات بشريط تمييز جانبي (بديل لتكرار inline style في JS) ---------- */
+.panel-accent {
+  border-inline-end: 4px solid var(--border);
+}
+
+.panel-accent-navy { border-inline-end-color: var(--navy); }
+.panel-accent-gold { border-inline-end-color: var(--gold); }
+.panel-accent-red { border-inline-end-color: var(--red); }
+.panel-accent-teal { border-inline-end-color: var(--teal); }
+
 /* ---------- توسيع مساحة اللمس على الموبايل (Accessibility) ---------- */
 @media (max-width: 600px) {
   .btn,

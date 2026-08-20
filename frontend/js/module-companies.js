@@ -737,7 +737,7 @@ function renderCompanies(){
     }).length;
     const notTakenCount = matchedTrainees.length - takenCount;
     return `
-      <div class="panel" id="ctrow-${t.id}" style="margin-bottom:14px; border-right:4px solid var(--gold);">
+      <div class="panel panel-accent panel-accent-gold" id="ctrow-${t.id}" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
           <div>
             <b>${escapeHtml(t.companyName)}</b> — <span class="mono">${t.date||'—'}</span>
