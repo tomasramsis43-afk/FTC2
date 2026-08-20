@@ -224,7 +224,7 @@ section.view.active {
 /* ============= HEADER (ترويسة رسمية مسطحة) ============= */
 header.top {
   position: sticky;
-  top: 12px;
+  top: 0;
   z-index: 40;
   overflow: hidden;
   isolation: isolate;
@@ -369,7 +369,7 @@ header.top p {
   header.top {
     padding: 12px 14px;
     gap: 10px;
-    top: 8px;
+    top: 0;
   }
 
   header.top h1 {
@@ -407,19 +407,19 @@ header.top p {
   max-width: none;
   width: 100%;
   margin: 0 auto;
-  padding: 16px 0 60px 36px;
+  padding: 0 0 60px 36px;
   box-sizing: border-box;
 }
 
 @media(min-width: 1600px) {
   .app {
-    padding: 16px 0 60px 4vw;
+    padding: 0 0 60px 4vw;
   }
 }
 
 @media(max-width: 600px) {
   .app {
-    padding: 10px 0 40px 10px;
+    padding: 0 0 40px 10px;
   }
 }
 
