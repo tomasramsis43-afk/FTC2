@@ -371,22 +371,24 @@ $('#supplier-form')?.addEventListener('submit', async e=>{
   const phone = $('#sup-phone').value.trim();
   const category = $('#sup-category').value.trim();
   const notes = $('#sup-notes').value.trim();
-  if(editingSupplierId){
-    const s = suppliers.find(x=>x.id===editingSupplierId);
-    if(s){
-      Object.assign(s, {name, phone, category, notes});
-      purchases.forEach(p=>{ if(p.supplierId===s.id) p.supplierName = name; });
-      await logAudit('edit','المشتريات', `تعديل بيانات المورد: ${name}`);
-      await savePurchases();
+  await withBtnLoading(e.target.querySelector('[type="submit"]'), async ()=>{
+    if(editingSupplierId){
+      const s = suppliers.find(x=>x.id===editingSupplierId);
+      if(s){
+        Object.assign(s, {name, phone, category, notes});
+        purchases.forEach(p=>{ if(p.supplierId===s.id) p.supplierName = name; });
+        await logAudit('edit','المشتريات', `تعديل بيانات المورد: ${name}`);
+        await savePurchases();
+      }
+    } else {
+      suppliers.push({id: uid(), name, phone, category, notes, createdAt: Date.now(), createdBy: currentUser});
+      await logAudit('add','المشتريات', `إضافة مورد جديد: ${name}`);
     }
-  } else {
-    suppliers.push({id: uid(), name, phone, category, notes, createdAt: Date.now(), createdBy: currentUser});
-    await logAudit('add','المشتريات', `إضافة مورد جديد: ${name}`);
-  }
-  await saveSuppliers();
-  $('#supplier-overlay').classList.remove('show');
-  renderPurchases();
-  showToast('تم حفظ بيانات المورد');
+    await saveSuppliers();
+    $('#supplier-overlay').classList.remove('show');
+    renderPurchases();
+    showToast('تم حفظ بيانات المورد');
+  });
 });
 
 $('#purchase-form')?.addEventListener('submit', async e=>{
