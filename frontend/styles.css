@@ -3374,3 +3374,199 @@ tbody tr {
     transform: none !important;
   }
 }
+
+/* ============================================================
+   طبقة تحسينات إضافية — Skeleton / Tooltip / Alert / Btn Loading
+   إضافات آمنة لا تمس أي منطق، فقط عناصر UI ناقصة في النظام الحالي
+   ============================================================ */
+
+/* ---------- Skeleton loading (بديل احترافي لشاشات "جاري التحميل") ---------- */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-alt) 90%, var(--border));
+  border-radius: 8px;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-solid) 60%, transparent), transparent);
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-line {
+  height: 12px;
+  margin: 6px 0;
+  border-radius: 6px;
+}
+
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-80 { width: 80%; }
+
+.skeleton-row td {
+  padding: 14px 12px;
+}
+
+/* شاشة تحميل التطبيق العامة (Boot / بعد تسجيل الدخول) بهوية نبض */
+#app-loading-overlay {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+.nabd-boot-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid color-mix(in srgb, var(--gold) 22%, transparent);
+  border-top-color: var(--gold);
+  animation: appSpin 0.9s linear infinite;
+}
+
+@keyframes appSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Tooltip بسيط عبر data-tooltip ---------- */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::before,
+[data-tooltip]::after {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  z-index: 80;
+}
+
+[data-tooltip]::before {
+  content: attr(data-tooltip);
+  background: var(--sidebar-bg, #171b2e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px -6px rgba(0, 0, 0, 0.4);
+}
+
+[data-tooltip]::after {
+  content: "";
+  bottom: calc(100% + 3px);
+  border: 5px solid transparent;
+  border-top-color: var(--sidebar-bg, #171b2e);
+}
+
+[data-tooltip]:hover::before,
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::before,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---------- Alert / Banner (تنبيهات ثابتة داخل الصفحة، بخلاف الـtoast العابر) ---------- */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  margin: 0 0 14px;
+}
+
+.alert .alert-icon {
+  flex: none;
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.alert-info {
+  background: color-mix(in srgb, var(--navy) 10%, transparent);
+  border-color: color-mix(in srgb, var(--navy) 25%, transparent);
+  color: var(--text);
+}
+
+.alert-success {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--text);
+}
+
+.alert-warning {
+  background: color-mix(in srgb, #e0a72f 14%, transparent);
+  border-color: color-mix(in srgb, #e0a72f 32%, transparent);
+  color: var(--text);
+}
+
+.alert-danger {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--text);
+}
+
+/* ---------- زر بحالة تحميل (بدون تغيير أي منطق JS — فقط class اختيارية .is-loading) ---------- */
+.btn.is-loading {
+  color: transparent !important;
+  pointer-events: none;
+  position: relative;
+}
+
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--on-accent-text, #fff) 35%, transparent);
+  border-top-color: var(--on-accent-text, #fff);
+  animation: appSpin 0.7s linear infinite;
+}
+
+.btn-ghost.is-loading::after,
+.btn-danger.is-loading::after {
+  border-color: color-mix(in srgb, var(--text) 30%, transparent);
+  border-top-color: var(--text);
+}
+
+/* ---------- تحسين حالة empty-state ---------- */
+.empty-state .big {
+  opacity: 0.55;
+}
+
+.empty-state-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ---------- توسيع مساحة اللمس على الموبايل (Accessibility) ---------- */
+@media (max-width: 600px) {
+  .btn,
+  nav.tabs button,
+  .table-scroll thead th.sortable {
+    min-height: 40px;
+  }
+}

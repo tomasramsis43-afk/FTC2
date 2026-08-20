@@ -512,9 +512,9 @@ function showAppLoadingOverlay(){
     if(_appLoadingOverlay) return;
     _appLoadingOverlay = document.createElement('div');
     _appLoadingOverlay.id = 'app-loading-overlay';
-    _appLoadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:999990;background:#060e1c;color:#eaf2ff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;direction:rtl;';
+    _appLoadingOverlay.style.cssText = 'position:fixed;inset:0;z-index:999990;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;direction:rtl;';
     const spinner = document.createElement('div');
-    spinner.style.cssText = 'width:44px;height:44px;border:4px solid rgba(56,189,248,.25);border-top-color:#22d3ee;border-radius:50%;animation:appSpin .9s linear infinite;';
+    spinner.className = 'nabd-boot-spinner';
     const label = document.createElement('div');
     label.style.cssText = 'font-size:15px;opacity:.9;';
     label.textContent = 'جاري تحميل البيانات...';
