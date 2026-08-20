@@ -1394,8 +1394,14 @@ function openVaultModal(id){
 $('#vf-cancel').addEventListener('click', ()=>{ $('#vault-overlay').classList.remove('show'); editingVaultId=null; });
 $('#vault-overlay').addEventListener('click', e=>{ if(e.target.id==='vault-overlay'){ $('#vault-overlay').classList.remove('show'); editingVaultId=null; } });
 
+let _vaultFormBusy = false;
 $('#vault-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(_vaultFormBusy) return; // منع الضغط المزدوج على "حفظ" أثناء عملية حفظ سابقة لم تنتهِ بعد
+  _vaultFormBusy = true;
+  const _vfSubmitBtn = e.target.querySelector('[type="submit"]');
+  if(_vfSubmitBtn) _vfSubmitBtn.classList.add('is-loading');
+  try{
   const rawType = $('#vf-type').value;
   const isIn = rawType==='in';
   const isReturn = rawType==='return';
@@ -1540,6 +1546,10 @@ $('#vault-form').addEventListener('submit', async e=>{
     await printReturnInvoice(savedTx.id);
   }else if(!wasVaultEdit && isOut){
     await printExpenseVoucher(savedTx.id);
+  }
+  }finally{
+    _vaultFormBusy = false;
+    if(_vfSubmitBtn) _vfSubmitBtn.classList.remove('is-loading');
   }
 });
 

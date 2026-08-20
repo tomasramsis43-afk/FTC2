@@ -985,8 +985,14 @@ document.addEventListener('click', async e=>{
 });
 $('#bp-cancel').addEventListener('click', ()=>{ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; });
 $('#bag-overlay').addEventListener('click', e=>{ if(e.target.id==='bag-overlay'){ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; } });
+let _bagPurchaseFormBusy = false;
 $('#bag-purchase-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(_bagPurchaseFormBusy) return;
+  _bagPurchaseFormBusy = true;
+  const _bpSubmitBtn = e.target.querySelector('[type="submit"]');
+  if(_bpSubmitBtn) _bpSubmitBtn.classList.add('is-loading');
+  try{
   const idx = clients.findIndex(c=>c.id===bagPurchaseTargetId);
   if(idx>-1){
     snapshotState(`تسجيل شراء حقيبة للعميل: ${clients[idx].name}`);
@@ -1012,6 +1018,10 @@ $('#bag-purchase-form').addEventListener('submit', async e=>{
   bagPurchaseTargetId = null;
   renderBags(); renderTable(); renderCourses(); renderMissingCourse();
   showToast('تم تسجيل شراء الحقيبة');
+  }finally{
+    _bagPurchaseFormBusy = false;
+    if(_bpSubmitBtn) _bpSubmitBtn.classList.remove('is-loading');
+  }
 });
 
 /* خانة الشراء السريعة بجانب "مطلوب شراء" في شيت العملاء وشيت الدورات (بكل تبويباته):

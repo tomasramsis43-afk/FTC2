@@ -479,8 +479,14 @@ $('#sf-cancel').addEventListener('click', closeSessionModal);
 $('#session-overlay').addEventListener('click', e=>{ if(e.target.id==='session-overlay') closeSessionModal(); });
 $('#btn-add-session').addEventListener('click', ()=>openSessionModal(null));
 
+let _sessionFormBusy = false;
 $('#session-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(_sessionFormBusy) return;
+  _sessionFormBusy = true;
+  const _sfSubmitBtn = e.target.querySelector('[type="submit"]');
+  if(_sfSubmitBtn) _sfSubmitBtn.classList.add('is-loading');
+  try{
   const data = {
     courseNumber: $('#sf-num').value.trim(),
     courseType: $('#sf-type').value,
@@ -510,6 +516,10 @@ $('#session-form').addEventListener('submit', async e=>{
   await saveCourseSessions();
   await logAudit(wasEdit?'edit':'add','الدورات', `${wasEdit?'تم تعديل':'تمت إضافة'} الدورة رقم ${data.courseNumber}`);
   closeSessionModal(); renderCourses(); renderTable();
+  }finally{
+    _sessionFormBusy = false;
+    if(_sfSubmitBtn) _sfSubmitBtn.classList.remove('is-loading');
+  }
 });
 
 $('#courses-sessions-list').addEventListener('click', async e=>{

@@ -1002,8 +1002,14 @@ function recalcCtrSplit(){
 $('#ctr-total').addEventListener('input', recalcCtrSplit);
 $('#ctr-bag-purchased').addEventListener('change', recalcCtrSplit);
 
+let _ctraineeFormBusy = false;
 $('#ctrainee-form').addEventListener('submit', async e=>{
   e.preventDefault();
+  if(_ctraineeFormBusy) return;
+  _ctraineeFormBusy = true;
+  const _ctSubmitBtn = e.target.querySelector('[type="submit"]');
+  if(_ctSubmitBtn) _ctSubmitBtn.classList.add('is-loading');
+  try{
   const t = companyTransfers.find(x=>x.id===ctraineeTargetTransferId);
   if(!t){ showToast('تعذّر تحديد الحوالة'); return; }
   const clientId = $('#ctr-id').value.trim();
@@ -1147,6 +1153,10 @@ $('#ctrainee-form').addEventListener('submit', async e=>{
   renderCompanies(); renderVault(); renderTable();
   if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
   showToast('تمت إضافة المتدرب');
+  }finally{
+    _ctraineeFormBusy = false;
+    if(_ctSubmitBtn) _ctSubmitBtn.classList.remove('is-loading');
+  }
 });
 
 document.addEventListener('change', async e=>{

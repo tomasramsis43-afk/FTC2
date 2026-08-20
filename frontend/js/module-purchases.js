@@ -391,8 +391,14 @@ $('#supplier-form')?.addEventListener('submit', async e=>{
   });
 });
 
+let _purchaseFormBusy = false;
 $('#purchase-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
+  if(_purchaseFormBusy) return; // منع الضغط المزدوج أثناء حفظ سابق لم ينتهِ بعد
+  _purchaseFormBusy = true;
+  const _puSubmitBtn = e.target.querySelector('[type="submit"]');
+  if(_puSubmitBtn) _puSubmitBtn.classList.add('is-loading');
+  try{
   const supplierId = $('#pu-supplier').value;
   const supplier = suppliers.find(s=>s.id===supplierId);
   if(!supplier){ showToast('اختر مورداً صحيحاً'); return; }
@@ -504,6 +510,10 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
   $('#purchase-overlay').classList.remove('show');
   renderPurchases();
   showToast('تم حفظ فاتورة الشراء');
+  }finally{
+    _purchaseFormBusy = false;
+    if(_puSubmitBtn) _puSubmitBtn.classList.remove('is-loading');
+  }
 });
 
 $('#btn-export-purchases')?.addEventListener('click', ()=>{
