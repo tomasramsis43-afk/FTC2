@@ -3297,6 +3297,54 @@ tbody tr {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--red) 50%, transparent);
 }
 
+/* ---------- أداء الموبايل: إيقاف الزجاجية (backdrop-filter) على الشاشات الصغيرة ----------
+   الـ blur/saturate مكلف على معالجات GPU الضعيفة وبيسبب تهنيج (jank) في السكرول على
+   موبايلات متوسطة/قديمة، خصوصًا مع تكرار العنصر (كروت الجدول، quickstats، cfo-panel).
+   تحت 768px نطفي الـ backdrop-filter تمامًا ونعوّض العمق بخلفية شبه-معتمة + نفس الظل
+   الطبقي، فيفضل الشكل قريب جدًا من البريميم من غير تكلفة الرندر. */
+@media (max-width: 768px) {
+  .card,
+  .close-entity-card,
+  .panel,
+  .cfo-hero-item,
+  .cfo-panel,
+  .user-pill,
+  .quickstats div,
+  .toast {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+  }
+
+  .login-box,
+  .login-container {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: color-mix(in srgb, var(--auth-panel) 97%, var(--surface-solid));
+  }
+
+  /* الظل الطبقي المزدوج (طبقتين+) أثقل من الفلات وبيتحسّب لكل عنصر مرئي أثناء
+     السكرول، فنبسّطه لطبقة واحدة فقط على الموبايل مع الحفاظ على نفس اتجاه العمق */
+  .card,
+  .close-entity-card,
+  .panel,
+  .cfo-hero-item,
+  .cfo-panel,
+  .user-pill,
+  .quickstats div {
+    box-shadow: 0 10px 20px -12px rgba(0, 0, 0, 0.35), 0 1px 0 var(--border);
+  }
+
+  .card:hover,
+  .close-entity-card:hover,
+  .panel:hover,
+  .cfo-hero-item:hover,
+  .cfo-panel:hover,
+  .quickstats div:hover {
+    box-shadow: 0 14px 26px -12px rgba(0, 0, 0, 0.4), 0 1px 0 var(--border);
+  }
+}
+
 /* ---------- تفضيل الحركة المخفّضة ---------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
