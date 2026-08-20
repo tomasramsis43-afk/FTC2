@@ -58,13 +58,15 @@ $('#btn-add-account')?.addEventListener('click', async ()=>{
   if(!code){ showToast('أدخل رمز الحساب'); return; }
   if(!name){ showToast('أدخل اسم الحساب'); return; }
   if(chartOfAccounts.some(a=>a.code===code)){ showToast('يوجد حساب آخر بنفس الرمز'); return; }
-  chartOfAccounts.push({ id: uid(), code, name, type });
-  await saveChartOfAccounts();
-  await logAudit('add','المحاسبة', `تمت إضافة حساب لدليل الحسابات: ${code} — ${name} (${accountTypeLabel(type)})`);
-  $('#coa-code').value=''; $('#coa-name').value='';
-  showToast('تمت إضافة الحساب');
-  renderChartOfAccountsTable();
-  refreshAccountSelectOptions();
+  await withBtnLoading($('#btn-add-account'), async ()=>{
+    chartOfAccounts.push({ id: uid(), code, name, type });
+    await saveChartOfAccounts();
+    await logAudit('add','المحاسبة', `تمت إضافة حساب لدليل الحسابات: ${code} — ${name} (${accountTypeLabel(type)})`);
+    $('#coa-code').value=''; $('#coa-name').value='';
+    showToast('تمت إضافة الحساب');
+    renderChartOfAccountsTable();
+    refreshAccountSelectOptions();
+  });
 });
 $('#coa-list-body')?.addEventListener('click', async e=>{
   const btn = e.target.closest('[data-coa-del]');
@@ -128,6 +130,7 @@ $('#btn-de-addline')?.addEventListener('click', ()=>{
 });
 $('#de-date') && ($('#de-date').value = todayISO());
 $('#btn-de-save')?.addEventListener('click', async ()=>{
+  const btn = $('#btn-de-save');
   if(!chartOfAccounts.length){ showToast('أضف حسابات لدليل الحسابات أولاً'); return; }
   const date = $('#de-date').value || todayISO();
   const description = $('#de-desc').value.trim();
@@ -143,13 +146,15 @@ $('#btn-de-save')?.addEventListener('click', async ()=>{
   const totalDebit = lines.reduce((s,l)=>s+l.debit,0);
   const totalCredit = lines.reduce((s,l)=>s+l.credit,0);
   if(Math.abs(totalDebit-totalCredit) >= 0.01){ showToast('القيد غير متوازن — يجب أن يتساوى إجمالي المدين مع إجمالي الدائن'); return; }
-  journalDE.push({ id: uid(), createdAt: Date.now(), date, description, lines });
-  await saveJournalDE();
-  await logAudit('add','المحاسبة', `تمت إضافة قيد يومية: ${description} بمبلغ ${fmt(totalDebit)} ﷼ (${lines.length} سطور)`);
-  $('#de-desc').value = '';
-  resetDELinesForm();
-  showToast('تم حفظ القيد اليومية');
-  renderDoubleEntryModule();
+  await withBtnLoading(btn, async ()=>{
+    journalDE.push({ id: uid(), createdAt: Date.now(), date, description, lines });
+    await saveJournalDE();
+    await logAudit('add','المحاسبة', `تمت إضافة قيد يومية: ${description} بمبلغ ${fmt(totalDebit)} ﷼ (${lines.length} سطور)`);
+    $('#de-desc').value = '';
+    resetDELinesForm();
+    showToast('تم حفظ القيد اليومية');
+    renderDoubleEntryModule();
+  });
 });
 function filteredJournalDE(){
   const q = ($('#de-filter-search')?.value || '').trim().toLowerCase();

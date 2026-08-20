@@ -11,6 +11,25 @@
 const $ = s => document.querySelector(s);
 const $all = s => document.querySelectorAll(s);
 
+/* ------------------------------------------------------------
+   منع الضغط المزدوج على أزرار الحفظ/الإرسال غير المتزامنة، وإظهار
+   حالة تحميل واضحة (spinner داخل الزر) أثناء التنفيذ. لا يغيّر أي
+   منطق — فقط يعطّل الزر مؤقتاً ويعيده لحالته بعد انتهاء العملية.
+   الاستخدام: withBtnLoading(btnEl, async () => { ... })
+   ------------------------------------------------------------ */
+async function withBtnLoading(btn, fn){
+  if(!btn) return fn();
+  if(btn.classList.contains('is-loading')) return; // منع الضغط المزدوج
+  btn.classList.add('is-loading');
+  btn.disabled = true;
+  try{
+    return await fn();
+  } finally {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+  }
+}
+
 // ضبط تلقائي للمسافة اللي تلزق عندها القائمة الجانبية (nav.tabs) أسفل الهيدر (header.top)،
 // عشان لما تعمل سكرول ميدخلوش في بعض. ارتفاع الهيدر مش ثابت (بيتغيّر حسب quickstats ولفّ
 // الأزرار على الشاشات الضيقة)، فبنقيسه فعليًا ونحدّث متغيّر CSS --sidebar-sticky-top بيه.

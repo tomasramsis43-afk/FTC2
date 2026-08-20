@@ -1396,15 +1396,17 @@ $('#btn-add-journal')?.addEventListener('click', async ()=>{
   if(type!=='readj' && amount<=0){ showToast('أدخل مبلغاً صحيحاً أكبر من صفر'); return; }
   if(type==='readj' && amount===0){ showToast('أدخل قيمة التسوية (يمكن أن تكون سالبة)'); return; }
   if(!description){ showToast('أدخل بياناً موجزاً لهذا القيد'); return; }
-  const entry = { id: uid(), createdAt: Date.now(), type, date, amount, description };
-  journalEntries.push(entry);
-  const posted = autoPostLegacyEntry(entry);
-  await saveJournalEntries();
-  if(posted) await saveJournalDE();
-  await logAudit('add','المحاسبة', `تمت إضافة قيد يدوي (${$('#jf-type').selectedOptions[0].textContent}): ${description} بمبلغ ${fmt(amount)} ﷼${posted ? ' — ورُحّل تلقائياً لدليل الحسابات' : ''}`);
-  $('#jf-amount').value=''; $('#jf-desc').value='';
-  showToast(posted ? 'تمت إضافة القيد وترحيله تلقائياً للقيد المزدوج' : 'تمت إضافة القيد');
-  renderAccounting();
+  await withBtnLoading($('#btn-add-journal'), async ()=>{
+    const entry = { id: uid(), createdAt: Date.now(), type, date, amount, description };
+    journalEntries.push(entry);
+    const posted = autoPostLegacyEntry(entry);
+    await saveJournalEntries();
+    if(posted) await saveJournalDE();
+    await logAudit('add','المحاسبة', `تمت إضافة قيد يدوي (${$('#jf-type').selectedOptions[0].textContent}): ${description} بمبلغ ${fmt(amount)} ﷼${posted ? ' — ورُحّل تلقائياً لدليل الحسابات' : ''}`);
+    $('#jf-amount').value=''; $('#jf-desc').value='';
+    showToast(posted ? 'تمت إضافة القيد وترحيله تلقائياً للقيد المزدوج' : 'تمت إضافة القيد');
+    renderAccounting();
+  });
 });
 $('#acc-journal-body')?.addEventListener('click', async e=>{
   const btn = e.target.closest('[data-jdel]');
