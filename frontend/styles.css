@@ -3228,6 +3228,50 @@ tbody tr {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 6px -3px rgba(0, 0, 0, 0.25);
 }
 
+/* ---------- لوحة CFO: كروت زجاجية بعمق موحّد مع باقي الهوية ---------- */
+.cfo-hero-item,
+.cfo-panel {
+  background: var(--surface);
+  backdrop-filter: var(--pro-glass-blur);
+  -webkit-backdrop-filter: var(--pro-glass-blur);
+  box-shadow: var(--pro-shadow-ambient);
+}
+
+.cfo-hero-item:hover,
+.cfo-panel:hover {
+  box-shadow: var(--pro-shadow-ambient-hover);
+}
+
+.cfo-hero-icon {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 12px -2px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.cfo-tab-btn.active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 18px -6px color-mix(in srgb, var(--gold) 55%, transparent);
+}
+
+/* ---------- حلقة إتمام الإغلاق الشهري: توهج أوضح خلف النسبة ---------- */
+.close-ring-wrap {
+  filter: drop-shadow(0 4px 14px color-mix(in srgb, var(--navy) 25%, transparent));
+}
+
+/* ---------- القوائم المنبثقة (overflow / row-menu): طبقة عائمة أعمق ---------- */
+.overflow-menu,
+.row-menu-panel {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 30px 60px -24px rgba(0, 0, 0, 0.55), 0 4px 14px -6px rgba(0, 0, 0, 0.3);
+}
+
+.overflow-menu .btn,
+.row-menu-panel .btn {
+  transition: background 0.15s ease, color 0.15s ease, padding-inline-start 0.15s ease;
+}
+
+/* ---------- زر التبديل الجانبي وأزرار الأيقونات: عمق موحّد عند الهوفر ---------- */
+.icon-btn:hover,
+.nav-collapse-toggle:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
 /* ---------- تفضيل الحركة المخفّضة ---------- */
 @media (prefers-reduced-motion: reduce) {
   .card,
@@ -3237,7 +3281,9 @@ tbody tr {
   nav.tabs button,
   .toolbar input,
   .toolbar select,
-  .login-box .seal {
+  .login-box .seal,
+  .cfo-hero-item,
+  .cfo-panel {
     transition: none !important;
     animation: none !important;
   }
@@ -3247,7 +3293,9 @@ tbody tr {
   .btn-primary:hover,
   .btn-gold:hover,
   .toolbar input:focus,
-  .toolbar select:focus {
+  .toolbar select:focus,
+  .cfo-hero-item:hover,
+  .cfo-panel:hover {
     transform: none !important;
   }
 }
