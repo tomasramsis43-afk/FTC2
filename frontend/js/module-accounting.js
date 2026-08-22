@@ -283,9 +283,35 @@ function renderTrialBalanceDE2(){
   }).join('');
   tbody.innerHTML = (rowsHtml || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">لا توجد قيود يومية مسجّلة بعد</td></tr>`)
     + (active.length ? `<tr style="font-weight:800; border-top:2px solid var(--navy);"><td colspan="3">الإجمالي</td><td class="mono">${fmt(totalDebit)}</td><td class="mono">${fmt(totalCredit)}</td></tr>` : '');
+  // تحقق فعلي (وليس عرض بصري فقط) من توازن الدفتر بالكامل: كانت الشاشة تعرض الإجماليين جنباً
+  // إلى جنب فقط، فلو حصل خلل (بيانات مستوردة، باج قديم، تعديل يدوي مباشر في الداتابيز) كان
+  // يمر بصمت تامة إلا لو انتبه أحد للفرق الرقمي بعينيه. الآن تنبيه واضح لا يمكن تجاهله.
+  const banner = $('#tb2-imbalance-banner');
+  const grandDiff = Math.abs(totalDebit - totalCredit);
+  if(banner){
+    if(grandDiff >= 0.01){
+      banner.style.display = '';
+      banner.innerHTML = `⚠️ ميزان المراجعة غير متزن! إجمالي المدين ${fmt(totalDebit)} لا يساوي إجمالي الدائن ${fmt(totalCredit)} — الفرق ${fmt(grandDiff)} ﷼. هذا يشير لقيد تالف أو بيانات مستوردة بشكل غير صحيح ويجب مراجعته فوراً.`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
 }
 $('#tb2-asof')?.addEventListener('change', renderTrialBalanceDE2);
 function accountByCode(code){ return chartOfAccounts.find(a=>a.code===code); }
+/* حارس توازن إلزامي قبل ترحيل أي قيد تلقائي: القيود اليدوية (الفورم) تُرفض عند عدم التوازن
+   قبل الحفظ، لكن الترحيل التلقائي (فواتير المشتريات/المبيعات/الدورات) كان يدفع سطوره لـ
+   journalDE مباشرة بثقة كاملة أن البناء صحيح رياضياً، من غير أي تحقق فعلي وقت التنفيذ. لو
+   حصل يوماً خلل في البيانات المصدر (مثلاً total لا يساوي subtotal+taxAmount في فاتورة شراء
+   أُدخلت يدوياً بشكل غير متسق) كان القيد المختل يدخل الدفاتر الرسمية بصمت تام. الآن أي قيد
+   تلقائي غير متزن (فرق >= 0.01) يُرفض ولا يُنشأ إطلاقاً، ويُسجَّل بسجل التدقيق ليُراجَع يدوياً
+   بدل أن يفسد ميزان المراجعة (Trial Balance) بصمت. */
+function assertBalancedLines(lines){
+  if(!lines || !lines.length) return false;
+  let debit=0, credit=0;
+  lines.forEach(l=>{ debit += num(l.debit); credit += num(l.credit); });
+  return Math.abs(debit-credit) < 0.01;
+}
 const LEGACY_JOURNAL_AUTO_MAP = {
   fixedasset:   { debit:'1500', credit:'1900' }, // إضافة أصل ثابت: مدين الأصول الثابتة / دائن تسويات معلّق (مصدر التمويل غير معروف تلقائياً)
   depreciation: { debit:'5100', credit:'1590' }, // قيد إهلاك: مدين مصروف الإهلاك / دائن مجمع الإهلاك
@@ -315,6 +341,10 @@ function autoPostLegacyEntry(j){
   if(j.linkedDEId) return false;
   const lines = buildAutoDELinesForLegacy(j);
   if(!lines) return false;
+  if(!assertBalancedLines(lines)){
+    logAudit('edit','المحاسبة', `⚠️ تعذّر الترحيل التلقائي: قيد يدوي قديم "${j.description||''}" غير متزن — تحتاج مراجعة يدوية`);
+    return false;
+  }
   const deEntry = { id: uid(), createdAt: Date.now(), date: j.date, description: `[ترحيل تلقائي] ${j.description||''}`, lines, sourceJournalEntryId: j.id, isAuto: true };
   journalDE.push(deEntry);
   j.linkedDEId = deEntry.id;
@@ -398,6 +428,10 @@ function autoPostPurchase(p){
   if(p.linkedDEId) return false;
   const lines = buildDELinesForPurchase(p);
   if(!lines || num(p.total)<=0) return false;
+  if(!assertBalancedLines(lines)){
+    logAudit('edit','المحاسبة', `⚠️ تعذّر الترحيل التلقائي: فاتورة شراء ${p.invoiceNo||''} غير متزنة (الإجمالي ${p.total} لا يساوي الفرعي+الضريبة) — تحتاج مراجعة يدوية`);
+    return false;
+  }
   const entry = { id: uid(), createdAt: Date.now(), date: p.date, description: `[ترحيل تلقائي] فاتورة شراء ${p.invoiceNo||''} — ${p.supplierName||''}`, lines, sourcePurchaseId: p.id, isAuto: true };
   journalDE.push(entry);
   p.linkedDEId = entry.id;
@@ -408,9 +442,9 @@ function autoPostPurchase(p){
 function buildDELinesForManualSale(m){
   const arAcc = accountByCode('1100'), revAcc = accountByCode('4000'), vatAcc = accountByCode('2100');
   if(!arAcc || !revAcc || !vatAcc) return null;
-  const total = num(m.total);
-  const vat = vatFromGross(total);
-  const net = total - vat;
+  const total = roundMoney(num(m.total));
+  const vat = vatFromGross(total); // مُقرَّبة بالفعل داخل vatFromGross
+  const net = roundMoney(total - vat);
   const lines = [{accountId:arAcc.id, debit:total, credit:0}, {accountId:revAcc.id, debit:0, credit:net}];
   if(vat>0.004) lines.push({accountId:vatAcc.id, debit:0, credit:vat});
   return lines;
@@ -419,6 +453,10 @@ function autoPostManualSale(m){
   if(m.linkedDEId) return false;
   const lines = buildDELinesForManualSale(m);
   if(!lines || num(m.total)<=0) return false;
+  if(!assertBalancedLines(lines)){
+    logAudit('edit','المحاسبة', `⚠️ تعذّر الترحيل التلقائي: فاتورة مبيعات يدوية رقم ${formatManualSalesInvoiceNo(m.invoiceNo||0)} غير متزنة — تحتاج مراجعة يدوية`);
+    return false;
+  }
   const entry = { id: uid(), createdAt: Date.now(), date: m.date, description: `[ترحيل تلقائي] فاتورة مبيعات يدوية رقم ${formatManualSalesInvoiceNo(m.invoiceNo||0)}${m.name?(' — '+m.name):''}`, lines, sourceManualSalesId: m.id, isAuto: true };
   journalDE.push(entry);
   m.linkedDEId = entry.id;
@@ -429,9 +467,9 @@ function autoPostManualSale(m){
 function buildDELinesForCourseInvoice(c){
   const arAcc = accountByCode('1100'), revAcc = accountByCode('4000'), vatAcc = accountByCode('2100');
   if(!arAcc || !revAcc || !vatAcc) return null;
-  const total = num(c.receiptActualValue);
-  const vat = courseInvoiceVat(c.receiptActualValue);
-  const net = total - vat;
+  const total = roundMoney(num(c.receiptActualValue));
+  const vat = courseInvoiceVat(total); // مُقرَّبة بالفعل داخل vatFromGross
+  const net = roundMoney(total - vat);
   const lines = [{accountId:arAcc.id, debit:total, credit:0}, {accountId:revAcc.id, debit:0, credit:net}];
   if(vat>0.004) lines.push({accountId:vatAcc.id, debit:0, credit:vat});
   return lines;
@@ -479,6 +517,10 @@ function autoPostCourseInvoice(c){
   if(clientHasUnsettledCash(c)) return false;
   const lines = buildDELinesForCourseInvoice(c);
   if(!lines) return false;
+  if(!assertBalancedLines(lines)){
+    logAudit('edit','المحاسبة', `⚠️ تعذّر الترحيل التلقائي: فاتورة دورة ${c.invoice||''} — ${c.name||''} غير متزنة — تحتاج مراجعة يدوية`);
+    return false;
+  }
   const entry = { id: uid(), createdAt: Date.now(), date: c.receiptIssueDate, description: `[ترحيل تلقائي] فاتورة دورة ${c.invoice||''} — ${c.name||''}`, lines, sourceClientId: c.id, isAuto: true };
   journalDE.push(entry);
   c.courseInvoiceDEId = entry.id;
