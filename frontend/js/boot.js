@@ -1,15 +1,15 @@
-// FTC2 — تحميل منطق صلاحية التثقيف الصحي بعد تحميل وحدات التطبيق الأساسية.
+// FTC2 — تحميل منطق صلاحية التثقيف الصحي وقواعد دورة الحقيبة.
 // يتم التحميل ديناميكياً حتى لا نغيّر ترتيب وحدات النظام الحالية أو نكسر الإقلاع.
-(function loadHealthEducationModules(){
+(function loadBusinessRuleModules(){
   try{
-    ['health-education-validity.js','health-education-ui.js'].forEach(file=>{
+    ['health-education-validity.js','health-education-ui.js','bag-workflow.js'].forEach(file=>{
       const s = document.createElement('script');
       s.src = 'js/' + file;
       s.defer = false;
       s.async = false;
       document.head.appendChild(s);
     });
-  }catch(e){ console.error('[HealthEducation] Failed to load modules:', e); }
+  }catch(e){ console.error('[BusinessRules] Failed to load modules:', e); }
 })();
 
 // دخول بمسح الكود (QR، زي واتساب ويب): لو فُتح هذا الرابط من مسح كود QR ظاهر على جهاز آخر
@@ -97,72 +97,4 @@ function autoSignInLocalUser(){
 }
 $('#btn-lang-toggle').addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
-});
-$('#btn-theme-toggle').addEventListener('click', async ()=>{
-  settings.darkMode = !settings.darkMode;
-  // الثيمات المتعددة أُلغيت — هوية واحدة "نبض" فقط، فالزر يبدّل الوضع
-  // الليلي/النهاري دائماً بلا أي شرط.
-  applyTheme(settings.darkMode);
-  await saveSettings();
-});
-$('#btn-sound-toggle').addEventListener('click', async ()=>{
-  settings.soundEnabled = !settings.soundEnabled;
-  applySoundIcon();
-  if(settings.soundEnabled) SoundFX.click();
-  await saveSettings();
-});
-// اختصار كيبورد Alt+L لتسجيل خروج سريع — مفيد للأجهزة المشتركة بين عدة موظفين (كشك استقبال
-// مثلاً) لتبديل المستخدم بسرعة دون الحاجة للبحث عن الزر داخل القائمة المنسدلة فى كل مرة.
-document.addEventListener('keydown', e=>{
-  if(e.altKey && (e.key === 'l' || e.key === 'L')){
-    const wrap = document.getElementById('app-wrap');
-    const logoutBtn = $('#btn-logout');
-    if(wrap && wrap.style.display !== 'none' && logoutBtn){
-      e.preventDefault();
-      logoutBtn.click();
-    }
-  }
-});
-$('#btn-logout').addEventListener('click', async ()=>{
-  if(await customConfirm('تأكيد تسجيل الخروج؟')){
-    // التأكد من رفع كل البيانات قبل تسجيل الخروج: ننتظر اكتمال الحفظ الجاري، ونرفع أي
-    // تعديلات معلّقة، ونتحقق ألا يتبقى شيء غير مرفوع. لو بقي شيء (انقطاع اتصال مثلاً)
-    // نُعلم المستخدم ونترك له القرار — البيانات محفوظة على الجهاز وستُرفع تلقائياً لاحقاً.
-    showAppLoadingOverlay();
-    setAppLoadingOverlayText('جاري التأكد من رفع كل البيانات إلى السيرفر...');
-    let verdict = null;
-    try{ verdict = await verifyAllDataUploadedBeforeLogout(); }catch(e){ console.error('[Finance] فشل فحص المزامنة قبل تسجيل الخروج', e); }
-    hideAppLoadingOverlay();
-    if(verdict && !verdict.allSynced){
-      const count = (verdict.kvPending||0) + (verdict.recPending||0);
-      const offlineMsg = verdict.offline ? ' (لا يوجد اتصال بالسيرفر حالياً)' : '';
-      const inFlightMsg = verdict.stillInFlight ? ' (هناك حفظ جارٍ لم يكتمل)' : '';
-      const warnMsg = 'لا تزال هناك بيانات لم تُرفع إلى السيرفر بعد' + offlineMsg + inFlightMsg +
-        (count > 0 ? ' — عدد التعديلات المعلّقة: ' + count : '') + '.' +
-        '\n\nهذه البيانات محفوظة على هذا الجهاز وستُرفع تلقائياً عند عودة الاتصال أو تسجيل الدخول من جديد — لكنها لن تكون متاحة من أجهزة أخرى حتى اكتمال الرفع.' +
-        '\n\nهل تريد تسجيل الخروج الآن على أي حال؟';
-      if(!await customConfirm(warnMsg, 'تعديلات لم تُرفع بعد')){
-        return; // المستخدم اختار البقاء حتى اكتمال الرفع
-      }
-    }
-    try{
-      await fetch(API_BASE + '/api/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
-      });
-    }catch(e){ /* حتى لو فشل الاتصال، نكمّل تسجيل الخروج محلياً بالأسفل */ }
-    try{ if(typeof disconnectRealtimeEvents==='function') disconnectRealtimeEvents(); }catch(e){ /* لا يمنع إكمال تسجيل الخروج */ }
-    currentUser = null;
-    currentUserRole = 'staff';
-    SERVER_AUTH_TOKEN = null;
-    SERVER_AUTH_USERNAME = null;
-    SERVER_AUTH_ROLE = null;
-    try{
-      sessionStorage.removeItem('serverAuthToken');
-      sessionStorage.removeItem('serverAuthUsername');
-      sessionStorage.removeItem('serverAuthRole');
-    }catch(e){ console.error('[Finance] Failed to clear session on logout:', e); }
-    $('#app-wrap').style.display = 'none';
-    showServerLoginScreen(null);
-  }
 });
