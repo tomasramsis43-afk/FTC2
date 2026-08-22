@@ -593,7 +593,6 @@ nav.tabs button[data-view="courseinvoices"]::before { content: "receipt_long"; }
 nav.tabs button[data-view="vault"]::before { content: "payments"; }
 nav.tabs button[data-view="bags"]::before { content: "inventory_2"; }
 nav.tabs button[data-view="purchases"]::before { content: "shopping_cart"; }
-nav.tabs button[data-view="zatca"]::before { content: "qr_code_2"; }
 nav.tabs button[data-view="reports"]::before { content: "monitoring"; }
 nav.tabs button[data-view="accounting"]::before { content: "account_balance"; }
 nav.tabs button[data-view="budget"]::before { content: "savings"; }

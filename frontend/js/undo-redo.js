@@ -864,7 +864,7 @@ function clearAllSheetFilters(){
 $('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);
 
 /* ---------------- Nav ---------------- */
-const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','zatca','budget'];
+const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','budget'];
 function canAccessView(view){
   if(currentUserRole==='admin') return true;
   const rp = (settings && settings.rolePermissions) || DEFAULT_SETTINGS.rolePermissions;
@@ -912,7 +912,6 @@ $all('button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='accounting') renderAccounting();
     if(btn.dataset.view==='budget') renderEpmBudget();
     if(btn.dataset.view==='purchases') renderPurchases();
-    if(btn.dataset.view==='zatca') renderZatca();
   });
 });
 /* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (settings.rolePermissions القابلة للتعديل من الإعدادات) */
