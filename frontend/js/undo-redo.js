@@ -903,7 +903,6 @@ $all('button[data-view]').forEach(btn=>{
     if(btn.dataset.view==='settings') renderSettings();
     if(btn.dataset.view==='bags') renderBags();
     if(btn.dataset.view==='vault') renderVault();
-    if(btn.dataset.view==='settlements' && typeof renderSettlementPanel==='function') renderSettlementPanel();
     if(btn.dataset.view==='courses') renderCourses();
     if(btn.dataset.view==='courseinvoices') renderCourseInvoices();
     if(btn.dataset.view==='audit') renderAuditLog();
