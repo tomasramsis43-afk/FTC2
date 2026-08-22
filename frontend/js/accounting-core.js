@@ -186,6 +186,37 @@ function cleanupDuplicateCompanyTraineeVaultEntries(){
   });
   return removedCount;
 }
+/* ================= إصلاح تلقائي لمرة واحدة: قيود يومية (journalDE) مُرحَّلة تلقائياً من فواتير
+   الدورات كانت تشير لحسابات (accountId) من جيل قديم لدليل الحسابات (أُعيد إنشاؤه بمعرّفات جديدة
+   أكثر من مرة تاريخياً — chartOfAccounts الحالي لا يحتوي هذه المعرّفات إطلاقاً). النتيجة: هذه
+   القيود رغم كونها متزنة رياضياً بالكامل (مدين = دائن) كانت تختفي بصمت من كشف الحساب العام
+   ومن ميزان المراجعة (لأن كليهما يبحث عن الحساب بمعرّفه الحالي فقط)، فتظهر إيرادات وذمم مدينة
+   أقل من حقيقتها الفعلية بمقدار كل القيود المتأثرة. سطور هذا النوع من القيود تُبنى دائماً بترتيب
+   ثابت لا يتغيّر (سطر1: ذمم مدينة 1100 / سطر2: إيراد 4000 / سطر3 إن وُجد: ضريبة 2100 — راجع
+   buildDELinesForCourseInvoice)، فيُعاد ربط كل سطر بمعرّف الحساب الصحيح الحالي لنفس الرمز حسب
+   ترتيبه، دون أي تغيير في المبالغ (debit/credit) نفسها إطلاقاً — إصلاح مرجع فقط، لا إصلاح مالي. */
+function repairOrphanedCourseInvoiceAccountRefs(){
+  if(settings.accountRefsRepairedV1) return 0;
+  const arAcc = accountByCode('1100'), revAcc = accountByCode('4000'), vatAcc = accountByCode('2100');
+  if(!arAcc || !revAcc || !vatAcc) return 0; // ننتظر دليل حسابات كامل قبل أي إصلاح
+  const knownIds = new Set(chartOfAccounts.map(a=>a.id));
+  const roleAccountIds = [arAcc.id, revAcc.id, vatAcc.id];
+  let fixedCount = 0;
+  journalDE.forEach(e=>{
+    if(!e.sourceClientId) return; // فقط قيود فواتير الدورات المُرحَّلة تلقائياً
+    const lines = e.lines||[];
+    let changed = false;
+    lines.forEach((l,idx)=>{
+      if(l.accountId && !knownIds.has(l.accountId) && roleAccountIds[idx]){
+        l.accountId = roleAccountIds[idx];
+        changed = true;
+      }
+    });
+    if(changed) fixedCount++;
+  });
+  settings.accountRefsRepairedV1 = true;
+  return fixedCount;
+}
 async function saveJournalEntries(){
   try{ await saveCollectionGeneric('journalEntries', journalEntries); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
 }

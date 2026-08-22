@@ -605,6 +605,18 @@ async function loadData(cacheOnly){
         await logAudit('delete','المحاسبة', `إصلاح تلقائي: تم حذف ${cleanup.removed} قيد يومية يتيم لوثائق محذوفة، وإعادة ربط ${cleanup.pointersFixed} وثيقة بقيدها المفقود`);
       }
     }catch(e){ console.error('فشل تنظيف القيود اليومية اليتيمة', e); }
+    // إصلاح مراجع الحسابات اليتيمة في قيود فواتير الدورات (راجع الشرح الكامل أعلى الدالة في
+    // accounting-core.js): يُنفَّذ مرة واحدة فقط، بعد seedChartOfAccountsIfEmpty وتحميل journalDE
+    // مباشرة، وقبل الترحيل التلقائي الشامل أدناه حتى تُحتسب هذه القيود المُصلَحة بشكل صحيح في
+    // أي تقرير يُبنى لاحقاً في نفس التحميل.
+    try{
+      const accFixedCount = typeof repairOrphanedCourseInvoiceAccountRefs==='function' ? repairOrphanedCourseInvoiceAccountRefs() : 0;
+      if(accFixedCount>0){
+        await saveJournalDE();
+        await saveSettings();
+        await logAudit('edit','المحاسبة', `إصلاح تلقائي: تم تصحيح مرجع الحساب في ${accFixedCount} قيد يومية لفواتير دورات كانت تشير لحسابات من جيل قديم لدليل الحسابات (لا تغيير في أي مبلغ، فقط إعادة ربط بالحساب الصحيح الحالي)`);
+      }
+    }catch(e){ console.error('فشل إصلاح مراجع الحسابات اليتيمة', e); }
   }
   try{
     const r = kv.zakatAdjustments;
