@@ -1,3 +1,17 @@
+// FTC2 — تحميل منطق صلاحية التثقيف الصحي بعد تحميل وحدات التطبيق الأساسية.
+// يتم التحميل ديناميكياً حتى لا نغيّر ترتيب وحدات النظام الحالية أو نكسر الإقلاع.
+(function loadHealthEducationModules(){
+  try{
+    ['health-education-validity.js','health-education-ui.js'].forEach(file=>{
+      const s = document.createElement('script');
+      s.src = 'js/' + file;
+      s.defer = false;
+      s.async = false;
+      document.head.appendChild(s);
+    });
+  }catch(e){ console.error('[HealthEducation] Failed to load modules:', e); }
+})();
+
 // دخول بمسح الكود (QR، زي واتساب ويب): لو فُتح هذا الرابط من مسح كود QR ظاهر على جهاز آخر
 // (شاشة الدخول تولّد رابطاً يحتوي على qrLoginSession=...)، نحفظ معرّف الجلسة فوراً قبل أي شيء
 // آخر، ونزيله من شريط العنوان. لاحقاً — بعد أي تسجيل دخول ناجح على هذا الجهاز (بأي طريقة: كلمة
@@ -69,7 +83,7 @@
   }
 })();
 
-/* ---------------- Login / Logout ----------------
+/* ---------------- Login / Logout
    نُقل هذا القسم من module-finance.js — منطق تسجيل خروج/دخول عام على مستوى
    التطبيق كله (لا علاقة له بالخزنة/المحاسبة)، ومكانه الطبيعي هنا مع باقي
    منطق الإقلاع (boot). لا تغيير فى أي منطق، نقل فقط.
@@ -152,4 +166,3 @@ $('#btn-logout').addEventListener('click', async ()=>{
     showServerLoginScreen(null);
   }
 });
-
