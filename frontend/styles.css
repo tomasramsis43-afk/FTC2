@@ -17,11 +17,11 @@
    مُستبدَلاً، لذلك تُعاد تعريف الأسماء المستعارة داخل نطاق كل ثيم على حدة. */
 :root {
   /* ── الهوية (Brand) ── */
-  --brand-primary: #d9832f;
+  --brand-primary: #d17e2d; /* AA-nudge 3:1 */
   --brand-primary-strong: #b3661e;
   --brand-primary-bright: #f0a857;
 
-  --brand-secondary: #1fa98a;
+  --brand-secondary: #1ea486; /* AA-nudge 3:1 */
   --brand-secondary-strong: #167a64;
   --brand-secondary-bright: #2fd9b0;
   --brand-secondary-soft: #5fcdb4;
@@ -4342,3 +4342,28 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
 #view-clients table.clients-grid.hide-col-13 > tbody td:nth-child(13) { display: none; }
 #view-clients table.clients-grid.hide-col-14 > thead th:nth-child(14),
 #view-clients table.clients-grid.hide-col-14 > tbody td:nth-child(14) { display: none; }
+
+/* ============================================================
+   نبض — Phase 6: Motion Pass (احترام reduced-motion)
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- معالج الترحيب --- */
+.ob-dots { display: flex; gap: 5px; margin: 8px 0 14px; }
+.ob-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  transition: background .2s ease, width .2s ease;
+}
+.ob-dot.active { background: var(--brand-primary); width: 18px; border-radius: var(--radius-full, 999px); }
+.ob-step .field { margin-bottom: 9px; }
