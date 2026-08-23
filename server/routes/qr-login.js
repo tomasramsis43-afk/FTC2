@@ -10,6 +10,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { requireAuth, signToken } = require('../auth');
+const { authLimiter } = require('../rate-limiters');
 
 // نخزّن جلسات QR مؤقتاً فى ذاكرة السيرفر فقط (لا حاجة لجدول قاعدة بيانات لبيانات قصيرة الأمد
 // كهذه؛ أقصى عمر 3 دقائق) — تُنظَّف تلقائياً بمرور الوقت.
@@ -23,14 +24,14 @@ setInterval(() => {
   }
 }, 60 * 1000).unref();
 
-router.post('/api/auth/qr-login/create', (req, res) => {
+router.post('/api/auth/qr-login/create', authLimiter, (req, res) => {
   const id = crypto.randomBytes(24).toString('base64url');
   const expiresAt = Date.now() + QR_SESSION_TTL_MS;
   qrSessions.set(id, { status: 'pending', createdAt: Date.now(), expiresAt });
   res.json({ sessionId: id, expiresAt: new Date(expiresAt).toISOString() });
 });
 
-router.get('/api/auth/qr-login/status/:id', (req, res) => {
+router.get('/api/auth/qr-login/status/:id', authLimiter, (req, res) => {
   const session = qrSessions.get(req.params.id);
   if (!session || session.expiresAt < Date.now()) return res.json({ status: 'expired' });
   if (session.status === 'approved') {

@@ -162,6 +162,17 @@ ensureSchema()
     cleanLoginHistory();
     setInterval(cleanLoginHistory, 24 * 60 * 60 * 1000); // كل 24 ساعة
 
+    // تنظيف دوري لجدول magic_link_tokens: روابط الدخول المستهلكة أو المنتهية لا قيمة لها
+    // بعد أسبوع — بدون هذا التنظيف كان الجدول ينمو للأبد (كل رابط مطلوب = صف دائم).
+    async function cleanMagicLinkTokens() {
+      try {
+        const r = await pool.query(`DELETE FROM magic_link_tokens WHERE created_at < now() - INTERVAL '7 days'`);
+        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} رابط دخول قديم من magic_link_tokens`);
+      } catch (e) { console.error('تعذّر تنظيف magic_link_tokens:', e.message); }
+    }
+    cleanMagicLinkTokens();
+    setInterval(cleanMagicLinkTokens, 24 * 60 * 60 * 1000); // كل 24 ساعة
+
     // حذف نهائي تلقائي لسجلات العملاء المرفوضة من الأدمن بعد 15 يوماً من وقت الرفض (رفض تسلسلي
     // "لطيف": السجل يبقى ظاهراً لموظف الاستقبال صاحبه فقط خلال هذه المهلة — راجع تعليق
     // /api/client-records/:id/reject و clientRecordsVisibilitySql أعلاه فى نفس الملف).

@@ -10,6 +10,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { requireAuth, signToken } = require('../auth');
+const { authLimiter } = require('../rate-limiters');
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -143,7 +144,7 @@ router.delete('/api/auth/webauthn/credentials/:id', requireAuth, async (req, res
    قائمة بصماته المسجَّلة لهذا الموقع فيختار منها مباشرة، فنعرف صاحب الحساب من الاستجابة نفسها
    (عبر credential_id الفريد) دون الحاجة لأي اسم مستخدم مُدخَل يدوياً. */
 
-router.post('/api/auth/webauthn/login-options', async (req, res) => {
+router.post('/api/auth/webauthn/login-options', authLimiter, async (req, res) => {
   try {
     const { rpID } = getRpIdAndOrigin(req);
     // لا نحدد allowCredentials إطلاقاً هنا عمداً — ده اللي بيخلي المتصفح يعرض كل البصمات
@@ -161,7 +162,7 @@ router.post('/api/auth/webauthn/login-options', async (req, res) => {
   }
 });
 
-router.post('/api/auth/webauthn/login-verify', async (req, res) => {
+router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => {
   try {
     const { requestId, response } = req.body || {};
     if (!requestId || !response) return res.status(400).json({ error: 'بيانات ناقصة' });

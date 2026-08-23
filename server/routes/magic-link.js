@@ -58,7 +58,7 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/api/auth/magic-link/verify', async (req, res) => {
+router.post('/api/auth/magic-link/verify', authLimiter, async (req, res) => {
   try {
     const { username, token } = req.body || {};
     if (!username || !token) return res.status(400).json({ error: 'بيانات ناقصة' });
