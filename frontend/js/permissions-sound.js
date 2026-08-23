@@ -498,6 +498,7 @@ async function loadData(cacheOnly){
   vaultDenomTx = await loadGeneric('vaultDenomTx');
   bankStatementRows = await loadGeneric('bankStatementRows');
   scheduledVaultTx = await loadGeneric('scheduledVaultTx');
+  followUpTasks = await loadGeneric('followUpTasks');
   deletedInvoices = await loadGeneric('deletedInvoices');
   courseSessions = await loadGeneric('courseSessions');
   try{
@@ -767,6 +768,9 @@ async function saveBankStatementRows(){
 }
 async function saveScheduledVaultTx(){
   try{ await saveCollectionGeneric('scheduledVaultTx', scheduledVaultTx); }catch(e){ showToast('تعذر حفظ قوالب الحركات المجدولة'); }
+}
+async function saveFollowUpTasks(){
+  try{ await saveCollectionGeneric('followUpTasks', followUpTasks); }catch(e){ showToast('تعذر حفظ التذكيرات'); }
 }
 async function saveDeletedInvoices(){
   try{ await saveCollectionGeneric('deletedInvoices', deletedInvoices); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }

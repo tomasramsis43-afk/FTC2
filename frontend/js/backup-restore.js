@@ -12,7 +12,7 @@ function gatherFullBackupData(){
     clients, settings, bagStock, vaultTx, courseSessions,
     users: usersWithoutPasswords, auditLog, companies, companyTransfers, journalEntries, bankStatementRows,
     suppliers, purchases, vaultDenomTx, manualSalesInvoices, zakatAdjustments,
-    chartOfAccounts, journalDE, budgetEntries, scheduledVaultTx
+    chartOfAccounts, journalDE, budgetEntries, scheduledVaultTx, followUpTasks
   };
 }
 function downloadFullBackup(auto){
@@ -77,6 +77,10 @@ const RESTORE_REQUIRED_KEYS = [
   'clients','settings','bagStock','vaultTx','courseSessions','users','auditLog','companies',
   'companyTransfers','journalEntries','bankStatementRows','suppliers','purchases','vaultDenomTx',
   'manualSalesInvoices','zakatAdjustments','chartOfAccounts','journalDE','budgetEntries','scheduledVaultTx'
+  // ملاحظة: followUpTasks عمداً غير مُدرَج هنا (رغم وجوده فى gatherFullBackupData) — إدراج تصنيف جديد
+  // فى القائمة الإلزامية يعني رفض استعادة أي نسخة احتياطية قديمة أُخذت قبل إضافته (لا يملك المفتاح
+  // إطلاقاً)، بينما restoreFullBackup أدناه يتعامل مع غيابه بأمان (data.followUpTasks || [])، فلا داعي
+  // لمنع استعادة نسخ قديمة سليمة بسبب تصنيف جديد فارغ أصلاً فى وقتها.
 ];
 // حماية حلقة إعادة المزامنة اللانهائية: لو فشل التحقق من اكتمال رفع الاستعادة للسيرفر باستمرار
 // (أي سبب — انقطاع، تعديل متزامن من جهاز آخر غيّر الأعداد، تصنيف لا يُرفع)، فإبقاء علامة
@@ -155,6 +159,7 @@ async function pushCurrentDataToServer(){
     ['courseSessions', courseSessions], ['auditLog', auditLog], ['companies', companies], ['companyTransfers', companyTransfers],
     ['journalEntries', journalEntries], ['chartOfAccounts', chartOfAccounts], ['journalDE', journalDE], ['budgetEntries', budgetEntries],
     ['suppliers', suppliers], ['purchases', purchases], ['manualSalesInvoices', manualSalesInvoices], ['scheduledVaultTx', scheduledVaultTx],
+    ['followUpTasks', followUpTasks],
   ];
   const active = collections.filter(([, arr])=> (arr||[]).some(x=> x && x.id));
   showAppLoadingOverlay();
@@ -190,7 +195,7 @@ function isCurrentlyOffline(){ return manualOfflineMode || _ftcIsOffline; }
 const RESTORED_RECORD_COLLECTIONS = [
   'bagStock','vaultTx','vaultDenomTx','bankStatementRows','courseSessions','auditLog',
   'companies','companyTransfers','journalEntries','chartOfAccounts','journalDE','budgetEntries',
-  'suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
+  'suppliers','purchases','manualSalesInvoices','scheduledVaultTx','followUpTasks',
 ];
 function _currentCollectionArray(c){
   switch(c){
@@ -210,6 +215,7 @@ function _currentCollectionArray(c){
     case 'purchases': return purchases;
     case 'manualSalesInvoices': return manualSalesInvoices;
     case 'scheduledVaultTx': return scheduledVaultTx;
+    case 'followUpTasks': return followUpTasks;
     default: return null;
   }
 }
@@ -338,6 +344,7 @@ async function restoreFullBackup(file){
   purchases = data.purchases || [];
   vaultDenomTx = data.vaultDenomTx || [];
   scheduledVaultTx = data.scheduledVaultTx || [];
+  followUpTasks = data.followUpTasks || [];
   manualSalesInvoices = data.manualSalesInvoices || [];
   zakatAdjustments = data.zakatAdjustments || {};
   chartOfAccounts = data.chartOfAccounts || [];

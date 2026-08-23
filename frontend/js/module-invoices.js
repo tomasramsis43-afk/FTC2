@@ -1288,7 +1288,7 @@ $('#btn-reset-app')?.addEventListener('click', async ()=>{
     // تصنيف عبر النقطة المخصصة لذلك بدل الاعتماد على مقارنة baseline سجل سجل (أبطأ وغير مضمون).
     const migratedCollections = ['bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','courseSessions',
       'auditLog','companies','companyTransfers','deletedInvoices','journalEntries','chartOfAccounts','journalDE',
-      'budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx'];
+      'budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx','followUpTasks'];
     for(const c of migratedCollections){
       try{
         await serverFetch(`/api/records/${encodeURIComponent(c)}`, { method: 'DELETE' });
@@ -1337,6 +1337,7 @@ $('#btn-reset-app')?.addEventListener('click', async ()=>{
     deletedVaultTx = [];
     vaultDenomTx = [];
     scheduledVaultTx = [];
+    followUpTasks = [];
     courseSessions = [];
     companies = [];
     companyTransfers = [];

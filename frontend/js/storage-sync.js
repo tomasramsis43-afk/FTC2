@@ -739,6 +739,7 @@ const ALLOWED_COLLECTIONS_LOCAL = [
   'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
   'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
   'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
+  'followUpTasks',
 ];
 const _recordVersions = {}; // collection -> Map(id -> version)
 const _collectionSyncBaseline = {}; // collection -> Map(id -> json) | null (لسه غير مؤكدة هذه الجلسة)

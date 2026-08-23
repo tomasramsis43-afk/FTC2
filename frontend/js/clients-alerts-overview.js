@@ -16,6 +16,7 @@ function renderDashboard(){
     renderCfoDashboard();
     renderCockpitPulse();
     renderSmartAlerts();
+    if(typeof renderFollowUpsPanel==='function') renderFollowUpsPanel();
     if(currentUserRole==='admin') refreshPendingApprovals();
   }
 }

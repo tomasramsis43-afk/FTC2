@@ -728,6 +728,7 @@ const ALLOWED_COLLECTIONS = [
   'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
   'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
   'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
+  'followUpTasks',
 ];
 function collectionRoleAllowed(role, collection) {
   if (collection in RESTRICTED_STORAGE_KEYS) {
