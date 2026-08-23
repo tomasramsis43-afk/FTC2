@@ -13,7 +13,10 @@
 /* ── 1) Rail افتراضي لأول تشغيل — يجب أن ينفَّذ قبل eval لملف theme-settings ── */
 try {
   if (localStorage.getItem('ftc2-sidebar-collapsed') === null) {
-    localStorage.setItem('ftc2-sidebar-collapsed', '1');
+    /* الوضع الافتراضي الآن: قائمة جانبية موسّعة وثابتة (Enterprise Sidebar)
+       بدل وضع Rail المطوي — تنفيذاً لبريف إعادة التصميم بند 2.
+       المستخدم يستطيع طيّها يدوياً وسيُحفَظ تفضيله في نفس المفتاح كالسابق. */
+    localStorage.setItem('ftc2-sidebar-collapsed', '0');
   }
 } catch (e) { /* التخزين المحلي غير متاح (وضع خاص) — نتجاهل بهدوء */ }
 
