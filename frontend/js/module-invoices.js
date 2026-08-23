@@ -238,10 +238,8 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
   }
 });
 
-/* ---------------- رفع فواتير حقيقية (PDF/صور) وقراءتها تلقائياً بالذكاء الاصطناعي ----------------
-   يرسل الملفات للخادم (الذي يناديها على Claude API بمفتاحه الخاص المحفوظ على الخادم فقط)،
-   ثم يعبّئ النتائج المستخرجة داخل نفس جدول المراجعة المستخدم في "تحديث/استيراد فواتير الدورات (جدول)"
-   بدل حفظها مباشرة — بحيث تبقى كل النتائج قابلة للمراجعة والتعديل اليدوي قبل أي حفظ فعلي. */
+// تحويل File إلى base64 (بدون بادئة data:...) — دالة عامة يستخدمها رفع الفواتير بالذكاء
+// الاصطناعي أدناه، وإرفاق الفاتورة بالإيميل، وmodule-reports.js أيضاً.
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
     const r = new FileReader();
@@ -250,6 +248,11 @@ function fileToBase64(file){
     r.readAsDataURL(file);
   });
 }
+
+/* ---------------- رفع فواتير حقيقية (PDF/صور) وقراءتها تلقائياً بالذكاء الاصطناعي ----------------
+   يرسل الملفات للخادم (الذي يناديها على Claude API بمفتاحه الخاص المحفوظ على الخادم فقط)،
+   ثم يعبّئ النتائج المستخرجة داخل نفس جدول المراجعة المستخدم في "تحديث/استيراد فواتير الدورات (جدول)"
+   بدل حفظها مباشرة — بحيث تبقى كل النتائج قابلة للمراجعة والتعديل اليدوي قبل أي حفظ فعلي. */
 $('#btn-ci-ai-upload')?.addEventListener('click', ()=> $('#ci-ai-upload-input').click());
 $('#ci-ai-upload-input')?.addEventListener('change', async e=>{
   const files = [...(e.target.files||[])];
@@ -613,16 +616,6 @@ async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
     console.error('فشل إرسال إيميل الفاتورة:', e);
     if(!silent) showToast('تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
   }
-}
-
-// تحويل File إلى base64 (بدون بادئة data:...) لإرفاقه مع طلب الإيميل.
-function fileToBase64(file){
-  return new Promise((resolve, reject)=>{
-    const r = new FileReader();
-    r.onload = ()=> resolve(String(r.result).split(',')[1] || '');
-    r.onerror = ()=> reject(new Error('تعذّر قراءة الملف'));
-    r.readAsDataURL(file);
-  });
 }
 
 // زرار الإرسال اليدوي: لو العميل معندوش إيميل محفوظ، نطلبه مرة واحدة (بدون حفظه فى بيانات
