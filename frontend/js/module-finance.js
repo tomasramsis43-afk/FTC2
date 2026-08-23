@@ -926,6 +926,7 @@ function renderVault(){
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
+            <button class="btn btn-ghost btn-sm" data-vws="${t.id}" title="فتح تفاصيل الحركة الكاملة">📂 التفاصيل</button>
             <button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>
             ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
             ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}

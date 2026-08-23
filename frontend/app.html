@@ -2958,6 +2958,7 @@
 <script defer src="js/module-purchases.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
 <script defer src="js/client-workspace.js"></script>
+<script defer src="js/vault-workspace.js"></script>
 <script defer src="js/boot.js"></script>
 
 
@@ -2989,6 +2990,19 @@
     </div>
     <div class="drawer-body" id="cw-body"></div>
     <div class="drawer-foot" id="cw-foot"></div>
+  </aside>
+</div>
+<div class="overlay cw-overlay" id="vault-workspace-overlay">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="تفاصيل الحركة المالية">
+    <div class="drawer-head">
+      <div class="drawer-head-main">
+        <h3 id="vw-title">—</h3>
+        <div class="cw-badges" id="vw-badges"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-vw-close">إغلاق ✕</button>
+    </div>
+    <div class="drawer-body" id="vw-body"></div>
+    <div class="drawer-foot" id="vw-foot"></div>
   </aside>
 </div>
 </body></html>
