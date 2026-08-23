@@ -807,6 +807,7 @@ $('#cs-bulk-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-cs-bulk-save').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-cs-bulk-save'), async ()=>{
   const courseNumber = $('#cs-bulk-coursenum').value.trim();
   const courseDate = $('#cs-bulk-date').value.trim();
   const rows = [...$('#cs-bulk-table-body').querySelectorAll('tr')];
@@ -865,7 +866,8 @@ $('#btn-cs-bulk-save').addEventListener('click', async ()=>{
   closeCsBulkModal();
   renderTable(); renderCourses();
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
-});
+
+  });});
 
 /* ---------------- استيراد/تحديث الرقم المرجعي دفعة واحدة (جدول داخل البرنامج) ----------------
    الربط برقم الهوية فقط: تحديث جزئي (الرقم المرجعي فقط) لعميل موجود، أو إضافة عميل جديد بالحد الأدنى
@@ -925,6 +927,7 @@ $('#refnum-bulk-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-refnum-bulk-save'), async ()=>{
   const rows = [...$('#refnum-bulk-table-body').querySelectorAll('tr')];
   const errors = [];
   const items = [];
@@ -959,7 +962,8 @@ $('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
   closeRefnumBulkModal();
   renderTable();
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''}`);
-});
+
+  });});
 
 /* ---------------- استيراد عمال الشركات دفعة واحدة (جدول داخل البرنامج فقط — بدون Excel) ----------------
    الربط برقم الهوية فقط: تحديث اسم الشركة (ونوع العميل تلقائياً إلى "عميل شركات") لعميل موجود، أو إضافة
@@ -1040,6 +1044,7 @@ $('#compworkers-bulk-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-compworkers-bulk-save').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-compworkers-bulk-save'), async ()=>{
   const companyName = $('#compworkers-bulk-company').value.trim();
   if(!companyName){ showToast('اكتب اسم الشركة أعلى الجدول أولاً'); $('#compworkers-bulk-company').focus(); return; }
   const rows = [...$('#compworkers-bulk-table-body').querySelectorAll('tr')];
@@ -1070,7 +1075,8 @@ $('#btn-compworkers-bulk-save').addEventListener('click', async ()=>{
   closeCompWorkersBulkModal();
   renderTable(); refreshFilterOptions();
   showToast(`تم تحديث ${updated} عميل${newClientsCount?`، منهم ${newClientsCount} عميل جديد أُضيف تلقائياً`:''} — الشركة: ${companyName}`);
-});
+
+  });});
 
 /* ---------------- تحديث/استيراد فواتير الدورات دفعة واحدة (جدول داخل البرنامج) ----------------
    يحل محل استيراد ملف Excel بنفس منطق الربط برقم الهوية (وبرقم الدورة إن وُجد) والتحديث الجزئي. */
@@ -1133,6 +1139,7 @@ $('#ci-bulk-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-ci-bulk-save'), async ()=>{
   const rows = [...$('#ci-bulk-table-body').querySelectorAll('tr')];
   const errors = [];
   const items = [];
@@ -1193,5 +1200,6 @@ $('#btn-ci-bulk-save').addEventListener('click', async ()=>{
     renderCourseInvoices();
   }
   showToast(`تم تحديث ${updated} سجل${invoiceChanged?` — ورُبط ${invoiceChanged} رقم فاتورة بجميع الشيتات`:''}`);
-});
+
+  });});
 

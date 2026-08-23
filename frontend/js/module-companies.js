@@ -826,6 +826,7 @@ function resetCompanyForm(){
 }
 
 $('#btn-add-company').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-company'), async ()=>{
   const name = $('#cm-name').value.trim();
   if(!name){ showToast('أدخل اسم الشركة'); return; }
   const dupCompany = companies.find(c=>c.name===name);
@@ -871,7 +872,8 @@ $('#btn-add-company').addEventListener('click', async ()=>{
   resetCompanyForm();
   renderCompanies();
   showToast('تمت إضافة الشركة');
-});
+
+  });});
 
 $('#btn-cancel-edit-company').addEventListener('click', ()=>{
   resetCompanyForm();
@@ -879,6 +881,7 @@ $('#btn-cancel-edit-company').addEventListener('click', ()=>{
 });
 
 $('#btn-add-transfer').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-transfer'), async ()=>{
   const companyId = $('#ct-company').value;
   const company = companies.find(c=>c.id===companyId);
   if(!company){ showToast('اختر شركة أولاً (أضفها من القائمة أعلاه إن لم تكن موجودة)'); return; }
@@ -945,7 +948,8 @@ $('#btn-add-transfer').addEventListener('click', async ()=>{
   resetCtGroups();
   renderCompanies(); renderVault();
   showToast('تم حفظ الحوالة');
-});
+
+  });});
 
 
 /* تعديل حوالة شركة قائمة: يملأ نموذج "إضافة حوالة جديدة" ببيانات الحوالة المحددة، ويحوّل زر الحفظ لوضع "تعديل" مؤقتاً */

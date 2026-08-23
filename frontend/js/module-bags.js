@@ -491,6 +491,7 @@ function cancelBagStockEdit(){
 $('#btn-cancel-edit-stock').addEventListener('click', cancelBagStockEdit);
 
 $('#btn-add-stock').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-stock'), async ()=>{
   const type = $('#bs-type').value; // deposit | withdraw
   const amount = num($('#bs-amount').value);
   if(amount<=0){ showToast('أدخل مبلغاً صحيحاً'); return; }
@@ -598,6 +599,7 @@ $('#btn-add-stock').addEventListener('click', async ()=>{
   cancelBagStockEdit();
   renderBags();
   showToast(wasEditing ? 'تم حفظ التعديل' : 'تم تسجيل العملية');
+  });
 });
 
 /* ---------------- إضافة حركات تمويل مخزون الحقائب دفعة واحدة (جدول داخل البرنامج) ----------------
@@ -676,6 +678,7 @@ $('#bagfund-bulk-table-body').addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-bagfund-bulk-save'), async ()=>{
   const defaultMethod = $('#bagfund-bulk-default-method').value;
   const rows = [...$('#bagfund-bulk-table-body').querySelectorAll('tr')];
   const errors = [];
@@ -744,7 +747,8 @@ $('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
   renderBags(); renderReports();
   closeBagfundBulkModal();
   showToast(`تمت إضافة ${added} حركة جديدة`);
-});
+
+  });});
 
 /* ---------------- تسجيل أرقام فواتير الحقائب دفعة واحدة (جدول داخل البرنامج) ----------------
    نفس منطق استيراد Excel بالضبط (تحديث عميل موجود مسبقاً فقط، وتحويل مصدر الحقيبة تلقائياً إلى
@@ -805,6 +809,7 @@ $('#baginv-bulk-table-body')?.addEventListener('paste', e=>{
   showToast(`تم لصق ${lines.length} صف`);
 });
 $('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-baginv-bulk-save'), async ()=>{
   const rows = [...$('#baginv-bulk-table-body').querySelectorAll('tr')];
   const errors = [];
   const items = [];
@@ -852,7 +857,8 @@ $('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
   renderTable(); renderBags();
   closeBaginvBulkModal();
   showToast(`تم تحديث ${updated} عميل${skipped?`، ${skipped} تم تخطيه (رقم هوية غير موجود)`:''}`);
-});
+
+  });});
 
 document.addEventListener('click', async e=>{
   if(e.target.closest('[data-refresh-bagstock]')){

@@ -1645,6 +1645,7 @@ function renderVaultLockStatus(){
     : 'لا يوجد قفل حالياً — كل الفترات مفتوحة للتعديل';
 }
 $('#btn-vault-lock').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-vault-lock'), async ()=>{
   const d = $('#vault-lock-date').value;
   if(!d){ showToast('اختر تاريخاً أولاً'); return; }
   if(settings.vaultLockedThrough && d<=settings.vaultLockedThrough){ showToast('يجب أن يكون تاريخ القفل الجديد بعد تاريخ القفل الحالي'); return; }
@@ -1655,8 +1656,10 @@ $('#btn-vault-lock').addEventListener('click', async ()=>{
   await logAudit('edit','الحركات المالية', `تم قفل الفترة المحاسبية حتى تاريخ ${d} — لا يمكن تعديل/حذف حركات هذه الفترة`);
   renderVaultLockStatus();
   showToast('تم قفل الفترة');
+  });
 });
 $('#btn-vault-unlock').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-vault-unlock'), async ()=>{
   if(!settings.vaultLockedThrough){ showToast('لا يوجد قفل حالياً'); return; }
   if(!await customConfirm('فتح القفل صلاحية استثنائية تتيح تعديل/حذف حركات فترة سبق اعتماد قوائمها المالية — تُستخدم فقط لتصحيح خطأ موثّق. هل أنت متأكد؟')) return;
   const oldLock = settings.vaultLockedThrough;
@@ -1666,6 +1669,7 @@ $('#btn-vault-unlock').addEventListener('click', async ()=>{
   await logAudit('edit','الحركات المالية', `تم فتح قفل الفترة المحاسبية (كانت مقفلة حتى ${oldLock}) — صلاحية استثنائية`);
   renderVaultLockStatus();
   showToast('تم فتح القفل');
+  });
 });
 let voidedPageState = {page:1, sig:''};
 function renderVoidedLog(){
