@@ -4130,3 +4130,73 @@ body.dark-theme .gsr-cmd-icon {
 .de-pill.ok    { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
 .de-pill.bad   { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
 .de-pill.muted { background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted); }
+
+/* ============================================================
+   نبض — Phase 4d: معاينة مستند الشراء الحية (Document Workspace)
+   ============================================================ */
+.pu-doc-preview { margin-bottom: 12px; }
+.doc-paper {
+  background: #fffdf8;
+  color: #241d10;
+  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
+  border-radius: var(--radius-md, 14px);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+body.dark-theme .doc-paper { background: #201a10; color: #f3ead8; }
+
+.doc-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--brand-primary);
+  margin-bottom: 10px;
+}
+.doc-center { font-size: 15px; font-weight: 800; }
+.doc-sub { font-size: 11px; opacity: .7; }
+.doc-meta { text-align: left; }
+.doc-title { font-weight: 800; font-size: 13px; color: var(--brand-primary-strong); }
+.doc-meta small { display: block; font-size: 11px; opacity: .75; }
+
+.doc-parties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 11.5px;
+  margin-bottom: 10px;
+  opacity: .9;
+}
+
+.doc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.doc-table th {
+  text-align: right;
+  padding: 5px 7px;
+  border-bottom: 1.5px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.doc-table td { padding: 5px 7px; border-bottom: 1px dashed var(--border); }
+
+.doc-totals {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.doc-grand {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--brand-primary-strong);
+  border-top: 2px solid var(--brand-primary);
+  padding-top: 4px;
+}
+.doc-notes {
+  margin-top: 9px;
+  font-size: 11.5px;
+  padding: 7px 9px;
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  border-radius: var(--radius-sm, 10px);
+}

@@ -239,7 +239,72 @@ function updatePurchaseTotalDisplay(){
   const subEl = $('#pu-subtotal-display'); if(subEl) subEl.textContent = fmt(subtotal);
   const taxEl = $('#pu-tax-display'); if(taxEl) taxEl.textContent = fmt(tax);
   const totEl = $('#pu-total-display'); if(totEl) totEl.textContent = fmt(total);
+  /* المعاينة الحية للمستند (Phase 4d) — عرض فقط؛ نفس الأرقام المحسوبة أعلاه حرفياً */
+  renderPurchaseDocPreview(subtotal, tax, total);
 }
+/* معاينة حية بشكل مستند الشراء داخل النموذج — تقرأ الحقول كما هي ولا تغير شيئاً.
+   VAT يُقرأ من ناتج purchaseTax نفسه (لا إعادة حساب ثانية). */
+function renderPurchaseDocPreview(subtotal, tax, total){
+  const el = $('#pu-doc-preview');
+  if(!el || el.style.display === 'none') return;
+  const ci = (typeof settings !== 'undefined' && settings.centerInfo) ? settings.centerInfo : {};
+  const supSel = $('#pu-supplier');
+  const supName = supSel?.selectedOptions?.[0]?.textContent || '—';
+  const method = $('#pu-method')?.value || '';
+  const statusMap = { paid: 'مدفوعة', unpaid: 'غير مدفوعة', partial: 'سداد جزئي' };
+  const status = statusMap[$('#pu-status')?.value] || $('#pu-status')?.value || '';
+  const items = $all('#pu-items .pu-item-row').map(row=>({
+    name: row.querySelector('.pu-item-name').value,
+    qty: num(row.querySelector('.pu-item-qty').value),
+    price: num(row.querySelector('.pu-item-price').value)
+  })).filter(it => it.name || it.qty || it.price);
+  el.innerHTML = `
+    <div class="doc-paper">
+      <div class="doc-head">
+        <div>
+          <div class="doc-center">${escapeHtml(ci.name || 'المركز')}</div>
+          <div class="doc-sub">${escapeHtml(ci.phone || '')}</div>
+        </div>
+        <div class="doc-meta">
+          <div class="doc-title">فاتورة مشتريات</div>
+          <small>رقم: ${escapeHtml($('#pu-invoiceno')?.value || '—')}</small>
+          <small>التاريخ: ${escapeHtml($('#pu-date')?.value || '—')}</small>
+        </div>
+      </div>
+      <div class="doc-parties">
+        <span>المورد: <b>${escapeHtml(supName)}</b></span>
+        <span>طريقة الدفع: <b>${escapeHtml(method || '—')}</b></span>
+        <span>الحالة: <b>${escapeHtml(status)}</b></span>
+      </div>
+      <table class="doc-table">
+        <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <tbody>
+          ${items.length ? items.map(it => `<tr>
+            <td>${escapeHtml(it.name || '—')}</td>
+            <td class="mono">${it.qty || 0}</td>
+            <td class="mono">${fmt(it.price)}</td>
+            <td class="mono">${fmt(it.qty * it.price)}</td>
+          </tr>`).join('') : '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">أضف أصنافاً لتظهر في المعاينة</td></tr>'}
+        </tbody>
+      </table>
+      <div class="doc-totals">
+        <span>قبل الضريبة <b>${fmt(subtotal)} ﷼</b></span>
+        <span>ض.ق.م (15%) <b>${fmt(tax)} ﷼</b></span>
+        <span class="doc-grand">الإجمالي <b>${fmt(total)} ﷼</b></span>
+      </div>
+      ${$('#pu-notes')?.value ? `<div class="doc-notes">ملاحظات: ${escapeHtml($('#pu-notes').value)}</div>` : ''}
+      ${ci.name ? '' : '<div class="hint" style="margin-top:6px;">أضف بيانات المركز من الإعدادات لتظهر في رأس المستند</div>'}
+    </div>`;
+}
+$('#pu-toggle-preview')?.addEventListener('click', ()=>{
+  const el = $('#pu-doc-preview');
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+  if(el.style.display === '') updatePurchaseTotalDisplay();
+});
+$('#purchase-form')?.addEventListener('input', ()=>{
+  if($('#pu-doc-preview')?.style.display === '') updatePurchaseTotalDisplay();
+});
 function openPurchaseModal(id){
   editingPurchaseId = id || null;
   const p = id ? purchases.find(x=>x.id===id) : null;
