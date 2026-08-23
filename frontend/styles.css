@@ -3678,3 +3678,169 @@ tbody tr {
     min-height: 40px;
   }
 }
+
+/* ============================================================
+   نبض — Phase 2: App Shell & Navigation & Command Center
+   (يُضاف في نهاية الملف عمداً ليتغلب على قواعد الأساس بنفس الخصوصية)
+   ============================================================ */
+
+/* --- عناوين مجموعات التنقل: نص واضح في الوضع الموسع، فاصل رقيق في وضع Rail المطوي --- */
+nav.tabs .nav-section-label {
+  flex: none;
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  margin: 10px 10px 4px;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text-muted) 90%, transparent);
+  background: none;
+  overflow: visible;
+}
+nav.tabs.collapsed .nav-section-label {
+  height: 1px;
+  margin: 8px 6px;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-muted) 45%, transparent), transparent);
+}
+.nav-section-hidden { display: none !important; }
+
+/* --- السطر الفرعي للهوية: شريحة الفترة المالية + مؤشر البث اللحظي --- */
+.brand-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.brand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 3px 9px;
+  border-radius: var(--radius-full, 999px);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  color: color-mix(in srgb, var(--navy) 82%, #000 18%);
+}
+body.dark-theme .brand-chip {
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 30%, transparent);
+  color: color-mix(in srgb, var(--gold) 80%, #fff 20%);
+}
+.sse-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+.sse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.sse-dot.live {
+  background: #22c55e;
+  animation: ssePulse 2.2s ease-out infinite;
+}
+.sse-dot.connecting { background: var(--warning, #e0a72f); }
+.sse-dot.off { background: var(--text-muted); opacity: .6; }
+@keyframes ssePulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .45); }
+  70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+/* --- مركز الأوامر (البحث الشامل Ctrl+K) --- */
+#global-search-results .gsr-head {
+  margin: 12px 2px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .02em;
+}
+#global-search-results .gsr-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background .12s ease;
+}
+#global-search-results .gsr-item:last-child { border-bottom-color: transparent; }
+#global-search-results .gsr-item:hover,
+#global-search-results .gsr-item.active {
+  background: color-mix(in srgb, var(--gold) 13%, transparent);
+}
+#global-search-results .gsr-item b { flex: none; }
+#global-search-results .gsr-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gsr-cmd-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+  color: color-mix(in srgb, var(--navy) 75%, #000 25%);
+}
+.gsr-cmd-icon svg { width: 14px; height: 14px; }
+body.dark-theme .gsr-cmd-icon {
+  background: color-mix(in srgb, var(--gold) 13%, transparent);
+  color: color-mix(in srgb, var(--gold) 85%, #fff 15%);
+}
+.gsr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.gsr-grid .gsr-item {
+  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 11px;
+  font-weight: 600;
+}
+.gsr-kbd-hints {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.gsr-kbd-hints kbd {
+  background: var(--surface-alt, #f2f4f7);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.gsr-kbd-sep { width: 1px; height: 12px; background: var(--border); display: inline-block; }

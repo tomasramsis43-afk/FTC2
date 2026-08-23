@@ -839,37 +839,119 @@ function runGlobalSearch(q){
   ).slice(0,8);
   return { clients: matchClients, vault: matchVault, purchases: matchPurchases };
 }
+/* ============ مركز الأوامر (Command Center v1) — فوق البحث الشامل ============
+   الأوامر تُبنى من DOM وقت الفتح لتبقى متزامنة تلقائياً مع الصلاحيات والتسميات.
+   كل صف قابل للتنفيذ يسجّل دالة في _gsActs ويُخاطَب بالفهرس (نقر/لوحة مفاتيح). */
+let _gsActs = [];
+let _gsActiveIdx = 0;
+const GS_ICONS = {
+  nav: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"></path></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.4"></circle><path d="M5.5 20c0-3.4 2.9-5.6 6.5-5.6s6.5 2.2 6.5 5.6"></path></svg>',
+  money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="7" width="18" height="11" rx="2"></rect><circle cx="12" cy="12.5" r="2.4"></circle><path d="M6.5 10v.01M17.5 15v.01"></path></svg>',
+  ledger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="4" width="14" height="16" rx="2"></rect><path d="M9 9h6M9 13h6M9 17h3"></path></svg>',
+  theme: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg>',
+  kbd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="7" width="18" height="11" rx="2"></rect><path d="M7 11h.01M11 11h.01M15 11h.01M7 14.5h10"></path></svg>'
+};
+function gsCommandItems(){
+  const cmds = [];
+  $all('nav.tabs button[data-view]').forEach(btn=>{
+    if(btn.style.display === 'none') return;
+    const span = btn.querySelector('span');
+    const label = span ? span.textContent.trim() : '';
+    if(!label) return;
+    cmds.push({ icon:'nav', label:`فتح: ${label}`, kw:`${label} ${btn.dataset.view||''} تنقل افتح شاشة`, run(){
+      closeGlobalSearch(); btn.click();
+    }});
+  });
+  const pushAct = (sel, icon, label, kw, pre)=>{
+    const b = document.getElementById(sel.replace('#',''));
+    if(!b || b.style.display === 'none') return;
+    cmds.push({ icon, label, kw, run(){
+      closeGlobalSearch();
+      if(pre) pre();
+      setTimeout(()=> b.click(), pre ? 250 : 0);
+    }});
+  };
+  pushAct('#btn-add', 'user', 'تسجيل متدرب جديد', 'متدرب عميل جديد تسجيل إضافة client',
+    ()=> document.querySelector('nav.tabs button[data-view="clients"]')?.click());
+  pushAct('#btn-fab-quickadd', 'money', 'حركة مالية جديدة', 'حركة مالية قبض صرف إيراد مصروف خزنة vault',
+    null);
+  pushAct('#btn-add-journal', 'ledger', 'قيد يومية جديد', 'قيد يومية محاسبة دفتر journal',
+    ()=> document.querySelector('nav.tabs button[data-view="accounting"]')?.click());
+  pushAct('#btn-theme-toggle', 'theme', 'تبديل الوضع الليلي/النهاري', 'وضع ليلي نهاري ثيم مظهر dark theme',
+    null);
+  pushAct('#btn-shortcuts-help', 'kbd', 'اختصارات لوحة المفاتيح', 'اختصارات مساعدة لوحة مفاتيح keyboard',
+    null);
+  return cmds;
+}
+function gsRunRow(html, run){
+  const i = _gsActs.length; _gsActs.push(run);
+  return `<div class="gsr-item" role="option" data-gs-act="${i}">${html}</div>`;
+}
+function gsSyncActive(){
+  $all('#global-search-results .gsr-item').forEach(el=>{
+    el.classList.toggle('active', Number(el.dataset.gsAct) === _gsActiveIdx);
+  });
+  $('#global-search-results .gsr-item.active')?.scrollIntoView({ block:'nearest' });
+}
 function renderGlobalSearchResults(q){
   const el = $('#global-search-results');
   if(!el) return;
+  _gsActs = []; _gsActiveIdx = 0;
+  q = String(q ?? '');
+  const ql = q.trim().toLowerCase();
+  /* شاشة فارغة = إجراءات سريعة جاهزة بدل رسالة "اكتب حرفين" الجافة */
+  if(ql.length < 2){
+    const quick = gsCommandItems().slice(0,6);
+    el.innerHTML = `<div class="hint">اكتب حرفين للبحث في العملاء والحركات والمشتريات — أو نفّذ أمراً مباشرة:</div>
+      <div class="gsr-grid">${ quick.map(c=> gsRunRow(
+        `<span class="gsr-cmd-icon">${GS_ICONS[c.icon]||GS_ICONS.nav}</span><span>${escapeHtml(c.label)}</span>`, c.run)).join('') }</div>`;
+    gsSyncActive();
+    return;
+  }
   const { clients: rc, vault: rv, purchases: rp } = runGlobalSearch(q);
-  if(q.trim().length < 2){ el.innerHTML = `<div class="hint">اكتب حرفين على الأقل للبحث</div>`; return; }
-  if(!rc.length && !rv.length && !rp.length){ el.innerHTML = `<div class="hint">لا توجد نتائج مطابقة</div>`; return; }
+  const cmds = gsCommandItems().filter(c=> c.kw.toLowerCase().includes(ql)).slice(0,7);
   let html = '';
+  if(cmds.length){
+    html += `<h4 class="gsr-head">أوامر</h4>`;
+    html += cmds.map(c=> gsRunRow(
+      `<span class="gsr-cmd-icon">${GS_ICONS[c.icon]||GS_ICONS.nav}</span><b>${escapeHtml(c.label)}</b>`, c.run)).join('');
+  }
   if(rc.length){
-    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">العملاء (${rc.length})</h4>`;
-    html += rc.map(c=> `<div class="gsr-item" data-gs-client="${c.id}" style="padding:8px; border-bottom:1px solid var(--border); cursor:pointer;">
-      <b>${escapeHtml(c.name||'')}</b> — ${escapeHtml(c.phone||'')} <span style="color:var(--text-muted); font-size:12px;">· ${escapeHtml(c.courseType||'')} · ${escapeHtml(c.invoice||'')}</span>
-    </div>`).join('');
+    html += `<h4 class="gsr-head">العملاء (${rc.length})</h4>`;
+    html += rc.map(c=> gsRunRow(
+      `<b>${escapeHtml(c.name||'')}</b><span class="gsr-meta">${escapeHtml(c.phone||'')} · ${escapeHtml(c.courseType||'')} · ${escapeHtml(c.invoice||'')}</span>`,
+      ()=>{
+        closeGlobalSearch();
+        document.querySelector('nav.tabs button[data-view="clients"]')?.click();
+        if($('#search')){ $('#search').value = c.clientId || c.name || ''; $('#search').dispatchEvent(new Event('input')); }
+      })).join('');
   }
   if(rv.length){
-    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">الحركات المالية (${rv.length})</h4>`;
-    html += rv.map(t=> `<div class="gsr-item" style="padding:8px; border-bottom:1px solid var(--border);">
-      <b>${fmt(num(t.amount))}</b> — ${escapeHtml(t.clientName||t.category||'')} <span style="color:var(--text-muted); font-size:12px;">· ${escapeHtml(t.date||'')} · ${t.type==='in'?'قبض':'صرف'}</span>
-    </div>`).join('');
+    html += `<h4 class="gsr-head">الحركات المالية (${rv.length})</h4>`;
+    html += rv.map(t=> gsRunRow(
+      `<b>${fmt(num(t.amount))}</b><span class="gsr-meta">${escapeHtml(t.clientName||t.category||'')} · ${escapeHtml(t.date||'')} · ${t.type==='in'?'قبض':'صرف'}</span>`,
+      ()=>{
+        closeGlobalSearch();
+        document.querySelector('nav.tabs button[data-view="vault"]')?.click();
+      })).join('');
   }
   if(rp.length){
-    html += `<h4 style="margin:10px 0 6px; color:var(--navy);">المشتريات (${rp.length})</h4>`;
-    html += rp.map(p=> `<div class="gsr-item" style="padding:8px; border-bottom:1px solid var(--border);">
-      <b>${escapeHtml(p.supplierName||'')}</b> — ${escapeHtml(p.invoiceNo||'')} <span style="color:var(--text-muted); font-size:12px;">· ${fmt(num(p.total))} · ${escapeHtml(p.date||'')}</span>
-    </div>`).join('');
+    html += `<h4 class="gsr-head">المشتريات (${rp.length})</h4>`;
+    html += rp.map(p=> gsRunRow(
+      `<b>${escapeHtml(p.supplierName||'')}</b><span class="gsr-meta">${escapeHtml(p.invoiceNo||'')} · ${fmt(num(p.total))} · ${escapeHtml(p.date||'')}</span>`,
+      ()=>{
+        closeGlobalSearch();
+        document.querySelector('nav.tabs button[data-view="purchases"]')?.click();
+      })).join('');
   }
-  el.innerHTML = html;
+  el.innerHTML = html || `<div class="hint">لا توجد نتائج مطابقة</div>`;
+  gsSyncActive();
 }
 function openGlobalSearch(){
   $('#global-search-overlay').classList.add('show');
   $('#global-search-input').value = '';
-  $('#global-search-results').innerHTML = '';
+  renderGlobalSearchResults('');
   setTimeout(()=> $('#global-search-input')?.focus(), 50);
 }
 function closeGlobalSearch(){ $('#global-search-overlay').classList.remove('show'); }
@@ -881,14 +963,25 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Escape' && $('#global-search-overlay')?.classList.contains('show')) closeGlobalSearch();
 });
 $('#global-search-input')?.addEventListener('input', e=> renderGlobalSearchResults(e.target.value));
+$('#global-search-input')?.addEventListener('keydown', e=>{
+  const rows = $all('#global-search-results .gsr-item');
+  if(!rows.length) return;
+  if(e.key==='ArrowDown' || e.key==='ArrowUp'){
+    e.preventDefault();
+    const dir = e.key==='ArrowDown' ? 1 : -1;
+    _gsActiveIdx = (_gsActiveIdx + dir + rows.length) % rows.length;
+    gsSyncActive();
+  } else if(e.key==='Enter'){
+    e.preventDefault();
+    const run = _gsActs[Math.min(_gsActiveIdx, _gsActs.length - 1)];
+    if(typeof run === 'function') run();
+  }
+});
 $('#global-search-results')?.addEventListener('click', e=>{
-  const item = e.target.closest('[data-gs-client]');
+  const item = e.target.closest('[data-gs-act]');
   if(!item) return;
-  const client = clients.find(c=>c.id===item.dataset.gsClient);
-  if(!client) return;
-  closeGlobalSearch();
-  document.querySelector('nav.tabs button[data-view="clients"]')?.click();
-  if($('#search')){ $('#search').value = client.clientId || client.name || ''; $('#search').dispatchEvent(new Event('input')); }
+  const run = _gsActs[Number(item.dataset.gsAct)];
+  if(typeof run === 'function') run();
 });
 
 /* ---------------- Excel Import / Export (linked by رقم الهوية) ---------------- */
