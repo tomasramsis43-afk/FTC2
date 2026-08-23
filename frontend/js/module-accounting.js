@@ -104,10 +104,45 @@ function computeDETotals(){
   const diff = debit - credit;
   const balanced = Math.abs(diff) < 0.01 && debit > 0;
   if(totalsEl){
-    totalsEl.innerHTML = `<span>إجمالي مدين: <b class="mono">${fmt(debit)}</b> · إجمالي دائن: <b class="mono">${fmt(credit)}</b> · ${balanced ? '<b style="color:var(--teal,#0f8a6b);">✅ القيد متوازن</b>' : `<b style="color:var(--red);">⚠️ غير متوازن (الفرق ${fmt(Math.abs(diff))})</b>`}</span>`;
+    /* مؤشر التوازن الحي (Phase 4c): عرض فقط — منطق التوفير/الحفظ في مكانه */
+    const emptyForm = debit === 0 && credit === 0;
+    const maxSide = Math.max(debit, credit);
+    const pctD = maxSide > 0 ? Math.round(debit / maxSide * 100) : 0;
+    const pctC = maxSide > 0 ? Math.round(credit / maxSide * 100) : 0;
+    const pill = emptyForm
+      ? `<span class="de-pill muted">بانتظار الإدخال</span>`
+      : balanced
+        ? `<span class="de-pill ok">✅ القيد متوازن</span>`
+        : `<span class="de-pill bad">⚠️ غير متوازن — الفرق ${fmt(Math.abs(diff))}</span>`;
+    const fixBtn = (!emptyForm && !balanced)
+      ? `<button type="button" class="btn btn-gold btn-sm" id="de-diff-fix" title="يضيف سطراً جديداً بمقدار الفرق على الجهة الناقصة">سدّ الفرق تلقائياً</button>` : '';
+    totalsEl.innerHTML = `
+      <div class="de-balance ${emptyForm ? '' : (balanced ? 'is-balanced' : 'is-unbalanced')}">
+        <div class="de-side"><small>إجمالي مدين</small><b class="mono">${fmt(debit)}</b><i style="width:${pctD}%"></i></div>
+        ${pill}${fixBtn}
+        <div class="de-side alt"><small>إجمالي دائن</small><b class="mono">${fmt(credit)}</b><i style="width:${pctC}%"></i></div>
+      </div>`;
   }
   return { debit, credit, balanced };
 }
+/* سدّ الفرق تلقائياً: يضيف سطر توازن جديد بالفرق على الجهة الناقصة —
+   تعبئة نموذج فقط؛ الحفظ يمر عبر btn-de-save ومساره القائم كما هو */
+document.addEventListener('click', e=>{
+  if(e.target.id !== 'de-diff-fix') return;
+  const tbody = $('#de-lines');
+  if(!tbody) return;
+  let debit=0, credit=0;
+  document.querySelectorAll('#de-lines .de-line-debit').forEach(i=> debit += num(i.value));
+  document.querySelectorAll('#de-lines .de-line-credit').forEach(i=> credit += num(i.value));
+  const diff = Number((debit - credit).toFixed(2));
+  if(Math.abs(diff) < 0.01){ showToast('القيد متوازن بالفعل'); return; }
+  tbody.insertAdjacentHTML('beforeend', deLineRowHtml());
+  const last = tbody.lastElementChild;
+  const inp = last.querySelector(diff > 0 ? '.de-line-credit' : '.de-line-debit');
+  if(inp){ inp.value = Math.abs(diff); }
+  computeDETotals();
+  inp?.focus();
+});
 $('#de-lines')?.addEventListener('input', e=>{
   if(e.target.classList.contains('de-line-debit') && num(e.target.value)>0){
     const row = e.target.closest('tr'); const c = row?.querySelector('.de-line-credit'); if(c) c.value='';

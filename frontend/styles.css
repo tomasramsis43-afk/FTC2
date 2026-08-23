@@ -4084,3 +4084,49 @@ body.dark-theme .gsr-cmd-icon {
   white-space: nowrap;
   margin-inline-start: auto;
 }
+
+/* ============================================================
+   نبض — Phase 4c: مؤشر التوازن الحي في محرر القيود
+   ============================================================ */
+.de-balance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.de-balance.is-balanced { border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 7%, transparent); }
+.de-balance.is-unbalanced { border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 6%, transparent); }
+
+.de-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 130px;
+  position: relative;
+}
+.de-side small { font-size: 10.5px; color: var(--text-muted); }
+.de-side b { font-size: 13px; }
+.de-side i {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--brand-primary);
+  opacity: .8;
+  transition: width .25s ease;
+}
+.de-side.alt i { background: var(--brand-secondary); }
+
+.de-pill {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-full, 999px);
+  white-space: nowrap;
+}
+.de-pill.ok    { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.de-pill.bad   { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+.de-pill.muted { background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted); }
