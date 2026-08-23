@@ -9,67 +9,151 @@
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
-/* ============= CSS VARIABLES & ROOT — نبض Light (فاتح) ============= */
+/* ============= نبض DS TOKENS v1 — Light (فاتح) =============
+   الأسماء الكانونية (--brand-*, --text-primary, --warning...) هي المرجع الجديد.
+   الأسماء القديمة (--navy, --gold, --teal...) أصبحت أسماءً مستعارة (aliases)
+   تشير إلى الكانونية حفاظاً على توافق كل الكود القائم — لا تستخدمها في كود جديد.
+   ملاحظة تقنية: استبدال var() داخل المتغيرات يحدث عند عنصر التعريف ثم يورَّث
+   مُستبدَلاً، لذلك تُعاد تعريف الأسماء المستعارة داخل نطاق كل ثيم على حدة. */
 :root {
+  /* ── الهوية (Brand) ── */
+  --brand-primary: #d9832f;
+  --brand-primary-strong: #b3661e;
+  --brand-primary-bright: #f0a857;
+
+  --brand-secondary: #1fa98a;
+  --brand-secondary-strong: #167a64;
+  --brand-secondary-bright: #2fd9b0;
+  --brand-secondary-soft: #5fcdb4;
+
+  /* ── الأسطح والخلفيات ── */
   --bg: #f6f7f9;
   --surface: rgba(255, 255, 255, 0.92);
   --surface-solid: #ffffff;
   --surface-alt: #eef1f5;
   --bg-soft: #eef1f5;
-  --navy: #d9832f;
-  --navy-dark: #b3661e;
-  --gold: #1fa98a;
-  --gold-dark: #167a64;
-  --gold-soft: #5fcdb4;
-  --teal: #1fa98a;
-  --success: #1fa98a;
-  --red: #e0505e;
-  --danger: #e0505e;
-  --text: #201a2e;
-  --text-muted: #6c6478;
   --border: #e3e7ec;
-  --radius: 20px;
+
+  /* ── النصوص ── */
+  --text-primary: #201a2e;
+  --text-secondary: #6c6478;
+
+  /* ── الدلالية (Semantic) ── */
+  --success: #1fa98a;
+  --warning: #e0a72f;
+  --danger: #e0505e;
+  --info: #4a7dd9;
+
+  /* ── مقاييس الاستدارة ── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+
+  /* ── مقياس المسافات (قاعدة 4px) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* ── الظلال (Elevation) ── */
+  --shadow-xs: 0 1px 2px rgba(32, 26, 46, 0.05);
+  --shadow-sm: 0 2px 8px rgba(32, 26, 46, 0.08);
+  --shadow-md: 0 8px 24px -8px rgba(32, 26, 46, 0.16);
+  --shadow-lg: 0 16px 40px -12px rgba(32, 26, 46, 0.22);
+  --shadow-brand: 0 12px 28px -14px rgba(217, 131, 47, 0.45);
+
+  /* ── الخطوط ── */
   --font-display: 'Tajawal', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-heading: 'Cairo', 'Tajawal', sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
-  --shadow: 0 1px 2px rgba(32, 26, 46, 0.05);
+
+  /* ═══ الأسماء المستعارة القديمة (Legacy aliases — توافق فقط) ═══ */
+  --navy: var(--brand-primary);
+  --navy-dark: var(--brand-primary-strong);
+  --gold: var(--brand-secondary);
+  --gold-dark: var(--brand-secondary-strong);
+  --gold-soft: var(--brand-secondary-soft);
+  --teal: var(--brand-secondary);
+  --green: var(--success);
+  --red: var(--danger);
+  --text: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --radius: 20px;
+  --shadow: var(--shadow-xs);
   --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.35);
   --on-accent-text: #ffffff;
   --sidebar-bg: #171b2e;
   --sidebar-bg-alt: #1c2036;
   --sidebar-text: #b9bedb;
   --sidebar-text-muted: #7a7fa0;
-  --sidebar-active-bg: #f0a857;
+  --sidebar-active-bg: var(--brand-primary-bright);
   --sidebar-active-text: #0f1326;
   color-scheme: light;
 }
 
+/* ============= نبض DS TOKENS v1 — Dark (داكن) ============= */
 body.dark-theme {
+  /* ── الهوية (Brand) — الداكن واجهة مستقلة لا انقلاب ألوان ── */
+  --brand-primary: #f0a857;
+  --brand-primary-strong: #d98a34;
+  --brand-primary-bright: #ffd9a0;
+
+  --brand-secondary: #2fd9b0;
+  --brand-secondary-strong: #21ad8b;
+  --brand-secondary-bright: #7eebd2;
+  --brand-secondary-soft: #7eebd2;
+
+  /* ── الأسطح والخلفيات ── */
   --bg: #0f1326;
   --surface: rgba(21, 25, 44, 0.92);
   --surface-solid: #151a2c;
   --surface-alt: #1a2038;
   --bg-soft: #171c30;
-  --navy: #f0a857;
-  --navy-dark: #d98a34;
-  --gold: #2fd9b0;
-  --gold-dark: #21ad8b;
-  --gold-soft: #7eebd2;
-  --teal: #2fd9b0;
-  --success: #2fd9b0;
-  --red: #ff6e7a;
-  --danger: #ff6e7a;
-  --text: #f2f3fa;
-  --text-muted: #9199bf;
   --border: #262c48;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* ── النصوص ── */
+  --text-primary: #f2f3fa;
+  --text-secondary: #9199bf;
+
+  /* ── الدلالية ── */
+  --success: #2fd9b0;
+  --warning: #eebc55;
+  --danger: #ff6e7a;
+  --info: #7aa3ef;
+
+  /* ── الظلال ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 18px 44px -14px rgba(0, 0, 0, 0.6);
+  --shadow-brand: 0 12px 30px -14px rgba(240, 168, 87, 0.5);
+
+  /* ═══ إعادة تعريف الأسماء المستعارة في نطاق الداكن (إلزامي) ═══ */
+  --navy: var(--brand-primary);
+  --navy-dark: var(--brand-primary-strong);
+  --gold: var(--brand-secondary);
+  --gold-dark: var(--brand-secondary-strong);
+  --gold-soft: var(--brand-secondary-soft);
+  --teal: var(--brand-secondary);
+  --green: var(--success);
+  --red: var(--danger);
+  --text: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --shadow: var(--shadow-xs);
   --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.4);
   --on-accent-text: #0f1326;
   --sidebar-bg: #0b0e1c;
   --sidebar-bg-alt: #11152a;
   --sidebar-text: #9199bf;
   --sidebar-text-muted: #565c85;
-  --sidebar-active-bg: #f0a857;
+  --sidebar-active-bg: var(--brand-primary);
   --sidebar-active-text: #0f1326;
   color-scheme: dark;
 }

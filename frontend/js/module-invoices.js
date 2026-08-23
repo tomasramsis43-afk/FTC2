@@ -1013,7 +1013,7 @@ function renderPruneRecordsPanel(){
   const wrap = $('#prune-records-rows');
   if(!wrap) return;
   wrap.innerHTML = PRUNE_RECORDS_CONFIG.map(cfg => `
-    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-color);">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
       <span style="min-width:210px;">${escapeHtml(cfg.label)}</span>
       <label style="display:flex; align-items:center; gap:6px; font-size:13px;">الاحتفاظ بآخر
         <input type="number" min="90" step="1" value="${cfg.defaultDays}" data-prune-days="${cfg.key}" style="width:90px;"> يوم
@@ -1073,7 +1073,7 @@ async function renderTfaPanel(){
     enabled = !!data.enabled;
   }catch(e){ badge.textContent = 'تعذّر التحقق من الحالة'; return; }
   badge.className = 'hint';
-  badge.style.color = enabled ? 'var(--green, #22c55e)' : '';
+  badge.style.color = enabled ? 'var(--success)' : '';
   badge.textContent = enabled ? '✅ المصادقة الثنائية مفعّلة حالياً' : '⭕ المصادقة الثنائية غير مفعّلة';
   if(enabled){
     controls.innerHTML = `<button class="btn btn-danger btn-sm" id="btn-tfa-disable">إلغاء تفعيل المصادقة الثنائية</button>`;
@@ -1120,7 +1120,7 @@ async function loadWebauthnDevicesList(){
       return;
     }
     listEl.innerHTML = rows.map(r => `
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid var(--border-soft, #e5e7eb); border-radius:10px; margin-bottom:6px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; margin-bottom:6px;">
         <div>
           <div style="font-weight:600;">${escapeHtml(r.nickname || 'جهاز غير مسمّى')}</div>
           <div style="font-size:12px; color:var(--text-muted);">
@@ -1173,9 +1173,9 @@ async function startTfaSetup(){
         const data2 = await res2.json();
         if(!res2.ok) throw new Error(data2.error||'كود غير صحيح');
         controls.innerHTML = `
-          <div class="hint" style="font-weight:600; color:var(--green, #22c55e);">✅ تم تفعيل المصادقة الثنائية بنجاح</div>
+          <div class="hint" style="font-weight:600; color:var(--success);">✅ تم تفعيل المصادقة الثنائية بنجاح</div>
           <div style="margin-top:8px;">احتفظ بهذه الأكواد الاحتياطية فى مكان آمن — كل كود يُستخدم مرة واحدة فقط، وتظهر هنا الآن فقط ولن تظهر مرة أخرى أبداً:</div>
-          <div class="mono" style="background:var(--bg-secondary); padding:10px; border-radius:8px; margin-top:6px; line-height:2;">
+          <div class="mono" style="background:var(--surface-alt); padding:10px; border-radius:8px; margin-top:6px; line-height:2;">
             ${data2.backupCodes.map(c=>escapeHtml(c)).join(' &nbsp; ')}
           </div>`;
         showToast('تم تفعيل المصادقة الثنائية');
