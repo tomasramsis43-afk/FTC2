@@ -753,7 +753,11 @@ document.addEventListener('click', async e=>{
   const delId = e.target?.dataset?.scheddel;
   if(toggleId){
     const s = scheduledVaultTx.find(x=>x.id===toggleId);
-    if(s){ s.active = s.active===false; await saveScheduledVaultTx(); renderScheduledVaultTable(); }
+    if(s && !e.target.disabled){
+      e.target.disabled = true;
+      try{ s.active = s.active===false; await saveScheduledVaultTx(); renderScheduledVaultTable(); }
+      finally{ e.target.disabled = false; }
+    }
   }
   if(editId) openScheduleModal(editId);
   if(delId){
