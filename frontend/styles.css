@@ -95,6 +95,19 @@
   --sidebar-text-muted: #7a7fa0;
   --sidebar-active-bg: var(--brand-primary-bright);
   --sidebar-active-text: #0f1326;
+
+  /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
+  --color-primary: var(--brand-primary);
+  --color-secondary: var(--brand-secondary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --bg-page: var(--bg);
+  --bg-surface: var(--surface-solid);
+  --bg-elevated: var(--surface-alt);
+  --border-subtle: var(--border);
+  --border-default: var(--border);
   color-scheme: light;
 }
 
@@ -155,6 +168,19 @@ body.dark-theme {
   --sidebar-text-muted: #565c85;
   --sidebar-active-bg: var(--brand-primary);
   --sidebar-active-text: #0f1326;
+
+  /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
+  --color-primary: var(--brand-primary);
+  --color-secondary: var(--brand-secondary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --bg-page: var(--bg);
+  --bg-surface: var(--surface-solid);
+  --bg-elevated: var(--surface-alt);
+  --border-subtle: var(--border);
+  --border-default: var(--border);
   color-scheme: dark;
 }
 
