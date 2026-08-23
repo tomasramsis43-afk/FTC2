@@ -4200,3 +4200,42 @@ body.dark-theme .doc-paper { background: #201a10; color: #f3ead8; }
   background: color-mix(in srgb, var(--gold) 8%, transparent);
   border-radius: var(--radius-sm, 10px);
 }
+
+/* ============================================================
+   نبض — Phase 4e: Report Studio (معرض بطاقات التقارير)
+   ============================================================ */
+.studio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.studio-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 14px);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.studio-card:hover,
+.studio-card:focus-visible {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+  outline: none;
+}
+.studio-ico {
+  font-size: 22px !important;
+  color: var(--brand-primary-strong);
+  background: color-mix(in srgb, var(--gold) 13%, transparent);
+  border-radius: var(--radius-sm, 10px);
+  padding: 7px;
+  flex: none;
+}
+body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
+.studio-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.studio-body b { font-size: 13px; color: var(--text-primary); }
+.studio-body small { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.studio-actions { display: flex; gap: 6px; margin-top: 6px; }
