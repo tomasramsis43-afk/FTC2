@@ -268,7 +268,7 @@ function renderSmartAlerts(){
     const pendingClientsCount = pendingClientIdSet().size;
     const totalPending = pendingClientsCount + visiblePendingApprovals.length;
     if(totalPending){
-      alerts.push({level:'red', icon:'badge', text:`${totalPending} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
+      alerts.push({key:'pending-approval', level:'red', icon:'badge', text:`${totalPending} عملية سجّلها موظفو الاستقبال بانتظار اعتمادك — لا تدخل الحسابات والتقارير حتى الاعتماد`, view:'dashboard'});
     }
   }
 
@@ -276,7 +276,7 @@ function renderSmartAlerts(){
   const overdueDays = settings.bagOverdueDays || 14;
   const overdueBags = clients.filter(c=> c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended && daysSinceDate(c.date) > overdueDays);
   if(overdueBags.length){
-    alerts.push({level:'red', icon:'shopping_bag', text:`${overdueBags.length} حقيبة مطلوب شراؤها تجاوزت ${overdueDays} يوم بدون شراء`, view:'clients'});
+    alerts.push({key:'overdue-bags', level:'red', icon:'shopping_bag', text:`${overdueBags.length} حقيبة مطلوب شراؤها تجاوزت ${overdueDays} يوم بدون شراء`, view:'clients'});
   }
 
   // ٢) انخفاض رصيد الخزنة + البنك عن الحد الأدنى
@@ -284,14 +284,14 @@ function renderSmartAlerts(){
   const liquid = balanceOfAsOf('vault', today) + balanceOfAsOf('bank', today);
   const threshold = settings.lowBalanceThreshold ?? 5000;
   if(liquid < threshold){
-    alerts.push({level:'red', icon:'payments', text:`رصيد الخزنة والبنك (${fmt(liquid)}) أقل من الحد الأدنى المحدد (${fmt(threshold)})`, view:'vault'});
+    alerts.push({key:'low-balance', level:'red', icon:'payments', text:`رصيد الخزنة والبنك (${fmt(liquid)}) أقل من الحد الأدنى المحدد (${fmt(threshold)})`, view:'vault'});
   }
 
   // ٣) اقتراب انتهاء الترخيص
   if(LICENSE_EXPIRY_DATE){
     const daysLeft = Math.ceil((new Date(LICENSE_EXPIRY_DATE).getTime() - Date.now()) / 86400000);
     if(daysLeft <= 14 && daysLeft >= 0){
-      alerts.push({level:'gold', icon:'vpn_key', text:`ترخيص البرنامج سينتهي خلال ${daysLeft} يوم — يُرجى التجديد قريباً`});
+      alerts.push({key:'license-expiry', level:'gold', icon:'vpn_key', text:`ترخيص البرنامج سينتهي خلال ${daysLeft} يوم — يُرجى التجديد قريباً`});
     }
   }
 
@@ -305,13 +305,13 @@ function renderSmartAlerts(){
       return ratio >= 0.8 && enrolled < s.capacity;
     });
     if(nearFull.length){
-      alerts.push({level:'gold', icon:'menu_book', text:`${nearFull.length} دورة اقتربت من اكتمال العدد (80% فأكثر)`, view:'courses'});
+      alerts.push({key:'courses-near-full', level:'gold', icon:'menu_book', text:`${nearFull.length} دورة اقتربت من اكتمال العدد (80% فأكثر)`, view:'courses'});
     }
   }
 
   // ٥) تذكير بالنسخ الاحتياطي التلقائي (لو معطّل أو متأخر بشكل غير متوقع)
   if(!settings.autoBackupEnabled){
-    alerts.push({level:'gold', icon:'save', text:'النسخ الاحتياطي التلقائي معطّل حالياً — يُفضّل تفعيله من الإعدادات', view:'settings'});
+    alerts.push({key:'backup-disabled', level:'gold', icon:'save', text:'النسخ الاحتياطي التلقائي معطّل حالياً — يُفضّل تفعيله من الإعدادات', view:'settings'});
   }
 
   // ٦) ملخص الشهر الماضي جاهز للإرسال عبر واتساب (يظهر أول 7 أيام من الشهر الجديد فقط ولمرة واحدة لكل شهر)
@@ -319,21 +319,50 @@ function renderSmartAlerts(){
     const key = lastCompleteMonthKey();
     const dayOfMonth = new Date().getDate();
     if(dayOfMonth<=7 && settings.lastMonthlyReportPromptMonth!==key){
-      alerts.push({level:'gold', icon:'ios_share', text:`ملخص ${monthLabelAr(key)} جاهز — اضغط لإرساله عبر واتساب`, action:'monthly-wa', actionKey:key});
+      alerts.push({key:'monthly-report', level:'gold', icon:'ios_share', text:`ملخص ${monthLabelAr(key)} جاهز — اضغط لإرساله عبر واتساب`, action:'monthly-wa', actionKey:key});
     }
   }
 
-  window.__openAlertsCount = alerts.length;
-  if(!alerts.length){ el.innerHTML = ''; return; }
+  // مؤجَّلة مؤقتاً: تنبيهات ضُغط عليها "🔔 ذكّرني غدًا" ولها تذكير مفتوح لم يستحق بعد — تُخفى من هنا
+  // (تبقى ظاهرة فى مركز المتابعة والتذكيرات نفسه) وتعود تلقائياً بمجرد وصول تاريخ التذكير.
+  const snoozedKeys = new Set(
+    (typeof followUpTasks!=='undefined' ? followUpTasks : [])
+      .filter(t=> t.status==='open' && t.sourceAlertKey && t.dueDate && t.dueDate >= today)
+      .map(t=> t.sourceAlertKey)
+  );
+  const visibleAlerts = alerts.filter(a=> !snoozedKeys.has(a.key));
+
+  window.__openAlertsCount = visibleAlerts.length;
+  if(!visibleAlerts.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel panel-accent panel-accent-red">
     <h3 style="margin:0 0 8px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> تنبيهات تحتاج انتباهك</h3>
-    ${alerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);" ${a.view?`class="sa-alert-item" data-sa-view="${a.view}" style="cursor:pointer;"`:(a.action?`class="sa-alert-item" data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}" style="cursor:pointer;"`:'')}>
-      <span class="msi" style="font-size:18px;">${a.icon}</span>
-      <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
+    ${visibleAlerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);">
+      <span class="sa-alert-item" ${a.view?`data-sa-view="${a.view}"`:(a.action?`data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}"`:'')} style="display:flex; align-items:center; gap:8px; flex:1; ${(a.view||a.action)?'cursor:pointer;':''}">
+        <span class="msi" style="font-size:18px;">${a.icon}</span>
+        <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" data-sa-remind="${a.key}" data-sa-remind-text="${escapeHtml(a.text)}" title="أضِف تذكير متابعة لهذا التنبيه واخفِه حتى الغد">🔔 ذكّرني غداً</button>
     </div>`).join('')}
   </div>`;
 }
 $('#smart-alerts-panel')?.addEventListener('click', async e=>{
+  const remindBtn = e.target.closest('[data-sa-remind]');
+  if(remindBtn){
+    const key = remindBtn.dataset.saRemind;
+    const text = remindBtn.dataset.saRemindText || '';
+    if(typeof followUpTasks !== 'undefined'){
+      followUpTasks.push({
+        id: uid(), text, dueDate: addDaysISO(todayISO(), 1), clientId:'', clientName:'',
+        status:'open', createdBy:(typeof currentUser!=='undefined'?currentUser:'—')||'—',
+        createdAt: Date.now(), doneAt:null, sourceAlertKey: key
+      });
+      await saveFollowUpTasks();
+      showToast('تمت إضافته إلى مركز المتابعة — سيظهر التنبيه مجدداً غداً لو لم يُحل');
+      renderSmartAlerts();
+      if(typeof renderFollowUpsPanel==='function') renderFollowUpsPanel();
+    }
+    return;
+  }
   const actionItem = e.target.closest('[data-sa-action]');
   if(actionItem){
     if(actionItem.dataset.saAction==='monthly-wa'){
