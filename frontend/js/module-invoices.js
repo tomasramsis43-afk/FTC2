@@ -954,6 +954,7 @@ async function renderRolePermissionsPanel(){
     </table>`;
 }
 if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-role-permissions'), async ()=>{
   const newRp = {};
   EDITABLE_ROLES.forEach(r=>{ newRp[r.id] = []; });
   $all('#role-permissions-table-wrap input[type=checkbox]').forEach(cb=>{
@@ -980,7 +981,8 @@ if($('#btn-save-role-permissions')) $('#btn-save-role-permissions').addEventList
   await logAudit('edit','الإعدادات','تم تعديل صلاحيات الأدوار (أي أقسام تظهر لكل دور، ويُفرض فعلياً على الخادم)');
   applyRolePermissions();
   showToast('تم حفظ الصلاحيات');
-});
+
+  });});
 /* ---------------- قيود دور الاستقبال (مهلة التعديل/الحذف بالساعات، قابلة للتغيير في أي وقت) ---------------- */
 function renderReceptionRestrictionsPanel(){
   const hoursInput = $('#rp-reception-window-hours');
@@ -992,6 +994,7 @@ function renderReceptionRestrictionsPanel(){
   delCb.checked = settings.receptionAllowDelete !== false;
 }
 if($('#btn-save-reception-restrictions')) $('#btn-save-reception-restrictions').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-reception-restrictions'), async ()=>{
   const hoursRaw = num($('#rp-reception-window-hours').value);
   const hours = (isFinite(hoursRaw) && hoursRaw>=0) ? hoursRaw : 5;
   settings.receptionEditDeleteWindowHours = hours;
@@ -1002,7 +1005,8 @@ if($('#btn-save-reception-restrictions')) $('#btn-save-reception-restrictions').
   renderReceptionRestrictionsPanel();
   showToast('تم حفظ قيود الاستقبال');
   renderTable();
-});
+
+  });});
 /* ---------------- تنظيف السجلات القديمة (سجل المراجعة/المحذوفات) — أدمن فقط، يدوي بالكامل ---------------- */
 const PRUNE_RECORDS_CONFIG = [
   { key: 'auditLog', label: 'سجل المراجعة (auditLog)', defaultDays: 730, warning: null },
@@ -1490,6 +1494,7 @@ $('#btn-export-app')?.addEventListener('click', ()=>{
   }
 });
 $('#btn-save-centerinfo')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-centerinfo'), async ()=>{
   settings.centerInfo = {
     name: $('#set-center-name').value.trim() || DEFAULT_SETTINGS.centerInfo.name,
     taxNumber: $('#set-center-tax').value.trim() || DEFAULT_SETTINGS.centerInfo.taxNumber,
@@ -1498,30 +1503,38 @@ $('#btn-save-centerinfo')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', 'تم تحديث بيانات المركز المستخدمة في الفاتورة');
   showToast('تم حفظ بيانات المركز');
-});
+
+  });});
 $('#btn-save-autobackup')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-autobackup'), async ()=>{
   settings.autoBackupEnabled = $('#set-autobackup-enabled').checked;
   settings.autoBackupIntervalDays = Math.max(1, Number($('#set-autobackup-days').value)||7);
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث إعداد النسخ الاحتياطي التلقائي: ${settings.autoBackupEnabled?'مفعّل':'معطّل'} كل ${settings.autoBackupIntervalDays} يوم`);
   showToast('تم حفظ إعداد النسخ الاحتياطي');
-});
+
+  });});
 $('#btn-save-alert-settings')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-alert-settings'), async ()=>{
   settings.lowBalanceThreshold = Math.max(0, Number($('#set-low-balance').value)||0);
   settings.bagOverdueDays = Math.max(1, Number($('#set-bag-overdue-days').value)||14);
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث إعدادات التنبيهات: حد أدنى للرصيد ${fmt(settings.lowBalanceThreshold)}، تنبيه الحقائب بعد ${settings.bagOverdueDays} يوم`);
   showToast('تم حفظ إعدادات التنبيهات');
   renderSmartAlerts();
-});
+
+  });});
 $('#btn-save-monthly-wa')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-monthly-wa'), async ()=>{
   settings.monthlyReportWhatsapp = ($('#set-monthly-wa-number').value||'').replace(/[^\d]/g,'');
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث رقم واتساب التقرير الشهري`);
   showToast('تم حفظ رقم واتساب');
   renderSmartAlerts();
-});
+
+  });});
 $('#btn-save-wa3-numbers')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-wa3-numbers'), async ()=>{
   const raw = ($('#wa3-numbers').value||'');
   const cleaned = raw.split(',').map(s=> s.replace(/[^\d]/g,'')).filter(Boolean);
   settings.monthlyPdfReportsWhatsappNumbers = cleaned.join(', ');
@@ -1529,8 +1542,10 @@ $('#btn-save-wa3-numbers')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي التقارير الشهرية (${cleaned.length} رقم)`);
   showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
-});
+
+  });});
 $('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-vat-wa-numbers'), async ()=>{
   const raw = ($('#vat-wa-numbers').value||'');
   const cleaned = raw.split(',').map(s=> s.replace(/[^\d]/g,'')).filter(Boolean);
   settings.vatPdfReportWhatsappNumbers = cleaned.join(', ');
@@ -1538,8 +1553,10 @@ $('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي الإقرار الضريبي (${cleaned.length} رقم)`);
   showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
-});
+
+  });});
 $('#btn-save-report-email')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-report-email'), async ()=>{
   const to = ($('#set-report-email-to').value||'').trim();
   const ccRaw = ($('#set-report-email-cc').value||'');
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1553,7 +1570,8 @@ $('#btn-save-report-email')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث إعدادات إيميل التقارير: To=${to||'—'}${ccList.length ? `, CC=${ccList.join(', ')}` : ''}`);
   showToast('تم حفظ إعدادات الإيميل');
-});
+
+  });});
 $('#btn-backup-now')?.addEventListener('click', ()=>{
   downloadFullBackup(false);
   showToast('تم تنزيل النسخة الاحتياطية');
@@ -1676,6 +1694,7 @@ document.addEventListener('click', async e=>{
   }
 });
 $('#btn-add-course')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-course'), async ()=>{
   const name = $('#new-course-name').value.trim();
   const price = num($('#new-course-price').value);
   if(!name) return;
@@ -1690,8 +1709,10 @@ $('#btn-add-course')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('add','الإعدادات', `تمت إضافة نوع دورة: ${name} (${fmt(price)})`);
   renderSettings(); refreshFilterOptions();
-});
+
+  });});
 $('#btn-add-nat')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-nat'), async ()=>{
   const v = $('#new-nat').value.trim(); if(!v) return;
   const dup = (settings.nationalities||[]).find(n=> String(n||'').trim().toLowerCase() === v.toLowerCase());
   if(dup){
@@ -1703,8 +1724,10 @@ $('#btn-add-nat')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('add','الإعدادات', `تمت إضافة جنسية: ${v}`);
   renderSettings(); refreshFilterOptions();
-});
+
+  });});
 $('#btn-add-channel')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-channel'), async ()=>{
   const v = $('#new-channel').value.trim(); if(!v) return;
   snapshotState(`إضافة طريقة دفع: ${v}`);
   settings.channels.push({name:v, dest:$('#new-channel-dest').value});
@@ -1712,15 +1735,18 @@ $('#btn-add-channel')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('add','الإعدادات', `تمت إضافة طريقة دفع: ${v}`);
   renderSettings(); refreshFilterOptions();
-});
+
+  });});
 $('#btn-add-expcat')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-add-expcat'), async ()=>{
   const v = $('#new-expcat').value.trim(); if(!v) return;
   snapshotState(`إضافة تصنيف مصروف: ${v}`);
   settings.expenseCategories.push(v); $('#new-expcat').value='';
   await saveSettings();
   await logAudit('add','الإعدادات', `تمت إضافة تصنيف مصروف: ${v}`);
   renderSettings();
-});
+
+  });});
 document.addEventListener('click', async e=>{
   if(e.target.dataset.rc!==undefined){
     const removed = settings.courses[+e.target.dataset.rc];
@@ -1752,6 +1778,7 @@ document.addEventListener('click', async e=>{
   }
 });
 $('#btn-reset')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-reset'), async ()=>{
   if(await customConfirm('سيتم حذف جميع بيانات العملاء نهائياً. متأكد؟')){
     const countBefore = clients.length;
     snapshotState(`حذف جميع بيانات العملاء (${countBefore} سجل)`);
@@ -1761,21 +1788,26 @@ $('#btn-reset')?.addEventListener('click', async ()=>{
     renderTable(); renderDashboard(); renderBags();
     showToast('تم حذف جميع البيانات');
   }
-});
+
+  });});
 $('#btn-save-bagprice')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-bagprice'), async ()=>{
   const oldPrice = settings.bagPrice;
   settings.bagPrice = num($('#set-bagprice').value);
   await saveSettings();
   await logAudit('edit','الإعدادات', `تم تعديل قيمة الحقيبة من ${fmt(oldPrice)} إلى ${fmt(settings.bagPrice)}`);
   showToast('تم حفظ قيمة الحقيبة');
-});
+
+  });});
 
 $('#btn-save-nat-prices')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-nat-prices'), async ()=>{
   const oldSaudi = settings.priceSaudi, oldNonSaudi = settings.priceNonSaudi;
   settings.priceSaudi = num($('#set-price-saudi').value);
   settings.priceNonSaudi = num($('#set-price-nonsaudi').value);
   await saveSettings();
   await logAudit('edit','الإعدادات', `تم تعديل سعر الدورة حسب الجنسية: السعودي من ${fmt(oldSaudi)} إلى ${fmt(settings.priceSaudi)}، وغير السعودي من ${fmt(oldNonSaudi)} إلى ${fmt(settings.priceNonSaudi)}`);
   showToast('تم حفظ أسعار الدورة حسب الجنسية');
-});
+
+  });});
 

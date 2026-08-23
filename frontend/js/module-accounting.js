@@ -404,6 +404,7 @@ async function autoPostAllPendingDoubleEntries(){
   return count;
 }
 $('#btn-migrate-legacy')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-migrate-legacy'), async ()=>{
   const pending = journalEntries.filter(j=>!j.linkedDEId);
   if(!pending.length){ showToast('كل القيود اليدوية مُرحّلة بالفعل'); return; }
   let count = 0;
@@ -414,7 +415,8 @@ $('#btn-migrate-legacy')?.addEventListener('click', async ()=>{
   await logAudit('add','المحاسبة', `تم ترحيل ${count} قيد يدوي تلقائياً إلى القيد المزدوج`);
   showToast(`تم ترحيل ${count} قيد تلقائياً`);
   renderAccounting();
-});
+
+  });});
 
 /* تنظيف القيود اليومية اليتيمة: قيد يومية بترحيل تلقائي (isAuto) مرتبط بمصدر لم يعد موجوداً —
    فاتورة شراء/مبيعات يدوية/قيد يدوي/فاتورة دورة حُذفت دون حذف قيدها المرتبط — كان يبقى إلى

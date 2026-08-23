@@ -105,6 +105,7 @@ function renderBagFinanceLinkToggle(){
   btn.className = enabled ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm';
 }
 $('#btn-toggle-bagfinancelink').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-toggle-bagfinancelink'), async ()=>{
   const enabled = settings.bagFinanceLinkEnabled!==false;
   settings.bagFinanceLinkEnabled = !enabled;
   await saveSettings();
@@ -113,7 +114,8 @@ $('#btn-toggle-bagfinancelink').addEventListener('click', async ()=>{
     : 'تم إلغاء ربط عمليات مخزون الحقائب بالحركات المالية تلقائياً (العمليات الجديدة لن تُنشئ حركات مالية، والحركات القديمة تبقى كما هي)');
   renderBagFinanceLinkToggle();
   showToast(settings.bagFinanceLinkEnabled ? 'تم تفعيل الربط' : 'تم إلغاء الربط');
-});
+
+  });});
 
 /* ---------------- ربط Power Automate (Webhooks) ----------------
    إرسال أحداث تلقائياً (POST بصيغة JSON) لرابط HTTP Trigger من Power Automate عند حدوث أحداث معيّنة.
@@ -136,6 +138,7 @@ async function sendPowerAutomateEvent(eventType, payload){
   }
 }
 $('#btn-save-pa-webhook').addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-pa-webhook'), async ()=>{
   settings.powerAutomate = {
     webhookUrl: $('#set-pa-webhook-url').value.trim(),
     notifyNewClient: $('#set-pa-notify-newclient').checked,
@@ -144,7 +147,8 @@ $('#btn-save-pa-webhook').addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', 'تم تحديث إعدادات ربط Power Automate');
   showToast('تم حفظ إعدادات Power Automate');
-});
+
+  });});
 $('#btn-test-pa-webhook').addEventListener('click', async ()=>{
   const url = $('#set-pa-webhook-url').value.trim();
   if(!url){ showToast('أدخل رابط Webhook أولاً'); return; }
@@ -1339,20 +1343,24 @@ $('#import-bankrecon-input')?.addEventListener('change', async e=>{
   }
 });
 $('#btn-bankrecon-rerun-automatch')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-bankrecon-rerun-automatch'), async ()=>{
   if(!bankStatementRows.length){ showToast('لا يوجد كشف حساب مستورد أصلاً'); return; }
   const matchedCount = autoMatchBankStatement();
   await saveBankStatementRows();
   renderBankRecon();
   showToast(matchedCount ? `تمت مطابقة ${matchedCount} سطراً إضافياً تلقائياً` : 'لا توجد مطابقات تلقائية جديدة ممكنة حالياً');
-});
+
+  });});
 $('#btn-bankrecon-clear')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-bankrecon-clear'), async ()=>{
   if(!bankStatementRows.length){ showToast('لا يوجد كشف حساب مستورد أصلاً'); return; }
   if(!await customConfirm('سيتم مسح كل سطور كشف الحساب البنكي المستورد وكل الربط الحالي معها. هذا لا يؤثر على الحركات المالية نفسها. متابعة؟')) return;
   bankStatementRows = [];
   await saveBankStatementRows();
   renderBankRecon();
   showToast('تم مسح كشف الحساب المستورد');
-});
+
+  });});
 document.addEventListener('click', async e=>{
   const matchId = e.target?.dataset?.match;
   const unmatchId = e.target?.dataset?.unmatch;

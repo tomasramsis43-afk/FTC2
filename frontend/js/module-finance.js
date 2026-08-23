@@ -1152,6 +1152,7 @@ $('#btn-vault-clear-selection')?.addEventListener('click', ()=>{
   renderVault();
 });
 $('#btn-vault-bulk-delete')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-vault-bulk-delete'), async ()=>{
   const allIds = [...selectedVaultIds].filter(id=>vaultTx.some(t=>t.id===id));
   if(!allIds.length){ showToast('لا يوجد حركات محددة'); return; }
   const targets = allIds.map(id=>vaultTx.find(t=>t.id===id));
@@ -1209,7 +1210,8 @@ $('#btn-vault-bulk-delete')?.addEventListener('click', async ()=>{
   renderTable(); renderDashboard(); refreshFilterOptions(); renderReports();
   renderVault();
   showToast(`تم إلغاء ${removedCount} حركة بنجاح${lockedTargets.length?`، وتجاهل ${lockedTargets.length} حركة مُقفلة`:''}`);
-});
+
+  });});
 
 function toggleVaultFields(){
   const type = $('#vf-type').value;
