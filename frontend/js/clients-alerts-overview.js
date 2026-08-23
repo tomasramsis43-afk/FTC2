@@ -14,6 +14,7 @@ function renderDashboard(){
   // قسم تاني بالبرنامج (فواتير، خزنة، حقائب، دورات...) وهو أصلاً مش شايف لوحة التحكم دلوقتي.
   if(isViewActive('dashboard')){
     renderCfoDashboard();
+    renderCockpitPulse();
     renderSmartAlerts();
     if(currentUserRole==='admin') refreshPendingApprovals();
   }

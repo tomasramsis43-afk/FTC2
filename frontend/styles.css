@@ -3844,3 +3844,111 @@ body.dark-theme .gsr-cmd-icon {
   line-height: 1.4;
 }
 .gsr-kbd-sep { width: 1px; height: 12px; background: var(--border); display: inline-block; }
+
+/* ============================================================
+   نبض — Phase 3: Cockpit Pulse (تدفق يومي / سجل نشاط / إجراءات)
+   ============================================================ */
+.pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .pulse-grid { grid-template-columns: 1fr; }
+}
+.pulse-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 18px);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+  min-width: 0;
+}
+.pulse-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pulse-card-head h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.pulse-sub, .pulse-legend {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pulse-legend i {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 3px;
+  margin-inline-start: 8px;
+  vertical-align: -1px;
+}
+.pulse-legend .lg-in { background: var(--brand-secondary); }
+.pulse-legend .lg-out { background: var(--danger); }
+
+.flow-chart { width: 100%; height: 66px; display: block; }
+.flow-chart rect { transition: opacity .15s ease; }
+.flow-chart g:hover rect { opacity: 1 !important; }
+
+.pulse-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1;
+  padding: 4px 9px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.chip b { font-weight: 700; }
+.chip-in { border-color: color-mix(in srgb, var(--brand-secondary) 35%, transparent); }
+.chip-in b { color: var(--brand-secondary-strong); }
+.chip-out { border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.chip-out b { color: var(--danger); }
+
+.act-stream { display: flex; flex-direction: column; }
+.act-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--border);
+  min-width: 0;
+}
+.act-row:last-child { border-bottom: none; }
+.act-ico { font-size: 17px !important; flex: none; margin-top: 1px; }
+.act-body { min-width: 0; }
+.act-text {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.act-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.qa-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.qa-btn {
+  justify-content: flex-start;
+  gap: 7px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md, 14px);
+  padding: 10px 12px !important;
+  font-size: 12.5px !important;
+}
+.qa-btn:hover { border-style: solid; border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
