@@ -126,6 +126,20 @@
       <button id="btn-redo" type="button" class="icon-btn" title="لا توجد عملية للتقدم إليها" disabled="" style="opacity:.5;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5"></path><path d="M20 12H9a5 5 0 0 0 0 10h1"></path></svg><span>تقدم</span></button>
       <button id="btn-clear-all-filters" type="button" class="icon-btn" title="إلغاء كل الفلاتر وخانات البحث في الشيت الحالي وإعادة عرض كل البيانات"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"></path><path d="M7 5v13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5"></path><path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"></path><path d="M9 10l6 6M15 10l-6 6"></path></svg><span>إلغاء الفلتر</span></button>
       <button id="btn-global-search" type="button" class="icon-btn" title="بحث شامل في كل الشيتات (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><span>بحث شامل</span></button>
+      <div class="notif-wrap" id="notif-wrap">
+        <button id="btn-notifications" type="button" class="icon-btn" title="الإشعارات" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+          <span>الإشعارات</span>
+          <span id="notif-badge" class="notif-badge" style="display:none;">0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" role="dialog" aria-modal="false" aria-label="الإشعارات">
+          <div class="notif-panel-head">
+            <b>الإشعارات</b>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-notif-mark-all">تعليم الكل كمقروء</button>
+          </div>
+          <div id="notif-panel-body" class="notif-panel-body"></div>
+        </div>
+      </div>
       <div class="user-menu-wrap" id="user-menu-wrap">
         <span class="user-pill" id="btn-user-menu-toggle" role="button" tabindex="0" title="خيارات إضافية" aria-haspopup="true" aria-expanded="false"><b id="current-user-label"></b></span>
         <div class="user-menu-dropdown" id="user-menu-dropdown">
@@ -2966,6 +2980,7 @@
 <script defer src="js/module-companies.js"></script>
 <script defer src="js/module-purchases.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
+<script defer src="js/notification-center.js"></script>
 <script defer src="js/module-followups.js"></script>
 <script defer src="js/client-workspace.js"></script>
 <script defer src="js/vault-workspace.js"></script>
