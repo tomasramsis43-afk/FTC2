@@ -2957,6 +2957,7 @@
 <script defer src="js/module-companies.js"></script>
 <script defer src="js/module-purchases.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
+<script defer src="js/client-workspace.js"></script>
 <script defer src="js/boot.js"></script>
 
 
@@ -2976,5 +2977,18 @@
       <button class="btn btn-ghost btn-sm" type="button" id="btn-close-global-search">إغلاق</button>
     </div>
   </div>
+</div>
+<div class="overlay cw-overlay" id="client-workspace-overlay">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="ملف العميل">
+    <div class="drawer-head">
+      <div class="drawer-head-main">
+        <h3 id="cw-name">—</h3>
+        <div class="cw-badges" id="cw-badges"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-cw-close">إغلاق ✕</button>
+    </div>
+    <div class="drawer-body" id="cw-body"></div>
+    <div class="drawer-foot" id="cw-foot"></div>
+  </aside>
 </div>
 </body></html>

@@ -190,6 +190,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
+            <button class="btn btn-ghost btn-sm" data-workspace="${c.id}" title="فتح ملف العميل الكامل (أو انقر نقراً مزدوجاً على الصف)">📂 فتح الملف</button>
             ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض هذا التسجيل المعلّق — يبقى ظاهراً للاستقبال 15 يوماً ثم يُحذف نهائياً تلقائياً">✖ رفض</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
             ${c.taxInvoiceNo ? `<button class="btn btn-ghost btn-sm" data-emailinvoice="${c.id}" title="إرسال الفاتورة بالإيميل للعميل">✉️ إرسال بالإيميل</button>` : ''}

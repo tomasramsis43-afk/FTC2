@@ -3952,3 +3952,135 @@ body.dark-theme .gsr-cmd-icon {
   font-size: 12.5px !important;
 }
 .qa-btn:hover { border-style: solid; border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+
+/* ============================================================
+   نبض — Phase 4a: Customer Workspace (ملف العميل - درج جانبي)
+   ============================================================ */
+.cw-overlay { justify-content: flex-end; padding: 0; }
+.drawer {
+  width: min(480px, 94vw);
+  max-width: 480px;
+  height: 100%;
+  background: var(--surface-solid, var(--surface));
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-24px);
+  opacity: 0;
+  transition: transform .22s ease, opacity .22s ease;
+}
+.cw-overlay.show .drawer { transform: translateX(0); opacity: 1; }
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 8%, transparent), transparent);
+}
+.drawer-head-main { min-width: 0; }
+.drawer-head h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.cw-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2.5px 8px;
+  border-radius: var(--radius-full, 999px);
+  line-height: 1.3;
+}
+.cw-badge.warn   { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.cw-badge.muted  { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text-muted); }
+.cw-badge.danger { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+
+.drawer-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+.drawer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.cw-section { margin-bottom: 18px; }
+.cw-section h4 {
+  margin: 0 0 9px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text-muted);
+}
+.cw-fin-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+.cw-fin-row > div {
+  padding: 9px 6px;
+  border-radius: var(--radius-md, 14px);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  border: 1px solid var(--border);
+}
+.cw-fin-row small { display: block; font-size: 10.5px; color: var(--text-muted); margin-bottom: 3px; }
+.cw-fin-row b { font-size: 13.5px; color: var(--text-primary); }
+.cw-fin-row .ok b { color: var(--success); }
+.cw-fin-row .due b { color: var(--danger); }
+
+.cw-bar {
+  height: 7px;
+  border-radius: var(--radius-full, 999px);
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+  overflow: hidden;
+  margin-top: 10px;
+}
+.cw-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-secondary), var(--brand-secondary-bright));
+  transition: width .4s ease;
+}
+.cw-bar-cap { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+.cw-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.cw-item {
+  padding: 7px 9px;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px dashed var(--border);
+  min-width: 0;
+}
+.cw-item small { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+.cw-item b { font-size: 12px; color: var(--text-primary); word-break: break-word; }
+
+.cw-moves { display: flex; flex-direction: column; gap: 5px; }
+.cw-move {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm, 10px);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.cw-move b { flex: none; }
+.cw-move-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-inline-start: auto;
+}
