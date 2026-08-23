@@ -9,7 +9,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { pool } = require('../db');
-const { requireAuth, signToken } = require('../auth');
+const { requireAuth, signToken, verifySecondFactor } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
 const {
   generateRegistrationOptions,
@@ -38,6 +38,19 @@ setInterval(() => {
     if (entry.expiresAt < now) pendingChallenges.delete(key);
   }
 }, 5 * 60 * 1000).unref();
+
+// جلسات "بانتظار الكود الثاني" بعد نجاح البصمة لحساب مفعّل عنده TOTP — بنفس نمط جلسات QR:
+// ذاكرة فقط، معرّف عشوائي 192-bit لا يمكن تخمينه، وعمر قصير 3 دقائق يُنظَّف دورياً.
+// الاستهلاك مرة واحدة: كل محاولة إدخال كود (صحيحة أو خاطئة) تحرق pendingId، فكل محاولة
+// جديدة تتطلب مسح بصمة جديد — وهذا بحد ذاته خنق طبيعي ضد تخمين الأكواد.
+const pendingSecondFactor = new Map(); // pendingId -> { username, expiresAt }
+const PENDING_2FA_TTL_MS = 3 * 60 * 1000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of pendingSecondFactor) {
+    if (entry.expiresAt < now) pendingSecondFactor.delete(id);
+  }
+}, 60 * 1000).unref();
 
 // rpID (Relying Party ID) يجب أن يطابق تماماً الدومين الذي تُخدَّم منه الواجهة فى متصفح
 // المستخدم؛ نستنتجه ديناميكياً من ترويسة Origin/Host بدل تثبيته، حتى يعمل صحيحاً سواء على
@@ -199,10 +212,33 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
     const user = userResult.rows[0];
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
-
-    const token = signToken(user);
     const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
+    // قفل المحاولات الفاشلة يسري على كل مسارات الدخول بلا استثناء.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      return res.status(403).json({ error: `الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة، حاول بعد ${minutesLeft} دقيقة` });
+    }
+    // المصادقة الثنائية: البصمة تثبت حيازة الجهاز المسجَّل، ولو الحساب مفعّل عنده TOTP نطلب
+    // الكود الثاني قبل إصدار التوكن — عبر جلسة قصيرة العمر تُستهلك في /login-2fa أسفل.
+    if (user.totp_enabled) {
+      const { totpCode, backupCode } = req.body || {};
+      const second = await verifySecondFactor(user, { totpCode, backupCode });
+      if (second.needed) {
+        const pendingId = crypto.randomBytes(24).toString('base64url');
+        pendingSecondFactor.set(pendingId, { username: user.username, expiresAt: Date.now() + PENDING_2FA_TTL_MS });
+        return res.json({ requires2FA: true, username: user.username, pendingId });
+      }
+      if (!second.ok) {
+        pool.query(
+          'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+          [user.username, user.role || 'staff', loginIp, loginDevice]
+        ).catch(() => {});
+        return res.status(401).json({ error: 'كود التحقق غير صحيح' });
+      }
+    }
+
+    const token = signToken(user);
     pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
     pool.query(
@@ -219,6 +255,64 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
     });
   } catch (e) {
     console.error('تعذّر إتمام الدخول بالبصمة:', e);
+    res.status(500).json({ error: 'تعذّر إتمام الدخول' });
+  }
+});
+
+// الخطوة الثانية لدخول البصمة لحساب مفعّل عنده TOTP: يستلم pendingId القصير العمر من
+// استجابة login-verify (requires2FA) مع الكود، فيُصدر التوكن عند النجاح. pendingId يُستهلك
+// مرة واحدة (خذ-واحذف) فكل محاولة خاطئة تتطلب مسح بصمة جديد من جديد — خنق طبيعي مضاعف
+// فوق authLimiter. لا يمكن تخمين pendingId (192-bit عشوائي) ولا الوصول إليه إلا بعد نجاح
+// البصمة فعلاً، فهذا المسار لا يفتح أي باب لحامل اسم مستخدم فقط.
+router.post('/api/auth/webauthn/login-2fa', authLimiter, async (req, res) => {
+  try {
+    const { pendingId, totpCode, backupCode } = req.body || {};
+    if (!pendingId) return res.status(400).json({ error: 'بيانات ناقصة' });
+    const entry = pendingSecondFactor.get(pendingId);
+    if (!entry || entry.expiresAt < Date.now()) {
+      pendingSecondFactor.delete(pendingId);
+      return res.status(401).json({ error: 'انتهت صلاحية جلسة التحقق — امسح بصمتك من جديد' });
+    }
+    // استهلاك فوري قبل أي تحقق: محاولة واحدة لكل مسح بصمة.
+    pendingSecondFactor.delete(pendingId);
+
+    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [entry.username]);
+    const user = userResult.rows[0];
+    if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
+    if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      return res.status(403).json({ error: `الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة، حاول بعد ${minutesLeft} دقيقة` });
+    }
+
+    const second = await verifySecondFactor(user, { totpCode, backupCode });
+    const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+    const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
+    if (!second.ok) {
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
+        [user.username, user.role || 'staff', loginIp, loginDevice]
+      ).catch(() => {});
+      return res.status(401).json({ error: 'كود التحقق غير صحيح' });
+    }
+
+    const token = signToken(user);
+    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+      .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
+    pool.query(
+      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
+      [user.username, user.role || 'staff', loginIp, 'دخول بالبصمة + كود مصادقة ثنائي']
+    ).catch(e => console.error('تعذّر تسجيل عملية الدخول فى السجل:', e));
+
+    res.json({
+      token,
+      username: user.username,
+      role: user.role || 'staff',
+      user: { username: user.username, displayName: user.display_name, role: user.role || 'staff' },
+      suspiciousAlert: [],
+    });
+  } catch (e) {
+    console.error('تعذّر التحقق من كود المصادقة بعد البصمة:', e);
     res.status(500).json({ error: 'تعذّر إتمام الدخول' });
   }
 });

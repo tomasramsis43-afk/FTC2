@@ -181,7 +181,47 @@ async function consumeBackupCode(storedJson, code) {
   return { ok: false, remaining: storedJson };
 }
 
+/* ---------------- تحقق موحّد من العامل الثاني لمسارات الدخول البديلة ----------------
+   نفس دلالات مسار /api/auth/login تماماً (كود TOTP مباشر أو كود احتياطي باستهلاك ذري
+   ضد TOCTOU عبر SELECT ... FOR UPDATE) — لكن دون تعديل المسار الرئيسي المُجرَّب.
+   النتيجة:
+   - { needed: true }            الحساب مفعّل عنده TOTP ولم يُرسَل أي كود → الواجهة تعرض حقل الإدخال
+   - { ok: true }                تحقق ناجح → يُصدَر التوكن في المستدعي
+   - { ok: false }               كود خاطئ/منتهٍ → يُرفض الدخول */
+async function verifySecondFactor(user, body) {
+  const { totpCode, backupCode } = body || {};
+  if (!totpCode && !backupCode) return { needed: true };
+  let verified = false;
+  // نجرّب TOTP أولاً؛ ولو فشل (أو كان الإدخال أصلاً كوداً احتياطياً من 8 أرقام) نجرب
+  // الاستهلاك الذري للأكواد الاحتياطية — فيقبل الحوار الواحد نوعَي الأكواد كما في تطبيقات المصادقة.
+  if (totpCode) {
+    verified = verifyTotpToken(totpCode, user.totp_secret);
+  }
+  if (!verified && backupCode) {
+    let tx = null;
+    try {
+      tx = await pool.connect();
+      await tx.query('BEGIN');
+      const locked = await tx.query('SELECT totp_backup_codes FROM server_users WHERE id = $1 FOR UPDATE', [user.id]);
+      const result = await consumeBackupCode(locked.rows[0].totp_backup_codes, backupCode);
+      verified = result.ok;
+      if (result.ok) {
+        await tx.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
+      }
+      await tx.query('COMMIT');
+    } catch (e) {
+      if (tx) await tx.query('ROLLBACK').catch(() => {});
+      console.error(e);
+      verified = false;
+    } finally {
+      if (tx) tx.release();
+    }
+  }
+  return { ok: verified };
+}
+
 module.exports = {
   signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword, verifyEmergencyAdmin, signEmergencyToken,
   generateTotpSecret, totpOtpauthUrl, verifyTotpToken, generateBackupCodes, hashBackupCodes, consumeBackupCode,
+  verifySecondFactor,
 };

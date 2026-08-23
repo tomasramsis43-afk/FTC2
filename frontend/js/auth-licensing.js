@@ -101,8 +101,21 @@ async function webauthnLogin(){
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ requestId, response: responsePayload }),
   });
-  const data = await verifyRes.json();
+  let data = await verifyRes.json();
   if(!verifyRes.ok) throw new Error(data.error || 'تعذّر الدخول بالبصمة');
+  // حساب محمي بمصادقة ثنائية: البصمة نجحت والخادم أعطانا جلسة انتظار قصيرة العمر (pendingId)
+  // نستكملها بإدخال الكود — محاولة واحدة لكل مسح بصمة (الخادم يستهلك الجلسة فوراً).
+  if(data.requires2FA && data.pendingId){
+    const code = await askTotpCode('تم التحقق من بصمتك — أدخل كود المصادقة الثنائية لإكمال الدخول');
+    if(!code) throw new Error('أُلغي إدخال كود المصادقة الثنائية');
+    const r2 = await fetch(API_BASE + '/api/auth/webauthn/login-2fa', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ pendingId: data.pendingId, totpCode: code, backupCode: code }),
+    });
+    const d2 = await r2.json();
+    if(!r2.ok) throw new Error(d2.error || 'كود التحقق غير صحيح — امسح بصمتك من جديد وحاول مجدداً');
+    data = d2;
+  }
   SERVER_AUTH_TOKEN = data.token;
   SERVER_AUTH_USERNAME = data.username;
   SERVER_AUTH_ROLE = normalizeRole(data.role);
@@ -112,6 +125,40 @@ async function webauthnLogin(){
     sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
   }catch(e){ console.error('[Auth] Failed to store session token:', e); }
   return data;
+}
+
+/* حوار إدخال كود المصادقة الثنائية (TOTP أو كود احتياطي) للتدفقات التي لا تملك حقلاً جاهزاً
+   (الدخول عبر رابط الإيميل / البصمة). يُبنى فوق نفس أصناف التنسيق القائمة (.overlay/.modal/.field)
+   فلا يحتاج أي CSS جديد، ويُرجع Promise بالنص المُدخل أو null عند الإلغاء/Escape. */
+function askTotpCode(message){
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = 'overlay show';
+    wrap.style.zIndex = '300';
+    wrap.innerHTML = `
+      <div class="modal" style="max-width:360px;">
+        <h2>كود المصادقة الثنائية</h2>
+        <p class="hint" style="margin:0 0 12px;">${message || 'أدخل كود التحقق من تطبيق المصادقة (أو أحد أكوادك الاحتياطية)'}</p>
+        <div class="field">
+          <input type="text" inputmode="numeric" autocomplete="one-time-code" id="ask-totp-input" placeholder="6 أرقام — أو كود احتياطي من 8" style="text-align:center; letter-spacing:4px; font-size:18px;">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="ask-totp-cancel">إلغاء</button>
+          <button type="button" class="btn btn-primary btn-sm" id="ask-totp-ok">تحقق</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    const input = wrap.querySelector('#ask-totp-input');
+    const done = value => { wrap.remove(); document.removeEventListener('keydown', onKey, true); resolve(value); };
+    const submit = () => { const v = input.value.trim(); if(v) done(v); };
+    function onKey(e){ if(e.key === 'Escape') done(null); }
+    document.addEventListener('keydown', onKey, true);
+    wrap.querySelector('#ask-totp-ok').addEventListener('click', submit);
+    wrap.querySelector('#ask-totp-cancel').addEventListener('click', () => done(null));
+    wrap.addEventListener('click', e => { if(e.target === wrap) done(null); });
+    input.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
+    setTimeout(() => input.focus(), 30);
+  });
 }
 
 /* ---------------- الدخول عبر رابط بالإيميل (Magic Link) ---------------- */
@@ -129,13 +176,25 @@ async function magicLinkRequest(username){
 }
 
 /* التحقق من رابط دخول تم الضغط عليه من الإيميل، وإتمام الدخول تلقائياً عند النجاح — يُرجع نفس
-   شكل بيانات serverLogin() عند النجاح. */
+   شكل بيانات serverLogin() عند النجاح. لو الحساب محمي بمصادقة ثنائية، الخادم يُرجع requires2FA
+   ويُبقي الرابط حيّاً، فنعرض حوار إدخال الكود ونعيد الإرسال بنفس الرابط (حتى 3 محاولات). */
 async function magicLinkVerify(username, token){
-  const res = await fetch(API_BASE + '/api/auth/magic-link/verify', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, token }),
-  });
-  const data = await res.json();
-  if(!res.ok) throw new Error(data.error || 'تعذّر الدخول عبر الرابط');
+  const post = body => fetch(API_BASE + '/api/auth/magic-link/verify', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
+  }).then(r => r.json().then(d => ({ ok: r.ok, d })));
+  let res = await post({ username, token });
+  if(res.ok && res.d.requires2FA){
+    for(let attempt = 0; attempt < 3; attempt++){
+      const code = await askTotpCode('هذا الحساب محمي بمصادقة ثنائية — أدخل كود التحقق لإتمام الدخول عبر الرابط');
+      if(!code) throw new Error('أُلغي إدخال كود المصادقة الثنائية');
+      res = await post({ username, token, totpCode: code, backupCode: code });
+      if(res.ok && !res.d.requires2FA) break;
+      if(!res.ok && !(res.d.error || '').includes('كود التحقق')) throw new Error(res.d.error || 'تعذّر الدخول عبر الرابط');
+    }
+    if(!res.ok || res.d.requires2FA) throw new Error('كود التحقق غير صحيح — اطلب رابطاً جديداً وحاول مجدداً');
+  }
+  if(!res.ok) throw new Error(res.d.error || 'تعذّر الدخول عبر الرابط');
+  const data = res.d;
   SERVER_AUTH_TOKEN = data.token;
   SERVER_AUTH_USERNAME = data.username || username;
   SERVER_AUTH_ROLE = normalizeRole(data.role);
