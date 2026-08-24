@@ -3407,40 +3407,42 @@ body.dark-theme #view-clients thead th {
   font-family: var(--font-mono);
 }
 
-/* تخصيص شكل جميع مربعات الاختيار (checkboxes) في البرنامج ككل — استبدال الشكل
-   المربّع الافتراضي للمتصفح بشكل "حبة دواء / بادج بيضاوي" بلون الفيروزي (teal) بدل
-   الأخضر الافتراضي، حتى يتطابق شكل الأيقونات عبر كل الشيتات (شيت العملاء، الحقائب، إلخ). */
+/* تخصيص شكل جميع مربعات الاختيار (checkboxes) — مربع بحواف دائرية وعلامة صح */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 26px;
-  height: 16px;
-  border: 1.5px solid var(--teal);
-  border-radius: 10px;
-  background: transparent;
+  width: 18px;
+  height: 18px;
+  border: 1.7px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
   position: relative;
   cursor: pointer;
   flex: none;
   vertical-align: middle;
-  transition: background .15s ease;
+  display: inline-grid;
+  place-items: center;
+  transition: background .14s ease, border-color .14s ease;
+}
+input[type="checkbox"]:hover {
+  border-color: var(--teal);
 }
 input[type="checkbox"]:checked {
   background: var(--teal);
+  border-color: var(--teal);
 }
 input[type="checkbox"]::after {
   content: "";
-  position: absolute;
-  top: 1.5px;
-  right: 1.5px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--teal);
-  transition: transform .15s ease;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .13s ease;
+  margin-top: -1px;
 }
 input[type="checkbox"]:checked::after {
-  background: #fff;
-  transform: translateX(-10px);
+  transform: rotate(45deg) scale(1);
 }
 
 /* ============================================================================
