@@ -925,10 +925,8 @@ async function printReceiptVoucher(id){
       </div>
     </div>
 
-    <div class="sig-grid">
-      <div class="sig-box">
-        <div class="sig-line">توقيع المحاسب</div>
-      </div>
+    <div style="text-align:center; margin-top:18px; padding-top:12px; border-top:1px dashed #DDE3EA; font-size:13px; color:#66707E;">
+      لا تحتاج إلى اعتماد المحاسب — صادر من نظام مركز فهد للتدريب
     </div>
 
     <div class="footer-note">
