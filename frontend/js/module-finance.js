@@ -752,7 +752,7 @@ $('#schedule-form')?.addEventListener('submit', async e=>{
     scheduledVaultTx[idx] = {...scheduledVaultTx[idx], ...data};
     await logAudit('edit','الحركات المالية', `تعديل قالب حركة مجدولة: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }else{
-    scheduledvaultTx.push({ id:uid(); bumpVaultVersion(), createdAt:Date.now(), lastRunMonth:null, ...data });
+    scheduledVaultTx.push({ id:uid(), createdAt:Date.now(), lastRunMonth:null, ...data });
     await logAudit('add','الحركات المالية', `إضافة قالب حركة مجدولة جديد: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }
   await saveScheduledVaultTx();
