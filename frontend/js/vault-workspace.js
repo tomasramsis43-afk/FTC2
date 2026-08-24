@@ -77,17 +77,18 @@ function openVaultWorkspace(id){
     </div>`;
   $('#vw-body').innerHTML = bodyHtml;
 
-  /* ---- الإجراءات: نفس شروط قائمة الصف بالضبط + سند قبض لكل وارد ---- */
+  /* ---- الإجراءات: نفس شروط قائمة الصف بالضبط + سند قبض للكاش فقط ---- */
   const foot = $('#vw-foot');
+  const isCashIn = t.type === 'in' && (t.destination||'vault')==='vault';
   if(isAutoClient){
-    foot.innerHTML = `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`;
+    foot.innerHTML = isCashIn ? `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>` : '';
   } else if(isCompany){
-    foot.innerHTML = `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`;
+    foot.innerHTML = isCashIn ? `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>` : '';
   } else {
     const acts = [`<button type="button" class="btn btn-gold btn-sm" id="vw-edit">تعديل</button>`];
     if(t.isReturn) acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-printreturn">طباعة فاتورة الاسترجاع</button>`);
     if(t.type === 'out' && !t.isReturn) acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-voucher">طباعة سند صرف</button>`);
-    if(t.type === 'in') acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`);
+    if(isCashIn) acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`);
     acts.push(`<button type="button" class="btn btn-danger btn-sm" id="vw-del">حذف</button>`);
     foot.innerHTML = acts.join('');
   }

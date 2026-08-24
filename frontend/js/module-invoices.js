@@ -838,6 +838,7 @@ function formatReceiptNo(n){ return 'RV-' + String(n).padStart(6,'0'); }
 async function printReceiptVoucher(id){
   const tx = vaultTx.find(x=>x.id===id);
   if(!tx || tx.type!=='in'){ showToast('تعذر إيجاد بيانات الحركة الواردة'); return; }
+  if((tx.destination||'vault')!=='vault'){ showToast('سند القبض متاح لحركات الكاش فقط'); return; }
   if(!tx.receiptNo){
     tx.receiptNo = settings.nextReceiptNo || 1;
     settings.nextReceiptNo = tx.receiptNo + 1;
