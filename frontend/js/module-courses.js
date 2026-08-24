@@ -129,6 +129,10 @@ function renderCourses(){
     const days = courseDurationDays(s.courseType);
     const capLabel = s.capacity ? `${enrolled.length} / ${s.capacity}` : `${enrolled.length}`;
     const full = s.capacity && enrolled.length>=s.capacity;
+    const activeEnrolled = enrolled.filter(c=>!c.cancelled);
+    const courseRevenue = activeEnrolled.reduce((sum,c)=>sum+total(c),0);
+    const coursePaid = activeEnrolled.reduce((sum,c)=>sum+paidTotal(c),0);
+    const courseDue = Math.max(0, courseRevenue - coursePaid);
     const sMeta = (typeof recordMeta==='object' && recordMeta && recordMeta.courseSessions) ? recordMeta.courseSessions[s.id] : null;
     const isSPending = !!(sMeta && sMeta.status==='pending');
     return `<div class="panel">
@@ -139,6 +143,11 @@ function renderCourses(){
             ${full ? ` <span class="stamp owe">${tr('fullCoursesLabel')}</span>` : ''}
             ${s.isDefined ? '' : ` <span class="stamp owe">${tr('undefinedInCourseSheet')}</span>`}
           </div>
+          ${activeEnrolled.length ? `<div style="font-size:12px; margin-top:5px; display:flex; gap:12px; flex-wrap:wrap;">
+            <span>الإيرادات: <b class="mono">${fmt(courseRevenue)}</b></span>
+            <span style="color:var(--success, var(--teal));">المحصّل: <b class="mono">${fmt(coursePaid)}</b></span>
+            ${courseDue > 0 ? `<span style="color:var(--danger, var(--red));">المتبقي: <b class="mono">${fmt(courseDue)}</b></span>` : ''}
+          </div>` : ''}
         </div>
         <div style="white-space:nowrap;">
           ${(isSPending && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve-session="${s.id}" title="اعتماد هذه الدورة لتظهر للجميع وتدخل في الشيتات">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject-session="${s.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
