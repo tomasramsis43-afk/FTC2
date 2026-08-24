@@ -2052,6 +2052,45 @@ tbody tr:hover {
   gap: 12px;
 }
 
+/* ============= Drawer / Side Panel (بريف 2026-08 بند 12) =============
+   متغيّر فوق نفس overlay/modal الحالي — نفس آلية الفتح/الإغلاق تماماً
+   (JS يبدّل .show فقط)، فلا حاجة لأي تعديل في منطق التحكم. يُستخدم
+   للعمليات الطويلة/الشاملة (Bulk operations) بدل مودال مركزي ضيق. */
+.overlay.drawer-overlay {
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0;
+}
+
+.overlay.drawer-overlay .modal {
+  height: 100%;
+  max-height: 100vh;
+  width: 100%;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  border-inline-start: none;
+  border-inline-end: 1px solid var(--border);
+  box-shadow: var(--shadow), 40px 0 70px -30px rgba(0, 0, 0, 0.35);
+  transform: translateX(24px);
+  opacity: 0;
+  transition: transform 0.28s cubic-bezier(0.22, 0.9, 0.32, 1), opacity 0.22s ease;
+}
+
+.overlay.drawer-overlay.show .modal {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay.drawer-overlay .modal { transition: opacity 0.15s linear; transform: none !important; }
+}
+
+@media (max-width: 760px) {
+  .overlay.drawer-overlay .modal { max-width: none !important; }
+}
+/* ============= /Drawer ============= */
+
 .formgrid .full {
   grid-column: 1 / 3;
 }

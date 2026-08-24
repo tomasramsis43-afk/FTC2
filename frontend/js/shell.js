@@ -20,6 +20,15 @@ try {
   }
 } catch (e) { /* التخزين المحلي غير متاح (وضع خاص) — نتجاهل بهدوء */ }
 
+/* إغلاق أي Drawer مفتوح بمفتاح Esc (بريف 2026-08 بند 12) — مقصور على
+   عناصر .drawer-overlay فقط حتى لا يغيّر سلوك أي مودال آخر في المشروع. */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.overlay.drawer-overlay.show').forEach(function (ov) {
+    ov.classList.remove('show');
+  });
+});
+
 (function () {
   'use strict';
 
