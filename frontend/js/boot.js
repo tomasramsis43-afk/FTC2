@@ -69,7 +69,12 @@
       }
     }catch(e){}
     // لا يوجد ترخيص مخبأ — استخدم مفتاح افتراضي ثابت مشترك لكل الأجهزة
-    const DEFAULT_ENC_KEY_B64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm";
+    // ملاحظة إصلاح حرِج (2026-08-24): القيمة السابقة هنا كانت تُفكّ Base64 إلى 48 بايت
+    // (384 بت) — وهو طول غير صالح لمفتاح AES-GCM (يُقبَل فقط 128 أو 256 بت)، فكان
+    // crypto.subtle.importKey يفشل دائماً بخطأ "AES key data must be 128 or 256 bits"
+    // ويمنع أي مستخدم بلا ترخيص مخبّأ من فتح البرنامج إطلاقاً. القيمة الجديدة 32 بايت
+    // بالضبط (256 بت) — ويجب أن تبقى مطابقة حرفياً لنفس القيمة في server/license.js.
+    const DEFAULT_ENC_KEY_B64 = "4U4cwlyiJcdXGejnxpyOV+J+cJEyyUx3PTC2D8nIT2Q=";
     try{
       ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(DEFAULT_ENC_KEY_B64), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
     }catch(e){ console.error('[Boot] Failed to import default key:', e); ENC_KEY = null; }
