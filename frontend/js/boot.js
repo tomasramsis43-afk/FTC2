@@ -95,8 +95,12 @@ function autoSignInLocalUser(){
 $('#btn-lang-toggle').addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
 });
-$('#btn-logout').addEventListener('click', async ()=>{
-  const btn = $('#btn-logout');
+// تفويض عام للأزرار داخل القائمة (يعمل حتى لو نُقلت القائمة لـ body بعد التحميل)
+document.addEventListener('click', async (e)=>{
+  const logoutBtn = e.target.closest('#btn-logout');
+  if(!logoutBtn) return;
+  e.preventDefault();
+  const btn = logoutBtn;
   if(btn) btn.disabled = true;
   try{
     var chk = {allSynced:true};
@@ -127,4 +131,30 @@ $('#btn-logout').addEventListener('click', async ()=>{
   }finally{
     if(btn) btn.disabled = false;
   }
+});
+// إصلاح زر الوضع الداكن — كان بلا مستمع بعد نقل القائمة لـ body
+document.addEventListener('click', async (e)=>{
+  const tBtn = e.target.closest('#btn-theme-toggle');
+  if(!tBtn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  try{
+    if(typeof settings==='undefined' || typeof applyTheme==='undefined') return;
+    settings.darkMode = !settings.darkMode;
+    applyTheme(settings.darkMode);
+    if(typeof saveSettings==='function') await saveSettings();
+  }catch(err){ console.error('[Theme] toggle failed:', err); }
+});
+// إصلاح زر كتم الصوت
+document.addEventListener('click', async (e)=>{
+  const sBtn = e.target.closest('#btn-sound-toggle');
+  if(!sBtn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  try{
+    if(typeof settings==='undefined') return;
+    settings.soundEnabled = !settings.soundEnabled;
+    if(typeof applySoundIcon==='function') applySoundIcon();
+    if(typeof saveSettings==='function') await saveSettings();
+  }catch(err){ console.error('[Sound] toggle failed:', err); }
 });
