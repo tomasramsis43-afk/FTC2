@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   nextInvoiceNo: 1,
   nextReturnInvoiceNo: 1,
   nextVoucherNo: 1,
+  nextReceiptNo: 1,
   nextManualSalesInvoiceNo: 1,
   darkMode: false,
   soundEnabled: true,

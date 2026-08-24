@@ -833,6 +833,95 @@ async function printExpenseVoucher(id){
   renderVault();
 }
 
+/* ---------------- Receipt Voucher (سند قبض — لكل وارد للخزنة/لأي عميل) ---------------- */
+function formatReceiptNo(n){ return 'RV-' + String(n).padStart(6,'0'); }
+async function printReceiptVoucher(id){
+  const tx = vaultTx.find(x=>x.id===id);
+  if(!tx || tx.type!=='in'){ showToast('تعذر إيجاد بيانات الحركة الواردة'); return; }
+  if(!tx.receiptNo){
+    tx.receiptNo = settings.nextReceiptNo || 1;
+    settings.nextReceiptNo = tx.receiptNo + 1;
+    await saveVaultTx();
+    await saveSettings();
+  }
+  const receiptLabel = formatReceiptNo(tx.receiptNo);
+  await logAudit('edit','الحركات المالية', `تمت طباعة سند قبض رقم ${receiptLabel} بمبلغ ${fmt(num(tx.amount))}`);
+
+  const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
+  const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
+
+  const payerName = tx.clientName || tx.manual || tx.clientId || '—';
+  const payerIdLine = tx.clientId ? `<div class="info-row"><span>رقم الهوية:</span><b>${escapeHtml(tx.clientId)}</b></div>` : '';
+  const destName = destLabel(tx.destination||'vault');
+  const isAuto = !!tx.autoClientId;
+  const linkNote = isAuto ? '<div class="hint" style="margin-top:6px; font-size:11px; color:var(--text-muted);">🔗 دفعة تسجيل مرتبطة بالعميل — مسجلة تلقائياً من شيت العملاء</div>' : '';
+
+  const win = openPrintTarget();
+  win.document.write(`
+  ${printDocHead('سند قبض ' + receiptLabel, {accent: PRINT_PALETTE.teal || PRINT_PALETTE.navy, borderColor: PRINT_PALETTE.navy, amountColor: PRINT_PALETTE.teal || PRINT_PALETTE.navy})}
+  <body>
+    <div class="inv-head">
+      <div style="display:flex; gap:14px; align-items:center;">
+        <img class="logo" src="data:image/jpeg;base64,${CENTER_LOGO_B64}">
+        <div>
+          <p class="center-name">${escapeHtml(ci.name)}</p>
+          <div class="center-meta">
+            الرقم الضريبي: ${escapeHtml(ci.taxNumber)}<br>
+            الهاتف: ${escapeHtml(ci.phone)}
+          </div>
+        </div>
+      </div>
+      <div class="inv-title">
+        <h2>سند قبض</h2>
+        <div class="no">${receiptLabel}</div>
+        <div style="font-size:12px; color:#66707E; margin-top:4px;">التاريخ: ${escapeHtml(tx.date || today)}</div>
+        <div style="font-size:11px; color:#66707E;">الرقم التسلسلي: #${escapeHtml(String(tx.seq||'—'))}</div>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-box">
+        <h4>بيانات الدافع</h4>
+        <div class="info-row"><span>اسم الدافع / العميل:</span><b>${escapeHtml(payerName)}</b></div>
+        ${payerIdLine}
+        ${tx.notes ? `<div class="info-row"><span>البيان:</span><b>${escapeHtml(tx.notes)}</b></div>` : ''}
+        ${linkNote}
+      </div>
+      <div class="info-box">
+        <h4>بيانات القبض</h4>
+        <div class="info-row"><span>الحساب:</span><b>${escapeHtml(destName)}</b></div>
+        <div class="info-row"><span>طريقة الدفع:</span><b>${escapeHtml(tx.method || '—')}</b></div>
+        ${tx.networkInvoice ? `<div class="info-row"><span>رقم فاتورة الشبكة:</span><b>${escapeHtml(tx.networkInvoice)}</b></div>` : ''}
+        <div class="info-row"><span>تاريخ الحركة:</span><b>${escapeHtml(tx.date || '—')}</b></div>
+      </div>
+    </div>
+
+    <div class="amount-box">
+      <div class="lbl">المبلغ المقبوض</div>
+      <div class="amt">${fmt(num(tx.amount))} ﷼</div>
+      <div style="font-size:12.5px; color:#66707E; margin-top:10px; border-top:1px dashed #DDE3EA; padding-top:8px;">
+        <b>المبلغ كتابةً:</b> ${escapeHtml(numberToArabicWords(tx.amount))}
+      </div>
+    </div>
+
+    <div class="sig-grid">
+      <div class="sig-box">
+        <div class="sig-line">توقيع المحاسب / أمين الصندوق</div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-line">توقيع الدافع (${escapeHtml(payerName)})</div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      هذا السند صادر إلكترونياً من نظام إدارة ${escapeHtml(ci.name)} — رقم السند تسلسلي ولا يتم التلاعب به.
+    </div>
+    ${printDocFooterButton()}
+  </body></html>`);
+  finishPrintDoc(win);
+  renderVault();
+}
+
 /* ---------------- Export ---------------- */
 $('#btn-export')?.addEventListener('click', ()=>{
   const headers = ['رقم الهوية','الاسم','رقم المرجع','الجوال','الجنسية','نوع العميل','اسم الشركة','الأجل (أيام)','الرقم الضريبي للعميل','نوع الدورة','رقم الفاتورة','رقم الفاتورة الضريبية','مصدر الحقيبة','حالة الحقيبة','رقم فاتورة الحقيبة','التاريخ','سعر الدورة','دخل المركز','قيمة الحقيبة','الخصم','الإجمالي','إجمالي المدفوع (شامل كل الدفعات)','المتبقي','طريقة الدفع الأولى','مبلغ الدفعة الأولى','طريقة الدفع الثانية','مبلغ الدفعة الثانية','رقم فاتورة الشبكة','الحالة','ملاحظات'];

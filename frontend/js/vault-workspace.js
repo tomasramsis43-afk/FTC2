@@ -1,10 +1,10 @@
 /* ============================================================
-   نبض — Ledger Workspace (تفاصيل الحركة المالية) — Phase 4b
+   نبض — Ledger Workspace (تفاصيل الحركة المالية) — Phase 4b + سند قبض
    ------------------------------------------------------------
    درج جانبي يعرض تفاصيل حركة الخزنة/البنك/الشبكة كاملة مع سياق
    الرصيد وحالة الاحتساب، وأزرار تعيد فتح المسارات القائمة نفسها:
    openVaultModal(id) للتعديل، وتفويض data-vdel / data-vvoucher /
-   data-vprintreturn للحذف والطباعة — صفر منطق كتابة جديد.
+   data-vreceipt / data-vprintreturn للحذف والطباعة — صفر منطق كتابة جديد.
    الفتح: زر "التفاصيل" من قائمة صف الحركة (النقر المزدوج محجوز
    أصلاً للتحرير السريع للخلايا).
    ============================================================ */
@@ -77,14 +77,17 @@ function openVaultWorkspace(id){
     </div>`;
   $('#vw-body').innerHTML = bodyHtml;
 
-  /* ---- الإجراءات: نفس شروط قائمة الصف بالضبط ---- */
+  /* ---- الإجراءات: نفس شروط قائمة الصف بالضبط + سند قبض لكل وارد ---- */
   const foot = $('#vw-foot');
-  if(isAutoClient || isCompany){
-    foot.innerHTML = '';
+  if(isAutoClient){
+    foot.innerHTML = `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`;
+  } else if(isCompany){
+    foot.innerHTML = `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`;
   } else {
     const acts = [`<button type="button" class="btn btn-gold btn-sm" id="vw-edit">تعديل</button>`];
     if(t.isReturn) acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-printreturn">طباعة فاتورة الاسترجاع</button>`);
     if(t.type === 'out' && !t.isReturn) acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-voucher">طباعة سند صرف</button>`);
+    if(t.type === 'in') acts.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`);
     acts.push(`<button type="button" class="btn btn-danger btn-sm" id="vw-del">حذف</button>`);
     foot.innerHTML = acts.join('');
   }
@@ -101,6 +104,7 @@ function openVaultWorkspace(id){
   $('#vw-edit')?.addEventListener('click', () => { closeVaultWorkspace(); openVaultModal(id); });
   $('#vw-printreturn')?.addEventListener('click', () => synth('data-vprintreturn'));
   $('#vw-voucher')?.addEventListener('click', () => synth('data-vvoucher'));
+  $('#vw-receipt')?.addEventListener('click', () => synth('data-vreceipt'));
   $('#vw-del')?.addEventListener('click', () => synth('data-vdel'));
 
   ov.classList.add('show');

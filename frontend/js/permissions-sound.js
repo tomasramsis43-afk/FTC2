@@ -409,6 +409,7 @@ async function loadData(cacheOnly){
     if(!settings.nextInvoiceNo) settings.nextInvoiceNo = 1;
     if(!settings.nextReturnInvoiceNo) settings.nextReturnInvoiceNo = 1;
     if(!settings.nextVoucherNo) settings.nextVoucherNo = 1;
+    if(!settings.nextReceiptNo) settings.nextReceiptNo = 1;
     if(!settings.nextManualSalesInvoiceNo) settings.nextManualSalesInvoiceNo = 1;
     if(settings.darkMode===undefined) settings.darkMode = false;
     if(settings.soundEnabled===undefined) settings.soundEnabled = true;

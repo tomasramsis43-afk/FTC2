@@ -925,8 +925,8 @@ function renderVault(){
       <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isVPending ? ` <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تدخل رصيد/حسابات/تقارير الأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
       <td class="${vaultInlineEditable(t)?'editable-cell':''}" data-label="ملاحظات"${vaultInlineEditable(t)?` data-inline-field="notes" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${escapeHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
-        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span>${vApproveBtns}` : (t.type==='in' && t.companyTransferId) ? `
-        <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button>` : `
+        ${(t.type==='in' && t.autoClientId) ? `<span class="hint" style="margin:0; display:inline-block; font-size:11px;">🔗 دفعة تسجيل — التعديل من شيت العملاء</span> <button class="btn btn-gold btn-sm" data-vreceipt="${t.id}" title="طباعة سند قبض">🧾 سند قبض</button>${vApproveBtns}` : (t.type==='in' && t.companyTransferId) ? `
+        <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button> <button class="btn btn-gold btn-sm" data-vreceipt="${t.id}" title="طباعة سند قبض">🧾 سند قبض</button>` : `
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
@@ -934,6 +934,7 @@ function renderVault(){
             <button class="btn btn-ghost btn-sm" data-vedit="${t.id}">${tr('edit')}</button>
             ${t.isReturn ? `<button class="btn btn-gold btn-sm" data-vprintreturn="${t.id}">طباعة فاتورة الاسترجاع</button>` : ''}
             ${(t.type==='out' && !t.isReturn) ? `<button class="btn btn-gold btn-sm" data-vvoucher="${t.id}">طباعة سند صرف</button>` : ''}
+            ${(t.type==='in') ? `<button class="btn btn-gold btn-sm" data-vreceipt="${t.id}">🧾 سند قبض</button>` : ''}
             ${vApproveBtns}
             <button class="btn btn-danger btn-sm" data-vdel="${t.id}">${tr('delete')}</button>
           </div>
@@ -1548,11 +1549,13 @@ $('#vault-form').addEventListener('submit', async e=>{
     }
   }
 
-  // طباعة تلقائية عند إضافة حركة جديدة: فاتورة استرجاع للعميل عند المردودات، أو سند صرف عند المصروفات
+  // طباعة تلقائية عند إضافة حركة جديدة: فاتورة استرجاع للعميل عند المردودات، أو سند صرف عند المصروفات، أو سند قبض عند الواردات
   if(!wasVaultEdit && isReturn){
     await printReturnInvoice(savedTx.id);
   }else if(!wasVaultEdit && isOut){
     await printExpenseVoucher(savedTx.id);
+  }else if(!wasVaultEdit && isIn){
+    await printReceiptVoucher(savedTx.id);
   }
   }finally{
     _vaultFormBusy = false;
@@ -1564,6 +1567,7 @@ document.addEventListener('click', async e=>{
   if(e.target.dataset.vedit) openVaultModal(e.target.dataset.vedit);
   if(e.target.dataset.vprintreturn) await printReturnInvoice(e.target.dataset.vprintreturn);
   if(e.target.dataset.vvoucher) await printExpenseVoucher(e.target.dataset.vvoucher);
+  if(e.target.dataset.vreceipt) await printReceiptVoucher(e.target.dataset.vreceipt);
   if(e.target.dataset.vapprove){
     const id = e.target.dataset.vapprove;
     const t = vaultTx.find(x=>x.id===id);
