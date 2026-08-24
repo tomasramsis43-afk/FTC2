@@ -29,6 +29,51 @@ document.addEventListener('keydown', function (e) {
   });
 });
 
+/* اختصارات "G ثم حرف" للتنقل السريع (بريف 2026-08 بند 29):
+   G→D لوحة القيادة، G→C العملاء، G→R التقارير.
+   لا تعمل أثناء الكتابة في أي حقل، ولا مع فتح أي مودال/درج/بحث شامل،
+   حتى لا تتعارض مع حرف "g" أو "d" أو "c" أو "r" العادي أثناء الكتابة. */
+(function () {
+  'use strict';
+  var GO_MAP = { d: 'dashboard', c: 'clients', r: 'reports' };
+  var awaitingSecondKey = false;
+  var awaitTimer = null;
+
+  function isTypingContext(target) {
+    if (!target) return false;
+    var tag = (target.tagName || '').toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  }
+  function isAnyOverlayOpen() {
+    return !!document.querySelector('.overlay.show');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isTypingContext(e.target) || isAnyOverlayOpen()) return;
+
+    var key = e.key.toLowerCase();
+
+    if (awaitingSecondKey) {
+      awaitingSecondKey = false;
+      clearTimeout(awaitTimer);
+      var view = GO_MAP[key];
+      if (view) {
+        e.preventDefault();
+        document.querySelector('nav.tabs button[data-view="' + view + '"]')?.click();
+      }
+      return;
+    }
+
+    if (key === 'g') {
+      awaitingSecondKey = true;
+      clearTimeout(awaitTimer);
+      /* لو ما جاش حرف تاني خلال ثانيتين، نلغي الانتظار حتى لا يبقى "معلّقاً" بصمت */
+      awaitTimer = setTimeout(function () { awaitingSecondKey = false; }, 2000);
+    }
+  });
+})();
+
 (function () {
   'use strict';
 
