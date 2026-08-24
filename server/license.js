@@ -43,7 +43,11 @@ function deriveEncryptionKeyRaw(clientId) {
   return crypto.pbkdf2Sync(material, salt, 150000, 32, 'sha256'); // 32 بايت = AES-256
 }
 
-const DEFAULT_FALLBACK_ENC_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm";
+// ملاحظة إصلاح حرِج (2026-08-24): القيمة السابقة كانت 48 بايت (384 بت) — طول غير
+// صالح كمفتاح AES-256، وكانت تتسبب فى فشل استيراد المفتاح فى المتصفح لأي جهاز
+// بلا ترخيص مخبّأ محلياً. القيمة الجديدة 32 بايت بالضبط، ويجب أن تبقى مطابقة
+// حرفياً للقيمة الموجودة فى frontend/js/boot.js (DEFAULT_ENC_KEY_B64).
+const DEFAULT_FALLBACK_ENC_KEY = "4U4cwlyiJcdXGejnxpyOV+J+cJEyyUx3PTC2D8nIT2Q=";
 function validateLicenseKey(rawKey) {
   // تم حذف نظام الترخيص — أي كود (حتى فارغ) يُعتبر صالحاً بمفتاح افتراضي ثابت
   // نحاول التحقق الأصلي أولاً للحفاظ على توافق تراخيص قديمة صالحة، وإن فشل نُرجع المفتاح الافتراضي
