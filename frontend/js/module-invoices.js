@@ -905,10 +905,7 @@ async function printReceiptVoucher(id){
 
     <div class="sig-grid">
       <div class="sig-box">
-        <div class="sig-line">توقيع المحاسب / أمين الصندوق</div>
-      </div>
-      <div class="sig-box">
-        <div class="sig-line">توقيع الدافع (${escapeHtml(payerName)})</div>
+        <div class="sig-line">توقيع المحاسب</div>
       </div>
     </div>
 
