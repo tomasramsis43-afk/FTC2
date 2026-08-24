@@ -471,7 +471,7 @@ async function printInvoice(id){
   const invoiceBodyHtml = buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand});
 
   const win = openPrintTarget();
-  win.document.write(`${printDocHead('فاتورة ' + invNoLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy})}<body>${invoiceBodyHtml}${printDocFooterButton()}</body></html>`);
+  win.document.write(`${printDocHead(invNoLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy})}<body>${invoiceBodyHtml}${printDocFooterButton()}</body></html>`);
   finishPrintDoc(win);
   renderTable();
   // إرسال تلقائي فور إصدار الفاتورة لو للعميل إيميل محفوظ — best-effort بالكامل (فشل الإرسال
@@ -683,7 +683,7 @@ async function printReturnInvoice(id){
 
   const win = openPrintTarget();
   win.document.write(`
-  ${printDocHead('فاتورة استرجاع ' + invNoLabel, {accent: PRINT_PALETTE.red})}
+  ${printDocHead(invNoLabel, {accent: PRINT_PALETTE.red})}
   <body>
     <div class="inv-head">
       <div style="display:flex; gap:14px; align-items:center;">
@@ -773,7 +773,7 @@ async function printExpenseVoucher(id){
 
   const win = openPrintTarget();
   win.document.write(`
-  ${printDocHead('سند صرف ' + voucherLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy, amountColor: PRINT_PALETTE.navy})}
+  ${printDocHead(voucherLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy, amountColor: PRINT_PALETTE.navy})}
   <body>
     <div class="inv-head">
       <div style="display:flex; gap:14px; align-items:center;">
@@ -880,7 +880,7 @@ async function printReceiptVoucher(id){
 
   const win = openPrintTarget();
   win.document.write(`
-  ${printDocHead('سند قبض ' + receiptLabel, {accent: PRINT_PALETTE.teal || PRINT_PALETTE.navy, borderColor: PRINT_PALETTE.navy, amountColor: PRINT_PALETTE.teal || PRINT_PALETTE.navy})}
+  ${printDocHead(receiptLabel, {accent: PRINT_PALETTE.teal || PRINT_PALETTE.navy, borderColor: PRINT_PALETTE.navy, amountColor: PRINT_PALETTE.teal || PRINT_PALETTE.navy})}
   <body>
     <div class="inv-head">
       <div style="display:flex; gap:14px; align-items:center;">

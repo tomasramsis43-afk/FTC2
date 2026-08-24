@@ -164,7 +164,7 @@ function openPurchaseItemsPopup(id){
 
   const win = openPrintTarget();
   win.document.write(`
-  ${printDocHead('بيان أصناف — فاتورة شراء ' + (p.invoiceNo||''), {accent: PRINT_PALETTE.navy, borderColor: PRINT_PALETTE.navy})}
+  ${printDocHead(p.invoiceNo || 'فاتورة-شراء', {accent: PRINT_PALETTE.navy, borderColor: PRINT_PALETTE.navy})}
   <body>
     <div class="inv-head">
       <div style="display:flex; gap:14px; align-items:center;">
