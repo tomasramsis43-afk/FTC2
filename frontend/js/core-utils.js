@@ -723,3 +723,50 @@ function _scanAutoLabelTables(root){
   });
 })();
 
+
+/* ============================================================
+   حالات فارغة وحالات خطأ موحّدة (بريف 2026-08 بند 15 و16)
+   ------------------------------------------------------------
+   دوال مساعدة عامة اختيارية — أي شاشة/موديول تقدر تستخدمها بدل
+   كتابة HTML الحالة الفارغة/الخطأ يدوياً من جديد. لا تستبدل أي
+   استخدام قائم لـ .empty-state (لسه شغال زي ما هو تماماً).
+   ============================================================ */
+function renderEmptyState(container, opts){
+  const el = typeof container === 'string' ? document.querySelector(container) : container;
+  if(!el) return;
+  const icon = (opts && opts.icon) || '📭';
+  const title = (opts && opts.title) || 'لا توجد بيانات بعد';
+  const hint = (opts && opts.hint) || '';
+  const actionLabel = opts && opts.actionLabel;
+  const onAction = opts && opts.onAction;
+  const btnId = 'empty-state-action-' + Math.random().toString(36).slice(2, 8);
+  el.innerHTML = `
+    <div class="empty-state">
+      <div class="big">${icon}</div>
+      <div class="empty-state-title">${escapeHtml(title)}</div>
+      ${hint ? `<div class="empty-state-hint">${escapeHtml(hint)}</div>` : ''}
+      ${actionLabel ? `<button type="button" class="btn btn-primary btn-sm" id="${btnId}">${escapeHtml(actionLabel)}</button>` : ''}
+    </div>`;
+  if(actionLabel && typeof onAction === 'function'){
+    document.getElementById(btnId)?.addEventListener('click', onAction);
+  }
+}
+
+function renderErrorState(container, opts){
+  const el = typeof container === 'string' ? document.querySelector(container) : container;
+  if(!el) return;
+  const title = (opts && opts.title) || 'حدث خطأ أثناء تحميل البيانات';
+  const detail = opts && opts.detail;
+  const onRetry = opts && opts.onRetry;
+  const btnId = 'error-state-retry-' + Math.random().toString(36).slice(2, 8);
+  el.innerHTML = `
+    <div class="error-state">
+      <div class="big">⚠️</div>
+      <div class="error-state-title">${escapeHtml(title)}</div>
+      ${typeof onRetry === 'function' ? `<button type="button" class="btn btn-ghost btn-sm" id="${btnId}">إعادة المحاولة</button>` : ''}
+      ${detail ? `<details><summary>تفاصيل تقنية (للمسؤول)</summary><div class="error-state-detail">${escapeHtml(String(detail))}</div></details>` : ''}
+    </div>`;
+  if(typeof onRetry === 'function'){
+    document.getElementById(btnId)?.addEventListener('click', onRetry);
+  }
+}

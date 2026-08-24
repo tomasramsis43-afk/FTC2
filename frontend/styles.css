@@ -2003,6 +2003,58 @@ tbody tr:hover {
   margin-bottom: 6px;
 }
 
+.empty-state .empty-state-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.empty-state .empty-state-hint {
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+/* ============= ERROR STATE (بريف 2026-08 بند 16) ============= */
+.error-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.error-state .big {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+.error-state .error-state-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--danger, var(--red));
+  margin-bottom: 4px;
+}
+
+.error-state .error-state-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 8px auto 0;
+  max-width: 480px;
+  direction: ltr;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-state details {
+  margin-top: 10px;
+}
+.error-state summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+/* ============= /ERROR STATE ============= */
+
 /* ============= MODAL ============= */
 .overlay {
   position: fixed;
