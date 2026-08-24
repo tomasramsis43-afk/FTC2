@@ -89,12 +89,12 @@
   --shadow: var(--shadow-xs);
   --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.35);
   --on-accent-text: #ffffff;
-  --sidebar-bg: #171b2e;
-  --sidebar-bg-alt: #1c2036;
-  --sidebar-text: #b9bedb;
-  --sidebar-text-muted: #7a7fa0;
-  --sidebar-active-bg: var(--brand-primary-bright);
-  --sidebar-active-text: #0f1326;
+  --sidebar-bg: #ffffff;
+  --sidebar-bg-alt: #f8fafc;
+  --sidebar-text: #1e293b;
+  --sidebar-text-muted: #64748b;
+  --sidebar-active-bg: linear-gradient(135deg, #f59e0b, #d97706);
+  --sidebar-active-text: #ffffff;
 
   /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
   --color-primary: var(--brand-primary);
@@ -554,10 +554,10 @@ nav.tabs {
   align-items: stretch;
   gap: 5px;
   background: var(--sidebar-bg);
-  border: 1px solid color-mix(in srgb, var(--gold) 18%, transparent);
+  border: 1px solid #e2e8f0;
   padding: 14px 10px;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 16px -8px rgba(0,0,0,0.08);
   position: sticky;
   top: var(--sidebar-sticky-top, 110px);
   z-index: 30;
@@ -671,8 +671,8 @@ nav.tabs button.active::before {
 }
 
 nav.tabs button:not(.active):hover {
-  background: var(--sidebar-bg-alt);
-  color: var(--gold);
+  background: #f1f5f9;
+  color: var(--sidebar-text);
 }
 
 nav.tabs button:hover svg {
@@ -772,7 +772,7 @@ nav.tabs button[data-view]:not(.active):hover::before {
   width: auto;
   height: 1px;
   margin: 7px 4px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--navy) 40%, transparent), transparent);
+  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
   font-size: 0;
   line-height: 0;
   overflow: hidden;
