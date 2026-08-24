@@ -98,3 +98,36 @@ function autoSignInLocalUser(){
 $('#btn-lang-toggle').addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
 });
+$('#btn-logout').addEventListener('click', async ()=>{
+  const btn = $('#btn-logout');
+  if(btn) btn.disabled = true;
+  try{
+    var chk = {allSynced:true};
+    try{ if(typeof verifyAllDataUploadedBeforeLogout==='function') chk = await verifyAllDataUploadedBeforeLogout(); }catch(e){ chk={allSynced:true}; }
+    if(!chk.allSynced){
+      var msg = 'لا تزال هناك بيانات غير مرفوعة للسيرفر';
+      if(chk.offline) msg += ' (أنت في وضع عدم الاتصال)';
+      else msg += ` (معلّق: kv=${chk.kvPending||0} / سجلات=${chk.recPending||0})`;
+      msg += ' — هل تريد تسجيل الخروج الآن على مسؤوليتك؟ قد تُفقد البيانات غير المتزامنة.';
+      if(!await customConfirm(msg)) return;
+    }
+    try{
+      if(SERVER_AUTH_TOKEN){
+        await fetch(API_BASE + '/api/auth/logout', {method:'POST', headers:{Authorization:'Bearer '+SERVER_AUTH_TOKEN}});
+      }
+    }catch(e){ console.error('[Logout] server logout failed:', e); }
+    SERVER_AUTH_TOKEN = null;
+    SERVER_AUTH_USERNAME = null;
+    SERVER_AUTH_ROLE = null;
+    try{ sessionStorage.removeItem('serverAuthToken'); }catch(e){}
+    try{ sessionStorage.removeItem('serverAuthUsername'); }catch(e){}
+    try{ sessionStorage.removeItem('serverAuthRole'); }catch(e){}
+    try{ sessionStorage.removeItem('pendingQrLoginSession'); }catch(e){}
+    try{ if(typeof disconnectRealtimeEvents==='function') disconnectRealtimeEvents(); }catch(e){}
+    try{ if(typeof setManualOfflineMode==='function') setManualOfflineMode(false); }catch(e){}
+    showServerLoginScreen(null);
+    showToast('تم تسجيل الخروج');
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+});
