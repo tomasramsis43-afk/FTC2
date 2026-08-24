@@ -2360,8 +2360,13 @@ body.dark-theme #server-login-screen {
 }
 
 .login-logo-panel {
+  position: relative;
+  overflow: hidden;
   flex: 0 0 190px;
-  background: rgba(240, 168, 87, 0.05);
+  background:
+    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--gold, #f0a857) 22%, transparent) 0%, transparent 42%),
+    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--teal, #2fd9b0) 16%, transparent) 0%, transparent 46%),
+    rgba(240, 168, 87, 0.05);
   border-inline-end: 1px solid var(--auth-border);
   display: flex;
   align-items: center;
@@ -2369,8 +2374,21 @@ body.dark-theme #server-login-screen {
   padding: 24px 18px;
 }
 
+.login-logo-panel::before,
+.login-logo-panel::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--gold, #f0a857) 18%, transparent);
+  pointer-events: none;
+}
+.login-logo-panel::before { width: 160px; height: 160px; inset-inline-end: -60px; top: -50px; }
+.login-logo-panel::after { width: 110px; height: 110px; inset-inline-start: -40px; bottom: -35px; border-color: color-mix(in srgb, var(--teal, #2fd9b0) 16%, transparent); }
+
 .login-logo-panel img,
 .login-logo-panel svg {
+  position: relative;
+  z-index: 1;
   max-width: 110px;
   max-height: 110px;
   width: 100%;
