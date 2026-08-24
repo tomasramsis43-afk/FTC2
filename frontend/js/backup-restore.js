@@ -655,17 +655,52 @@ async function checkPendingRestoreResync(){
 
 const ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
 const ICON_WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
-function showToast(msg){
-  const t = $('#toast');
-  if(!t) return;
-  const isError = /تعذّر|تعذر|خطأ|فشل|غير صحيح/.test(msg);
+const ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>';
+const TOAST_ICON_BY_TYPE = { success: ICON_OK, error: ICON_WARN, warning: ICON_WARN, info: ICON_INFO };
+const TOAST_MAX_STACK = 4;
+
+/* نظام التوست الموحّد (بريف 2026-08 بند 18): success / error / warning / info،
+   Stacking حقيقي (أكثر من إشعار في نفس الوقت)، Auto-dismiss بشريط تقدم مرئي،
+   زر إغلاق يدوي، ودعم RTL/Dark mode عبر Design Tokens الحالية.
+   التوقيع showToast(msg) لم يتغيّر — النوع الثاني اختياري بالكامل، وإن لم
+   يُمرَّر يُستنتَج تلقائياً من نص الرسالة تماماً كالسابق، حفاظاً على التوافق
+   مع كل الاستدعاءات القديمة في المشروع. */
+function showToast(msg, type){
+  const stack = $('#toast-stack');
+  if(!stack) return;
+
+  if(!type){
+    const isError = /تعذّر|تعذر|خطأ|فشل|غير صحيح/.test(msg);
+    type = isError ? 'error' : 'success';
+  }
   const isDelete = /حذف/.test(msg);
-  t.innerHTML = `<span>${isError ? ICON_WARN : ICON_OK}</span><span>${escapeHtml(msg)}</span>`;
-  t.classList.toggle('error', isError);
-  t.classList.add('show');
-  clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(()=>t.classList.remove('show'), 2400);
-  if(isError) SoundFX.error();
+
+  /* منع تراكم لا نهائي: لو وصل عدد الإشعارات المعروضة للحد الأقصى، نُزيل الأقدم فوراً */
+  const existing = stack.querySelectorAll('.toast-item');
+  if(existing.length >= TOAST_MAX_STACK) existing[0].remove();
+
+  const item = document.createElement('div');
+  item.className = 'toast-item ' + type;
+  item.setAttribute('role', type === 'error' || type === 'warning' ? 'alert' : 'status');
+  const durationMs = 4200;
+  item.innerHTML = `
+    <span>${TOAST_ICON_BY_TYPE[type] || ICON_OK}</span>
+    <span class="toast-msg">${escapeHtml(msg)}</span>
+    <button type="button" class="toast-close" aria-label="إغلاق الإشعار">✕</button>
+    <span class="toast-progress" style="animation-duration:${durationMs}ms;"></span>
+  `;
+  stack.appendChild(item);
+  requestAnimationFrame(()=> item.classList.add('show'));
+
+  const remove = ()=>{
+    if(!item.isConnected) return;
+    item.classList.remove('show');
+    setTimeout(()=> item.remove(), 300);
+  };
+  const timer = setTimeout(remove, durationMs);
+  item.querySelector('.toast-close')?.addEventListener('click', ()=>{ clearTimeout(timer); remove(); });
+
+  if(type==='error') SoundFX.error();
   else if(isDelete) SoundFX.delete();
   else SoundFX.success();
 }

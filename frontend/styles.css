@@ -2647,61 +2647,129 @@ td select:hover:not(:focus) {
   border-color: color-mix(in srgb, var(--navy) 40%, var(--border));
 }
 
-/* ============= TOASTS ============= */
-.toast {
+/* ============= TOASTS (بريف 2026-08 بند 18: نظام موحّد + Stacking) ============= */
+.toast-stack {
   position: fixed;
   bottom: 24px;
   left: 50%;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  max-width: min(92vw, 420px);
+}
+
+.toast-item {
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: linear-gradient(135deg, var(--navy) 0%, var(--gold) 100%);
   color: var(--on-accent-text);
   font-weight: 700;
-  padding: 11px 22px;
+  padding: 11px 34px 11px 22px;
   border-radius: 12px;
   font-size: 13px;
   letter-spacing: 0.3px;
-  box-shadow: 0 12px 34px -8px color-mix(in srgb, var(--navy) 55%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--navy) 55%, transparent);
   opacity: 0;
+  transform: translateY(8px) scale(0.98);
   transition: opacity 0.3s ease, transform 0.3s ease;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   will-change: transform, opacity;
-  /* لازم تظهر فوق أي شاشة مفتوحة (مودالات .overlay بقيمة 50، قوائم .row-menu-panel/
-     .user-menu-dropdown بقيمة 55) — قبل هذا التعديل ما كان للتوست z-index إطلاقاً فكانت
-     أي نافذة منبثقة مفتوحة وقت ظهور الإشعار (تسجيل/خطأ) تغطيه تماماً فيختفي بصمت. */
-  z-index: 9999;
-  pointer-events: none;
 }
 
-.toast svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
-.toast.show {
+.toast-item.show {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0) scale(1);
 }
 
-.toast.error {
+.toast-item svg { width: 16px; height: 16px; flex: none; }
+
+.toast-item .toast-msg { flex: 1 1 auto; min-width: 0; }
+
+.toast-item.error {
   background: linear-gradient(135deg, var(--red) 0%, color-mix(in srgb, var(--red) 60%, #b91c1c) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--red) 50%, transparent);
 }
 
-@media(max-width: 600px) {
-  .toast {
+.toast-item.warning {
+  background: linear-gradient(135deg, var(--warning, #d98a34) 0%, color-mix(in srgb, var(--warning, #d98a34) 60%, #92400e) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--warning, #d98a34) 50%, transparent);
+}
+
+.toast-item.info {
+  background: linear-gradient(135deg, var(--info, var(--teal)) 0%, color-mix(in srgb, var(--info, var(--teal)) 55%, #0e5f6d) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--info, var(--teal)) 50%, transparent);
+}
+
+.toast-close {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+}
+.toast-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.4);
+  transform-origin: right;
+  animation-name: toastShrink;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes toastShrink {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (max-width: 600px) {
+  .toast-stack {
     bottom: 14px;
     left: 10px;
     right: 10px;
-    transform: translateY(8px);
+    transform: none;
     max-width: none;
     width: auto;
-    justify-content: center;
+    align-items: stretch;
   }
 
-  .toast.show {
-    transform: translateY(0);
+  .toast-item {
+    justify-content: center;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item { transition: opacity 0.15s linear; transform: none !important; }
+  .toast-progress { animation: none; display: none; }
+}
+
 
 .hint {
   font-size: 11.5px;
@@ -3522,16 +3590,8 @@ tbody tr {
   box-shadow: var(--pro-shadow-ambient-hover);
 }
 
-/* ---------- التوست: عمق زجاجي بدل الظل الواحد ---------- */
-.toast {
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--navy) 55%, transparent);
-}
-
-.toast.error {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--red) 50%, transparent);
-}
+/* ---------- ملاحظة: تأثير الزجاجية والظل الطبقي للتوست أصبح مدمجاً
+   مباشرة داخل .toast-item (انظر قسم TOASTS أعلاه) بعد الترقية لنظام Stacking ---------- */
 
 /* ---------- أداء الموبايل: إيقاف الزجاجية (backdrop-filter) على الشاشات الصغيرة ----------
    الـ blur/saturate مكلف على معالجات GPU الضعيفة وبيسبب تهنيج (jank) في السكرول على
@@ -3546,7 +3606,7 @@ tbody tr {
   .cfo-panel,
   .user-pill,
   .quickstats div,
-  .toast {
+  .toast-item {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
