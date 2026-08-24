@@ -3407,14 +3407,14 @@ body.dark-theme #view-clients thead th {
   font-family: var(--font-mono);
 }
 
-/* تخصيص شكل جميع مربعات الاختيار (checkboxes) — مربع بحواف دائرية وعلامة صح */
+/* تخصيص شكل جميع مربعات الاختيار (checkboxes) — مربع صغير بحواف دائرية وعلامة صح */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 1.7px solid var(--border);
-  border-radius: 5px;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
   background: var(--surface);
   position: relative;
   cursor: pointer;
@@ -3433,10 +3433,10 @@ input[type="checkbox"]:checked {
 }
 input[type="checkbox"]::after {
   content: "";
-  width: 5px;
-  height: 9px;
+  width: 4px;
+  height: 7px;
   border: solid #fff;
-  border-width: 0 2px 2px 0;
+  border-width: 0 1.7px 1.7px 0;
   transform: rotate(45deg) scale(0);
   transition: transform .13s ease;
   margin-top: -1px;
