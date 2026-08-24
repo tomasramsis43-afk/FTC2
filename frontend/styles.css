@@ -617,8 +617,8 @@ nav.tabs.collapsed button span {
 }
 
 nav.tabs.collapsed button {
-  justify-content: center;
-  padding: 9px;
+  justify-content: flex-start;
+  padding: 9px 10px;
   position: relative;
 }
 nav.tabs button.active::after {
