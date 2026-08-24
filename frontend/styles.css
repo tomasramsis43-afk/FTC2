@@ -309,7 +309,11 @@ body {
 }
 
 section.view.active {
-  animation: viewFadeIn 0.32s cubic-bezier(0.22, 0.9, 0.32, 1);
+  animation: viewFadeIn 0.16s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  section.view.active { animation: none; }
+  nav.tabs button.active { animation: none; }
 }
 
 .modal {
@@ -659,11 +663,11 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: var(--sidebar-active-bg);
-  color: var(--sidebar-active-text);
+  background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--gold) 88%, #fff));
+  color: #1a1a1a;
   font-weight: 700;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-active-bg) 60%, transparent), 0 6px 20px -4px color-mix(in srgb, var(--sidebar-active-bg) 65%, transparent);
-  animation: navPop 0.25s cubic-bezier(0.22, 0.9, 0.32, 1);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent), 0 6px 18px -6px color-mix(in srgb, var(--gold) 50%, transparent);
+  animation: navPop 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
 nav.tabs button.active::before {

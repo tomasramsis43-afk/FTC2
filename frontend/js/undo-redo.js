@@ -883,6 +883,8 @@ $all('button[data-view]').forEach(btn=>{
     btn.classList.add('active');
     const newView = $('#view-'+btn.dataset.view);
     const oldView = $('section.view.active');
+    const _prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const _navDur = _prefersReduced ? 0 : 180;
     if(oldView && newView && oldView !== newView){
       const mc = document.querySelector('.main-content');
       if(mc) mc.classList.add('nav-transitioning');
@@ -893,24 +895,27 @@ $all('button[data-view]').forEach(btn=>{
         oldView.classList.remove('view-leaving');
         newView.classList.remove('view-entering');
         if(mc) mc.classList.remove('nav-transitioning');
-      }, 340);
+      }, _navDur);
     } else if(newView){
       $all('section.view').forEach(v=>v.classList.remove('active'));
       newView.classList.add('active');
     }
-    if(btn.dataset.view==='clients') renderTable();
-    if(btn.dataset.view==='dashboard') renderDashboard();
-    if(btn.dataset.view==='settings') renderSettings();
-    if(btn.dataset.view==='bags') renderBags();
-    if(btn.dataset.view==='vault') renderVault();
-    if(btn.dataset.view==='courses') renderCourses();
-    if(btn.dataset.view==='courseinvoices') renderCourseInvoices();
-    if(btn.dataset.view==='audit') renderAuditLog();
-    if(btn.dataset.view==='reports') renderReports();
-    if(btn.dataset.view==='companies') renderCompanies();
-    if(btn.dataset.view==='accounting') renderAccounting();
-    if(btn.dataset.view==='budget') renderEpmBudget();
-    if(btn.dataset.view==='purchases') renderPurchases();
+    const _view = btn.dataset.view;
+    requestAnimationFrame(()=>{
+      if(_view==='clients' && typeof renderTable==='function') renderTable();
+      else if(_view==='dashboard' && typeof renderDashboard==='function') renderDashboard();
+      else if(_view==='settings' && typeof renderSettings==='function') renderSettings();
+      else if(_view==='bags' && typeof renderBags==='function') renderBags();
+      else if(_view==='vault' && typeof renderVault==='function') renderVault();
+      else if(_view==='courses' && typeof renderCourses==='function') renderCourses();
+      else if(_view==='courseinvoices' && typeof renderCourseInvoices==='function') renderCourseInvoices();
+      else if(_view==='audit' && typeof renderAuditLog==='function') renderAuditLog();
+      else if(_view==='reports' && typeof renderReports==='function') renderReports();
+      else if(_view==='companies' && typeof renderCompanies==='function') renderCompanies();
+      else if(_view==='accounting' && typeof renderAccounting==='function') renderAccounting();
+      else if(_view==='budget' && typeof renderEpmBudget==='function') renderEpmBudget();
+      else if(_view==='purchases' && typeof renderPurchases==='function') renderPurchases();
+    });
   });
 });
 /* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (settings.rolePermissions القابلة للتعديل من الإعدادات) */
