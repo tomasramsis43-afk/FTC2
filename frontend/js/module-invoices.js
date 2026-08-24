@@ -852,8 +852,6 @@ async function printReceiptVoucher(id){
   const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
   const destName = destLabel(tx.destination||'vault');
-  const isAuto = !!tx.autoClientId;
-  const linkNote = isAuto ? '<div class="hint" style="margin-top:6px; font-size:11px; color:var(--text-muted);">🔗 دفعة تسجيل مرتبطة بالعميل — مسجلة تلقائياً من شيت العملاء</div>' : '';
   // شركة تدفع نقداً: اسم الدافع = اسم الشركة، والتفصيل = كل متدرب باسمه ورقم هويته ومبلغه
   const companyTransfer = tx.companyTransferId && typeof companyTransfers !== 'undefined' ? companyTransfers.find(x=>x.id===tx.companyTransferId) : null;
   const isCompanyCash = !!(companyTransfer && (tx.destination||'vault')==='vault');
@@ -908,7 +906,6 @@ async function printReceiptVoucher(id){
         <h4>بيانات الدافع</h4>
         <div class="info-row"><span>اسم الدافع / العميل:</span><b>${escapeHtml(payerName)}</b></div>
         ${payerIdLine}
-        ${linkNote}
       </div>
       <div class="info-box">
         <h4>بيانات القبض</h4>
