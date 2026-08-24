@@ -2806,6 +2806,17 @@ td select:hover:not(:focus) {
 .cfo-hero-sub b.up { color: var(--teal); font-family: var(--font-mono); }
 .cfo-hero-sub b.down { color: var(--red); font-family: var(--font-mono); }
 
+.cfo-hero-value b.up,
+.cfo-hero-value b.down {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  margin-inline-start: 4px;
+  vertical-align: middle;
+}
+.cfo-hero-value b.up { color: var(--teal); }
+.cfo-hero-value b.down { color: var(--red); }
+
 
 
 

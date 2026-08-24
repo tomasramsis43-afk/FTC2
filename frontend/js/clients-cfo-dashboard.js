@@ -128,10 +128,28 @@ function renderCfoHero(){
   const todayIncome = todayClients.reduce((s,c)=>s+centerIncome(c),0);
   const todayCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'')===today).reduce((s,t)=>s+num(t.amount),0);
 
+  /* مؤشرات الاتجاه: اليوم مقابل أمس لبطاقتي "اليوم"، وهذه السنة مقابل السنة الماضية لنسبة التحصيل */
+  const yesterday = (()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); })();
+  const yestClients = activeClients.filter(c=>String(c.date||'')===yesterday);
+  const yestRegCount = yestClients.length;
+  const yestCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'')===yesterday).reduce((s,t)=>s+num(t.amount),0);
+  const trendBadge = (cur, prev)=>{
+    const p = cfoPct(cur, prev);
+    const cls = p>=0 ? 'up' : 'down';
+    const sign = p>=0 ? '+' : '';
+    const arrow = p>=0 ? '▲' : '▼';
+    return ` <b class="${cls}" title="مقارنة بالأمس">${arrow} ${sign}${p.toFixed(0)}%</b>`;
+  };
+
   const thisYear = new Date().getFullYear();
   const yearSales = activeClients.filter(c=>String(c.date||'').slice(0,4)===String(thisYear)).reduce((s,c)=>s+num(c.coursePrice),0);
   const yearCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(thisYear)).reduce((s,t)=>s+num(t.amount),0);
   const collectionRate = yearSales>0 ? Math.min(999, (yearCollected/yearSales)*100) : 0;
+
+  const prevYear = thisYear-1;
+  const prevYearSales = activeClients.filter(c=>String(c.date||'').slice(0,4)===String(prevYear)).reduce((s,c)=>s+num(c.coursePrice),0);
+  const prevYearCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(prevYear)).reduce((s,t)=>s+num(t.amount),0);
+  const prevCollectionRate = prevYearSales>0 ? Math.min(999, (prevYearCollected/prevYearSales)*100) : 0;
 
   const totalBalance = balanceOf('vault') + balanceOf('bank') + balanceOf('network');
   const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
@@ -143,7 +161,7 @@ function renderCfoHero(){
       <div class="cfo-hero-icon">${CFO_ICONS.sales}</div>
       <div class="cfo-hero-body">
         <div class="cfo-hero-label">تسجيلات اليوم</div>
-        <div class="cfo-hero-value">${String(todayRegCount)}</div>
+        <div class="cfo-hero-value">${String(todayRegCount)}${trendBadge(todayRegCount, yestRegCount)}</div>
         <div class="cfo-hero-sub">دخل اليوم: <b>${fmt(todayIncome)}</b> ﷼</div>
       </div>
     </div>
@@ -151,7 +169,7 @@ function renderCfoHero(){
       <div class="cfo-hero-icon">${CFO_ICONS.wallet}</div>
       <div class="cfo-hero-body">
         <div class="cfo-hero-label">تحصيل اليوم</div>
-        <div class="cfo-hero-value">${fmt(todayCollected)} ﷼</div>
+        <div class="cfo-hero-value">${fmt(todayCollected)} ﷼${trendBadge(todayCollected, yestCollected)}</div>
         <div class="cfo-hero-sub">من الحركات المالية الداخلة</div>
       </div>
     </div>
@@ -159,7 +177,7 @@ function renderCfoHero(){
       <div class="cfo-hero-icon">${CFO_ICONS.profit}</div>
       <div class="cfo-hero-body">
         <div class="cfo-hero-label">نسبة التحصيل ${thisYear}</div>
-        <div class="cfo-hero-value">${collectionRate.toFixed(1)}%</div>
+        <div class="cfo-hero-value">${collectionRate.toFixed(1)}%${trendBadge(collectionRate, prevCollectionRate)}</div>
         <div class="cfo-hero-sub">محصّل ${fmt(yearCollected)} من ${fmt(yearSales)} ﷼</div>
       </div>
     </div>
