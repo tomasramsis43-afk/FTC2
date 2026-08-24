@@ -579,16 +579,7 @@ router.post('/api/license/validate', licenseLimiter, async (req, res) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [result.clientId, ip, fp, geo?.country || null, geo?.city || null, isNewIp, isNewDevice]
       ).catch(e => console.error('تعذّر تسجيل نشاط ربط الترخيص:', e));
-      const reasonLines = [
-        isNewIp ? '<li>تحقق من الترخيص من عنوان IP مختلف عن الجهاز المرتبط به أصلاً</li>' : '',
-        isNewDevice ? '<li>تحقق من الترخيص من بصمة جهاز مختلفة عن الجهاز المرتبط به أصلاً</li>' : '',
-      ].filter(Boolean).join('');
-      alertAdmins(
-        `استخدام الترخيص من جهاز/موقع مختلف (${result.clientId})`,
-        `<p>تم رصد ما يلي عند التحقق من كود الترخيص الخاص بـ <b>${result.clientId}</b>:</p>
-         <ul>${reasonLines}</ul>
-         <p style="color:#888; font-size:13px;">IP: ${ip || 'غير معروف'}${geo?.country ? ` (${geo.city ? geo.city + '، ' : ''}${geo.country})` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-      ).catch(() => {});
+      // تم إلغاء إرسال إشعار الإيميل عند استخدام الترخيص/فتح البرنامج نهائياً حسب الطلب
     }
   } catch (e) {
     // فشل منطق الربط لا يجب أبداً أن يمنع تحقق ترخيص صحيح من النجاح.
