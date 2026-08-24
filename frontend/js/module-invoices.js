@@ -884,7 +884,6 @@ async function printReceiptVoucher(id){
         <h4>بيانات الدافع</h4>
         <div class="info-row"><span>اسم الدافع / العميل:</span><b>${escapeHtml(payerName)}</b></div>
         ${payerIdLine}
-        ${tx.notes ? `<div class="info-row"><span>البيان:</span><b>${escapeHtml(tx.notes)}</b></div>` : ''}
         ${linkNote}
       </div>
       <div class="info-box">
