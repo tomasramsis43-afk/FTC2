@@ -1,5 +1,4 @@
 // FTC2 — تحميل منطق صلاحية التثقيف الصحي وقواعد دورة الحقيبة.
-// يتم التحميل ديناميكياً حتى لا نغيّر ترتيب وحدات النظام الحالية أو نكسر الإقلاع.
 (function loadBusinessRuleModules(){
   try{
     ['health-education-validity.js','health-education-ui.js','bag-workflow.js'].forEach(file=>{
@@ -12,11 +11,6 @@
   }catch(e){ console.error('[BusinessRules] Failed to load modules:', e); }
 })();
 
-// دخول بمسح الكود (QR، زي واتساب ويب): لو فُتح هذا الرابط من مسح كود QR ظاهر على جهاز آخر
-// (شاشة الدخول تولّد رابطاً يحتوي على qrLoginSession=...)، نحفظ معرّف الجلسة فوراً قبل أي شيء
-// آخر، ونزيله من شريط العنوان. لاحقاً — بعد أي تسجيل دخول ناجح على هذا الجهاز (بأي طريقة: كلمة
-// مرور، بصمة، رابط إيميل، أو جلسة محفوظة بالفعل) — نعرض تأكيداً بسيطاً لربط الجهاز الآخر بنفس
-// الحساب (راجع checkPendingQrLoginApproval فى module-purchases.js).
 (function(){
   try{
     const params = new URLSearchParams(window.location.search);
@@ -29,7 +23,6 @@
 })();
 
 (async function bootNoLicense(){
-  // تم حذف نظام الترخيص — البرنامج يعمل مباشرة بدون كود ترخيص
   try{
     if(!(window.crypto && window.crypto.subtle)){
       const warn = document.createElement('div');
@@ -46,15 +39,20 @@
       await ensureServerLoginThenStart();
       return;
     }
-    // توافق مع بيانات مشفرة سابقاً بمفتاح ترخيص قديم — استخدمه إن وجد
+    let cachedIsDefault = false;
+    let cachedRawTmp = null;
     try{
-      const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
-      if(cachedRaw){
-        const cached = JSON.parse(cachedRaw);
-        const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
-        if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
-          await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
-          return;
+      cachedRawTmp = localStorage.getItem(LICENSE_CACHE_KEY);
+      if(cachedRawTmp){
+        const c = JSON.parse(cachedRawTmp);
+        if(c.encKeyRaw){
+          if(c.clientId === 'default'){
+            cachedIsDefault = true;
+          } else {
+            const ce = c.expiryDate ? new Date(c.expiryDate) : null;
+            await activateAndStart(c.encKeyRaw, ce, c.clientId);
+            return;
+          }
         }
       }
     }catch(e){}
@@ -67,8 +65,15 @@
           return;
         }
       }
+      if(cachedIsDefault && cachedRawTmp){
+        const c2 = JSON.parse(cachedRawTmp);
+        if(c2.encKeyRaw){
+          const ce2 = c2.expiryDate ? new Date(c2.expiryDate) : null;
+          await activateAndStart(c2.encKeyRaw, ce2, c2.clientId);
+          return;
+        }
+      }
     }catch(e){}
-    // لا يوجد ترخيص مخبأ — استخدم مفتاح افتراضي ثابت مشترك لكل الأجهزة
     const DEFAULT_ENC_KEY_B64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm";
     try{
       ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(DEFAULT_ENC_KEY_B64), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
@@ -80,14 +85,6 @@
   }
 })();
 
-/* ---------------- Login / Logout
-   نُقل هذا القسم من module-finance.js — منطق تسجيل خروج/دخول عام على مستوى
-   التطبيق كله (لا علاقة له بالخزنة/المحاسبة)، ومكانه الطبيعي هنا مع باقي
-   منطق الإقلاع (boot). لا تغيير فى أي منطق، نقل فقط.
-   تم حذف شاشة تسجيل الدخول المحلي داخل البرنامج بناءً على طلب المستخدم.
-   الدخول الآن يتم فقط عبر شاشة السيرفر المركزي (server-login-screen)، وصلاحيات المستخدم
-   (admin/staff) تُشتق مباشرة من هوية المستخدم الذي سجّل دخوله فعليًا على الخادم (SERVER_AUTH_USERNAME/
-   SERVER_AUTH_ROLE)، وليس من أول مستخدم في قائمة "المستخدمين" الداخلية للبرنامج. */
 function autoSignInLocalUser(){
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();
@@ -95,7 +92,6 @@ function autoSignInLocalUser(){
 $('#btn-lang-toggle').addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
 });
-// تفويض عام للأزرار داخل القائمة (يعمل حتى لو نُقلت القائمة لـ body بعد التحميل)
 document.addEventListener('click', async (e)=>{
   const logoutBtn = e.target.closest('#btn-logout');
   if(!logoutBtn) return;
@@ -132,7 +128,6 @@ document.addEventListener('click', async (e)=>{
     if(btn) btn.disabled = false;
   }
 });
-// إصلاح زر الوضع الداكن — كان بلا مستمع بعد نقل القائمة لـ body
 document.addEventListener('click', async (e)=>{
   const tBtn = e.target.closest('#btn-theme-toggle');
   if(!tBtn) return;
@@ -145,7 +140,6 @@ document.addEventListener('click', async (e)=>{
     if(typeof saveSettings==='function') await saveSettings();
   }catch(err){ console.error('[Theme] toggle failed:', err); }
 });
-// إصلاح زر كتم الصوت
 document.addEventListener('click', async (e)=>{
   const sBtn = e.target.closest('#btn-sound-toggle');
   if(!sBtn) return;

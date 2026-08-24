@@ -62,8 +62,9 @@ function validateLicenseKey(rawKey) {
           const expiryStr = payloadStr.slice(8, 16);
           const y = +expiryStr.slice(0, 4), m = +expiryStr.slice(4, 6), d = +expiryStr.slice(6, 8);
           const expiryDate = new Date(y, m - 1, d, 23, 59, 59);
-          if (!isNaN(expiryDate.getTime()) && new Date() <= expiryDate) {
+          if (!isNaN(expiryDate.getTime())) {
             const encKey = deriveEncryptionKeyRaw(clientId).toString('base64');
+            // نتجاهل تاريخ الانتهاء عمداً — الترخيص محذوف والبيانات المشفرة قديماً يجب أن تبقى قابلة للقراءة
             return { valid: true, clientId, expiryDate: expiryDate.toISOString(), encKey };
           }
         }
