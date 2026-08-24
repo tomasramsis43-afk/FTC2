@@ -1,4 +1,11 @@
-/* ---------------- Vault (الخزنة) ---------------- */
+/* ---------------- Vault (الخزنة) — memo + version bump لتسريع التبويب ---------------- */
+let _balanceCache = {};
+let _balanceCacheVersion = -1;
+let _anomalyCache = null;
+let _anomalyCacheVersion = -1;
+let _dupCache = null;
+let _dupCacheVersion = -1;
+function bumpVaultVersion(){ try{ vaultTxVersion++; _balanceCacheVersion = -1; _anomalyCacheVersion = -1; _dupCacheVersion = -1; }catch(e){} }
 $('#btn-template-bag-invoices').addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_فواتير_الحقائب.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890', 'رقم فاتورة الحقيبة':'INV-0001', 'تاريخ شراء الحقيبة':'2026-01-15'}
@@ -147,7 +154,7 @@ $('#import-bagown-input').addEventListener('change', async e=>{
 });
 
 function removeClientLedgerEntries(clientRecordId){
-  vaultTx = vaultTx.filter(t=>t.autoClientId!==clientRecordId);
+  vaultTx = vaultTx.filter(t=>t.autoClientId!==clientRecordId); bumpVaultVersion();
 }
 /* هل مستخدم (باسمه) هو صاحب دور "استقبال"؟ تُستخدم لتحديد هل دفعة العميل النقدية تحتاج
    "تسوية" (تأكيد استلام فعلي) أم لا — فقط عمليات التسجيل التي يقوم بها الاستقبال نفسه
@@ -275,10 +282,12 @@ function vaultFilteredMethodTotals(rows){
 }
 /* أرقام الهوية التي تتكرر أكثر من مرة ضمن كل حركات الخزنة/البنك/الشبكة (بغض النظر عن الفلتر الحالي) */
 function vaultDuplicateClientIds(){
+  if(_dupCacheVersion===vaultTxVersion && _dupCache) return _dupCache;
   const counts = {};
   vaultTx.forEach(t=>{ if(t.clientId) counts[t.clientId] = (counts[t.clientId]||0)+1; });
   const dup = new Set();
   Object.keys(counts).forEach(id=>{ if(counts[id]>1) dup.add(id); });
+  _dupCache=dup; _dupCacheVersion=vaultTxVersion;
   return dup;
 }
 /* ---------------- كشف الحركات غير المعتادة إحصائياً (Anomaly Detection) ----------------
@@ -288,6 +297,7 @@ function vaultDuplicateClientIds(){
    استثنائية تستحق الانتباه). يتطلب 5 حركات على الأقل بنفس التصنيف حتى يُعتد بالمتوسط، وإلا
    يبقى التصنيف بلا حكم كافٍ (بيانات غير كافية). */
 function vaultAnomalyIds(){
+  if(_anomalyCacheVersion===vaultTxVersion && _anomalyCache) return _anomalyCache;
   const byCat = {};
   vaultTx.forEach(t=>{ if(t.type==='out' && t.category){ (byCat[t.category] = byCat[t.category]||[]).push(t); } });
   const anomalies = new Set();
@@ -302,6 +312,7 @@ function vaultAnomalyIds(){
       if((num(t.amount)-mean)/stdev > 2.5) anomalies.add(t.id);
     });
   });
+  _anomalyCache=anomalies; _anomalyCacheVersion=vaultTxVersion;
   return anomalies;
 }
 function vaultFilteredRows(){
@@ -480,8 +491,11 @@ function projectedBalance(dest){
   };
 }
 function balanceOf(dest){
-  return vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0)
+  if(_balanceCacheVersion===vaultTxVersion && _balanceCache.hasOwnProperty(dest)) return _balanceCache[dest];
+  const v = vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0)
        - vaultTx.filter(t=>(t.destination||'vault')===dest && t.type==='out').reduce((s,t)=>s+num(t.amount),0);
+  _balanceCache[dest]=v; _balanceCacheVersion=vaultTxVersion;
+  return v;
 }
 /* بطاقة الرصيد المتوقع للخزنة (كاش) — تقدير تقريبي وليس ضماناً، مبني على متوسط أداء الأيام الماضية فقط */
 function renderProjectedBalanceCard(){
@@ -738,7 +752,7 @@ $('#schedule-form')?.addEventListener('submit', async e=>{
     scheduledVaultTx[idx] = {...scheduledVaultTx[idx], ...data};
     await logAudit('edit','الحركات المالية', `تعديل قالب حركة مجدولة: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }else{
-    scheduledVaultTx.push({ id:uid(), createdAt:Date.now(), lastRunMonth:null, ...data });
+    scheduledvaultTx.push({ id:uid(); bumpVaultVersion(), createdAt:Date.now(), lastRunMonth:null, ...data });
     await logAudit('add','الحركات المالية', `إضافة قالب حركة مجدولة جديد: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }
   await saveScheduledVaultTx();
@@ -801,7 +815,7 @@ async function runDueScheduledVaultTx(){
         recipientName: s.recipientName, referenceNo: 'مجدولة تلقائياً',
         destination: s.destination||'vault', networkInvoice: ''
       };
-      vaultTx.push(savedTx);
+      vaultTx.push(savedTx); bumpVaultVersion();
       await saveSettings();
       s.lastRunMonth = currentMonthKey;
       anyRun = true;
@@ -944,19 +958,25 @@ function renderVault(){
   }).join('');
 
 
-  const catTotals = {};
-  rows.filter(t=>t.type==='out').forEach(t=>{ const k=t.category||'أخرى'; catTotals[k]=(catTotals[k]||0)+num(t.amount); });
-  drawBars('#chart-expense-cat', Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k, Math.round(v*100)/100]));
-
-  const dailyTrend = vaultFilteredDailyTrend(rows);
-  drawLineChart('#chart-vault-daily', dailyTrend.labels, dailyTrend.series);
-  drawBars('#chart-vault-method', vaultFilteredMethodTotals(rows));
-
-  ensureDenomUiBuilt();
-  recalcDenomTable();
-  renderDenomHistory();
-  renderCashFlowForecastChart('vault');
-  renderVaultBudgetGlance();
+  // رسوم ثقيلة تُؤجل للـ idle حتى يظهر الجدول فوراً
+  const _deferCharts = (cb)=>{
+    if(typeof isViewActive==='function' && !isViewActive('vault')) return;
+    if(typeof requestIdleCallback==='function') requestIdleCallback(cb, {timeout:400});
+    else setTimeout(cb, 16);
+  };
+  _deferCharts(()=>{
+    const catTotals = {};
+    rows.filter(t=>t.type==='out').forEach(t=>{ const k=t.category||'أخرى'; catTotals[k]=(catTotals[k]||0)+num(t.amount); });
+    drawBars('#chart-expense-cat', Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k, Math.round(v*100)/100]));
+    const dailyTrend = vaultFilteredDailyTrend(rows);
+    drawLineChart('#chart-vault-daily', dailyTrend.labels, dailyTrend.series);
+    drawBars('#chart-vault-method', vaultFilteredMethodTotals(rows));
+    ensureDenomUiBuilt();
+    recalcDenomTable();
+    renderDenomHistory();
+    renderCashFlowForecastChart('vault');
+    renderVaultBudgetGlance();
+  });
 }
 
 /* ---------------- تصنيف الفئات النقدية بالخزنة (سجل حركات دخول/خروج) ----------------
@@ -1467,7 +1487,7 @@ $('#vault-form').addEventListener('submit', async e=>{
     showToast('تم تحديث الحركة');
   }else{
     savedTx = {id:uid(), seq: allocVaultSeq(data.destination), createdAt:Date.now(), ...data};
-    vaultTx.push(savedTx);
+    vaultTx.push(savedTx); bumpVaultVersion();
     await saveSettings();
     showToast('تمت إضافة الحركة');
   }
@@ -1591,7 +1611,7 @@ document.addEventListener('click', async e=>{
     if(await customConfirm(`رفض وحذف تسجيل الاستقبال المعلّق "${desc}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)){
       const ok = await deleteOneRecordGeneric('vaultTx', id);
       if(ok!==false){
-        vaultTx = vaultTx.filter(x=>x.id!==id);
+        vaultTx = vaultTx.filter(x=>x.id!==id); bumpVaultVersion();
         await logAudit('delete','الحركات المالية', `تم رفض وحذف تسجيل الاستقبال المعلّق: ${desc}`);
         refreshEverything();
         showToast('تم رفض التسجيل وحذفه');
