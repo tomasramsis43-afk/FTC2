@@ -1,4 +1,5 @@
 // FTC2 — تحميل منطق صلاحية التثقيف الصحي وقواعد دورة الحقيبة.
+// يتم التحميل ديناميكياً حتى لا نغيّر ترتيب وحدات النظام الحالية أو نكسر الإقلاع.
 (function loadBusinessRuleModules(){
   try{
     ['health-education-validity.js','health-education-ui.js','bag-workflow.js'].forEach(file=>{
@@ -11,6 +12,11 @@
   }catch(e){ console.error('[BusinessRules] Failed to load modules:', e); }
 })();
 
+// دخول بمسح الكود (QR، زي واتساب ويب): لو فُتح هذا الرابط من مسح كود QR ظاهر على جهاز آخر
+// (شاشة الدخول تولّد رابطاً يحتوي على qrLoginSession=...)، نحفظ معرّف الجلسة فوراً قبل أي شيء
+// آخر، ونزيله من شريط العنوان. لاحقاً — بعد أي تسجيل دخول ناجح على هذا الجهاز (بأي طريقة: كلمة
+// مرور، بصمة، رابط إيميل، أو جلسة محفوظة بالفعل) — نعرض تأكيداً بسيطاً لربط الجهاز الآخر بنفس
+// الحساب (راجع checkPendingQrLoginApproval فى module-purchases.js).
 (function(){
   try{
     const params = new URLSearchParams(window.location.search);
@@ -22,9 +28,12 @@
   }catch(e){ console.error('[QR Login] Failed to capture qrLoginSession param:', e); }
 })();
 
-(async function bootNoLicense(){
+(async function bootWithLicense(){
   try{
     if(!(window.crypto && window.crypto.subtle)){
+      // بيئة لا تدعم Web Crypto — غالباً لأن الرابط HTTP وليس HTTPS.
+      // نعرض تحذيراً صريحاً وثابتاً في أعلى الشاشة حتى لا يخفى على المستخدم،
+      // ونكمل التشغيل بدون تشفير (بيانات تُرسل/تُخزَّن كنص عادي).
       const warn = document.createElement('div');
       warn.id = 'http-warning-banner';
       warn.style.cssText = [
@@ -36,61 +45,52 @@
       ].join(';');
       warn.textContent = '⚠️ تحذير أمني: البرنامج يعمل عبر HTTP غير آمن — بياناتك لن تُشفَّر. استخدم رابط HTTPS دائماً لحماية البيانات.';
       document.body.prepend(warn);
+      $('#license-screen').style.display = 'none';
       await ensureServerLoginThenStart();
       return;
     }
-    let cachedIsDefault = false;
-    let cachedRawTmp = null;
-    try{
-      cachedRawTmp = localStorage.getItem(LICENSE_CACHE_KEY);
-      if(cachedRawTmp){
-        const c = JSON.parse(cachedRawTmp);
-        if(c.encKeyRaw){
-          if(c.clientId === 'default'){
-            cachedIsDefault = true;
-          } else {
-            const ce = c.expiryDate ? new Date(c.expiryDate) : null;
-            await activateAndStart(c.encKeyRaw, ce, c.clientId);
-            return;
+    const storedKey = localStorage.getItem(LICENSE_STORAGE_KEY);
+    if(storedKey){
+      const result = await validateLicenseKey(storedKey);
+      if(result.valid){
+        await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
+        return;
+      }
+      // تعذّر الوصول للسيرفر (مش رفض صريح للكود): نحاول تشغيل البرنامج بآخر تفعيل
+      // ناجح محفوظ محلياً على هذا الجهاز، بدل حجب البرنامج بالكامل لمجرد انقطاع
+      // الإنترنت. لو الترخيص المحفوظ منتهي فعلياً حسب آخر تاريخ انتهاء معروف، أو
+      // مفيش أي تفعيل سابق محفوظ، تظهر شاشة الترخيص كالمعتاد.
+      if(result.networkError){
+        try{
+          const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
+          if(cachedRaw){
+            const cached = JSON.parse(cachedRaw);
+            const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
+            if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
+              await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
+              showToast('تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
+              return;
+            }
           }
-        }
+        }catch(e){ console.error('[Boot] Failed to activate cached license:', e); }
       }
-    }catch(e){}
-    try{
-      const storedKey = localStorage.getItem(LICENSE_STORAGE_KEY);
-      if(storedKey){
-        const result = await validateLicenseKey(storedKey);
-        if(result.valid){
-          await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
-          return;
-        }
-      }
-      if(cachedIsDefault && cachedRawTmp){
-        const c2 = JSON.parse(cachedRawTmp);
-        if(c2.encKeyRaw){
-          const ce2 = c2.expiryDate ? new Date(c2.expiryDate) : null;
-          await activateAndStart(c2.encKeyRaw, ce2, c2.clientId);
-          return;
-        }
-      }
-    }catch(e){}
-    // لا يوجد ترخيص مخبأ — استخدم مفتاح افتراضي ثابت مشترك لكل الأجهزة
-    // ملاحظة إصلاح حرِج (2026-08-24): القيمة السابقة هنا كانت تُفكّ Base64 إلى 48 بايت
-    // (384 بت) — وهو طول غير صالح لمفتاح AES-GCM (يُقبَل فقط 128 أو 256 بت)، فكان
-    // crypto.subtle.importKey يفشل دائماً بخطأ "AES key data must be 128 or 256 bits"
-    // ويمنع أي مستخدم بلا ترخيص مخبّأ من فتح البرنامج إطلاقاً. القيمة الجديدة 32 بايت
-    // بالضبط (256 بت) — ويجب أن تبقى مطابقة حرفياً لنفس القيمة في server/license.js.
-    const DEFAULT_ENC_KEY_B64 = "4U4cwlyiJcdXGejnxpyOV+J+cJEyyUx3PTC2D8nIT2Q=";
-    try{
-      ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(DEFAULT_ENC_KEY_B64), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
-    }catch(e){ console.error('[Boot] Failed to import default key:', e); ENC_KEY = null; }
-    await ensureServerLoginThenStart();
+      showLicenseScreen(result.reason);
+      return;
+    }
+    showLicenseScreen(null);
   }catch(e){
-    console.error('[Boot] fallback error:', e);
-    try{ await ensureServerLoginThenStart(); }catch(e2){}
+    showLicenseScreen('حدث خطأ غير متوقع أثناء التحقق من الترخيص');
   }
 })();
 
+/* ---------------- Login / Logout
+   نُقل هذا القسم من module-finance.js — منطق تسجيل خروج/دخول عام على مستوى
+   التطبيق كله (لا علاقة له بالخزنة/المحاسبة)، ومكانه الطبيعي هنا مع باقي
+   منطق الإقلاع (boot). لا تغيير فى أي منطق، نقل فقط.
+   تم حذف شاشة تسجيل الدخول المحلي داخل البرنامج بناءً على طلب المستخدم.
+   الدخول الآن يتم فقط عبر شاشة السيرفر المركزي (server-login-screen)، وصلاحيات المستخدم
+   (admin/staff) تُشتق مباشرة من هوية المستخدم الذي سجّل دخوله فعليًا على الخادم (SERVER_AUTH_USERNAME/
+   SERVER_AUTH_ROLE)، وليس من أول مستخدم في قائمة "المستخدمين" الداخلية للبرنامج. */
 function autoSignInLocalUser(){
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();
@@ -98,11 +98,8 @@ function autoSignInLocalUser(){
 $('#btn-lang-toggle').addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
 });
-document.addEventListener('click', async (e)=>{
-  const logoutBtn = e.target.closest('#btn-logout');
-  if(!logoutBtn) return;
-  e.preventDefault();
-  const btn = logoutBtn;
+$('#btn-logout').addEventListener('click', async ()=>{
+  const btn = $('#btn-logout');
   if(btn) btn.disabled = true;
   try{
     var chk = {allSynced:true};
@@ -133,28 +130,4 @@ document.addEventListener('click', async (e)=>{
   }finally{
     if(btn) btn.disabled = false;
   }
-});
-document.addEventListener('click', async (e)=>{
-  const tBtn = e.target.closest('#btn-theme-toggle');
-  if(!tBtn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  try{
-    if(typeof settings==='undefined' || typeof applyTheme==='undefined') return;
-    settings.darkMode = !settings.darkMode;
-    applyTheme(settings.darkMode);
-    if(typeof saveSettings==='function') await saveSettings();
-  }catch(err){ console.error('[Theme] toggle failed:', err); }
-});
-document.addEventListener('click', async (e)=>{
-  const sBtn = e.target.closest('#btn-sound-toggle');
-  if(!sBtn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  try{
-    if(typeof settings==='undefined') return;
-    settings.soundEnabled = !settings.soundEnabled;
-    if(typeof applySoundIcon==='function') applySoundIcon();
-    if(typeof saveSettings==='function') await saveSettings();
-  }catch(err){ console.error('[Sound] toggle failed:', err); }
 });

@@ -22,7 +22,22 @@
 </head>
 <body>
 
-<!-- SERVER LOGIN (تسجيل الدخول على الخادم المركزي) -->
+<!-- LICENSE ACTIVATION -->
+<div id="license-screen" style="position: fixed; inset: 0px; z-index: 210; display: none; align-items: center; justify-content: center; padding: 20px;">
+  <div class="login-box">
+    <div class="seal"><img src="assets/img/logo.png" alt="FTC" loading="lazy"></div>
+    <h2>تفعيل البرنامج</h2>
+    <p class="sub">أدخل كود الترخيص الخاص بمنشأتكم</p>
+    <form id="license-form">
+      <div class="field"><label>كود الترخيص</label><input type="text" id="license-key-input" placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX" autocomplete="off" required="" style="font-family:'IBM Plex Mono',monospace; letter-spacing:.5px;"></div>
+      <button type="submit" class="btn btn-primary">تفعيل</button>
+      <div class="login-error" id="license-error" style="display:none;"></div>
+    </form>
+    <div class="login-hint" id="license-status" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- SERVER LOGIN (تسجيل الدخول على الخادم المركزي — يظهر بعد التحقق من الترخيص وقبل تحميل بيانات البرنامج) -->
 <div id="server-login-screen" style="position: fixed; inset: 0px; z-index: 215; display: none; align-items: center; justify-content: center; padding: 20px;">
   <div class="login-container">
     <button type="button" id="login-theme-toggle" class="login-theme-toggle-btn" title="الوضع الليلي/النهاري" aria-label="تبديل الوضع الليلي/النهاري">
