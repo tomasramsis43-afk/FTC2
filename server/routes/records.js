@@ -6,6 +6,12 @@ const { requireAuth, requireRole } = require('../auth');
 const { storageLimiter } = require('../rate-limiters');
 const { restrictKeyToAdmin, roleCanAccessView, RESTRICTED_STORAGE_KEYS } = require('../permissions');
 const { broadcastRecordChanged } = require('../sse');
+const { alertAdmins } = require('../services/email');
+
+// إشعار إيميل تلقائي — best-effort، لا يؤثر على نجاح العملية
+function notifyChange(subject, html) {
+  alertAdmins(subject, html).catch(() => {});
+}
 
 // (خصومات، دفعات جزئية...) موجودة فقط بمنطق الواجهة الأمامية — تلك الحالات تستمر تُحسب من
 // المصفوفة الكاملة المحمّلة أصلاً بالمتصفح كما كانت قبل هذا التحديث، بلا أي تغيير في نتيجتها.
@@ -452,6 +458,10 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
     );
     if (upsert.rows[0]) {
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+      notifyChange(
+        `تعديل بيانات عميل${plainClientId ? ' — ' + plainClientId : ''}`,
+        `<p>قام المستخدم <b>${req.user.username}</b> بتعديل بيانات عميل (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الحالة: ${upsert.rows[0].status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      );
       return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     }
     const current = await pool.query('SELECT version, enc FROM client_records WHERE id = $1', [req.params.id]);
@@ -542,6 +552,10 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
     }
     await pool.query('DELETE FROM client_records WHERE id = $1', [req.params.id]);
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+    notifyChange(
+      `حذف بيانات عميل — ${req.params.id}`,
+      `<p>قام المستخدم <b>${req.user.username}</b> بحذف بيانات عميل (معرّف السجل: ${req.params.id}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+    );
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
@@ -569,6 +583,10 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
       await pool.query(`DELETE FROM client_records WHERE id = ANY($1::text[]) AND status = 'confirmed'`, [ids]);
     }
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+    notifyChange(
+      `حذف جماعي لبيانات عملاء — ${ids.length} سجل`,
+      `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> سجل عميل — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+    );
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);
@@ -686,6 +704,13 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
     }
     const migrated = records.length - conflictRows.length;
     await client.query('COMMIT');
+    if (migrated > 0) {
+      broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+      notifyChange(
+        `ترحيل/استيراد جماعي لبيانات عملاء — ${migrated} سجل`,
+        `<p>قام المستخدم <b>${req.user.username}</b> بترحيل جماعي لـ <b>${migrated}</b> سجل عميل${conflictedIds.length ? ` — تعارض: ${conflictedIds.length}` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      );
+    }
     res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
   } catch (e) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -889,6 +914,12 @@ router.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
     );
     if (upsert.rows[0]) {
       broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+      if (req.params.collection === 'vaultTx') {
+        notifyChange(
+          `تعديل حركة مالية — ${req.params.id}`,
+          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل حركة مالية (معرّف: ${req.params.id}) — الحالة: ${upsert.rows[0].status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        );
+      }
       return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     }
     const current = await pool.query('SELECT version, enc FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
@@ -941,6 +972,12 @@ router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requi
       );
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+    if (req.params.collection === 'vaultTx') {
+      notifyChange(
+        `حذف حركة مالية — ${req.params.id}`,
+        `<p>قام المستخدم <b>${req.user.username}</b> بحذف حركة مالية (معرّف: ${req.params.id}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      );
+    }
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
@@ -1057,7 +1094,15 @@ router.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter
     }
     const migrated = records.length - conflictRows.length;
     await client.query('COMMIT');
-    if (migrated > 0) broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+    if (migrated > 0) {
+      broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+      if (req.params.collection === 'vaultTx') {
+        notifyChange(
+          `تحديث جماعي لحركات مالية — ${migrated} سجل`,
+          `<p>قام المستخدم <b>${req.user.username}</b> بتحديث جماعي لـ <b>${migrated}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        );
+      }
+    }
     res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
   } catch (e) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -1091,6 +1136,12 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
       );
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
+    if (req.params.collection === 'vaultTx') {
+      notifyChange(
+        `حذف جماعي لحركات مالية — ${ids.length} سجل`,
+        `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      );
+    }
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);

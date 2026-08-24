@@ -10,10 +10,9 @@
 */
 const crypto = require('crypto');
 
-const LICENSE_SECRET = process.env.LICENSE_SECRET;
-if (!LICENSE_SECRET) {
-  console.error('❌ متغيّر البيئة LICENSE_SECRET غير موجود. راجع ملف .env.example');
-  process.exit(1);
+const LICENSE_SECRET = process.env.LICENSE_SECRET || 'fhad-training-center-default-secret-fallback-v1';
+if (!process.env.LICENSE_SECRET) {
+  console.warn('⚠️ LICENSE_SECRET غير مضبوط — يُستخدم مفتاح افتراضي (وضع بدون ترخيص)');
 }
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -44,38 +43,35 @@ function deriveEncryptionKeyRaw(clientId) {
   return crypto.pbkdf2Sync(material, salt, 150000, 32, 'sha256'); // 32 بايت = AES-256
 }
 
+const DEFAULT_FALLBACK_ENC_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm";
 function validateLicenseKey(rawKey) {
+  // تم حذف نظام الترخيص — أي كود (حتى فارغ) يُعتبر صالحاً بمفتاح افتراضي ثابت
+  // نحاول التحقق الأصلي أولاً للحفاظ على توافق تراخيص قديمة صالحة، وإن فشل نُرجع المفتاح الافتراضي
   try {
     const cleaned = (rawKey || '').replace(/[\s-]/g, '').toUpperCase();
-    if (!cleaned) return { valid: false, reason: 'أدخل كود الترخيص' };
-    const bytes = b32Decode(cleaned);
-    if (bytes.length < 26) return { valid: false, reason: 'صيغة كود الترخيص غير صحيحة' };
-    const payload = bytes.subarray(0, 16);
-    const sig = bytes.subarray(16, 26);
-    const expectedSig = crypto.createHmac('sha256', LICENSE_SECRET).update(payload).digest().subarray(0, 10);
-    // مقارنة بزمن ثابت (timingSafeEqual) بدل حلقة مقارنة عادية — تحسين إضافي
-    // بسيط يمنع هجمات قياس التوقيت النظرية.
-    const match = sig.length === expectedSig.length && crypto.timingSafeEqual(sig, expectedSig);
-    if (!match) return { valid: false, reason: 'كود الترخيص غير صحيح' };
-    const payloadStr = payload.toString('utf8');
-    const clientId = payloadStr.slice(0, 8).trim();
-    const expiryStr = payloadStr.slice(8, 16);
-    const y = +expiryStr.slice(0, 4), m = +expiryStr.slice(4, 6), d = +expiryStr.slice(6, 8);
-    const expiryDate = new Date(y, m - 1, d, 23, 59, 59);
-    if (isNaN(expiryDate.getTime())) return { valid: false, reason: 'كود الترخيص غير صحيح' };
-    if (new Date() > expiryDate) {
-      const disp = String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
-      return {
-        valid: false, expired: true,
-        reason: `انتهت صلاحية الترخيص بتاريخ ${disp}. يرجى تجديد الاشتراك.`,
-        clientId,
-      };
+    if (cleaned) {
+      const bytes = b32Decode(cleaned);
+      if (bytes.length >= 26) {
+        const payload = bytes.subarray(0, 16);
+        const sig = bytes.subarray(16, 26);
+        const expectedSig = crypto.createHmac('sha256', LICENSE_SECRET).update(payload).digest().subarray(0, 10);
+        const match = sig.length === expectedSig.length && crypto.timingSafeEqual(sig, expectedSig);
+        if (match) {
+          const payloadStr = payload.toString('utf8');
+          const clientId = payloadStr.slice(0, 8).trim();
+          const expiryStr = payloadStr.slice(8, 16);
+          const y = +expiryStr.slice(0, 4), m = +expiryStr.slice(4, 6), d = +expiryStr.slice(6, 8);
+          const expiryDate = new Date(y, m - 1, d, 23, 59, 59);
+          if (!isNaN(expiryDate.getTime()) && new Date() <= expiryDate) {
+            const encKey = deriveEncryptionKeyRaw(clientId).toString('base64');
+            return { valid: true, clientId, expiryDate: expiryDate.toISOString(), encKey };
+          }
+        }
+      }
     }
-    const encKey = deriveEncryptionKeyRaw(clientId).toString('base64');
-    return { valid: true, clientId, expiryDate: expiryDate.toISOString(), encKey };
-  } catch (e) {
-    return { valid: false, reason: 'تعذر التحقق من كود الترخيص' };
-  }
+  } catch (e) {}
+  // fallback — ترخيص افتراضي دائم بدون انتهاء
+  return { valid: true, clientId: 'default', expiryDate: null, encKey: DEFAULT_FALLBACK_ENC_KEY };
 }
 
 module.exports = { validateLicenseKey };

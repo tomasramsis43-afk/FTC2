@@ -28,12 +28,10 @@
   }catch(e){ console.error('[QR Login] Failed to capture qrLoginSession param:', e); }
 })();
 
-(async function bootWithLicense(){
+(async function bootNoLicense(){
+  // تم حذف نظام الترخيص — البرنامج يعمل مباشرة بدون كود ترخيص
   try{
     if(!(window.crypto && window.crypto.subtle)){
-      // بيئة لا تدعم Web Crypto — غالباً لأن الرابط HTTP وليس HTTPS.
-      // نعرض تحذيراً صريحاً وثابتاً في أعلى الشاشة حتى لا يخفى على المستخدم،
-      // ونكمل التشغيل بدون تشفير (بيانات تُرسل/تُخزَّن كنص عادي).
       const warn = document.createElement('div');
       warn.id = 'http-warning-banner';
       warn.style.cssText = [
@@ -45,41 +43,40 @@
       ].join(';');
       warn.textContent = '⚠️ تحذير أمني: البرنامج يعمل عبر HTTP غير آمن — بياناتك لن تُشفَّر. استخدم رابط HTTPS دائماً لحماية البيانات.';
       document.body.prepend(warn);
-      $('#license-screen').style.display = 'none';
       await ensureServerLoginThenStart();
       return;
     }
-    const storedKey = localStorage.getItem(LICENSE_STORAGE_KEY);
-    if(storedKey){
-      const result = await validateLicenseKey(storedKey);
-      if(result.valid){
-        await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
-        return;
+    // توافق مع بيانات مشفرة سابقاً بمفتاح ترخيص قديم — استخدمه إن وجد
+    try{
+      const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
+      if(cachedRaw){
+        const cached = JSON.parse(cachedRaw);
+        const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
+        if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
+          await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
+          return;
+        }
       }
-      // تعذّر الوصول للسيرفر (مش رفض صريح للكود): نحاول تشغيل البرنامج بآخر تفعيل
-      // ناجح محفوظ محلياً على هذا الجهاز، بدل حجب البرنامج بالكامل لمجرد انقطاع
-      // الإنترنت. لو الترخيص المحفوظ منتهي فعلياً حسب آخر تاريخ انتهاء معروف، أو
-      // مفيش أي تفعيل سابق محفوظ، تظهر شاشة الترخيص كالمعتاد.
-      if(result.networkError){
-        try{
-          const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
-          if(cachedRaw){
-            const cached = JSON.parse(cachedRaw);
-            const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
-            if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
-              await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
-              showToast('تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
-              return;
-            }
-          }
-        }catch(e){ console.error('[Boot] Failed to activate cached license:', e); }
+    }catch(e){}
+    try{
+      const storedKey = localStorage.getItem(LICENSE_STORAGE_KEY);
+      if(storedKey){
+        const result = await validateLicenseKey(storedKey);
+        if(result.valid){
+          await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
+          return;
+        }
       }
-      showLicenseScreen(result.reason);
-      return;
-    }
-    showLicenseScreen(null);
+    }catch(e){}
+    // لا يوجد ترخيص مخبأ — استخدم مفتاح افتراضي ثابت مشترك لكل الأجهزة
+    const DEFAULT_ENC_KEY_B64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVm";
+    try{
+      ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(DEFAULT_ENC_KEY_B64), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
+    }catch(e){ console.error('[Boot] Failed to import default key:', e); ENC_KEY = null; }
+    await ensureServerLoginThenStart();
   }catch(e){
-    showLicenseScreen('حدث خطأ غير متوقع أثناء التحقق من الترخيص');
+    console.error('[Boot] fallback error:', e);
+    try{ await ensureServerLoginThenStart(); }catch(e2){}
   }
 })();
 

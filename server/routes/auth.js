@@ -239,6 +239,19 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
     } catch (e) {
       console.error('تعذّر جلب آخر عملية دخول سابقة أو التحقق من الجهاز:', e);
     }
+    // فحص هل عنوان IP الحالي سبق له دخول ناجح لهذا الحساب — "غير متعارف عليه خارجي" يعني IP لم يُسجَّل من قبل
+    let isNewIp = false;
+    try {
+      if (lastLogin && loginIp) {
+        const ipSeen = await pool.query(
+          `SELECT 1 FROM login_history WHERE username = $1 AND success = true AND ip_address = $2 LIMIT 1`,
+          [user.username, loginIp]
+        );
+        isNewIp = ipSeen.rows.length === 0;
+      }
+    } catch (e) {
+      console.error('تعذّر التحقق من عنوان IP:', e);
+    }
     // تحديد دولة/مدينة الدخول الحالي تقريبياً من عنوان IP، ومقارنتها بالدولة الأكثر تكراراً فى
     // دخولات هذا الحساب الناجحة السابقة — لتنبيه المستخدم لو الدخول الحالي من دولة غير معتادة له.
     // best-effort بالكامل: لا يمنع الدخول أبداً حتى لو فشلت خدمة الـ geolocation أو كانت بطيئة.
@@ -283,18 +296,17 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       newDeviceAlert: isNewDevice,
       geoAlert,
     });
-    // تنبيه إيميل فوري للإدارة عند دخول من جهاز جديد أو دولة غير معتادة لأي حساب (وليس فقط
-    // الأدمن نفسه) — بخلاف تنبيه "المحاولات الفاشلة" أسفله (خاص بلوحة الأدمن فقط)، هذا يُرسل
-    // فعلياً بالإيميل لحظة حدوثه لأن بيانات login_history غير مشفّرة ومتاحة للسيرفر بالكامل.
-    // best-effort تماماً: لا يُبطئ الاستجابة (أُرسلت أعلاه) ولا يفشل تسجيل الدخول لو تعذّر الإرسال.
-    if (isNewDevice || geoAlert) {
+    // تنبيه إيميل فقط للدخول غير المتعارف عليه (خارجي جديد): إذا كان الجهاز أو عنوان IP أو الدولة جديداً
+    // — لو الجهاز/IP مسجّل من قبل لا يُرسل إشعار. best-effort: لا يُبطئ الاستجابة ولا يفشل الدخول.
+    if (isNewDevice || isNewIp || geoAlert) {
       const reasonLines = [
         isNewDevice ? '<li>تسجيل دخول من جهاز/متصفح لم يُستخدم من قبل مع هذا الحساب</li>' : '',
+        isNewIp ? `<li>تسجيل دخول من عنوان IP جديد غير مسجّل لهذا الحساب (${loginIp || 'غير معروف'})</li>` : '',
         geoAlert ? `<li>تسجيل دخول من دولة غير معتادة (${geoAlert.country || 'غير معروفة'}) بينما المعتاد هو ${geoAlert.usualCountry}</li>` : '',
       ].filter(Boolean).join('');
       alertAdmins(
-        `دخول مشبوه للحساب "${user.username}"`,
-        `<p>تم رصد ما يلي عند تسجيل دخول الحساب <b>${user.username}</b> (${user.role || 'staff'}):</p>
+        `دخول غير متعارف عليه للحساب "${user.username}"`,
+        `<p>تم رصد دخول غير متعارف عليه للحساب <b>${user.username}</b> (${user.role || 'staff'}):</p>
          <ul>${reasonLines}</ul>
          <p style="color:#888; font-size:13px;">IP: ${loginIp || 'غير معروف'} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
       ).catch(() => {});

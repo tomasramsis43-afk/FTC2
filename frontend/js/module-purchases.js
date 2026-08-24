@@ -862,13 +862,10 @@ async function startApp(){
   try{ if(typeof connectRealtimeEvents==='function') connectRealtimeEvents(); }catch(e){ console.error('startApp: فشلت خطوة "connectRealtimeEvents"', e); }
 }
 
-/* ---------------- License gate: يجب التحقق من كود الترخيص قبل تشغيل أي جزء من البرنامج ---------------- */
+/* ---------------- License gate removed: تم حذف نظام الترخيص — الدخول مباشر بدون كود ---------------- */
 function showLicenseScreen(errorMsg){
-  $('#license-screen').style.display = 'flex';
-  if(errorMsg){
-    $('#license-error').textContent = errorMsg;
-    $('#license-error').style.display = 'block';
-  }
+  // no-op: البرنامج يعمل بدون ترخيص
+  try{ ensureServerLoginThenStart(); }catch(e){}
 }
 
 async function ensureServerLoginThenStart(){
@@ -1238,24 +1235,5 @@ async function activateAndStart(encKeyRaw, expiryDate, clientId){
   await ensureServerLoginThenStart();
 }
 
-$('#license-form').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const btn = e.target.querySelector('button[type="submit"]');
-  const input = $('#license-key-input').value.trim();
-  $('#license-error').style.display = 'none';
-  if(btn) btn.disabled = true;
-  try{
-    const result = await validateLicenseKey(input);
-    if(result.valid){
-      const cleaned = input.replace(/[\s-]/g,'').toUpperCase();
-      localStorage.setItem(LICENSE_STORAGE_KEY, cleaned);
-      await activateAndStart(result.encKeyRaw, result.expiryDate, result.clientId);
-    }else{
-      $('#license-error').textContent = result.reason || 'كود الترخيص غير صالح';
-      $('#license-error').style.display = 'block';
-    }
-  }finally{
-    if(btn) btn.disabled = false;
-  }
-});
+// تم حذف نموذج الترخيص — البرنامج يعمل بدون كود
 
