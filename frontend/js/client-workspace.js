@@ -28,6 +28,46 @@ function cwRelatedMovements(c){
     .slice(0, 6);
 }
 
+/* سجل نشاط هذا العميل تحديداً (قراءة فقط): نفلتر auditLog العام بمطابقة نصية
+   لاسمه أو رقم هويته داخل وصف كل عملية — نفس أسلوب الربط النصي المستخدم أصلاً
+   فى أماكن أخرى بالمشروع (مثال: module-companies.js) لعدم وجود clientId مُهيكل
+   داخل بنية auditLog الحالية. صفر بيانات وهمية — كل سطر هنا عملية حقيقية مسجّلة. */
+function cwClientActivity(c){
+  if(typeof auditLog === 'undefined' || !Array.isArray(auditLog)) return [];
+  const needles = [c.name, c.clientId].filter(Boolean).map(String);
+  if(!needles.length) return [];
+  return auditLog
+    .filter(a => needles.some(n => String(a.description||'').includes(n)))
+    .sort((a,b)=> b.ts - a.ts)
+    .slice(0, 25);
+}
+
+function cwActivityHtml(c){
+  const rows = cwClientActivity(c);
+  if(!rows.length){
+    return '<div class="hint">لا يوجد نشاط مسجَّل لهذا العميل بعد.</div>';
+  }
+  return '<div class="cw-activity">' + rows.map(a => `
+    <div class="cw-activity-row ${escapeHtml(a.action||'')}">
+      <span class="cw-act-dot"></span>
+      <div>
+        <div>${a.user ? '<b>'+escapeHtml(a.user)+'</b> ' : ''}${escapeHtml(a.description||a.section||'')}</div>
+        <div class="cw-act-meta">${formatDateDisplay ? (new Date(a.ts)).toLocaleString('ar-SA') : ''}${a.section ? ' · '+escapeHtml(a.section) : ''}</div>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+const CW_TABS = [
+  { id: 'overview', label: 'نظرة عامة' },
+  { id: 'data', label: 'البيانات' },
+  { id: 'activity', label: 'النشاط' },
+];
+
+function cwSwitchTab(tabId){
+  $all('.cw-tab').forEach(b => b.classList.toggle('active', b.dataset.cwTab === tabId));
+  $all('.cw-tabpanel').forEach(p => p.classList.toggle('active', p.dataset.cwPanel === tabId));
+}
+
 function openClientWorkspace(id){
   const c = clients.find(x => x.id === id);
   if(!c) return;
@@ -37,7 +77,7 @@ function openClientWorkspace(id){
   $('#cw-name').textContent = c.name || 'بدون اسم';
   $('#cw-badges').innerHTML = cwStatusBadges(c);
 
-  /* ---- الملخص المالي ---- */
+  /* ---- الملخص المالي (تبويب نظرة عامة) ---- */
   const tt = total(c), pd = paidTotal(c), rem = Math.max(tt - pd, 0);
   const pct = tt > 0 ? Math.min(100, Math.round((pd / tt) * 100)) : (pd > 0 ? 100 : 0);
   const finHtml = `
@@ -52,7 +92,21 @@ function openClientWorkspace(id){
       <div class="cw-bar-cap">سُدد ${pct}% من إجمالي المستحق${c.creditDays ? ` · آجل ${escapeHtml(String(c.creditDays))} يوم` : ''}${c.clientTaxNumber ? ` · الرقم الضريبي: ${escapeHtml(c.clientTaxNumber)}` : ''}</div>
     </div>`;
 
-  /* ---- بطاقات البيانات ---- */
+  /* ---- الحركات المرتبطة (قراءة فقط) — تبويب نظرة عامة ---- */
+  const moves = cwRelatedMovements(c);
+  const movesHtml = `
+    <div class="cw-section">
+      <h4>آخر الحركات المالية المرتبطة</h4>
+      ${moves.length ? `<div class="cw-moves">${moves.map(t => `
+        <div class="cw-move">
+          <span class="stamp ${t.type === 'in' ? 'paid' : 'owe'}">${t.type === 'in' ? 'قبض' : 'صرف'}</span>
+          <b>${fmt(num(t.amount))}</b>
+          <span class="cw-move-meta">${formatDateDisplay(t.date) || ''} ${t.notes ? '· ' + escapeHtml(String(t.notes)).slice(0, 40) : ''}</span>
+        </div>`).join('')}</div>`
+      : '<div class="hint">لا توجد حركات مالية مرتبطة بهذا العميل بعد</div>'}
+    </div>`;
+
+  /* ---- بطاقات البيانات (تبويب البيانات) ---- */
   const row = (k, v) => v ? `<div class="cw-item"><small>${k}</small><b>${v}</b></div>` : '';
   const infoHtml = `
     <div class="cw-section">
@@ -80,21 +134,22 @@ function openClientWorkspace(id){
       </div>
     </div>`;
 
-  /* ---- الحركات المرتبطة (قراءة فقط) ---- */
-  const moves = cwRelatedMovements(c);
-  const movesHtml = `
-    <div class="cw-section">
-      <h4>آخر الحركات المالية المرتبطة</h4>
-      ${moves.length ? `<div class="cw-moves">${moves.map(t => `
-        <div class="cw-move">
-          <span class="stamp ${t.type === 'in' ? 'paid' : 'owe'}">${t.type === 'in' ? 'قبض' : 'صرف'}</span>
-          <b>${fmt(num(t.amount))}</b>
-          <span class="cw-move-meta">${formatDateDisplay(t.date) || ''} ${t.notes ? '· ' + escapeHtml(String(t.notes)).slice(0, 40) : ''}</span>
-        </div>`).join('')}</div>`
-      : '<div class="hint">لا توجد حركات مالية مرتبطة بهذا العميل بعد</div>'}
-    </div>`;
+  /* ---- تبويب النشاط ---- */
+  const activityHtml = `<div class="cw-section">${cwActivityHtml(c)}</div>`;
 
-  $('#cw-body').innerHTML = finHtml + infoHtml + movesHtml;
+  $('#cw-tabs').innerHTML = CW_TABS.map((t, i) =>
+    `<button type="button" class="cw-tab${i===0?' active':''}" data-cw-tab="${t.id}">${t.label}</button>`
+  ).join('');
+
+  $('#cw-body').innerHTML = `
+    <div class="cw-tabpanel active" data-cw-panel="overview">${finHtml}${movesHtml}</div>
+    <div class="cw-tabpanel" data-cw-panel="data">${infoHtml}</div>
+    <div class="cw-tabpanel" data-cw-panel="activity">${activityHtml}</div>
+  `;
+
+  $('#cw-tabs').querySelectorAll('.cw-tab').forEach(btn => {
+    btn.addEventListener('click', () => cwSwitchTab(btn.dataset.cwTab));
+  });
 
   /* ---- الإجراءات: نفس فتحات النماذج القائمة بالضبط ---- */
   const foot = $('#cw-foot');

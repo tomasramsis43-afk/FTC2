@@ -4316,6 +4316,54 @@ body.dark-theme .gsr-cmd-icon {
   border-top: 1px solid var(--border);
 }
 
+/* ===== تبويبات Workspace (بريف 2026-08 بند 9/10) ===== */
+.cw-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.cw-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 4px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cw-tab:hover { color: var(--text-primary); }
+.cw-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.cw-tabpanel { display: none; }
+.cw-tabpanel.active { display: block; }
+
+.cw-activity { display: flex; flex-direction: column; gap: 2px; }
+.cw-activity-row {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12px;
+}
+.cw-activity-row:last-child { border-bottom: none; }
+.cw-activity-row .cw-act-dot {
+  flex: none;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-top: 5px;
+  background: var(--text-muted);
+}
+.cw-activity-row.add .cw-act-dot { background: var(--success); }
+.cw-activity-row.delete .cw-act-dot { background: var(--danger); }
+.cw-activity-row.edit .cw-act-dot { background: var(--gold); }
+.cw-activity-row .cw-act-meta { color: var(--text-muted); font-size: 10.5px; margin-top: 2px; }
+/* ===== /تبويبات Workspace ===== */
+
 .cw-section { margin-bottom: 18px; }
 .cw-section h4 {
   margin: 0 0 9px;
