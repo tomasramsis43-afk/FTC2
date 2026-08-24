@@ -336,8 +336,8 @@ header.top {
   position: sticky;
   top: 0;
   z-index: 40;
-  overflow: hidden;
-  isolation: isolate;
+  overflow: visible;
+  isolation: auto;
   display: flex;
   align-items: center;
   justify-content: flex-start;
