@@ -629,8 +629,9 @@ nav.tabs button.active::after {
   transform: translateY(-50%);
   width: 4px;
   height: 22px;
-  background: var(--gold);
+  background: #fff;
   border-radius: 2px;
+  opacity: 0.9;
 }
 nav.tabs.collapsed button.active::after {
   inset-inline-start: -2px;
@@ -674,16 +675,16 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: var(--sidebar-active-bg);
-  color: #fff;
+  background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--gold) 88%, #fff));
+  color: #1a1a1a;
   font-weight: 700;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent), 0 4px 14px -6px rgba(0,0,0,.25);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent), 0 6px 18px -6px color-mix(in srgb, var(--gold) 50%, transparent);
   animation: navPop 0.25s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
 nav.tabs button.active::before {
-  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
-  color: var(--gold);
+  font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24;
+  color: #1a1a1a;
 }
 
 nav.tabs button:not(.active):hover {
