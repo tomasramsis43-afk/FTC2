@@ -172,9 +172,36 @@ function showFatalDecryptErrorScreen(err){
           أو تواصل مع المطوّر إن استمرت المشكلة.
         </p>
         <button id="fatal-decrypt-reload-btn" style="margin-top:12px;padding:10px 24px;border:none;border-radius:8px;background:#c62828;color:#fff;font-size:15px;cursor:pointer;">إعادة تحميل الصفحة</button>
+        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+          <button id="fatal-decrypt-clear-btn" style="padding:8px 16px;border:1px solid #ff8a80;border-radius:8px;background:transparent;color:#ff8a80;font-size:13px;cursor:pointer;">مسح مفتاح التشفير المؤقت وإعادة المحاولة</button>
+          <button id="fatal-decrypt-license-btn" style="padding:8px 16px;border:1px solid #ffcc80;border-radius:8px;background:transparent;color:#ffcc80;font-size:13px;cursor:pointer;">إدخال كود ترخيص قديم</button>
+        </div>
+        <p style="margin-top:12px;font-size:11.5px;opacity:0.7;">لو كنت تستخدم رابط https:// صحيح وما زال الخطأ يظهر، جرّب الزرين أعلاه.</p>
       </div>`;
     document.body.appendChild(div);
     document.getElementById('fatal-decrypt-reload-btn').addEventListener('click', ()=> location.reload());
+    document.getElementById('fatal-decrypt-clear-btn').addEventListener('click', ()=>{
+      try{ localStorage.removeItem('appLicenseCacheV1'); localStorage.removeItem('appFallbackEncKeyV1'); }catch(e){}
+      location.reload();
+    });
+    document.getElementById('fatal-decrypt-license-btn').addEventListener('click', async ()=>{
+      const code = prompt('أدخل كود الترخيص القديم كما كان مكتوباً (مع الشرطات إن وجدت):');
+      if(!code || !code.trim()) return;
+      try{
+        const r = await fetch('/api/license/validate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({licenseKey: code.trim()})});
+        const data = await r.json();
+        if(data && data.valid && data.encKey){
+          try{
+            localStorage.setItem('appLicenseKeyV1', code.trim().replace(/[\s-]/g,'').toUpperCase());
+            localStorage.setItem('appLicenseCacheV1', JSON.stringify({encKeyRaw: data.encKey, expiryDate: data.expiryDate || null, clientId: data.clientId || null, cachedAt: new Date().toISOString()}));
+          }catch(e){}
+          alert('تم حفظ كود الترخيص — سيُعاد تحميل الصفحة الآن');
+          location.reload();
+        } else {
+          alert('كود الترخيص غير صالح: ' + (data.reason || 'غير معروف'));
+        }
+      }catch(e){ alert('تعذّر التحقق من الكود — تأكد من الاتصال بالإنترنت'); }
+    });
   }catch(e){ alert('تعذّر فتح البرنامج بأمان على هذا الجهاز — يرجى إعادة تحميل الصفحة'); }
 }
 async function loadData(cacheOnly){
