@@ -851,11 +851,34 @@ async function printReceiptVoucher(id){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
 
-  const payerName = tx.clientName || tx.manual || tx.clientId || '—';
-  const payerIdLine = tx.clientId ? `<div class="info-row"><span>رقم الهوية:</span><b>${escapeHtml(tx.clientId)}</b></div>` : '';
   const destName = destLabel(tx.destination||'vault');
   const isAuto = !!tx.autoClientId;
   const linkNote = isAuto ? '<div class="hint" style="margin-top:6px; font-size:11px; color:var(--text-muted);">🔗 دفعة تسجيل مرتبطة بالعميل — مسجلة تلقائياً من شيت العملاء</div>' : '';
+  // شركة تدفع نقداً: اسم الدافع = اسم الشركة، والتفصيل = كل متدرب باسمه ورقم هويته ومبلغه
+  const companyTransfer = tx.companyTransferId && typeof companyTransfers !== 'undefined' ? companyTransfers.find(x=>x.id===tx.companyTransferId) : null;
+  const isCompanyCash = !!(companyTransfer && (tx.destination||'vault')==='vault');
+  const rawPayerName = tx.clientName || tx.manual || tx.clientId || '—';
+  const payerName = isCompanyCash ? (companyTransfer.companyName || companyTransfer.company || rawPayerName) : rawPayerName;
+  const payerIdLine = isCompanyCash ? '' : (tx.clientId ? `<div class="info-row"><span>رقم الهوية:</span><b>${escapeHtml(tx.clientId)}</b></div>` : '');
+  let traineesTableHtml = '';
+  if(isCompanyCash && companyTransfer.trainees && companyTransfer.trainees.length){
+    const rows = companyTransfer.trainees.map((trn, idx)=>{
+      const c = typeof clients !== 'undefined' ? clients.find(x=>x.clientId===trn.clientId) : null;
+      const name = c ? c.name : (trn.clientName || '—');
+      const perAmount = fmt(num(trn.courseValue) + num(trn.bagValue));
+      return `<tr><td class="mono" style="text-align:center;">${idx+1}</td><td>${escapeHtml(name)}</td><td class="mono">${escapeHtml(trn.clientId||'—')}</td><td class="mono" style="text-align:left;">${perAmount} ﷼</td></tr>`;
+    }).join('');
+    const totalFromTrainees = companyTransfer.trainees.reduce((s,x)=>s+num(x.courseValue)+num(x.bagValue),0);
+    traineesTableHtml = `
+    <div style="margin-top:14px;">
+      <h4 style="margin:0 0 8px; font-size:13px; color:${PRINT_PALETTE.navy};">تفصيل المتدربين — الدافع: ${escapeHtml(payerName)}</h4>
+      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead><tr><th style="width:40px; text-align:center;">م</th><th style="text-align:right;">اسم المتدرب</th><th style="text-align:right;">رقم الهوية</th><th style="text-align:left;">المبلغ</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="3" style="text-align:left; font-weight:700; background:${PRINT_PALETTE.surfaceAlt};">الإجمالي (${companyTransfer.trainees.length} متدرب)</td><td class="mono" style="text-align:left; font-weight:700; background:${PRINT_PALETTE.surfaceAlt};">${fmt(totalFromTrainees)} ﷼</td></tr></tfoot>
+      </table>
+    </div>`;
+  }
 
   const win = openPrintTarget();
   win.document.write(`
@@ -895,6 +918,7 @@ async function printReceiptVoucher(id){
         <div class="info-row"><span>تاريخ الحركة:</span><b>${escapeHtml(tx.date || '—')}</b></div>
       </div>
     </div>
+    ${traineesTableHtml}
 
     <div class="amount-box">
       <div class="lbl">المبلغ المقبوض</div>
