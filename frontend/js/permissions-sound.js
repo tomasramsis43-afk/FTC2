@@ -509,7 +509,7 @@ async function loadData(cacheOnly){
   // على السيرفر بناءً على صورة غير مؤكدة — قبل أن تُتِمّ المزامنة الخلفية (backgroundSyncCheck)
   // الصورة الصحيحة. تأجيلها لِما بعد التحميل المؤكد يمنع هذا التكرار/التعارض الزائف.
   if(!cacheOnly) await syncBagStockIssues();
-  vaultTx = await loadGeneric('vaultTx');
+  vaultTx = await loadGeneric('vaultTx'); bumpVaultVersion();
   deletedVaultTx = await loadGeneric('deletedVaultTx');
   if(!cacheOnly){
     // نفس مبدأ syncBagStockIssues أعلاه: كل الترحيلات/الإصلاحات التلقائية هنا تكتب على السيرفر،
