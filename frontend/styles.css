@@ -4849,6 +4849,10 @@ nav.tabs.collapsed .nav-section-label {
   justify-content: center;
   padding: 0;
 }
+nav.tabs.collapsed #btn-sidebar-collapse {
+  justify-content: center;
+  padding: 8px;
+}
 #btn-sidebar-collapse {
   /* زر الطي ثابت لا يختفي */
   display: flex !important;
