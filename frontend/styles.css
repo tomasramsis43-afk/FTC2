@@ -719,6 +719,7 @@ nav.tabs button[data-view]::before {
   width: 40px;
   height: 40px;
   flex: none;
+  pointer-events: none;
   text-align: center;
   color: currentColor;
   background: color-mix(in srgb, var(--sidebar-bg-alt) 80%, var(--text-muted));
