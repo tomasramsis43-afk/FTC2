@@ -89,34 +89,94 @@ function printDocFooterButton(){
 function openPrintTarget(){
   const overlay = document.createElement('div');
   overlay.id = 'print-preview-overlay';
-  overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,33,.6); z-index:99999; display:flex; flex-direction:column; align-items:center; padding:18px; box-sizing:border-box;';
+  overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,33,.8); z-index:99999; display:flex; flex-direction:column; align-items:center; padding:12px; box-sizing:border-box;';
 
   const bar = document.createElement('div');
-  bar.style.cssText = 'width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;';
-  bar.innerHTML = `<span style="color:#fff; font-family:Tahoma,Arial,sans-serif; font-size:13px;">معاينة الطباعة — اضغط زر "طباعة / حفظ PDF" داخل المعاينة</span>`;
+  bar.style.cssText = 'width:100%; max-width:1000px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-shrink:0; gap:10px; flex-wrap:wrap;';
+  bar.innerHTML = `<span style="color:#e0e7ff; font-family:'Tahoma','Arial',sans-serif; font-size:12.5px; flex:1; min-width:200px;">📄 معاينة الطباعة — اضغط "طباعة / حفظ PDF" لحفظ أو طباعة المستند</span>`;
+  
+  const printBtn = document.createElement('button');
+  printBtn.textContent = '🖨️ طباعة / حفظ PDF';
+  printBtn.style.cssText = 'padding:8px 16px; background:#f59e0b; color:#000; border:none; border-radius:6px; cursor:pointer; font-family:Tahoma,Arial,sans-serif; font-size:13px; font-weight:600; transition:background 0.2s ease; flex-shrink:0;';
+  printBtn.onmouseover = ()=> printBtn.style.background='#d97706';
+  printBtn.onmouseout = ()=> printBtn.style.background='#f59e0b';
+  
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ إغلاق المعاينة';
-  closeBtn.style.cssText = 'padding:8px 16px; background:#fff; color:#1B242E; border:none; border-radius:8px; cursor:pointer; font-family:Tahoma,Arial,sans-serif; font-size:13px;';
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'padding:8px 12px; background:#6b7280; color:#fff; border:none; border-radius:6px; cursor:pointer; font-family:Tahoma,Arial,sans-serif; font-size:14px; font-weight:600; transition:background 0.2s ease; flex-shrink:0;';
+  closeBtn.onmouseover = ()=> closeBtn.style.background='#4b5563';
+  closeBtn.onmouseout = ()=> closeBtn.style.background='#6b7280';
   closeBtn.onclick = ()=> overlay.remove();
+  
+  bar.appendChild(printBtn);
   bar.appendChild(closeBtn);
 
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'width:100%; max-width:900px; flex:1 1 auto; background:#fff; border:0; border-radius:10px; min-height:0;';
+  const containerDiv = document.createElement('div');
+  containerDiv.style.cssText = 'width:100%; max-width:1000px; flex:1 1 auto; display:flex; flex-direction:column; min-height:0; background:#f3f4f6; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden;';
 
+  // محتوى المعاينة (سيتم ملئه بالمحتوى)
+  const previewDiv = document.createElement('div');
+  previewDiv.style.cssText = 'flex:1 1 auto; overflow:auto; background:#fff; display:flex; flex-direction:column; align-items:center; padding:0;';
+  previewDiv.id = 'print-preview-content';
+
+  containerDiv.appendChild(previewDiv);
   overlay.appendChild(bar);
-  overlay.appendChild(iframe);
+  overlay.appendChild(containerDiv);
   document.body.appendChild(overlay);
 
-  const win = iframe.contentWindow;
-  win.addEventListener('afterprint', ()=>{ setTimeout(()=> overlay.remove(), 400); });
+  const win = {
+    document: {
+      _content: '',
+      _iframeContent: null,
+      write: function(html) { this._content += html; },
+      close: function() { 
+        // عرض الـ HTML في div preview بدل iframe
+        const previewDiv = document.getElementById('print-preview-content');
+        if(previewDiv) {
+          previewDiv.innerHTML = this._content;
+          // أضف styles للمعاينة
+          const styles = previewDiv.querySelectorAll('style');
+          const printContent = previewDiv.querySelector('html, body, *:not(style)');
+          if(printContent) {
+            previewDiv.style.padding = '24px';
+          }
+        }
+      },
+      getElementById: function(id) { return document.getElementById('print-preview-content')?.querySelector('#' + id); }
+    },
+    print: function() { 
+      // استخدم الـ document.querySelectorAll لطباعة محتوى المعاينة
+      const printFrame = document.createElement('iframe');
+      printFrame.style.cssText = 'display:none;';
+      document.body.appendChild(printFrame);
+      printFrame.contentDocument.write(document.getElementById('print-preview-content').innerHTML);
+      printFrame.contentDocument.close();
+      setTimeout(()=> { printFrame.contentWindow.print(); }, 250);
+    },
+    addEventListener: function(event, handler) {
+      if(event === 'afterprint') {
+        window.addEventListener('afterprint', handler);
+      }
+    }
+  };
+  
+  // ربط زر الطباعة
+  bar.querySelector('button:first-child').onclick = ()=> win.print();
+  
   return win;
 }
 // يُستدعى بدل win.document.close() مباشرة في كل دوال الطباعة: يغلق الكتابة للمستند ثم يربط
 // زر "طباعة / حفظ PDF" فوراً (document.write متزامن، فالزر موجود فعلياً في الدوم في هذه اللحظة —
 // لا داعي لانتظار حدث 'load' الذي قد يكون أُطلق بالفعل على الإطار الفارغ قبل كتابة المحتوى).
 function finishPrintDoc(win){
-  win.document.close();
-  win.document.getElementById('doc-print-btn')?.addEventListener('click', ()=> win.print());
+  if(win.document.close) {
+    win.document.close();
+  }
+  // البحث عن زر الطباعة في المعاينة
+  const printBtn = document.querySelector('#print-preview-overlay button:first-child');
+  if(printBtn) {
+    printBtn.onclick = ()=> win.print();
+  }
 }
 
 onSearchInput('#search', renderTable);
