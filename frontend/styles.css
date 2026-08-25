@@ -742,9 +742,8 @@ nav.tabs button[data-view] svg {
 }
 
 nav.tabs button[data-view]::before {
-  font-family: 'Material Symbols Outlined';
+  font-family: 'Material Symbols Outlined', Arial, sans-serif;
   font-weight: 400;
-  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
   font-size: 19px;
   line-height: 1;
   width: 38px;
@@ -757,6 +756,10 @@ nav.tabs button[data-view]::before {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-feature-settings: 'LIGA' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
               color 0.25s ease-out,
               background 0.25s ease-out,
@@ -764,6 +767,7 @@ nav.tabs button[data-view]::before {
               filter 0.25s ease-out,
               font-variation-settings 0.2s ease;
   will-change: transform;
+  pointer-events: auto;
 }
 
 nav.tabs button[data-view="dashboard"]::before { content: "dashboard"; }
