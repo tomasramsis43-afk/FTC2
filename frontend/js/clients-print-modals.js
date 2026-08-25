@@ -95,20 +95,22 @@ function openPrintTarget(){
   bar.style.cssText = 'width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;';
   bar.innerHTML = `<span style="color:#fff; font-family:Tahoma,Arial,sans-serif; font-size:13px;">معاينة الطباعة — اضغط زر "طباعة / حفظ PDF" داخل المعاينة</span>`;
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ إغلاق المعاينة';
-  closeBtn.style.cssText = 'padding:8px 16px; background:#fff; color:#1B242E; border:none; border-radius:8px; cursor:pointer; font-family:Tahoma,Arial,sans-serif; font-size:13px;';
-  closeBtn.onclick = ()=> overlay.remove();
-  bar.appendChild(closeBtn);
+  if(closeBtn){
+    closeBtn.textContent = '✕ إغلاق المعاينة';
+    closeBtn.style.cssText = 'padding:8px 16px; background:#fff; color:#1B242E; border:none; border-radius:8px; cursor:pointer; font-family:Tahoma,Arial,sans-serif; font-size:13px;';
+    closeBtn.onclick = ()=> overlay && overlay.remove();
+    if(bar) bar.appendChild(closeBtn);
+  }
 
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'width:100%; max-width:900px; flex:1 1 auto; background:#fff; border:0; border-radius:10px; min-height:0;';
 
-  overlay.appendChild(bar);
-  overlay.appendChild(iframe);
-  document.body.appendChild(overlay);
+  if(overlay && bar) overlay.appendChild(bar);
+  if(overlay && iframe) overlay.appendChild(iframe);
+  if(document.body && overlay) document.body.appendChild(overlay);
 
-  const win = iframe.contentWindow;
-  win.addEventListener('afterprint', ()=>{ setTimeout(()=> overlay.remove(), 400); });
+  const win = iframe ? iframe.contentWindow : null;
+  if(win) win.addEventListener('afterprint', ()=>{ setTimeout(()=> overlay && overlay.remove(), 400); });
   return win;
 }
 // يُستدعى بدل win.document.close() مباشرة في كل دوال الطباعة: يغلق الكتابة للمستند ثم يربط
