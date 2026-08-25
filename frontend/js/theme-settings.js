@@ -841,27 +841,7 @@ $('#btn-density-toggle')?.addEventListener('click', ()=>{
   applyRowDensity(next);
   try{ localStorage.setItem('ftc2-row-density', next ? 'compact' : 'comfortable'); }catch(e){}
 });
-/* طي/توسيع القائمة الجانبية (عرض الأيقونات فقط بدون النصوص) — تفضيل شخصي يُحفظ محلياً
-   في هذا المتصفح فقط، ويضيف عنوان (title) لكل زر عند الطي حتى يبقى واضحاً عند تمرير الفأرة فوقه. */
-function applySidebarCollapsed(isCollapsed){
-  const nav = $('nav.tabs');
-  if(!nav) return;
-  nav.classList.toggle('collapsed', !!isCollapsed);
-  if(isCollapsed){
-    nav.querySelectorAll(':scope > button, .nav-flyout-row > button').forEach(btn=>{
-      if(!btn.title){
-        const label = btn.querySelector('span')?.textContent?.trim();
-        if(label) btn.title = label;
-      }
-    });
-  }
-}
-try{ applySidebarCollapsed(localStorage.getItem('ftc2-sidebar-collapsed')==='1'); }catch(e){}
-$('#btn-sidebar-collapse')?.addEventListener('click', ()=>{
-  const next = !$('nav.tabs')?.classList.contains('collapsed');
-  applySidebarCollapsed(next);
-  try{ localStorage.setItem('ftc2-sidebar-collapsed', next ? '1' : '0'); }catch(e){}
-});
+/* تم حذف كود طي السايدبار القديم — سيُعاد بناؤه من الصفر في sidebar-collapse.js */
 
 /* ============ قائمة المستخدم المنسدلة بجانب الاسم (الإعدادات / تحديث الشيت / اللغة /
    كتم الصوت / الوضع الليلي-النهاري / كثافة الصفوف / اختصارات لوحة المفاتيح) — تجميع
