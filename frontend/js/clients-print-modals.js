@@ -118,7 +118,20 @@ function openPrintTarget(){
 // لا داعي لانتظار حدث 'load' الذي قد يكون أُطلق بالفعل على الإطار الفارغ قبل كتابة المحتوى).
 function finishPrintDoc(win){
   win.document.close();
-  win.document.getElementById('doc-print-btn')?.addEventListener('click', ()=> win.print());
+  const btn = win.document.getElementById('doc-print-btn');
+  if(btn){
+    btn.addEventListener('click', ()=>{
+      setTimeout(()=>{
+        try{ win.focus(); }catch(e){}
+        try{ win.print(); }catch(e){
+          try{ window.print(); }catch(e2){}
+        }
+      }, 150);
+    });
+  }
+  try{
+    if(win) win.addEventListener('afterprint', ()=>{ setTimeout(()=>{ const ov=document.getElementById('print-preview-overlay'); if(ov) ov.remove(); }, 400); });
+  }catch(e){}
 }
 
 onSearchInput('#search', renderTable);
