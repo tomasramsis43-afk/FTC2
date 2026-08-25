@@ -661,6 +661,9 @@ nav.tabs.collapsed {
   flex: none;
   stroke: currentColor;
   transition: transform 0.2s ease;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 nav.tabs.collapsed .nav-collapse-toggle svg {
@@ -706,6 +709,9 @@ nav.tabs button svg {
   stroke: currentColor;
   transition: transform 0.2s ease, filter 0.2s ease;
   will-change: transform;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 nav.tabs button span {
@@ -756,6 +762,11 @@ nav.tabs button[data-view] svg {
               background 0.25s ease-out,
               box-shadow 0.25s ease-out;
   will-change: transform;
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
 }
 
 /* Hover effect: scale + background color change + glow */
@@ -4118,7 +4129,7 @@ nav.tabs .nav-section-label {
   color: color-mix(in srgb, var(--text-muted) 85%, transparent);
   background: none;
   overflow: visible;
-  cursor: help;
+  cursor: default;
   border-radius: 8px;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -4130,6 +4141,9 @@ nav.tabs .nav-section-label svg {
   stroke: currentColor;
   transition: transform 0.2s ease, filter 0.2s ease;
   will-change: transform;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 nav.tabs .nav-section-label span {
