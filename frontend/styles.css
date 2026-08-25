@@ -184,19 +184,19 @@ body.dark-theme {
   color-scheme: dark;
 }
 
-/* ════ Dark theme: تحسين أيقونات sidebar مع الـ dark theme ════ */
+/* ════ Dark theme: أيقونات sidebar مع دوائر في الـ dark theme ════ */
 body.dark-theme nav.tabs button[data-view]:not(.active):hover::before {
   color: var(--gold);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 50%, transparent),
-               0 0 24px color-mix(in srgb, var(--gold) 25%, transparent);
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+  background: color-mix(in srgb, var(--gold) 15%, #1a2038);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--gold) 50%, transparent);
 }
 
 body.dark-theme nav.tabs button[data-view].active::before {
   color: #0f1326;
-  text-shadow: 0 0 16px color-mix(in srgb, var(--gold) 50%, transparent),
-               0 0 28px color-mix(in srgb, var(--gold) 35%, transparent);
-  filter: drop-shadow(0 4px 12px rgba(240, 168, 87, 0.3));
+  background: var(--gold);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 40%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent),
+              0 4px 12px rgba(240, 168, 87, 0.35);
 }
 
 body.dark-theme select,
@@ -346,19 +346,19 @@ body {
   }
 }
 
-/* ════ Light theme: تحسين أيقونات sidebar مع الـ light theme ════ */
+/* ════ Light theme: أيقونات sidebar مع دوائر في الـ light theme ════ */
 body:not(.dark-theme) nav.tabs button[data-view]:not(.active):hover::before {
   color: #d97706;
-  text-shadow: 0 0 10px color-mix(in srgb, #f59e0b 50%, transparent),
-               0 0 20px color-mix(in srgb, #f59e0b 25%, transparent);
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12));
+  background: color-mix(in srgb, #f59e0b 12%, #f1f5f9);
+  text-shadow: 0 0 6px color-mix(in srgb, #f59e0b 40%, transparent);
 }
 
 body:not(.dark-theme) nav.tabs button[data-view].active::before {
-  color: #1a1a1a;
-  text-shadow: 0 0 10px color-mix(in srgb, #f59e0b 40%, transparent),
-               0 0 20px color-mix(in srgb, #f59e0b 20%, transparent);
-  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.15));
+  color: #ffffff;
+  background: #f59e0b;
+  text-shadow: 0 0 8px color-mix(in srgb, #f59e0b 30%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #f59e0b 40%, transparent),
+              0 3px 10px rgba(245, 158, 11, 0.25);
 }
 
 section.view.active {
@@ -743,22 +743,25 @@ nav.tabs button[data-view]::before {
   font-family: 'Material Symbols Outlined';
   font-weight: 400;
   font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
-  width: 20px;
-  height: 20px;
+  width: 40px;
+  height: 40px;
   flex: none;
   text-align: center;
   color: currentColor;
+  background: color-mix(in srgb, var(--sidebar-bg-alt) 80%, var(--text-muted));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
               color 0.25s ease-out,
+              background 0.25s ease-out,
               text-shadow 0.25s ease-out,
               filter 0.25s ease-out,
               font-variation-settings 0.2s ease;
   will-change: transform;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 nav.tabs button[data-view="dashboard"]::before { content: "dashboard"; }
@@ -774,21 +777,23 @@ nav.tabs button[data-view="accounting"]::before { content: "account_balance"; }
 nav.tabs button[data-view="budget"]::before { content: "savings"; }
 nav.tabs button[data-view="audit"]::before { content: "fact_check"; }
 
-/* Hover effect: scale + color + glow */
+/* Hover effect: scale + background color change + glow */
 nav.tabs button[data-view]:not(.active):hover::before {
-  transform: scale(1.2) rotate(-5deg);
+  transform: scale(1.08);
   color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 15%, var(--sidebar-bg-alt));
   text-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent),
                0 0 16px color-mix(in srgb, var(--gold) 30%, transparent);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
 
-/* Active state: fill + shadow */
+/* Active state: fill + background highlight */
 nav.tabs button[data-view].active::before {
   font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 200, 'opsz' 24;
-  color: #1a1a1a;
+  color: #ffffff;
+  background: var(--gold);
   text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 40%, transparent);
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent),
+              0 4px 12px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 /* Focus state for accessibility */
@@ -797,23 +802,26 @@ nav.tabs button[data-view]:focus-visible::before {
   outline-offset: 2px;
 }
 
-/* Collapsed sidebar: icons only, smaller animation */
+/* Collapsed sidebar: smaller circle, refined animation */
 nav.tabs.collapsed button[data-view]::before {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
 }
 
 nav.tabs.collapsed button[data-view]:not(.active):hover::before {
-  transform: scale(1.15) rotate(-3deg);
+  transform: scale(1.06);
+  background: color-mix(in srgb, var(--gold) 12%, var(--sidebar-bg-alt));
 }
 
-/* Mobile: smaller icons */
+/* Mobile: smaller circles */
 @media(max-width: 900px) {
   nav.tabs button[data-view]::before {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
+    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
   }
 }
 
