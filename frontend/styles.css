@@ -597,12 +597,12 @@ nav.tabs {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 5px;
+  gap: 6px;
   background: var(--sidebar-bg);
   border: 1px solid #e2e8f0;
-  padding: 14px 10px;
-  border-radius: var(--radius);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 16px -8px rgba(0,0,0,0.08);
+  padding: 16px 12px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px -10px rgba(15,23,42,0.06), 0 1px 3px rgba(0,0,0,0.04);
   position: sticky;
   top: var(--sidebar-sticky-top, 110px);
   z-index: 30;
@@ -704,10 +704,11 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--gold) 88%, #fff));
-  color: #1a1a1a;
+  background: #fef9e7;
+  color: #92400e;
   font-weight: 700;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent), 0 6px 18px -6px color-mix(in srgb, var(--gold) 50%, transparent);
+  border: 1px solid #fde68a;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   animation: navPop 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
@@ -852,14 +853,20 @@ nav.tabs.collapsed button[data-view]::before {
   }
 }
 
-/* فاصل بصري رفيع بين مجموعات التبويبات */
+/* عناوين مجموعات بريميوم — نص صغير واضح بدل خط فقط */
 .nav-section-label {
   flex: none;
   align-self: stretch;
   width: auto;
-  height: 1px;
-  margin: 7px 4px;
-  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+  height: auto;
+  margin: 16px 0 4px;
+  padding: 0 12px;
+  background: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
   font-size: 0;
   line-height: 0;
   overflow: hidden;
