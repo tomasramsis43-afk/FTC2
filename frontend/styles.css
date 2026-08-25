@@ -674,12 +674,14 @@ nav.tabs button.active::before {
   content: none;
 }
 
-nav.tabs button:not(.active):hover {
-  background: #f1f5f9;
+nav.tabs button:not(.active):hover,
+nav.tabs .nav-section-label:hover {
+  background: var(--sidebar-bg-alt);
   color: var(--sidebar-text);
 }
 
-nav.tabs button:hover svg {
+nav.tabs button:hover svg,
+nav.tabs .nav-section-label:hover svg {
   transform: scale(1.08);
 }
 
@@ -4014,12 +4016,15 @@ tbody tr {
 
 /* --- عناوين مجموعات التنقل: نص واضح في الوضع الموسع، فاصل رقيق في وضع Rail المطوي --- */
 nav.tabs .nav-section-label {
+  display: flex;
+  align-items: center;
+  gap: 11px;
   flex: none;
   align-self: stretch;
   width: auto;
   height: auto;
   margin: 10px 10px 4px;
-  padding: 0 2px;
+  padding: 12px 14px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .02em;
@@ -4027,14 +4032,35 @@ nav.tabs .nav-section-label {
   color: color-mix(in srgb, var(--text-muted) 90%, transparent);
   background: none;
   overflow: visible;
+  cursor: help;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
+
+nav.tabs .nav-section-label svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  stroke: currentColor;
+  transition: transform 0.2s ease, filter 0.2s ease;
+  will-change: transform;
+}
+
+nav.tabs .nav-section-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 nav.tabs.collapsed .nav-section-label {
-  height: 1px;
+  justify-content: center;
+  padding: 9px 10px;
   margin: 8px 6px;
-  padding: 0;
-  font-size: 0;
-  line-height: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-muted) 45%, transparent), transparent);
+  gap: 0;
+}
+
+nav.tabs.collapsed .nav-section-label span {
+  display: none;
 }
 .nav-section-hidden { display: none !important; }
 
