@@ -184,6 +184,21 @@ body.dark-theme {
   color-scheme: dark;
 }
 
+/* ════ Dark theme: تحسين أيقونات sidebar مع الـ dark theme ════ */
+body.dark-theme nav.tabs button[data-view]:not(.active):hover::before {
+  color: var(--gold);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 50%, transparent),
+               0 0 24px color-mix(in srgb, var(--gold) 25%, transparent);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+body.dark-theme nav.tabs button[data-view].active::before {
+  color: #0f1326;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--gold) 50%, transparent),
+               0 0 28px color-mix(in srgb, var(--gold) 35%, transparent);
+  filter: drop-shadow(0 4px 12px rgba(240, 168, 87, 0.3));
+}
+
 body.dark-theme select,
 body.dark-theme input,
 body.dark-theme textarea {
@@ -299,6 +314,29 @@ body {
   }
 }
 
+@keyframes iconBounce {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(-8deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
 @keyframes rowIn {
   from {
     opacity: 0;
@@ -306,6 +344,21 @@ body {
   to {
     opacity: 1;
   }
+}
+
+/* ════ Light theme: تحسين أيقونات sidebar مع الـ light theme ════ */
+body:not(.dark-theme) nav.tabs button[data-view]:not(.active):hover::before {
+  color: #d97706;
+  text-shadow: 0 0 10px color-mix(in srgb, #f59e0b 50%, transparent),
+               0 0 20px color-mix(in srgb, #f59e0b 25%, transparent);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.12));
+}
+
+body:not(.dark-theme) nav.tabs button[data-view].active::before {
+  color: #1a1a1a;
+  text-shadow: 0 0 10px color-mix(in srgb, #f59e0b 40%, transparent),
+               0 0 20px color-mix(in srgb, #f59e0b 20%, transparent);
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.15));
 }
 
 section.view.active {
@@ -670,10 +723,6 @@ nav.tabs button.active {
   animation: navPop 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
-nav.tabs button.active::before {
-  content: none;
-}
-
 nav.tabs button:not(.active):hover,
 nav.tabs .nav-section-label:hover {
   background: var(--sidebar-bg-alt);
@@ -685,7 +734,7 @@ nav.tabs .nav-section-label:hover svg {
   transform: scale(1.08);
 }
 
-/* ============= أيقونات Material Symbols (بدل SVG) — تطابق المرجع ============= */
+/* ============= أيقونات Material Symbols (بدل SVG) — تحسين styling و animations ============= */
 nav.tabs button[data-view] svg {
   display: none;
 }
@@ -693,12 +742,23 @@ nav.tabs button[data-view] svg {
 nav.tabs button[data-view]::before {
   font-family: 'Material Symbols Outlined';
   font-weight: 400;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  font-size: 24px;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  font-size: 20px;
   line-height: 1;
-  width: 24px;
+  width: 20px;
+  height: 20px;
   flex: none;
   text-align: center;
+  color: currentColor;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              color 0.25s ease-out,
+              text-shadow 0.25s ease-out,
+              filter 0.25s ease-out,
+              font-variation-settings 0.2s ease;
+  will-change: transform;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 nav.tabs button[data-view="dashboard"]::before { content: "dashboard"; }
@@ -714,8 +774,47 @@ nav.tabs button[data-view="accounting"]::before { content: "account_balance"; }
 nav.tabs button[data-view="budget"]::before { content: "savings"; }
 nav.tabs button[data-view="audit"]::before { content: "fact_check"; }
 
+/* Hover effect: scale + color + glow */
 nav.tabs button[data-view]:not(.active):hover::before {
+  transform: scale(1.2) rotate(-5deg);
   color: var(--gold);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent),
+               0 0 16px color-mix(in srgb, var(--gold) 30%, transparent);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Active state: fill + shadow */
+nav.tabs button[data-view].active::before {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 200, 'opsz' 24;
+  color: #1a1a1a;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 40%, transparent);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+}
+
+/* Focus state for accessibility */
+nav.tabs button[data-view]:focus-visible::before {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Collapsed sidebar: icons only, smaller animation */
+nav.tabs.collapsed button[data-view]::before {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+nav.tabs.collapsed button[data-view]:not(.active):hover::before {
+  transform: scale(1.15) rotate(-3deg);
+}
+
+/* Mobile: smaller icons */
+@media(max-width: 900px) {
+  nav.tabs button[data-view]::before {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
 }
 
 @media(max-width: 900px) {
