@@ -118,16 +118,45 @@ function openPrintTarget(){
 // لا داعي لانتظار حدث 'load' الذي قد يكون أُطلق بالفعل على الإطار الفارغ قبل كتابة المحتوى).
 function finishPrintDoc(win){
   win.document.close();
+  const isElectron = /Electron/.test(navigator.userAgent);
   const btn = win.document.getElementById('doc-print-btn');
   if(btn){
     btn.addEventListener('click', ()=>{
       setTimeout(()=>{
         try{ win.focus(); }catch(e){}
-        try{ win.print(); }catch(e){
-          try{ window.print(); }catch(e2){}
+        // في Electron: حاول طباعة الـ iframe أولاً، وإن فشل اطبع النافذة الأم
+        // كحل أخير: افتح المستند في تبويب جديد للطباعة (يعمل في كل المتصفحات)
+        const tryPrint = ()=>{
+          try{
+            if(isElectron && win && win.print){
+              win.print();
+              return true;
+            }
+            if(win && win.print){
+              win.print();
+              return true;
+            }
+          }catch(e){}
+          try{ window.print(); return true; }catch(e){}
+          return false;
+        };
+        if(!tryPrint()){
+          // fallback: افتح المحتوى في نافذة جديدة
+          const html = win.document.documentElement.outerHTML;
+          const w = window.open('', '_blank');
+          if(w){
+            w.document.write(html);
+            w.document.close();
+            w.focus();
+            setTimeout(()=>{ try{ w.print(); }catch(e){} }, 200);
+          }
         }
-      }, 150);
+      }, 180);
     });
+    // تفعيل تلقائي للمعاينة في Electron بعد ثانية (اختياري)
+    if(isElectron){
+      setTimeout(()=>{ try{ btn.click(); }catch(e){} }, 600);
+    }
   }
   try{
     if(win) win.addEventListener('afterprint', ()=>{ setTimeout(()=>{ const ov=document.getElementById('print-preview-overlay'); if(ov) ov.remove(); }, 400); });
