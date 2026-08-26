@@ -192,8 +192,10 @@ function startLocalServer() {
         headers['host'] = 'arkkanapp.net';
         if (body.length) headers['content-length'] = String(body.length);
         const u = new URL(targetUrl);
-        const proxyReq = https.request(
-          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers },
+        const proxyHeaders = Object.assign({}, headers);
+    if (req.headers.cookie) proxyHeaders.cookie = req.headers.cookie;
+    const proxyReq = https.request(
+          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders },
           proxyRes => {
             // تمرير كوكيز الجلسة كما هي
             res.writeHead(proxyRes.statusCode, proxyRes.headers);
