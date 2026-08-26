@@ -4844,6 +4844,8 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
 #view-clients table.clients-grid.hide-col-13 > tbody td:nth-child(13) { display: none; }
 #view-clients table.clients-grid.hide-col-14 > thead th:nth-child(14),
 #view-clients table.clients-grid.hide-col-14 > tbody td:nth-child(14) { display: none; }
+#view-clients table.clients-grid.hide-col-15 > thead th:nth-child(15),
+#view-clients table.clients-grid.hide-col-15 > tbody td:nth-child(15) { display: none; }
 
 /* ============================================================
    نبض — Phase 6: Motion Pass (احترام reduced-motion)
