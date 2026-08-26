@@ -91,22 +91,31 @@ async function prepareAssets() {
   userAssetsDir = path.join(app.getPath('userData'), 'app-assets');
   try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
   clearStaleAssetsIfVersionChanged();
-  checkForFrontendUpdate().catch(() => {}); // في الخلفية، لا يوقف فتح البرنامج
 }
 
+// يتحقق من ملفات الواجهة على السيرفر الحي، ويحدّث المخزَّن محلياً فقط للملفات
+// اللي اتغيّرت فعلاً (بمقارنة المحتوى)، ويرجّع true لو حصل أي تغيير حقيقي —
+// عشان اللي بينادي الدالة يقرر هل يعمل reload للنافذة المفتوحة بالفعل أو لأ.
 async function checkForFrontendUpdate() {
+  let changed = false;
   for (const file of SYNCED_FILES) {
     try {
       const remote = await fetchText(`${REMOTE_BASE}/${file}`);
       // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
       if (remote && remote.length > 20) {
         const destPath = path.join(userAssetsDir, file);
-        // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
-        fs.mkdirSync(path.dirname(destPath), { recursive: true });
-        fs.writeFileSync(destPath, remote, 'utf8');
+        let existing = null;
+        try { existing = fs.readFileSync(destPath, 'utf8'); } catch (e) {}
+        if (existing !== remote) {
+          // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
+          fs.mkdirSync(path.dirname(destPath), { recursive: true });
+          fs.writeFileSync(destPath, remote, 'utf8');
+          changed = true;
+        }
       }
     } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
   }
+  return changed;
 }
 
 // خادم محلي صغير يقدّم ملفات الواجهة من داخل التطبيق — بهذا الشكل تفتح
@@ -157,6 +166,21 @@ function startLocalServer() {
         if (body.length) proxyReq.write(body);
         proxyReq.end();
       });
+    });
+
+    // ---- منع أي كاش من طرف Chromium الداخلي لملفات الواجهة ----
+    // كان الخادم المحلي مبيبعتش أي Cache-Control header، فـ Chromium (زي أي متصفح)
+    // بيفترض إنه يقدر يستخدم نسخته المخزَّنة محلياً من app.html/js/*.js من غير ما
+    // يسأل الخادم المحلي أصلاً في التشغيلات التالية — حتى لو checkForFrontendUpdate
+    // فعلاً نزّل ملفات جديدة على القرص. النتيجة: تحديثات الواجهة بتوصل فعلياً لكنها
+    // "محبوسة" في مجلد بيانات المستخدم ومحدّش بيقرأها. الحل: نجبر Chromium يتحقق من
+    // الخادم المحلي في كل مرة (no-cache), وطالما الخادم بيقرأ من القرص في كل طلب أصلاً
+        // (مفيش أي in-memory caching هنا)، فده مضمون يرجّع آخر نسخة مكتوبة فعلياً.
+    srv.use((req, res, next) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
     });
 
     srv.use(express.static(userAssetsDir));
@@ -234,6 +258,16 @@ if (!gotTheLock) {
     await prepareAssets();
     await startLocalServer();
     createWindow();
+
+    // فحص التحديث بيتنفّذ بعد ما النافذة اتفتحت (مش قبلها) عشان الفتح يفضل فوري
+    // ومايستناش على شبكة الإنترنت. لو اتلاقى تغيير حقيقي في أي ملف، نعمل reload
+    // للنافذة المفتوحة فعلاً تلقائياً — فالمستخدم بياخد آخر نسخة من غير ما يحتاج
+    // يقفل البرنامج ويفتحه تاني.
+    checkForFrontendUpdate().then((changed) => {
+      if (changed && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reload();
+      }
+    }).catch(() => {});
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
