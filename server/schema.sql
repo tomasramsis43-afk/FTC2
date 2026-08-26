@@ -129,6 +129,10 @@ CREATE TABLE IF NOT EXISTS clients_rows (
   reg_date      TEXT,
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- تسريع البحث النصي ILIKE '%..%' عبر pg_trgm (يحتاج CREATE EXTENSION)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_clients_rows_name_trgm ON clients_rows USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_clients_rows_search_trgm ON clients_rows USING gin ((name || ' ' || client_id || ' ' || refer_num || ' ' || invoice_no) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_name ON clients_rows(name);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_client_id ON clients_rows(client_id);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_course_type ON clients_rows(course_type);

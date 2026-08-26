@@ -1972,6 +1972,8 @@ body.density-compact .stamp {
 
 tbody tr {
   transition: background 0.12s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 52px;
 }
 
 tbody tr:hover {

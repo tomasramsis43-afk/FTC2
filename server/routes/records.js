@@ -47,15 +47,43 @@ router.get('/api/clients', requireAuth, async (req, res) => {
     const sortCols = { name: 'name', date: 'reg_date', clientId: 'client_id', courseType: 'course_type', nationality: 'nationality' };
     const sortCol = sortCols[req.query.sort] || 'name';
     const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
+    // Keyset pagination: إذا أرسل cursor (id آخر صف من الصفحة السابقة) نستخدمه بدل OFFSET للصفحات العميقة
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
+    let cursorSql = '';
+    let cursorParams = [];
+    if(cursor){
+      cursorSql = ` AND ((${sortCol} > $${i} ) OR (${sortCol} = $${i} AND id > $${i+1}))`;
+      // للتبسيط: cursor يحمل قيمة sortCol + id مشفرة base64 — fallback لـ OFFSET لو فشل التحليل
+      try{
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+        cursorParams = [decoded.val, decoded.id];
+        i+=2;
+      }catch{ cursorSql=''; cursorParams=[]; }
+    }
     const totalR = await pool.query(`SELECT COUNT(*) FROM clients_rows ${whereSql}`, params);
-    const rowsR = await pool.query(
-      `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
-      [...params, pageSize, (page - 1) * pageSize]
-    );
+    let rowsR;
+    if(cursorSql){
+      rowsR = await pool.query(
+        `SELECT data, ${sortCol} as sc, id FROM clients_rows ${whereSql}${cursorSql} ORDER BY ${sortCol} ${order} NULLS LAST, id ASC LIMIT $${i}`,
+        [...params, ...cursorParams, pageSize]
+      );
+    } else {
+      rowsR = await pool.query(
+        `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
+        [...params, pageSize, (page - 1) * pageSize]
+      );
+    }
+    // nextCursor للـ keyset pagination
+    let nextCursor = null;
+    if(rowsR.rows.length === pageSize){
+      const last = rowsR.rows[rowsR.rows.length-1];
+      const val = last.sc !== undefined ? last.sc : (last.data ? last.data[sortCol] : null);
+      nextCursor = Buffer.from(JSON.stringify({val, id: last.id || last.data?.id || ''})).toString('base64url');
+    }
     res.json({
       rows: rowsR.rows.map(r => r.data),
       total: Number(totalR.rows[0].count),
-      page, pageSize,
+      page, pageSize, nextCursor
     });
   } catch (e) {
     console.error(e);
@@ -299,35 +327,8 @@ router.get('/api/storage', requireAuth, async (req, res) => {
    بعينه مطبَّقة فى الواجهة كما كانت دائماً (canDeleteClientRecord وغيرها)؛ هذه
    النقاط تحتاج requireAuth فقط، تماماً كحفظ مفتاح kv_store('clients') سابقاً. */
 
-// عزل بيانات الاستقبال (origin/status/created_by، راجع تعليق CREATE TABLE client_records فى
-// schema.sql): الأدمن فقط يرى كل شيء (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال
-// يرى فقط سجلاته هو شخصياً (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول
-// تماماً عن بقية مستخدمي الاستقبال، وليس مساحة مشتركة بينهم. أي دور آخر (staff/accountant) يرى
-// فقط السجلات المعتمدة status='confirmed' (نفس السلوك القديم تماماً بالنسبة له).
-function clientRecordsVisibilitySql(role, username) {
-  if (role === 'admin') return { where: '', params: [] };
-  // مستخدم الاستقبال يرى سجلاته المعلّقة/المعتمدة دائماً، وسجلاته المرفوضة أيضاً لكن لمدة 15 يوماً
-  // فقط من وقت الرفض (raised_at)، ليعرف أن الأدمن رفضها قبل أن تُحذف نهائياً تلقائياً بعد المهلة.
-  if (role === 'reception') return { where: `WHERE origin = $1 AND created_by = $2 AND (status <> 'rejected' OR rejected_at > now() - INTERVAL '15 days')`, params: ['reception', username] };
-  return { where: 'WHERE status = $1', params: ['confirmed'] };
-}
-
-// نفس عزل العملاء تماماً لكن للتصنيفات العامة (collection_records): الأدمن يرى كل شيء
-// (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال يرى سجلاته هو شخصياً فقط
-// (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول حتى عن بقية مستخدمي
-// الاستقبال. وأي دور آخر (staff/accountant) يرى فقط السجلات المعتمدة status='confirmed'
-// (نفس السلوك القديم تماماً بالنسبة له). الصيغة بصيغة AND عمداً (لا تبدأ بـ WHERE) لأن
-// كل مسارات السجلات العامة تضيفها لشرط collection موجود أصلاً.
-function recordsVisibilitySql(role, username) {
-  if (role === 'admin') return { where: '', params: [] };
-  if (role === 'reception') return { where: 'AND origin = $2 AND created_by = $3', params: ['reception', username] };
-  return { where: 'AND status = $1', params: ['confirmed'] };
-}
-// التصنيفات التشغيلية التي تكتبها شاشات الاستقبال فعلاً (العملاء/الخزنة/المخزون/الدورات):
-// سجلاتها المضافة من دور 'reception' تبدأ معلّقة (pending) بانتظار اعتماد الأدمن. بقية
-// التصنيفات (سجلات تاريخية/إعدادات) لا تدخل نظام الاعتماد إطلاقاً حتى لا تُقيَّد عمليات
-// نظامية جانبية (سجل التدقيق، سجل الإلغاءات...) بموافقات منفصلة بلا معنى.
-const APPROVAL_GATED_COLLECTIONS = ['vaultTx', 'bagStock', 'courseSessions'];
+// عزل بيانات الاستقبال — مستخرج لـ helpers.js لتقليل حجم هذا الملف (تقسيم منطقي بدون كسر)
+const { clientRecordsVisibilitySql, recordsVisibilitySql, APPROVAL_GATED_COLLECTIONS } = require('./helpers');
 
 router.get('/api/client-records', requireAuth, async (req, res) => {
   try {
@@ -756,12 +757,7 @@ router.get('/api/storage-versions', requireAuth, async (req, res) => {
 /* ---------------- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (Generic Collection Records) ----------------
    نفس فكرة /api/client-records بالضبط لكن قابلة لإعادة الاستخدام لأي شيت آخر — سجل واحد يتغيّر
    = صف واحد يُرفع، بدل رفع كل مصفوفة الشيت كاملة عند أي تعديل بسيط. */
-const ALLOWED_COLLECTIONS = [
-  'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
-  'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
-  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
-  'followUpTasks',
-];
+const { ALLOWED_COLLECTIONS } = require('./helpers');
 function collectionRoleAllowed(role, collection) {
   if (collection in RESTRICTED_STORAGE_KEYS) {
     const view = RESTRICTED_STORAGE_KEYS[collection];
