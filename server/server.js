@@ -9,7 +9,6 @@ const { centralErrorHandler } = require('./errors');
 const { loadRolePermissionsCache } = require('./permissions');
 const backupsRouter = require('./routes/backups');
 const aiRouter = require('./routes/ai');
-const zatcaRouter = require('./routes/zatca');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const webauthnRouter = require('./routes/webauthn');
@@ -117,7 +116,6 @@ app.use(recordsRouter);
 app.use(aiRouter);
 app.use(backupsRouter);
 app.use(healthRouter);
-app.use(zatcaRouter);
 app.use(arkkanRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));

@@ -355,98 +355,6 @@ function softDeleteClientInvoice(clientId, reason){
   if(idx>-1) clients[idx] = c;
   return removed;
 }
-/* ================= ZATCA — رمز الاستجابة السريعة (QR) لفاتورة ضريبية مبسّطة — المرحلة الأولى ================
-   يبني الحقول الخمسة المطلوبة (اسم البائع، الرقم الضريبي، الطابع الزمني، الإجمالي شامل الضريبة، قيمة الضريبة)
-   بترميز TLV (Tag-Length-Value) ثم Base64، وفق ما تتطلبه هيئة الزكاة والضريبة والجمارك لفواتير المرحلة الأولى
-   (توليد وعرض فقط — لا يشمل هذا الربط المرحلة الثانية "فاتورة" التي تتطلب توقيعاً رقمياً وخادماً خلفياً). */
-function zatcaTlvField(tag, value){
-  const bytes = new TextEncoder().encode(String(value||''));
-  // ترميز BER-TLV وفق مواصفة ZATCA: لو الطول <= 127 نكتبه في بايت واحد. لو تجاوز 127
-  // (اسم بائع/طابع زمني طويل) يجب الترميز الممتد: بايت يشير لعدد بايتات الطول (0x80|n)
-  // ثم n بايتات بالترتيب الكبير (big-endian) — النسخة السابقة كانت تضع الطول دائماً في
-  // بايت واحد فيلتف (wraps) ويتلف الحقل لأي قيمة أطول من 255 بايت.
-  const len = bytes.length;
-  let header;
-  if(len < 128){
-    header = new Uint8Array([tag, len]);
-  }else{
-    let nb = 0, tmp = len;
-    while(tmp > 0){ tmp >>= 8; nb++; }
-    header = new Uint8Array(2 + nb);
-    header[0] = tag;
-    header[1] = 0x80 | nb;
-    for(let i=0;i<nb;i++){ header[2 + i] = (len >> (8*(nb-1-i))) & 0xFF; }
-  }
-  const out = new Uint8Array(header.length + len);
-  out.set(header, 0);
-  out.set(bytes, header.length);
-  return out;
-}
-function zatcaBuildQrBase64({sellerName, vatNumber, timestampISO, total, vatAmount}){
-  const fields = [
-    zatcaTlvField(1, sellerName),
-    zatcaTlvField(2, vatNumber),
-    zatcaTlvField(3, timestampISO),
-    zatcaTlvField(4, num(total).toFixed(2)),
-    zatcaTlvField(5, num(vatAmount).toFixed(2)),
-  ];
-  const totalLen = fields.reduce((s,f)=>s+f.length, 0);
-  const merged = new Uint8Array(totalLen);
-  let offset = 0;
-  fields.forEach(f=>{ merged.set(f, offset); offset += f.length; });
-  let binary = '';
-  merged.forEach(b=> binary += String.fromCharCode(b));
-  return btoa(binary);
-}
-/* يُعيد <img> جاهزة برمز QR، أو نصاً بديلاً بصمت إن تعذّر تحميل مكتبة الترميز (لا اتصال بالإنترنت مثلاً) */
-function zatcaQrImgTag(qrPayloadBase64){
-  try{
-    if(typeof QRious === 'undefined') return '';
-    const canvas = document.createElement('canvas');
-    new QRious({element: canvas, value: qrPayloadBase64, size: 220, level:'M'});
-    return `<div class="zatca-qr"><img src="${canvas.toDataURL('image/png')}"><span>رمز الفاتورة الضريبية (QR)</span></div>`;
-  }catch(e){ return ''; }
-}
-/* يبني حمولة QR كاملة لفاتورة عميل (فاتورة الدورة) */
-function zatcaInvoiceQrTag(ci, totalInclVat, vat, issueDate){
-  const iso = (()=>{ try{ return new Date(issueDate || Date.now()).toISOString(); }catch(e){ return new Date().toISOString(); } })();
-  const payload = zatcaBuildQrBase64({
-    sellerName: ci.name, vatNumber: ci.taxNumber, timestampISO: iso,
-    total: totalInclVat, vatAmount: vat
-  });
-  return zatcaQrImgTag(payload);
-}
-
-/* ================= إرسال فعلي لهيئة الزكاة والضريبة (فاتورة) — المرحلة الثانية =================
-   يُستدعى تلقائياً عند طباعة كل فاتورة/مردود. يفشل بصمت تماماً إن لم يكن الربط
-   مفعّلاً بعد (Onboarding) حتى لا يعطّل الطباعة العادية قبل جهوزية الشهادة —
-   بمجرد توفر الشهادة سيبدأ العمل تلقائياً بدون أي تعديل إضافي هنا. */
-async function zatcaSubmit(path, body){
-  try{
-    const res = await serverFetch(path, { method:'POST', body: JSON.stringify(body) });
-    if(!res.ok) return null;
-    return await res.json();
-  }catch(e){ return null; }
-}
-function zatcaLineItem(nameLabel, taxExclusivePrice){
-  return { id:'1', name: nameLabel, quantity:1, tax_exclusive_price: Math.max(0, taxExclusivePrice), VAT_percent: VAT_RATE };
-}
-/* شارة صغيرة تُدرَج أسفل الفاتورة المطبوعة توضّح حالة الإرسال للهيئة — لا تظهر إطلاقاً
-   إن لم تتم أي محاولة إرسال بعد (قبل جهوزية الشهادة)، حتى لا نربك المستخدم بشيء غير مفعّل. */
-function zatcaStatusBadge(result){
-  if(!result) return '';
-  const map = {
-    reported: ['✅ أُرسلت إلى هيئة الزكاة والضريبة (فاتورة) بنجاح', '#1a7f37'],
-    compliance_check: ['🧪 فحص توافق تجريبي مع الهيئة (وضع الإعداد الأولي)', '#9a6700'],
-    warning: ['⚠️ أُرسلت للهيئة مع ملاحظات — راجع سجل الفواتير', '#9a6700'],
-    error: ['❌ تعذّر إرسال الفاتورة للهيئة — راجع سجل الفواتير', '#cf222e'],
-    not_supported_yet: ['ℹ️ الفواتير الضريبية القياسية (B2B) لعملاء الشركات غير مفعّلة بعد في الربط الإلكتروني', '#57606a'],
-  };
-  const info = map[result.status];
-  if(!info) return '';
-  return `<div style="margin-top:8px; font-size:11.5px; color:${info[1]};">${info[0]}</div>`;
-}
-
 async function printInvoice(id){
   const c = clients.find(x=>x.id===id);
   if(!c){ showToast('تعذر إيجاد بيانات العميل'); return; }
@@ -486,11 +394,6 @@ async function printInvoice(id){
 function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand}){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
-  // قرار عمل صريح: هذه الفاتورة (تُطبَع من شيت العملاء) لم تعد تُرسَل لهيئة الزكاة والضريبة إطلاقاً —
-  // أصبحت "فاتورة مبسطة" داخلية فقط (رمز QR مُولَّد محلياً كما كان دائماً فى الحالة العادية أدناه،
-  // بدون أي اتصال بالسيرفر/الهيئة). هذا هو ما سمح أيضاً بالسماح للاستقبال بطباعتها قبل اعتماد الأدمن
-  // (راجع طلب المستخدم) بأمان — لم يعد هناك رقم رسمي يُستهلك فعلياً لدى الهيئة يصعب التراجع عنه.
-  const zatcaResult = null;
   const rowsHtml = `
     <tr><td>رسوم الدورة التدريبية${c.courseType ? ' — '+escapeHtml(c.courseType) : ''}</td><td class="num">${fmt(num(c.coursePrice))}</td></tr>
     ${num(c.discount)>0 ? `<tr><td>الخصم</td><td class="num">-${fmt(num(c.discount))}</td></tr>` : ''}
@@ -508,7 +411,6 @@ function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, 
           </div>
         </div>
       </div>
-      ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, totalInclVat, vat, c.taxInvoiceDate || today)}
       <div class="inv-title">
         <h2>فاتورة مبسطة</h2>
         <div class="no">${invNoLabel}</div>
@@ -553,8 +455,7 @@ function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, 
     </div>
     <div style="margin:14px 0 22px; padding:12px 14px; border:1px solid #DDE3EA; border-radius:8px; background:#F7F9FB; font-size:12.5px; text-align:center;">
       <b>المبلغ كتابةً:</b> ${escapeHtml(numberToArabicWords(grand+vat))}
-    </div>
-    ${zatcaStatusBadge(zatcaResult)}`;
+    </div>`;
 }
 
 // إرسال الفاتورة بالإيميل فعلياً عبر السيرفر. جسم الإيميل بسيط (تحية + إشارة للمرفق) لضمان
@@ -668,19 +569,6 @@ async function printReturnInvoice(id){
 
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
-  const returnNet = netFromGross(num(tx.amount));
-
-  const zatcaResult = await zatcaSubmit('/api/zatca/return', {
-    environment: 'sandbox',
-    clientType: client?.clientType==='company' ? 'company' : 'individual',
-    sourceRef: String(tx.id),
-    lineItems: [ zatcaLineItem('مردود مبيعات', returnNet) ],
-    issueDate: tx.date || (typeof todayISO==='function' ? todayISO() : new Date().toISOString().slice(0,10)),
-    issueTime: new Date().toTimeString().slice(0,8),
-    canceledInvoiceNumber: client?.taxInvoiceNo ? formatInvoiceNo(client.taxInvoiceNo) : '',
-    reason: tx.notes || 'مردود مبيعات',
-  });
-
   const win = openPrintTarget();
   win.document.write(`
   ${printDocHead(invNoLabel, {accent: PRINT_PALETTE.red})}
@@ -696,7 +584,6 @@ async function printReturnInvoice(id){
           </div>
         </div>
       </div>
-      ${zatcaResult && zatcaResult.qr ? zatcaQrImgTag(zatcaResult.qr) : zatcaInvoiceQrTag(ci, num(tx.amount), num(tx.amount) - returnNet, tx.date || today)}
       <div class="inv-title">
         <h2>فاتورة استرجاع مبلغ<br><span style="font-size:14px;">Return Invoice</span></h2>
         <div class="no">${invNoLabel}</div>
@@ -747,7 +634,6 @@ async function printReturnInvoice(id){
       هذه الفاتورة صادرة إلكترونياً من نظام إدارة ${escapeHtml(ci.name)} — رقم الفاتورة تسلسلي ولا يتم التلاعب به، وهذا المردود خاص بهذا العميل فقط.<br>
       <span style="font-size:10.5px;">This invoice is issued electronically by ${escapeHtml(ci.name)} management system — the invoice number is sequential and non-editable, and this return applies to this client only.</span>
     </div>
-    ${zatcaStatusBadge(zatcaResult)}
     ${printDocFooterButton()}
   </body></html>`);
   finishPrintDoc(win);
