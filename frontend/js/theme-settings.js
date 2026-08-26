@@ -896,3 +896,17 @@ userMenuDropdown?.addEventListener('click', (e)=>{
 document.addEventListener('click', (e)=>{
   if(userMenuDropdown?.classList.contains('show') && !userMenuWrap?.contains(e.target)) closeUserMenuDropdown();
 });
+/* زر الوضع الليلي/النهاري داخل القائمة المنسدلة (#btn-theme-toggle) كان بلا أي مستمع نقر مربوط
+   به إطلاقاً بعد نقل الأزرار لقائمة المستخدم — الزر كان يظهر ويُغلق القائمة عند الضغط عليه لكن
+   لا يُبدّل الثيم فعلياً ولا يحفظ التفضيل. نفس الشيء كان يسري على زر كتم الصوت (#btn-sound-toggle). */
+$('#btn-theme-toggle')?.addEventListener('click', async ()=>{
+  settings.darkMode = !settings.darkMode;
+  applyTheme(settings.darkMode);
+  await saveSettings();
+});
+$('#btn-sound-toggle')?.addEventListener('click', async ()=>{
+  settings.soundEnabled = !settings.soundEnabled;
+  applySoundIcon();
+  await saveSettings();
+  if(settings.soundEnabled && typeof sfx!=='undefined') sfx.click();
+});
