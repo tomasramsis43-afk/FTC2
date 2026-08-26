@@ -911,9 +911,9 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   left: 0;
   width: 340px;
   max-width: 88vw;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
@@ -1004,9 +1004,9 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   top: calc(100% + 8px);
   left: 0;
   min-width: 210px;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
@@ -1772,7 +1772,7 @@ table {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-  will-change: contents;
+  contain: content;
 }
 
 @media(max-width: 900px) {
@@ -2058,9 +2058,9 @@ tbody tr:hover {
   z-index: 55;
   min-width: 168px;
   max-width: 240px;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);

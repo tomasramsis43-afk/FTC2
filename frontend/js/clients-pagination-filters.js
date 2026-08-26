@@ -132,21 +132,26 @@ async function renderTable(){
 }
 // يرسم صفوف الجدول وشريط الترقيم فعلياً — يُستخدَم من كلا مساري renderTable (السيرفر والمحلي)
 // حتى لا يتكرر كود بناء HTML للصف في مكانين قد يختلفان عن بعض بمرور الوقت.
+let _filteredCache = { sig: '', rows: null };
+function getFilteredCached(filterSig){
+  if(_filteredCache.sig === filterSig && _filteredCache.rows) return _filteredCache.rows;
+  const rows = filteredClients();
+  _filteredCache = { sig: filterSig, rows };
+  return rows;
+}
 function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, filteredRowsCache){
-  // فلترة واحدة فقط (بدل ثلاث عمليات متكررة كانت تُبطئ فتح شيت العملاء) — نعيد استخدامها
-  // لحساب الإجماليات أدناه، أو نستقبلها من المتصل (المسار المحلي) إن كانت محسوبة أصلاً.
-  const filtered = filteredRowsCache || filteredClients();
+  // استخدام كاش الفلترة لتجنب 3 مسوحات كاملة عند كل ترقيم
+  const filterSig = JSON.stringify([filteredTotal, grandTotal, pageSize]);
+  const filtered = filteredRowsCache || _filteredCache.rows || filteredClients();
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
   const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
-  // إجمالي المبلغ المدفوع لكل العملاء المطابقين للفلتر الحالي (وليس فقط صفحة الجدول المعروضة حالياً) —
-  // يُحسب دائماً محلياً عبر filteredClients() (بدلاً من مسار السيرفر السريع الذي يُرجع صفحة واحدة فقط
-  // من الصفوف) لضمان دقة الإجمالي بغض النظر عن أي مسار عُرض به الجدول.
+  // حساب الإجماليات في تمريرة واحدة بدل تمريرتين
+  let paidSum = 0, remSum = 0;
+  for(const c of filtered){ paidSum += paidTotal(c); if(!c.suspended && !c.cancelled) remSum += remaining(c); }
   const cfp = $('#clients-filtered-paid');
-  if(cfp) cfp.textContent = fmt(filtered.reduce((s,c)=>s+paidTotal(c),0));
-  // إجمالي المتبقي على كل العملاء المطابقين للفلتر الحالي (نفس منطق استبعاد الموقوفين/الملغيين
-  // المستخدم في حساب "متبقي" بلوحة التحكم)، ليظهر بجانب "إجمالي المدفوع" أعلى جدول العملاء.
+  if(cfp) cfp.textContent = fmt(paidSum);
   const cfr = $('#clients-filtered-remaining');
-  if(cfr) cfr.textContent = fmt(filtered.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0));
+  if(cfr) cfr.textContent = fmt(remSum);
 
   $('#empty-state').style.display = filteredTotal ? 'none' : 'block';
 

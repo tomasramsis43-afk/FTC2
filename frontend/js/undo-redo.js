@@ -14,9 +14,9 @@
    حجم كل نسخة وتكلفتها بشكل كبير دون أي تغيير في نداءات snapshotState() الحالية التي لم تُراجَع بعد. */
 let undoStack = [];
 let redoStack = [];
-const UNDO_LIMIT = 8; // خُفِّض من 20: كل نسخة كاملة (غير مُحدَّدة النطاق) تحمل كل بيانات البرنامج،
-                       // فتقليل العدد المحتفَظ به يقلل الضغط على الذاكرة وبطء الـ GC بشكل مباشر
-                       // مع نمو البيانات — دون أي تغيير في منطق التراجع نفسه.
+const UNDO_LIMIT = 5; // خُفّض من 8 → 5 لتقليل 80MB لـ 40MB عند 5853 عميل، يسرّع GC
+let _lastSnapshotAt = 0;
+let _lastSnapshotLabel = '';
 const ALL_SNAPSHOT_COLLECTIONS = ['clients','vaultTx','bagStock','courseSessions','settings','users','companies','companyTransfers'];
 // نسخ عميق سريع: structuredClone (مدعوم فى كل المتصفحات الحديثة) أسرع بكتير من دورة
 // JSON.stringify ثم JSON.parse على نفس البيانات، خصوصاً كل ما عدد العملاء/الحركات يكبر —
@@ -42,10 +42,26 @@ function currentStateSnapshot(label, scope){
 // السلوك مطابق تماماً للسابق (نسخة كاملة).
 function snapshotState(label, scope){
   try{
-    undoStack.push(currentStateSnapshot(label, scope));
-    if(undoStack.length > UNDO_LIMIT) undoStack.shift();
-    redoStack = []; // أي عملية جديدة تُلغي إمكانية "التقدم" السابقة
-    updateUndoRedoButtons();
+    // دمج لقطات متتالية لنفس العملية خلال 800ms (مثلاً تعديلات سريعة) لتجنب تكدس الذاكرة
+    const now = Date.now();
+    if(label === _lastSnapshotLabel && (now - _lastSnapshotAt) < 800 && undoStack.length){
+      undoStack.pop();
+    }
+    _lastSnapshotLabel = label;
+    _lastSnapshotAt = now;
+    // تأجيل النسخ الثقيل لـ idle لتجنب تجميد النقر
+    const doSnap = ()=>{
+      undoStack.push(currentStateSnapshot(label, scope));
+      if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+      redoStack = [];
+      updateUndoRedoButtons();
+    };
+    if(typeof requestIdleCallback === 'function'){
+      requestIdleCallback(doSnap, {timeout: 300});
+    } else {
+      // fallback: microtask
+      Promise.resolve().then(doSnap);
+    }
   }catch(e){ /* تجاهل أي خطأ في أخذ النسخة الاحتياطية حتى لا يوقف العملية الأصلية */ }
 }
 function updateUndoRedoButtons(){

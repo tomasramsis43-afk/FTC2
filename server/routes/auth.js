@@ -252,37 +252,29 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
     } catch (e) {
       console.error('تعذّر التحقق من عنوان IP:', e);
     }
-    // تحديد دولة/مدينة الدخول الحالي تقريبياً من عنوان IP، ومقارنتها بالدولة الأكثر تكراراً فى
-    // دخولات هذا الحساب الناجحة السابقة — لتنبيه المستخدم لو الدخول الحالي من دولة غير معتادة له.
-    // best-effort بالكامل: لا يمنع الدخول أبداً حتى لو فشلت خدمة الـ geolocation أو كانت بطيئة.
-    const currentGeo = await geolocateIp(loginIp);
+    // تحديد دولة/مدينة الدخول الحالي — لا نؤخر الاستجابة به، نُشغّله في الخلفية
+    let currentGeo = null;
     let geoAlert = null;
-    try {
-      if (currentGeo && currentGeo.country) {
-        const usual = await pool.query(
-          `SELECT country, COUNT(*)::int AS cnt FROM login_history
-           WHERE username = $1 AND success = true AND country IS NOT NULL
-           GROUP BY country ORDER BY cnt DESC LIMIT 1`,
-          [user.username]
-        );
-        const usualCountry = usual.rows[0]?.country || null;
-        if (usualCountry && usualCountry !== currentGeo.country) {
-          geoAlert = { country: currentGeo.country, city: currentGeo.city, usualCountry };
-        }
-      }
-    } catch (e) {
-      console.error('تعذّر تحديد الدولة المعتادة لهذا الحساب:', e);
-    }
+    const geoPromise = geolocateIp(loginIp).catch(()=>null);
     const token = signToken(user);
     // نجاح كامل: تصفير عداد المحاولات الفاشلة وأي قفل مؤقت قائم لهذا الحساب.
     pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
-    // تسجيل عملية الدخول في سجل الدخول (best-effort — فشل هذا التسجيل لا يجب أن يمنع
-    // المستخدم من الدخول فعلياً، لذا لا ننتظره ولا نُفشل الطلب لو حدث خطأ فيه).
-    pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info, country, city) VALUES ($1, $2, $3, $4, $5, $6)',
-      [user.username, user.role || 'staff', loginIp, loginDevice, currentGeo?.country || null, currentGeo?.city || null]
-    ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+    // تسجيل الدخول + تحديد الدولة يتم في الخلفية بدون تأخير الاستجابة
+    geoPromise.then(g=>{
+      currentGeo = g;
+      if(g && g.country){
+        pool.query(`SELECT country FROM login_history WHERE username=$1 AND success=true AND country IS NOT NULL GROUP BY country ORDER BY COUNT(*) DESC LIMIT 1`, [user.username])
+          .then(r=>{
+            const usual = r.rows[0]?.country;
+            if(usual && usual !== g.country) geoAlert = { country: g.country, city: g.city, usualCountry: usual };
+          }).catch(()=>{});
+      }
+      pool.query(
+        'INSERT INTO login_history (username, role, ip_address, device_info, country, city) VALUES ($1, $2, $3, $4, $5, $6)',
+        [user.username, user.role || 'staff', loginIp, loginDevice, g?.country || null, g?.city || null]
+      ).catch(e => console.error('تعذّر تسجيل عملية الدخول في السجل:', e));
+    });
     // نُرجع username و role صراحة في جسم الاستجابة، لأن الواجهة أصبحت تعتمد عليهما
     // مباشرة لتحديد صلاحيات المستخدم (admin/staff)، بدلاً من أي قائمة محلية داخل البرنامج.
     // الاستجابة تُرسل فوراً — بدون الانتظار في استعلام الأنشطة المشتبكة للمدراء.

@@ -34,6 +34,12 @@ const pool = new Pool({
     : process.env.DATABASE_SSL === 'verify'
     ? { rejectUnauthorized: true }
     : { rejectUnauthorized: false },
+  max: 20,
+  min: 2,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
+  query_timeout: 15000,
 });
 if (process.env.DATABASE_SSL !== 'false' && process.env.DATABASE_SSL !== 'verify') {
   console.warn('⚠️  تحذير أمني: DATABASE_SSL غير مُفعّل للتحقق الكامل (rejectUnauthorized:false). فعّل DATABASE_SSL=verify في الإنتاج مع شهادة CA موثوقة لتجنب هجمات MITM.');
