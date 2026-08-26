@@ -603,7 +603,7 @@ nav.tabs {
   align-items: stretch;
   gap: 6px;
   background: var(--sidebar-bg);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   padding: 14px 10px;
   border-radius: var(--radius);
   box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 16px -8px rgba(0,0,0,0.08);
@@ -861,7 +861,7 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   width: auto;
   height: 1px;
   margin: 7px 4px;
-  background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
   font-size: 0;
   line-height: 0;
   overflow: hidden;
@@ -3522,9 +3522,9 @@ input[type="checkbox"] {
   -webkit-appearance: none;
   width: 13px;
   height: 13px;
-  border: 1.2px solid #cbd5e1;
+  border: 1.2px solid var(--border);
   border-radius: 3px;
-  background: #fff;
+  background: var(--surface-solid);
   position: relative;
   cursor: pointer;
   flex: none;
