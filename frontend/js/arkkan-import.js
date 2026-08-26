@@ -18,7 +18,15 @@ async function arkkanLogin(username, password){
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body: body.toString()
   });
-  return res.text();
+  const html = await res.text();
+  // تحقق فعلي من نجاح الدخول: طالما حقل الباسورد أو زر الدخول لا يزال ظاهراً
+  // في الرد فهذا يعني أننا ما زلنا على صفحة تسجيل الدخول (بيانات خاطئة، أو
+  // تغيّرت أسماء الحقول في أركان) — بدون هذا التحقق كانت العملية تفشل بصمت
+  // وتُرجع صفر سجلات دون أي رسالة توضح السبب الحقيقي.
+  if (/name="Password"/i.test(html) || /id="UsernameLog"/i.test(html)) {
+    throw new Error('فشل تسجيل الدخول لأركان — تأكد من اليوزر والباسورد');
+  }
+  return html;
 }
 
 function parseArkkanRows(html){
@@ -44,13 +52,16 @@ function parseArkkanRows(html){
 
 async function importArkkan(from,to, username, password, onProgress){
   onProgress('جاري تسجيل الدخول لأركان...');
-  await arkkanLogin(username, password);
+  // صفحة الدخول الناجحة هي نفسها صفحة النتائج (صفحة 1) في هذا الموقع، فنعيد
+  // استخدام ردّها مباشرة بدل عمل GET إضافي كان يعيد صفحة الدخول من جديد
+  // (الجلسة عبر الكوكيز فقط، وGET بلا كوكيز مُعاد استخدامها بشكل صحيح كان
+  // يبدو وكأنه يعمل، لكن الخطأ الحقيقي هو أن حلقة التنقل بين الصفحات أدناه
+  // كانت تتجاهل رد "الصفحة التالية" وتُعيد طلب الصفحة الأولى في كل تكرار).
+  let html = await arkkanLogin(username, password);
   let all=[];
   let page=1;
   while(true){
     onProgress(`جاري سحب الصفحة ${page}...`);
-    // فلترة التاريخ عبر query string إن وجدت، وإلا نسحب كل الصفحات ونفلتر محلياً
-    const html = await fetch(`/arkkan/Municipal/Disbursed-bags.aspx`, {credentials:'include'}).then(r=>r.text());
     const rows = parseArkkanRows(html);
     if(!rows.length) break;
     // فلترة التاريخ محلياً
@@ -60,16 +71,15 @@ async function importArkkan(from,to, username, password, onProgress){
       return true;
     });
     all.push(...filtered);
-    // هل يوجد زر التالي؟
-    const hasNext = html.includes('>') && html.includes('التالي');
-    // للتبسيط: نسحب عبر __doPostBack للصفحة التالية إن وجد
+    // الانتقال للصفحة التالية عبر __doPostBack إن وجد، ونستخدم رد هذا الطلب
+    // نفسه كصفحة تالية بدل إعادة GET لصفحة 1 (كان هذا هو سبب توقف الاستيراد
+    // فعلياً عند الصفحة الأولى دائماً، حتى مع بيانات دخول صحيحة).
     const m = html.match(/__doPostBack\('([^']+)','[^']*Next[^']*'\)/);
     if(!m) break;
-    // تنفيذ الانتقال للصفحة التالية
     const vs = (html.match(/name="__VIEWSTATE" value="([^"]+)"/)||[])[1]||'';
     const vsg = (html.match(/name="__VIEWSTATEGENERATOR" value="([^"]+)"/)||[])[1]||'';
     const body = new URLSearchParams({__VIEWSTATE:vs, __VIEWSTATEGENERATOR:vsg, __EVENTTARGET:m[1], __EVENTARGUMENT:''});
-    await fetch('/arkkan/Municipal/Disbursed-bags.aspx',{method:'POST', credentials:'include', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body.toString()});
+    html = await fetch('/arkkan/Municipal/Disbursed-bags.aspx',{method:'POST', credentials:'include', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body.toString()}).then(r=>r.text());
     page++;
     if(page>20) break;
   }

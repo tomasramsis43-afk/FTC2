@@ -197,8 +197,15 @@ function startLocalServer() {
     const proxyReq = https.request(
           { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders },
           proxyRes => {
-            // تمرير كوكيز الجلسة كما هي
-            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+            // إصلاح: كوكيز arkkanapp.net تصل بسمة Domain=arkkanapp.net، وتمريرها
+            // كما هي يجعل Chromium يرفضها لأنها لا تطابق أصل الخادم المحلي — فتضيع
+            // الجلسة فور تسجيل الدخول وتُرجع كل الطلبات التالية صفحة الدخول (صفر نتائج بصمت).
+            const respHeaders = Object.assign({}, proxyRes.headers);
+            const rawSetCookie = proxyRes.headers['set-cookie'];
+            if (rawSetCookie) {
+              respHeaders['set-cookie'] = rawSetCookie.map(c => c.replace(/;\s*domain=[^;]+/i, ''));
+            }
+            res.writeHead(proxyRes.statusCode, respHeaders);
             proxyRes.pipe(res);
           }
         );
