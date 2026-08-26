@@ -38,10 +38,16 @@ function parseArkkanRows(html){
     if(tds.length < 6) continue;
     const printLink = tr.querySelector("a[href*='sanad']");
     if(!printLink) continue;
+    const rawDate = tds[4]?.textContent.trim()||'';
+    // تحويل DD/MM/YYYY → YYYY-MM-DD مع التحقق من الصيغة — لو التاريخ بصيغة غير متوقعة يُترك فارغاً بدل إدخال قيمة خاطئة
+    const dateParts = rawDate.split('/');
+    const date = (dateParts.length === 3 && /^\d{1,2}$/.test(dateParts[0]) && /^\d{1,2}$/.test(dateParts[1]) && /^\d{4}$/.test(dateParts[2]))
+      ? `${dateParts[2]}-${dateParts[1].padStart(2,'0')}-${dateParts[0].padStart(2,'0')}`
+      : '';
     out.push({
       receiptNo: tds[1]?.textContent.trim()||'',
       bagType: tds[3]?.textContent.trim()||'',
-      date: tds[4]?.textContent.trim().split('/').reverse().join('-'), // 25/08/2026 -> 2026-08-25
+      date,
       clientName: tds[5]?.textContent.trim()||'',
       clientId: tds[6]?.textContent.trim()||'',
       printHref: printLink.getAttribute('href')
