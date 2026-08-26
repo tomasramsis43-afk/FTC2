@@ -1535,8 +1535,7 @@ $('#vault-form').addEventListener('submit', async e=>{
       date: data.date,
       amount,
       method: data.method,
-      notes: `مرتبط تلقائياً بحركة مالية (${data.category||'مصروف'})${data.notes ? ' — '+data.notes : ''}`,
-      sourceVaultTxId: savedTx.id
+      notes: `مرتبط تلقائياً بحركة مالية (${data.category||'مصروف'})${data.notes ? ' — '+data.notes : ''}`
     });
     recalcBagFundLedger();
     await saveBagStock();
