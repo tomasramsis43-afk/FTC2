@@ -1,41 +1,41 @@
 {
-  "name": "ftc2-desktop",
-  "version": "1.0.6",
-  "description": "برنامج إدارة المركز - تطبيق سطح المكتب",
-  "main": "main.js",
-  "author": "FTC2",
-  "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --win nsis"
-  },
-  "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  },
-  "build": {
-    "appId": "com.ftc2.desktop",
-    "productName": "FTC2",
-    "files": [
-      "main.js",
-      "app-assets/**/*"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.ico",
-      "signAndEditExecutable": false,
-      "signDlls": false
-    },
-    "forceCodeSigning": false,
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
-  }
+    "name":  "ftc2-desktop",
+    "version":  "1.0.7",
+    "description":  "ط¨ط±ظ†ط§ظ…ط¬ ط¥ط¯ط§ط±ط© ط§ظ„ظ…ط±ظƒط² - طھط·ط¨ظٹظ‚ ط³ط·ط­ ط§ظ„ظ…ظƒطھط¨",
+    "main":  "main.js",
+    "author":  "FTC2",
+    "scripts":  {
+                    "start":  "electron .",
+                    "dist":  "electron-builder --win nsis"
+                },
+    "devDependencies":  {
+                            "electron":  "^31.0.0",
+                            "electron-builder":  "^24.13.3"
+                        },
+    "dependencies":  {
+                         "express":  "^4.19.2"
+                     },
+    "build":  {
+                  "appId":  "com.ftc2.desktop",
+                  "productName":  "FTC2",
+                  "files":  [
+                                "main.js",
+                                "app-assets/**/*"
+                            ],
+                  "win":  {
+                              "target":  [
+                                             "nsis"
+                                         ],
+                              "icon":  "build/icon.ico",
+                              "signAndEditExecutable":  false,
+                              "signDlls":  false
+                          },
+                  "forceCodeSigning":  false,
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true
+                           }
+              }
 }
