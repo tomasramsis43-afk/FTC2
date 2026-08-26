@@ -37,7 +37,7 @@ try {
 // مش موجود أصلاً في نسخة Electron). كذلك أُزيل module-zatca.js من هنا لأنه لم يعد
 // مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
-  'app.html', 'styles.css', 'sw.js', 'sw-register.js',
+  'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
@@ -171,6 +171,38 @@ function startLocalServer() {
             res.writeHead(502, { 'content-type': 'application/json; charset=utf-8' });
           }
           res.end(JSON.stringify({ error: 'تعذّر الاتصال بالسيرفر: ' + err.message }));
+        });
+        if (body.length) proxyReq.write(body);
+        proxyReq.end();
+      });
+    });
+
+    // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
+    // يسمح للواجهة بسحب بيانات الحقائب المصروفة مباشرة من arkkanapp.net مع الحفاظ على الكوكيز
+    srv.use('/arkkan', (req, res) => {
+      const targetPath = req.url; // يحتفظ بالمسار كما هو /Municipal/Disbursed-bags.aspx
+      const targetUrl = 'https://arkkanapp.net' + targetPath;
+      const chunks = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const headers = Object.assign({}, req.headers);
+        delete headers.host;
+        delete headers.connection;
+        headers['host'] = 'arkkanapp.net';
+        if (body.length) headers['content-length'] = String(body.length);
+        const u = new URL(targetUrl);
+        const proxyReq = https.request(
+          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers },
+          proxyRes => {
+            // تمرير كوكيز الجلسة كما هي
+            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+            proxyRes.pipe(res);
+          }
+        );
+        proxyReq.on('error', err => {
+          if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('Arkkan proxy error: ' + err.message);
         });
         if (body.length) proxyReq.write(body);
         proxyReq.end();

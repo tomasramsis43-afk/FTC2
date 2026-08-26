@@ -3,7 +3,7 @@
 (function loadBusinessRuleModules(){
   try{
     const ver = (window.CACHE_VERSION || '12');
-    ['health-education-validity.js','health-education-ui.js','bag-workflow.js'].forEach(file=>{
+    ['health-education-validity.js','health-education-ui.js','bag-workflow.js','arkkan-import.js'].forEach(file=>{
       const s = document.createElement('script');
       s.src = 'js/' + file + '?v=' + ver;
       s.defer = false;
