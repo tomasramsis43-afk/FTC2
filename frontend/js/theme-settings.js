@@ -894,5 +894,5 @@ userMenuDropdown?.addEventListener('click', (e)=>{
   if(btn && btn.id!=='btn-sound-toggle') closeUserMenuDropdown();
 });
 document.addEventListener('click', (e)=>{
-  if(userMenuDropdown?.classList.contains('show') && !userMenuWrap.contains(e.target)) closeUserMenuDropdown();
+  if(userMenuDropdown?.classList.contains('show') && !userMenuWrap?.contains(e.target)) closeUserMenuDropdown();
 });
