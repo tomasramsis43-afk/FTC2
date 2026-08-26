@@ -1,10 +1,23 @@
 /* ===== نظام التراجع والتقدم العام (Undo / Redo) =====
-   قبل أي عملية إضافة/تعديل/حذف في أي جزء من البرنامج، نأخذ نسخة كاملة من البيانات
-   ونضعها في مكدس التراجع. زر "تراجع" يعيد آخر نسخة محفوظة، وزر "تقدم" يعيد تنفيذ
-   العملية التي تم التراجع عنها إن لم يقم المستخدم بأي عملية جديدة بعدها. */
+   قبل أي عملية إضافة/تعديل/حذف في أي جزء من البرنامج، نأخذ نسخة من البيانات ونضعها في مكدس
+   التراجع. زر "تراجع" يعيد آخر نسخة محفوظة، وزر "تقدم" يعيد تنفيذ العملية التي تم التراجع عنها
+   إن لم يقم المستخدم بأي عملية جديدة بعدها.
+   تحسين أداء (أغسطس 2026): كل نداء لـ snapshotState() كان يعمل نسخة كاملة (Deep Clone) لكل
+   مجموعات بيانات البرنامج الثمانية معاً (عملاء/حركات مالية/مخزون حقائب/دورات/إعدادات/مستخدمين/
+   شركات/حوالات) دون استثناء — حتى لو كانت العملية الفعلية تمس مجموعة واحدة فقط منها. مع نمو
+   البيانات (آلاف السجلات) أصبح هذا يُبطئ كل نقرة تقريباً في البرنامج (٧٠ نقطة نداء مختلفة عبر كل
+   الشاشات)، وكل نسخة من الـ 20 المحتفَظ بها في الذاكرة تحمل نسخة كاملة من كل شيء.
+   الحل هنا: snapshotState() تقبل الآن معامل "scope" اختياري (مصفوفة أسماء المجموعات المتأثرة
+   فعلياً بهذه العملية تحديداً). لو لم يُمرَّر (الحالة الافتراضية، وهي حال كل نداءات الكود الحالية
+   الـ 70) يبقى السلوك القديم تماماً بلا أي تغيير: نسخة كاملة لكل شيء. النداءات الجديدة أو التي
+   ستُراجَع لاحقاً يمكنها تمرير scope محدود (مثلاً ['vaultTx']) فتُنسخ هذه المجموعة فقط، مما يقلل
+   حجم كل نسخة وتكلفتها بشكل كبير دون أي تغيير في نداءات snapshotState() الحالية التي لم تُراجَع بعد. */
 let undoStack = [];
 let redoStack = [];
-const UNDO_LIMIT = 20;
+const UNDO_LIMIT = 8; // خُفِّض من 20: كل نسخة كاملة (غير مُحدَّدة النطاق) تحمل كل بيانات البرنامج،
+                       // فتقليل العدد المحتفَظ به يقلل الضغط على الذاكرة وبطء الـ GC بشكل مباشر
+                       // مع نمو البيانات — دون أي تغيير في منطق التراجع نفسه.
+const ALL_SNAPSHOT_COLLECTIONS = ['clients','vaultTx','bagStock','courseSessions','settings','users','companies','companyTransfers'];
 // نسخ عميق سريع: structuredClone (مدعوم فى كل المتصفحات الحديثة) أسرع بكتير من دورة
 // JSON.stringify ثم JSON.parse على نفس البيانات، خصوصاً كل ما عدد العملاء/الحركات يكبر —
 // وهي نفس البيانات بالضبط (مصفوفات/كائنات عادية بدون Function أو Date معقدة تمنع النسخ).
@@ -12,23 +25,24 @@ function _deepClone(x){
   try{ return structuredClone(x); }
   catch(e){ return JSON.parse(JSON.stringify(x)); } // احتياط لو المتصفح قديم جداً أو فى قيمة غير قابلة للنسخ
 }
-function currentStateSnapshot(label){
-  return {
-    label,
-    ts: Date.now(),
-    clients: _deepClone(clients),
-    vaultTx: _deepClone(vaultTx),
-    bagStock: _deepClone(bagStock),
-    courseSessions: _deepClone(courseSessions),
-    settings: _deepClone(settings),
-    users: _deepClone(users),
-    companies: _deepClone(companies),
-    companyTransfers: _deepClone(companyTransfers)
-  };
+function currentStateSnapshot(label, scope){
+  const cols = (Array.isArray(scope) && scope.length) ? scope : ALL_SNAPSHOT_COLLECTIONS;
+  const snap = { label, ts: Date.now() };
+  if(cols.includes('clients')) snap.clients = _deepClone(clients);
+  if(cols.includes('vaultTx')) snap.vaultTx = _deepClone(vaultTx);
+  if(cols.includes('bagStock')) snap.bagStock = _deepClone(bagStock);
+  if(cols.includes('courseSessions')) snap.courseSessions = _deepClone(courseSessions);
+  if(cols.includes('settings')) snap.settings = _deepClone(settings);
+  if(cols.includes('users')) snap.users = _deepClone(users);
+  if(cols.includes('companies')) snap.companies = _deepClone(companies);
+  if(cols.includes('companyTransfers')) snap.companyTransfers = _deepClone(companyTransfers);
+  return snap;
 }
-function snapshotState(label){
+// scope اختياري: مصفوفة بأسماء المجموعات المتأثرة فعلياً (راجع تعليق أعلى الملف). بلا تمرير،
+// السلوك مطابق تماماً للسابق (نسخة كاملة).
+function snapshotState(label, scope){
   try{
-    undoStack.push(currentStateSnapshot(label));
+    undoStack.push(currentStateSnapshot(label, scope));
     if(undoStack.length > UNDO_LIMIT) undoStack.shift();
     redoStack = []; // أي عملية جديدة تُلغي إمكانية "التقدم" السابقة
     updateUndoRedoButtons();
@@ -88,26 +102,38 @@ function _mergeSnapshotArrays(snapshotArr, currentArr, isConfirmed){
 async function applyStateSnapshot(entry){
   // دمج بدل استبدال كلي: أي سجل من جهاز آخر (غائب عن اللقطة ومؤكَّد على السيرفر) يبقى، وأي سجل
   // في اللقطة يُستعاد محتواه — التراجع لا يمسح بيانات الآخرين أبداً.
-  clients = _mergeSnapshotArrays(entry.clients, clients, id=> (_clientRecordVersions[id] || 0) > 0);
-  vaultTx = _mergeSnapshotArrays(entry.vaultTx, vaultTx, id=> (_recordVersions.vaultTx ? (_recordVersions.vaultTx.get(id) || 0) > 0 : false));
-  bagStock = _mergeSnapshotArrays(entry.bagStock, bagStock, id=> (_recordVersions.bagStock ? (_recordVersions.bagStock.get(id) || 0) > 0 : false));
-  courseSessions = _mergeSnapshotArrays(entry.courseSessions, courseSessions, id=> (_recordVersions.courseSessions ? (_recordVersions.courseSessions.get(id) || 0) > 0 : false));
-  settings = entry.settings === undefined ? settings : _deepClone(entry.settings);
-  users = entry.users === undefined ? users : _deepClone(entry.users);
-  companies = _mergeSnapshotArrays(entry.companies, companies, id=> (_recordVersions.companies ? (_recordVersions.companies.get(id) || 0) > 0 : false));
-  companyTransfers = _mergeSnapshotArrays(entry.companyTransfers, companyTransfers, id=> (_recordVersions.companyTransfers ? (_recordVersions.companyTransfers.get(id) || 0) > 0 : false));
-  // عمداً saveClients(false) وليس saveClients(true): اللقطة المخزَّنة في مكدس التراجع التُقطت من
-  // ذاكرة هذا الجهاز في لحظة سابقة، وقد تكون قديمة عن أي عملاء أضافهم مستخدمون آخرون على أجهزتهم
-  // منذ ذلك الحين. allowDrop=true كان يمرّر allowLargeDrop لخط الرجعة القديم فيتخطّى حماية السيرفر
-  // من "الحذف المفاجئ الكبير" — فيمكن للتراجع أن يمسح عملاء لم يقم هذا المستخدم بحذفهم أبداً.
-  await saveClients(false);
-  await saveVaultTx();
-  await saveBagStock();
-  await saveCourseSessions();
-  await saveSettings();
-  await saveUsers();
-  await saveCompanies();
-  await saveCompanyTransfers();
+  // كل مجموعة تُستعاد وتُحفَظ فقط لو كانت فعلاً جزءاً من هذه اللقطة (راجع scope فى أعلى الملف) —
+  // لقطة غير محدودة النطاق (السلوك القديم) تحمل كل المجموعات الثمانية فيعمل هذا كالمعتاد بلا تغيير.
+  if('clients' in entry){
+    clients = _mergeSnapshotArrays(entry.clients, clients, id=> (_clientRecordVersions[id] || 0) > 0);
+    // عمداً saveClients(false) وليس saveClients(true): اللقطة المخزَّنة في مكدس التراجع التُقطت من
+    // ذاكرة هذا الجهاز في لحظة سابقة، وقد تكون قديمة عن أي عملاء أضافهم مستخدمون آخرون على أجهزتهم
+    // منذ ذلك الحين. allowDrop=true كان يمرّر allowLargeDrop لخط الرجعة القديم فيتخطّى حماية السيرفر
+    // من "الحذف المفاجئ الكبير" — فيمكن للتراجع أن يمسح عملاء لم يقم هذا المستخدم بحذفهم أبداً.
+    await saveClients(false);
+  }
+  if('vaultTx' in entry){
+    vaultTx = _mergeSnapshotArrays(entry.vaultTx, vaultTx, id=> (_recordVersions.vaultTx ? (_recordVersions.vaultTx.get(id) || 0) > 0 : false));
+    await saveVaultTx();
+  }
+  if('bagStock' in entry){
+    bagStock = _mergeSnapshotArrays(entry.bagStock, bagStock, id=> (_recordVersions.bagStock ? (_recordVersions.bagStock.get(id) || 0) > 0 : false));
+    await saveBagStock();
+  }
+  if('courseSessions' in entry){
+    courseSessions = _mergeSnapshotArrays(entry.courseSessions, courseSessions, id=> (_recordVersions.courseSessions ? (_recordVersions.courseSessions.get(id) || 0) > 0 : false));
+    await saveCourseSessions();
+  }
+  if('settings' in entry){ settings = _deepClone(entry.settings); await saveSettings(); }
+  if('users' in entry){ users = _deepClone(entry.users); await saveUsers(); }
+  if('companies' in entry){
+    companies = _mergeSnapshotArrays(entry.companies, companies, id=> (_recordVersions.companies ? (_recordVersions.companies.get(id) || 0) > 0 : false));
+    await saveCompanies();
+  }
+  if('companyTransfers' in entry){
+    companyTransfers = _mergeSnapshotArrays(entry.companyTransfers, companyTransfers, id=> (_recordVersions.companyTransfers ? (_recordVersions.companyTransfers.get(id) || 0) > 0 : false));
+    await saveCompanyTransfers();
+  }
   if(typeof refreshFilterOptions==='function') refreshFilterOptions();
   if(typeof refreshAuditFilterOptions==='function') refreshAuditFilterOptions();
   if(typeof renderTable==='function') renderTable();
@@ -123,8 +149,11 @@ async function applyStateSnapshot(entry){
 }
 async function performUndo(){
   if(!undoStack.length){ showToast('لا توجد عملية للتراجع عنها'); return; }
-  redoStack.push(currentStateSnapshot(undoStack[undoStack.length-1].label));
   const entry = undoStack.pop();
+  // نبني لقطة "التقدم" المقابلة بنفس نطاق لقطة التراجع بالضبط (لا أوسع) حتى لا تلمس عملية
+  // "تقدم" لاحقة مجموعات بيانات لم تكن أصلاً جزءاً من هذه العملية.
+  const scope = Object.keys(entry).filter(k=> k!=='label' && k!=='ts');
+  redoStack.push(currentStateSnapshot(entry.label, scope));
   await applyStateSnapshot(entry);
   await logAudit('edit','النظام', `تم التراجع عن العملية: ${entry.label}`);
   updateUndoRedoButtons();
@@ -132,9 +161,9 @@ async function performUndo(){
 }
 async function performRedo(){
   if(!redoStack.length){ showToast('لا توجد عملية للتقدم إليها'); return; }
-  const label = redoStack[redoStack.length-1].label;
-  undoStack.push(currentStateSnapshot(label));
   const entry = redoStack.pop();
+  const scope = Object.keys(entry).filter(k=> k!=='label' && k!=='ts');
+  undoStack.push(currentStateSnapshot(entry.label, scope));
   await applyStateSnapshot(entry);
   await logAudit('edit','النظام', `تم التقدم لإعادة العملية: ${entry.label}`);
   updateUndoRedoButtons();
