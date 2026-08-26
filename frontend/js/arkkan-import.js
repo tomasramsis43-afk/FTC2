@@ -96,24 +96,28 @@ async function importArkkan(from,to, username, password, onProgress){
   return imported;
 }
 
-// ربط زر الواجهة
-document.addEventListener('DOMContentLoaded', ()=>{
-  const btn = document.getElementById('btn-arkkan-import');
-  if(!btn) return;
-  btn.addEventListener('click', async ()=>{
-    const user = document.getElementById('arkkan-user')?.value.trim();
-    const pass = document.getElementById('arkkan-pass')?.value;
-    const from = document.getElementById('arkkan-from')?.value;
-    const to = document.getElementById('arkkan-to')?.value;
-    const status = document.getElementById('arkkan-status');
-    const log = document.getElementById('arkkan-log');
-    if(!user || !pass){ alert('أدخل يوزر وباسورد أركان'); return; }
-    btn.disabled=true;
-    const onProgress = (msg)=>{ if(status) status.textContent=msg; if(log) log.textContent += msg+'\n'; console.log('[Arkkan]',msg); };
-    try{
-      await importArkkan(from,to,user,pass,onProgress);
-      showToast('تم الاستيراد من أركان');
-    }catch(e){ onProgress('خطأ: '+(e.message||e)); showToast('فشل الاستيراد'); console.error(e); }
-    finally{ btn.disabled=false; }
-  });
-});
+// ربط زر الواجهة (محمّل ديناميكياً عبر boot.js بعد DOMContentLoaded)
+(function bindArkkanButton(){
+  function bind(){
+    const btn = document.getElementById('btn-arkkan-import');
+    if(!btn){ setTimeout(bind,500); return; }
+    btn.addEventListener('click', async ()=>{
+      const user = document.getElementById('arkkan-user')?.value.trim();
+      const pass = document.getElementById('arkkan-pass')?.value;
+      const from = document.getElementById('arkkan-from')?.value;
+      const to = document.getElementById('arkkan-to')?.value;
+      const status = document.getElementById('arkkan-status');
+      const log = document.getElementById('arkkan-log');
+      if(!user || !pass){ alert('أدخل يوزر وباسورد أركان'); return; }
+      btn.disabled=true;
+      const onProgress = (msg)=>{ if(status) status.textContent=msg; if(log) log.textContent += msg+'\n'; console.log('[Arkkan]',msg); };
+      try{
+        await importArkkan(from,to,user,pass,onProgress);
+        showToast('تم الاستيراد من أركان');
+      }catch(e){ onProgress('خطأ: '+(e.message||e)); showToast('فشل الاستيراد'); console.error(e); }
+      finally{ btn.disabled=false; }
+    });
+    console.log('[Arkkan] زر الاستيراد جاهز');
+  }
+  bind();
+})();
