@@ -12,7 +12,11 @@ try {
   const cfgPath = require('path').join(__dirname, 'config.json');
   if (require('fs').existsSync(cfgPath)) {
     const cfg = JSON.parse(require('fs').readFileSync(cfgPath, 'utf8'));
-    if (cfg.serverUrl) REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
+    if (cfg.serverUrl && /^https:\/\//.test(cfg.serverUrl)) {
+      REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
+    } else if (cfg.serverUrl) {
+      console.warn('[Config] serverUrl must start with https:// — ignoring:', cfg.serverUrl);
+    }
   }
 } catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
 // نفس ملفات الواجهة اللي تتحدّث فعلياً (بلا الأيقونات والـ manifest الثابتة اللي
@@ -33,7 +37,7 @@ try {
 // مش موجود أصلاً في نسخة Electron). كذلك أُزيل module-zatca.js من هنا لأنه لم يعد
 // مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
-  'app.html', 'styles.css', 'sw.js', 'sw-register.js',
+  'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
@@ -91,22 +95,31 @@ async function prepareAssets() {
   userAssetsDir = path.join(app.getPath('userData'), 'app-assets');
   try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
   clearStaleAssetsIfVersionChanged();
-  checkForFrontendUpdate().catch(() => {}); // في الخلفية، لا يوقف فتح البرنامج
 }
 
+// يتحقق من ملفات الواجهة على السيرفر الحي، ويحدّث المخزَّن محلياً فقط للملفات
+// اللي اتغيّرت فعلاً (بمقارنة المحتوى)، ويرجّع true لو حصل أي تغيير حقيقي —
+// عشان اللي بينادي الدالة يقرر هل يعمل reload للنافذة المفتوحة بالفعل أو لأ.
 async function checkForFrontendUpdate() {
+  let changed = false;
   for (const file of SYNCED_FILES) {
     try {
       const remote = await fetchText(`${REMOTE_BASE}/${file}`);
       // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
       if (remote && remote.length > 20) {
         const destPath = path.join(userAssetsDir, file);
-        // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
-        fs.mkdirSync(path.dirname(destPath), { recursive: true });
-        fs.writeFileSync(destPath, remote, 'utf8');
+        let existing = null;
+        try { existing = fs.readFileSync(destPath, 'utf8'); } catch (e) {}
+        if (existing !== remote) {
+          // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
+          fs.mkdirSync(path.dirname(destPath), { recursive: true });
+          fs.writeFileSync(destPath, remote, 'utf8');
+          changed = true;
+        }
       }
     } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
   }
+  return changed;
 }
 
 // خادم محلي صغير يقدّم ملفات الواجهة من داخل التطبيق — بهذا الشكل تفتح
@@ -119,6 +132,11 @@ async function checkForFrontendUpdate() {
 function startLocalServer() {
   return new Promise((resolve, reject) => {
     const srv = express();
+    srv.use((req, res, next) => {
+      // تحصين إضافي: منع أي محاولة تجاوز للبروكسي
+      if (req.path.includes('..')) return res.status(400).end();
+      next();
+    });
 
     // ---- بروكسي شفاف لكل طلبات /api/* إلى السيرفر الحقيقي على Render ----
     // قبل هذا التعديل كانت الواجهة بتعمل fetch مباشرة لعنوان Render (أصل http مختلف
@@ -159,6 +177,38 @@ function startLocalServer() {
       });
     });
 
+    // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
+    // يسمح للواجهة بسحب بيانات الحقائب المصروفة مباشرة من arkkanapp.net مع الحفاظ على الكوكيز
+    srv.use('/arkkan', (req, res) => {
+      const targetPath = req.url; // يحتفظ بالمسار كما هو /Municipal/Disbursed-bags.aspx
+      const targetUrl = 'https://arkkanapp.net' + targetPath;
+      const chunks = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const headers = Object.assign({}, req.headers);
+        delete headers.host;
+        delete headers.connection;
+        headers['host'] = 'arkkanapp.net';
+        if (body.length) headers['content-length'] = String(body.length);
+        const u = new URL(targetUrl);
+        const proxyReq = https.request(
+          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers },
+          proxyRes => {
+            // تمرير كوكيز الجلسة كما هي
+            res.writeHead(proxyRes.statusCode, proxyRes.headers);
+            proxyRes.pipe(res);
+          }
+        );
+        proxyReq.on('error', err => {
+          if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('Arkkan proxy error: ' + err.message);
+        });
+        if (body.length) proxyReq.write(body);
+        proxyReq.end();
+      });
+    });
+
     // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت
     // تعتمد على الكاش المتصفحي القياسي (HTTP disk cache) للردود القادمة من هذا
     // الخادم المحلي — ولأن express.static افتراضياً لا يرسل Cache-Control (فقط
@@ -170,6 +220,8 @@ function startLocalServer() {
     // الحل: نجبر كل رد من هذا الخادم (HTML/JS/CSS) على عدم التخزين مؤقتاً إطلاقاً،
     // فتُعاد قراءة الملف من القرص (المُحدَّث دوماً بواسطة checkForFrontendUpdate)
     // فى كل تحميل للصفحة، بلا أي احتمال لتقديم نسخة قديمة من كاش المتصفح.
+    // (لاحظ: هذا الميدل وير كان بالفعل مضافاً بشكل شبه مطابق من جلسة/تعديل آخر —
+    // تم توحيدهما هنا فى نسخة واحدة بدل تكرار middleware مرتين لنفس الغرض)
     srv.use((req, res, next) => {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
@@ -205,6 +257,10 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
+      enableRemoteModule: false,
       // مبقاش لازم webSecurity:false: كل طلبات /api بقت بتروح لنفس أصل الصفحة
       // (127.0.0.1) عبر البروكسي المحلي في startLocalServer، فمفيش أصل مختلف
       // يستدعي تعطيل فحص الأمان في المتصفح المدمج أصلاً.
@@ -252,6 +308,16 @@ if (!gotTheLock) {
     await prepareAssets();
     await startLocalServer();
     createWindow();
+
+    // فحص التحديث بيتنفّذ بعد ما النافذة اتفتحت (مش قبلها) عشان الفتح يفضل فوري
+    // ومايستناش على شبكة الإنترنت. لو اتلاقى تغيير حقيقي في أي ملف، نعمل reload
+    // للنافذة المفتوحة فعلاً تلقائياً — فالمستخدم بياخد آخر نسخة من غير ما يحتاج
+    // يقفل البرنامج ويفتحه تاني.
+    checkForFrontendUpdate().then((changed) => {
+      if (changed && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reload();
+      }
+    }).catch(() => {});
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

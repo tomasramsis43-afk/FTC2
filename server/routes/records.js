@@ -35,8 +35,9 @@ router.get('/api/clients', requireAuth, async (req, res) => {
       where.push(`NOT EXISTS (SELECT 1 FROM client_records cr WHERE cr.id = clients_rows.id AND cr.origin = 'reception' AND cr.status = 'pending')`);
     }
     if (req.query.search) {
-      where.push(`(name ILIKE $${i} OR client_id ILIKE $${i} OR refer_num ILIKE $${i} OR invoice_no ILIKE $${i})`);
-      params.push('%' + req.query.search + '%'); i++;
+      const escSearch = String(req.query.search).replace(/[%_\\]/g, '\\$&');
+      where.push(`(name ILIKE $${i} ESCAPE '\\' OR client_id ILIKE $${i} ESCAPE '\\' OR refer_num ILIKE $${i} ESCAPE '\\' OR invoice_no ILIKE $${i} ESCAPE '\\')`);
+      params.push('%' + escSearch + '%'); i++;
     }
     if (req.query.nationality) { where.push(`nationality = $${i}`); params.push(req.query.nationality); i++; }
     if (req.query.courseType) { where.push(`course_type = $${i}`); params.push(req.query.courseType); i++; }
@@ -46,15 +47,43 @@ router.get('/api/clients', requireAuth, async (req, res) => {
     const sortCols = { name: 'name', date: 'reg_date', clientId: 'client_id', courseType: 'course_type', nationality: 'nationality' };
     const sortCol = sortCols[req.query.sort] || 'name';
     const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
+    // Keyset pagination: إذا أرسل cursor (id آخر صف من الصفحة السابقة) نستخدمه بدل OFFSET للصفحات العميقة
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
+    let cursorSql = '';
+    let cursorParams = [];
+    if(cursor){
+      cursorSql = ` AND ((${sortCol} > $${i} ) OR (${sortCol} = $${i} AND id > $${i+1}))`;
+      // للتبسيط: cursor يحمل قيمة sortCol + id مشفرة base64 — fallback لـ OFFSET لو فشل التحليل
+      try{
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString());
+        cursorParams = [decoded.val, decoded.id];
+        i+=2;
+      }catch{ cursorSql=''; cursorParams=[]; }
+    }
     const totalR = await pool.query(`SELECT COUNT(*) FROM clients_rows ${whereSql}`, params);
-    const rowsR = await pool.query(
-      `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
-      [...params, pageSize, (page - 1) * pageSize]
-    );
+    let rowsR;
+    if(cursorSql){
+      rowsR = await pool.query(
+        `SELECT data, ${sortCol} as sc, id FROM clients_rows ${whereSql}${cursorSql} ORDER BY ${sortCol} ${order} NULLS LAST, id ASC LIMIT $${i}`,
+        [...params, ...cursorParams, pageSize]
+      );
+    } else {
+      rowsR = await pool.query(
+        `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
+        [...params, pageSize, (page - 1) * pageSize]
+      );
+    }
+    // nextCursor للـ keyset pagination
+    let nextCursor = null;
+    if(rowsR.rows.length === pageSize){
+      const last = rowsR.rows[rowsR.rows.length-1];
+      const val = last.sc !== undefined ? last.sc : (last.data ? last.data[sortCol] : null);
+      nextCursor = Buffer.from(JSON.stringify({val, id: last.id || last.data?.id || ''})).toString('base64url');
+    }
     res.json({
       rows: rowsR.rows.map(r => r.data),
       total: Number(totalR.rows[0].count),
-      page, pageSize,
+      page, pageSize, nextCursor
     });
   } catch (e) {
     console.error(e);
@@ -277,9 +306,9 @@ router.delete('/api/storage/:key', requireAuth, requireRole('admin'), async (req
 });
 
 router.get('/api/storage', requireAuth, async (req, res) => {
-  const prefix = req.query.prefix || '';
+  const prefix = String(req.query.prefix || '').replace(/[%_\\]/g, '\\$&');
   try {
-    const r = await pool.query('SELECT key FROM kv_store WHERE key LIKE $1', [prefix + '%']);
+    const r = await pool.query('SELECT key FROM kv_store WHERE key LIKE $1 ESCAPE \'\\\'', [prefix + '%']);
     res.json({ keys: r.rows.map(x => x.key) });
   } catch (e) {
     console.error(e);
@@ -298,35 +327,8 @@ router.get('/api/storage', requireAuth, async (req, res) => {
    بعينه مطبَّقة فى الواجهة كما كانت دائماً (canDeleteClientRecord وغيرها)؛ هذه
    النقاط تحتاج requireAuth فقط، تماماً كحفظ مفتاح kv_store('clients') سابقاً. */
 
-// عزل بيانات الاستقبال (origin/status/created_by، راجع تعليق CREATE TABLE client_records فى
-// schema.sql): الأدمن فقط يرى كل شيء (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال
-// يرى فقط سجلاته هو شخصياً (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول
-// تماماً عن بقية مستخدمي الاستقبال، وليس مساحة مشتركة بينهم. أي دور آخر (staff/accountant) يرى
-// فقط السجلات المعتمدة status='confirmed' (نفس السلوك القديم تماماً بالنسبة له).
-function clientRecordsVisibilitySql(role, username) {
-  if (role === 'admin') return { where: '', params: [] };
-  // مستخدم الاستقبال يرى سجلاته المعلّقة/المعتمدة دائماً، وسجلاته المرفوضة أيضاً لكن لمدة 15 يوماً
-  // فقط من وقت الرفض (raised_at)، ليعرف أن الأدمن رفضها قبل أن تُحذف نهائياً تلقائياً بعد المهلة.
-  if (role === 'reception') return { where: `WHERE origin = $1 AND created_by = $2 AND (status <> 'rejected' OR rejected_at > now() - INTERVAL '15 days')`, params: ['reception', username] };
-  return { where: 'WHERE status = $1', params: ['confirmed'] };
-}
-
-// نفس عزل العملاء تماماً لكن للتصنيفات العامة (collection_records): الأدمن يرى كل شيء
-// (عام + مسودات/معتمدات كل الاستقبال). كل مستخدم استقبال يرى سجلاته هو شخصياً فقط
-// (origin='reception' AND created_by = اسم المستخدم الحالي) — معزول حتى عن بقية مستخدمي
-// الاستقبال. وأي دور آخر (staff/accountant) يرى فقط السجلات المعتمدة status='confirmed'
-// (نفس السلوك القديم تماماً بالنسبة له). الصيغة بصيغة AND عمداً (لا تبدأ بـ WHERE) لأن
-// كل مسارات السجلات العامة تضيفها لشرط collection موجود أصلاً.
-function recordsVisibilitySql(role, username) {
-  if (role === 'admin') return { where: '', params: [] };
-  if (role === 'reception') return { where: 'AND origin = $2 AND created_by = $3', params: ['reception', username] };
-  return { where: 'AND status = $1', params: ['confirmed'] };
-}
-// التصنيفات التشغيلية التي تكتبها شاشات الاستقبال فعلاً (العملاء/الخزنة/المخزون/الدورات):
-// سجلاتها المضافة من دور 'reception' تبدأ معلّقة (pending) بانتظار اعتماد الأدمن. بقية
-// التصنيفات (سجلات تاريخية/إعدادات) لا تدخل نظام الاعتماد إطلاقاً حتى لا تُقيَّد عمليات
-// نظامية جانبية (سجل التدقيق، سجل الإلغاءات...) بموافقات منفصلة بلا معنى.
-const APPROVAL_GATED_COLLECTIONS = ['vaultTx', 'bagStock', 'courseSessions'];
+// عزل بيانات الاستقبال — مستخرج لـ helpers.js لتقليل حجم هذا الملف (تقسيم منطقي بدون كسر)
+const { clientRecordsVisibilitySql, recordsVisibilitySql, APPROVAL_GATED_COLLECTIONS } = require('./helpers');
 
 router.get('/api/client-records', requireAuth, async (req, res) => {
   try {
@@ -639,14 +641,19 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
     // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
     // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
     // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود.
-    // القيم تُضمَّن نصياً آمنة (الدور/اسم المستخدم من الـ JWT مع تهريب علامات الاقتباس) لأن
-    // معاملات pg داخل CREATE TEMP TABLE AS SELECT مع شرط OR لا تُحدَّد أنواعها فيفشل التحليل.
-    const esc = s => String(s).replace(/'/g, "''");
-    const guard = req.user.role === 'reception'
-      ? `('${esc(req.user.role)}' = 'reception' AND cr.origin = 'reception' AND cr.created_by = '${esc(req.user.username)}')`
-      : req.user.role === 'admin'
-      ? `'${esc(req.user.role)}' = 'admin'`
-      : `cr.status = 'confirmed'`;
+    // إصلاح أمني: استخدم معاملات مُقيّدة (parameterized) بدل تضمين نصي مع esc() لتجنب حقن SQL.
+    let guardSql;
+    let guardParams = [];
+    if (req.user.role === 'reception') {
+      guardSql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
+      guardParams = [req.user.role, req.user.username];
+    } else if (req.user.role === 'admin') {
+      guardSql = `($1::text = 'admin')`;
+      guardParams = [req.user.role];
+    } else {
+      guardSql = `cr.status = 'confirmed'`;
+      guardParams = [];
+    }
     const payload = JSON.stringify(records.map(r => ({
       id: String(r.id),
       enc: String(r.enc),
@@ -671,7 +678,8 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
        SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
        FROM _inc i
        JOIN client_records cr ON cr.id = i.id
-       WHERE cr.version <> i.known_version OR NOT (${guard})`
+       WHERE cr.version <> i.known_version OR NOT (${guardSql})`,
+      guardParams
     );
     // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
     // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق
@@ -749,12 +757,7 @@ router.get('/api/storage-versions', requireAuth, async (req, res) => {
 /* ---------------- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (Generic Collection Records) ----------------
    نفس فكرة /api/client-records بالضبط لكن قابلة لإعادة الاستخدام لأي شيت آخر — سجل واحد يتغيّر
    = صف واحد يُرفع، بدل رفع كل مصفوفة الشيت كاملة عند أي تعديل بسيط. */
-const ALLOWED_COLLECTIONS = [
-  'bagStock','vaultTx','deletedVaultTx','vaultDenomTx','bankStatementRows','deletedInvoices',
-  'courseSessions','auditLog','companies','companyTransfers','journalEntries','chartOfAccounts',
-  'journalDE','budgetEntries','suppliers','purchases','manualSalesInvoices','scheduledVaultTx',
-  'followUpTasks',
-];
+const { ALLOWED_COLLECTIONS } = require('./helpers');
 function collectionRoleAllowed(role, collection) {
   if (collection in RESTRICTED_STORAGE_KEYS) {
     const view = RESTRICTED_STORAGE_KEYS[collection];
@@ -1034,15 +1037,22 @@ router.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter
     // السجلات المرفوعة من الاستقبال في التصنيفات التشغيلية تبدأ معلّقة (نفس منطق PUT الفردي)،
     // مع حماية العزل حسب الدور في التعارضات (نفس guard الخاص بـ client-records/bulk-migrate):
     // الاستقبال يلمس سجلاته الشخصية فقط، staff/accountant يلمسون المعتمد فقط، والأدمن بلا قيود.
+    // إصلاح أمني: معاملات مُقيّدة بدل تضمين نصي.
     const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
-    const esc = s => String(s).replace(/'/g, "''");
-    const guard = req.user.role === 'reception'
-      ? `('${esc(req.user.role)}' = 'reception' AND cr.origin = 'reception' AND cr.created_by = '${esc(req.user.username)}')`
-      : req.user.role === 'admin'
-      ? `'${esc(req.user.role)}' = 'admin'`
-      : `cr.status = 'confirmed'`;
+    let guard2Sql;
+    let guard2Params = [];
+    if (req.user.role === 'reception') {
+      guard2Sql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
+      guard2Params = [req.user.role, req.user.username];
+    } else if (req.user.role === 'admin') {
+      guard2Sql = `($1::text = 'admin')`;
+      guard2Params = [req.user.role];
+    } else {
+      guard2Sql = `cr.status = 'confirmed'`;
+      guard2Params = [];
+    }
     const payload = JSON.stringify(records.map(r => ({ id: String(r.id), enc: String(r.enc), version: Number.isInteger(r.version) ? r.version : 0 })));
     await client.query('BEGIN');
     await client.query(
@@ -1052,13 +1062,17 @@ router.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter
       [payload]
     );
     // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
+    // guard مُقيَّد بمعاملات لتجنب حقن SQL
+    const confParams = [req.params.collection, ...guard2Params];
+    // نحتاج إزاحة أرقام المعاملات في guard لأن $1 محجوز لـ collection — نستخدم placeholder لتجنب التصادم
+    const guard2Shifted = guard2Sql.replace(/\$2/g, '__TMP_DOLLAR2__').replace(/\$1/g, '$2').replace(/__TMP_DOLLAR2__/g, '$3');
     await client.query(
       `CREATE TEMP TABLE _conf ON COMMIT DROP AS
        SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
        FROM _inc i
        JOIN collection_records cr ON cr.collection = $1 AND cr.id = i.id
-       WHERE cr.version <> i.known_version OR NOT (${guard})`,
-      [req.params.collection]
+       WHERE cr.version <> i.known_version OR NOT (${guard2Shifted})`,
+      confParams
     );
     // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
     // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق

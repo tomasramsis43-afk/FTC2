@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole } = require('../auth');
 const zatca = require('../zatca/lib');
+const { zatcaLimiter } = require('../rate-limiters');
 const { alertAdmins } = require('../services/email');
 
 /* ================= ربط هيئة الزكاة والضريبة والجمارك (فاتورة) ================= */
@@ -19,7 +20,7 @@ router.get('/api/zatca/status', requireAuth, async (req, res) => {
 });
 
 // تسجيل/تحديث EGS والحصول على شهادة الامتثال (compliance CSID) — يتطلب OTP من بوابة فاتورة
-router.post('/api/zatca/onboard', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/api/zatca/onboard', requireAuth, requireRole('admin'), zatcaLimiter, async (req, res) => {
   const { environment = 'sandbox', otp, orgProfile } = req.body || {};
   if (!otp || !orgProfile) return res.status(400).json({ error: 'يلزم إرسال OTP وبيانات المنشأة (orgProfile)' });
   try {
@@ -32,7 +33,7 @@ router.post('/api/zatca/onboard', requireAuth, requireRole('admin'), async (req,
 });
 
 // طلب شهادة الإنتاج (PCSID) بعد اجتياز فحوصات التوافق
-router.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), zatcaLimiter, async (req, res) => {
   const { environment = 'sandbox', complianceRequestId } = req.body || {};
   if (!complianceRequestId) return res.status(400).json({ error: 'يلزم إرسال complianceRequestId' });
   try {
@@ -48,7 +49,7 @@ router.post('/api/zatca/production-csid', requireAuth, requireRole('admin'), asy
 // مقيَّدة على الأدوار التي تملك فعلياً شاشة الخزنة/العملاء التي تُرسل منها (admin/accountant/staff) —
 // الاستقبال محروم لعدم امتلاكه أي من هذه الشاشات أصلاً، ويمنع إرسال فواتير/سجلات ضريبية مزوّرة
 // عبر طلب مباشر بأقل صلاحية (إغلاق ثغرة غياب رقابة الدور على هذه النقطة).
-router.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
+router.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant', 'staff'), zatcaLimiter, async (req, res) => {
   const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime } = req.body || {};
   if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
     return res.status(400).json({ error: 'بيانات الفاتورة غير مكتملة' });
@@ -77,7 +78,7 @@ router.post('/api/zatca/invoice', requireAuth, requireRole('admin', 'accountant'
 });
 
 // إرسال إشعار دائن (مردود مبيعات) — نفس رقابة الدور أعلاه (ممنوع عن الاستقبال).
-router.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 'staff'), async (req, res) => {
+router.post('/api/zatca/return', requireAuth, requireRole('admin', 'accountant', 'staff'), zatcaLimiter, async (req, res) => {
   const { environment = 'sandbox', clientType, sourceRef, lineItems, issueDate, issueTime, canceledInvoiceNumber, reason } = req.body || {};
   if (!sourceRef || !Array.isArray(lineItems) || !lineItems.length) {
     return res.status(400).json({ error: 'بيانات المردود غير مكتملة' });

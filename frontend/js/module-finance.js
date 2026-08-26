@@ -1252,14 +1252,12 @@ function toggleVaultFields(){
   $('#wrap-recipient').style.display = isOut ? '' : 'none';
   $('#wrap-refno').style.display = isOut ? '' : 'none';
   $('#wrap-netinvoice').style.display = $('#vf-destination').value==='network' ? '' : 'none';
-  $('#wrap-bagdeposit-toggle').style.display = isOut ? '' : 'none';
-  $('#wrap-bagdeposit-qty').style.display = (isOut && $('#vf-bagdeposit').checked) ? '' : 'none';
-  if(!isOut) $('#vf-bagdeposit').checked = false;
+  $('#wrap-bagdeposit-qty').style.display = (isOut && $('#vf-category').value==='حقائب') ? '' : 'none';
 }
 $('#vf-type').addEventListener('change', toggleVaultFields);
 $('#vf-linked').addEventListener('change', toggleVaultFields);
 $('#vf-destination').addEventListener('change', toggleVaultFields);
-$('#vf-bagdeposit').addEventListener('change', toggleVaultFields);
+$('#vf-category').addEventListener('change', toggleVaultFields);
 
 /* ---------------- تصنيف تلقائي للمصروفات بالذكاء الاصطناعي ----------------
    يقرأ اسم مستلم المبلغ + الملاحظات + رقم المستند + المبلغ، ويقترح أنسب تصنيف
@@ -1415,7 +1413,6 @@ function openVaultModal(id){
   $('#vf-notes').value = t?.notes || '';
   $('#vf-destination').value = t?.destination || 'vault';
   $('#vf-netinvoice').value = t?.networkInvoice || '';
-  $('#vf-bagdeposit').checked = false;
   toggleVaultFields();
   $('#vault-overlay').classList.add('show'); SoundFX.open();
 }
@@ -1525,14 +1522,11 @@ $('#vault-form').addEventListener('submit', async e=>{
     }
   }
 
-  // إذا فُعّلت خانة "إيداع في حساب/مخزون الحقائب" ضمن مصروف، يُضاف المبلغ لرصيد حساب الحقائب
+  // إذا كان تصنيف المصروف "حقائب"، يُضاف المبلغ لرصيد حساب الحقائب تلقائياً (بلا حاجة لخانة تفعيل يدوية)
   // ويُحتسب عدد الحقائب المضافة تلقائياً حسب السعر الثابت للحقيبة (نفس منطق تمويل المخزون).
-  // يعمل عند الإضافة وعند التعديل على حد سواء: الخانة (#vf-bagdeposit) تُصفَّر دائماً عند فتح
-  // نافذة التعديل (راجع أعلى الدالة)، فتفعيلها يدوياً أثناء التعديل يعني نية صريحة جديدة من
-  // المستخدم بربط هذه الحركة بمخزون الحقائب الآن — ولا يوجد أي مرجع سابق محفوظ يربط حركة الخزنة
-  // بإيداع سابق فى مخزون الحقائب أصلاً، فلا خطر تكرار من إتاحتها هنا أيضاً (كانت مُقيَّدة بالخطأ
-  // بشرط !wasVaultEdit فلا تعمل إطلاقاً أثناء التعديل رغم ظهور الخانة نفسها فى النموذج).
-  if(isOut && $('#vf-bagdeposit').checked){
+  // يعمل فقط عند الإضافة (!wasVaultEdit) وليس عند التعديل، لتفادي تكرار الإيداع في مخزون الحقائب
+  // كل مرة تُعدَّل فيها نفس الحركة المحفوظة أصلاً بتصنيف "حقائب".
+  if(isOut && !wasVaultEdit && $('#vf-category').value==='حقائب'){
     snapshotState(`إيداع في حساب الحقائب عبر حركة مصروف: ${fmt(amount)}`);
     bagStock.push({
       id: uid(), createdBy: currentUser,

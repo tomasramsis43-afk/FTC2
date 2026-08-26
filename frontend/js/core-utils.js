@@ -642,17 +642,15 @@ function _scanAutoLabelTables(root){
     document.querySelectorAll('.table-scroll').forEach(el=>{
       mo.observe(el, { childList:true, subtree:true });
     });
-    // شاشات (views) بتتولّد وتُضاف للـ DOM لاحقاً (بعد تسجيل الدخول مثلاً) — إعادة
-    // فحص دورية خفيفة تلتقط أي .table-scroll جديد يظهر لاحقاً ولسه مش بيتراقَب
-    let lastCount = document.querySelectorAll('.table-scroll').length;
-    setInterval(()=>{
+    // نراقب body مباشرة لأي جدول جديد بدل فحص دوري كل 2 ثانية (كان يستهلك CPU)
+    const bodyMo = new MutationObserver(()=>{
       const els = document.querySelectorAll('.table-scroll');
-      if(els.length !== lastCount){
-        lastCount = els.length;
-        els.forEach(el=>{ mo.observe(el, { childList:true, subtree:true }); });
-        _scanAutoLabelTables(document);
-      }
-    }, 2000);
+      els.forEach(el=>{
+        try{ mo.observe(el, { childList:true, subtree:true }); }catch(e){}
+      });
+      _scanAutoLabelTables(document);
+    });
+    bodyMo.observe(document.body, { childList:true, subtree:true });
   };
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();

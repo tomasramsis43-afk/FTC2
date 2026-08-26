@@ -6,34 +6,44 @@ on:
     paths:
       - 'server/package.json'
       - 'server/package-lock.json'
+      - 'electron-desktop/package.json'
+      - 'electron-desktop/package-lock.json'
   pull_request:
     branches: [main]
     paths:
       - 'server/package.json'
       - 'server/package-lock.json'
+      - 'electron-desktop/package.json'
+      - 'electron-desktop/package-lock.json'
   schedule:
     # أسبوعياً كل يوم أحد الساعة 6 صباحاً UTC، لرصد أي ثغرة جديدة حتى لو محدش عدّل package.json
     - cron: '0 6 * * 0'
   workflow_dispatch: {}
 
 jobs:
-  npm-audit:
+  npm-audit-server:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: server
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      # audit-ci بدل npm audit مباشرة، لأنه بيسمح بـ allowlist لثغرات مقبولة (معالجة يدوياً
-      # زي fast-xml-parser عبر zatca-xml-js: لا يوجد fix متاح، لكن الخطر مُخفَّف داخلياً فى
-      # server/zatca/lib.js عبر منع أي sequence تسمح بكسر الـ XML). أي ثغرة جديدة غير موجودة
-      # فى الـ allowlist ستُفشل الـ build فوراً.
-      - name: npm audit (moderate+, مع استثناء الثغرات المقبولة يدوياً)
+      - name: npm audit server (moderate+)
         run: |
           npx --yes audit-ci --moderate \
             --allowlist GHSA-gh4j-gqv2-49f6
+  npm-audit-desktop:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: electron-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm audit desktop (moderate+)
+        run: npx --yes audit-ci --moderate

@@ -2,13 +2,23 @@
 // يتم التحميل ديناميكياً حتى لا نغيّر ترتيب وحدات النظام الحالية أو نكسر الإقلاع.
 (function loadBusinessRuleModules(){
   try{
-    ['health-education-validity.js','health-education-ui.js','bag-workflow.js'].forEach(file=>{
+    const ver = (window.CACHE_VERSION || '12');
+    ['health-education-validity.js','health-education-ui.js','bag-workflow.js','arkkan-import.js'].forEach(file=>{
       const s = document.createElement('script');
-      s.src = 'js/' + file;
+      s.src = 'js/' + file + '?v=' + ver;
       s.defer = false;
       s.async = false;
+      s.onerror = ()=> console.error('[BusinessRules] Failed to load:', file);
       document.head.appendChild(s);
     });
+    // إصلاح: زر مسح الفلاتر في empty-state كان inline onclick (يكسر CSP)
+    setTimeout(()=>{
+      const btn = document.getElementById('btn-clear-filters-empty');
+      if(btn) btn.addEventListener('click', ()=>{
+        const b=document.getElementById('btn-clear-all-filters');
+        if(b) b.click();
+      });
+    }, 500);
   }catch(e){ console.error('[BusinessRules] Failed to load modules:', e); }
 })();
 

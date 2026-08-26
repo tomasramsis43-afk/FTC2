@@ -79,7 +79,10 @@ app.use(compression({
     return true;
   }
 }));
-app.use(express.json({ limit: '25mb' })); // بيانات مشفّرة كاملة (آلاف العملاء) قد تكون كبيرة نسبياً
+const bulkJsonParser = express.json({ limit: '10mb' });
+app.use('/api/client-records/bulk-migrate', bulkJsonParser);
+app.use('/api/records/:collection/bulk-migrate', bulkJsonParser);
+app.use(express.json({ limit: '2mb' })); // إصلاح أمني/أداء: كان 25mb يسمح بهجوم OOM. ترتيب bulk قبل العام حتى لا يحجب 10mb
 
 /* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
    تسجيل دخول مسبق. نحدّد بالـ IP لأن هذين المسارين تحديداً هما هدف مباشر

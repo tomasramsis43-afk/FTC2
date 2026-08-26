@@ -6,8 +6,8 @@
    IBM Plex Mono للأرقام. توهجات لونية خفيفة في الزوايا وخلف العناصر النشطة.
    ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+/* Material Symbols محذوف: التطبيق يستخدم SVG inline فقط، لا يحتاج تحميل 80KB خط أيقونات */
+/* Cairo/Tajawal/IBM محملة عبر <link> في app.html مع preconnect — لا نكرر التحميل هنا */
 
 /* ============= نبض DS TOKENS v1 — Light (فاتح) =============
    الأسماء الكانونية (--brand-*, --text-primary, --warning...) هي المرجع الجديد.
@@ -187,14 +187,10 @@ body.dark-theme {
 /* ════ Dark theme: أيقونات sidebar مع دوائر في الـ dark theme ════ */
 body.dark-theme nav.tabs button[data-view]:not(.active):hover svg {
   color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 15%, #1a2038);
 }
 
 body.dark-theme nav.tabs button[data-view].active svg {
-  color: #0f1326;
-  background: var(--gold);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent),
-              0 4px 12px rgba(240, 168, 87, 0.35);
+  color: inherit;
 }
 
 body.dark-theme select,
@@ -227,7 +223,9 @@ select option:focus {
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--navy) 55%, transparent) transparent;
+}
+@supports (scrollbar-color: auto) {
+  * { scrollbar-color: color-mix(in srgb, var(--navy) 55%, transparent) transparent; }
 }
 
 ::-webkit-scrollbar {
@@ -259,7 +257,8 @@ body {
     radial-gradient(1000px 460px at 88% -12%, color-mix(in srgb, var(--navy) 5%, transparent), transparent 60%),
     radial-gradient(800px 420px at -10% 25%, color-mix(in srgb, var(--gold) 5%, transparent), transparent 60%),
     var(--bg);
-  background-attachment: fixed;
+  /* background-attachment:fixed يسبب jank على الموبايل — نستخدم scroll كافتراضي */
+  background-attachment: scroll;
   color: var(--text);
   font-family: var(--font-display), 'Tajawal', system-ui, sans-serif;
   font-weight: 500;
@@ -348,14 +347,10 @@ body {
 /* ════ Light theme: أيقونات sidebar مع دوائر في الـ light theme ════ */
 body:not(.dark-theme) nav.tabs button[data-view]:not(.active):hover svg {
   color: #d97706;
-  background: color-mix(in srgb, #f59e0b 12%, #f1f5f9);
 }
 
 body:not(.dark-theme) nav.tabs button[data-view].active svg {
-  color: #ffffff;
-  background: #f59e0b;
-  box-shadow: 0 0 0 1px color-mix(in srgb, #f59e0b 40%, transparent),
-              0 3px 10px rgba(245, 158, 11, 0.25);
+  color: inherit;
 }
 
 section.view.active {
@@ -755,12 +750,9 @@ nav.tabs button[data-view] svg {
   width: var(--icon-box);
   height: var(--icon-box);
   padding: 9.5px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--sidebar-bg-alt) 80%, var(--text-muted));
+  color: var(--sidebar-text-muted);
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-              color 0.25s ease-out,
-              background 0.25s ease-out,
-              box-shadow 0.25s ease-out;
+              color 0.25s ease-out;
   will-change: transform;
   -webkit-user-drag: none;
   user-drag: none;
@@ -769,20 +761,15 @@ nav.tabs button[data-view] svg {
   pointer-events: none;
 }
 
-/* Hover effect: scale + background color change + glow */
+/* Hover effect: scale + color change فقط (بدون أي خلفية/إطار خلف الأيقونة) */
 nav.tabs button[data-view]:not(.active):hover svg {
   transform: scale(1.08);
   color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 15%, var(--sidebar-bg-alt));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent);
 }
 
-/* Active state: solid gold background + white icon */
+/* Active state: بدون أي خلفية/إطار خلف الأيقونة — تاخد لون نص الزرار النشط تلقائياً (تباين واضح فوق الخلفية الكهرمانية) */
 nav.tabs button[data-view].active svg {
-  color: #ffffff;
-  background: var(--gold);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent),
-              0 4px 12px color-mix(in srgb, var(--gold) 30%, transparent);
+  color: inherit;
 }
 
 /* Focus state for accessibility */
@@ -791,7 +778,7 @@ nav.tabs button[data-view]:focus-visible svg {
   outline-offset: 2px;
 }
 
-/* Collapsed sidebar: smaller circle, refined animation */
+/* Collapsed sidebar: أيقونة أصغر شوية */
 nav.tabs.collapsed button[data-view] {
   --icon-box: 36px;
 }
@@ -802,10 +789,9 @@ nav.tabs.collapsed button[data-view] svg {
 
 nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   transform: scale(1.06);
-  background: color-mix(in srgb, var(--gold) 12%, var(--sidebar-bg-alt));
 }
 
-/* Mobile: smaller circles */
+/* Mobile: أيقونة أصغر شوية */
 @media(max-width: 900px) {
   nav.tabs button[data-view] {
     --icon-box: 36px;
@@ -925,9 +911,9 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   left: 0;
   width: 340px;
   max-width: 88vw;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
@@ -1018,9 +1004,9 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
   top: calc(100% + 8px);
   left: 0;
   min-width: 210px;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);
@@ -1786,7 +1772,7 @@ table {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-  will-change: contents;
+  contain: content;
 }
 
 @media(max-width: 900px) {
@@ -1986,6 +1972,8 @@ body.density-compact .stamp {
 
 tbody tr {
   transition: background 0.12s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 52px;
 }
 
 tbody tr:hover {
@@ -2072,9 +2060,9 @@ tbody tr:hover {
   z-index: 55;
   min-width: 168px;
   max-width: 240px;
-  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.3);
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: var(--surface-solid);
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-hover), 0 16px 40px -16px rgba(0, 0, 0, 0.55);

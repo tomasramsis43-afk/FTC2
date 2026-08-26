@@ -35,6 +35,20 @@ const aiLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'طلبات ذكاء اصطناعي كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات كثيرة جداً، يرجى الانتظار قليلاً' },
+});
+const zatcaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات ZATCA كثيرة جداً، يرجى الانتظار قليلاً' },
+});
 
 // إرسال الإيميلات (فواتير/تقارير) يستهلك اتصال SMTP فعلي لكل طلب — حد معقول يكفي
 // الاستخدام العادي (إرسال فاتورة بعد كل تسجيل، تقرير بين الحين والآخر) دون فتح الباب
@@ -47,4 +61,4 @@ const emailLimiter = rateLimit({
   message: { error: 'طلبات إرسال إيميل كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
 
-module.exports = { authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter };
+module.exports = { authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter, apiLimiter, zatcaLimiter };
