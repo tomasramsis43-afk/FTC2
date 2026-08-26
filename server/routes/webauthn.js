@@ -52,13 +52,23 @@ setInterval(() => {
   }
 }, 60 * 1000).unref();
 
-// rpID (Relying Party ID) يجب أن يطابق تماماً الدومين الذي تُخدَّم منه الواجهة فى متصفح
-// المستخدم؛ نستنتجه ديناميكياً من ترويسة Origin/Host بدل تثبيته، حتى يعمل صحيحاً سواء على
-// دومين Render الافتراضي أو أي دومين مخصّص يُضاف لاحقاً بدون أي تعديل فى الكود.
+// rpID (Relying Party ID) يجب أن يطابق تماماً الدومين الذي تُخدَّم منه الواجهة.
+// إصلاح أمني: لا نثق بـ Host/Origin من العميل مباشرةً. إذا حُدد PUBLIC_ORIGIN أو ALLOWED_RP_IDS
+// في البيئة، نتحقق ضده و نرفض أي Host غير مسموح.
 function getRpIdAndOrigin(req) {
+  const allowedEnv = (process.env.PUBLIC_ORIGIN || process.env.ALLOWED_RP_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const allowedHosts = allowedEnv.map(v => { try { return new URL(v).hostname || v; } catch { return v; } }).filter(Boolean);
   const origin = req.headers.origin || `https://${req.headers.host}`;
   let hostname;
   try { hostname = new URL(origin).hostname; } catch (e) { hostname = req.hostname; }
+  // تحقق صارم: hostname يجب أن يكون أحرف/أرقام/نقطة/شرطة فقط
+  if (!/^[a-zA-Z0-9.-]+$/.test(hostname)) hostname = req.hostname;
+  if (allowedHosts.length && !allowedHosts.includes(hostname)) {
+    // في الإنتاج: استخدم أول Host مسموح بدلاً من Host المهاجم
+    hostname = allowedHosts[0];
+    const fixedOrigin = allowedEnv[0].startsWith('http') ? allowedEnv[0] : `https://${hostname}`;
+    return { rpID: hostname, origin: fixedOrigin };
+  }
   return { rpID: hostname, origin };
 }
 
@@ -184,7 +194,7 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
     if (!expectedChallenge) return res.status(400).json({ error: 'انتهت صلاحية محاولة الدخول، حاول من جديد' });
 
     // نتعرّف على صاحب الحساب من credential_id نفسه (الاستجابة لا تحمل اسم مستخدم إطلاقاً).
-    const credRow = await pool.query('SELECT * FROM webauthn_credentials WHERE credential_id = $1', [response.id]);
+    const credRow = await pool.query('SELECT id, username, credential_id, public_key, counter, transports FROM webauthn_credentials WHERE credential_id = $1', [response.id]);
     if (!credRow.rows.length) return res.status(400).json({ error: 'هذه البصمة غير مسجَّلة على هذا الحساب' });
     const cred = credRow.rows[0];
     const username = cred.username;
@@ -208,7 +218,7 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
       [verification.authenticationInfo.newCounter, cred.id]
     );
 
-    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [username]);
+    const userResult = await pool.query('SELECT id, username, password_hash, role, display_name, token_version, is_active, failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes FROM server_users WHERE username = $1', [username]);
     const user = userResult.rows[0];
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
@@ -276,7 +286,7 @@ router.post('/api/auth/webauthn/login-2fa', authLimiter, async (req, res) => {
     // استهلاك فوري قبل أي تحقق: محاولة واحدة لكل مسح بصمة.
     pendingSecondFactor.delete(pendingId);
 
-    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [entry.username]);
+    const userResult = await pool.query('SELECT id, username, password_hash, role, display_name, token_version, is_active, failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes FROM server_users WHERE username = $1', [entry.username]);
     const user = userResult.rows[0];
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });

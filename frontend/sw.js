@@ -28,11 +28,11 @@ const STATIC_ASSETS = [
 
 // تثبيت Service Worker وحفظ الموارد الثابتة
 self.addEventListener('install', event => {
-  console.log('[ServiceWorker] Installing...');
-  
+  if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') console.log('[ServiceWorker] Installing...');
+
   event.waitUntil(
     caches.open(CACHE_VERSION).then(cache => {
-      console.log('[ServiceWorker] Caching static assets');
+      if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') console.log('[ServiceWorker] Caching static assets');
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.log('[ServiceWorker] Cache addAll error:', err);
       });
@@ -44,7 +44,7 @@ self.addEventListener('install', event => {
 
 // تنظيف نسخ Service Worker القديمة
 self.addEventListener('activate', event => {
-  console.log('[ServiceWorker] Activating...');
+  if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') console.log('[ServiceWorker] Activating...');
   
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -328,21 +328,9 @@ async function getCacheSize() {
   return totalSize;
 }
 
-/**
- * Online/Offline events
- */
-self.addEventListener('online', () => {
-  console.log('[ServiceWorker] Online');
-  // ملاحظة: المزامنة الفعلية للبيانات المعلّقة تتم بالكامل داخل الصفحة نفسها
-  // (flushPendingWrites/flushPendingRecordWrites + backgroundSyncCheck كل دقيقتين)، وليس عبر
-  // الـ Service Worker — كان هنا مسار Background Sync قديم يرفع طابور pending المشترك
-  // وينشره على /api/sync (نقطة نهاية أُزيلت من السيرفر)، فكان إما يفشل بلا فائدة أو يمسح
-  // الطابور من تحت أقدام الصفحة وهي تستخدمه. أُزيل نهائياً.
-});
+// ملاحظة: أحداث online/offline لا تُطلق داخل Service Worker إطلاقاً (فقط window) — حُذفت المعالجات الميتة.
 
-self.addEventListener('offline', () => {
-  console.log('[ServiceWorker] Offline');
-});
-
-// قياس أداء الـ Service Worker
-console.log('[ServiceWorker] Loaded and ready to serve!');
+// قياس أداء الـ Service Worker — فقط في التطوير
+if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
+  console.log('[ServiceWorker] Loaded and ready to serve!');
+}

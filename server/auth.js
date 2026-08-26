@@ -35,7 +35,11 @@ const EMERGENCY_ADMIN_PASSWORD_HASH = process.env.EMERGENCY_ADMIN_PASSWORD_HASH 
 
 async function verifyEmergencyAdmin(username, password) {
   if (!EMERGENCY_ADMIN_USERNAME || !EMERGENCY_ADMIN_PASSWORD_HASH) return false;
-  if (username !== EMERGENCY_ADMIN_USERNAME) return false;
+  // مقارنة ثابتة الزمن لتجنب timing attack
+  try {
+    if (username.length !== EMERGENCY_ADMIN_USERNAME.length) return false;
+    if (!crypto.timingSafeEqual(Buffer.from(username), Buffer.from(EMERGENCY_ADMIN_USERNAME))) return false;
+  } catch { return false; }
   try {
     return await bcrypt.compare(password, EMERGENCY_ADMIN_PASSWORD_HASH);
   } catch (e) {
@@ -59,9 +63,10 @@ function signToken(user) {
     // أضفنا role داخل التوكن نفسه، حتى تصل صلاحية المستخدم (admin/staff) إلى الواجهة
     // فوراً بعد الدخول. tv (token_version) تُستخدم في requireAuth أدناه للتحقق من
     // أن هذا التوكن لم يُبطَل بعد (تسجيل خروج، تغيير كلمة مرور، تغيير صلاحية، حذف الحساب).
+    // إصلاح أمني: قُلّلت الصلاحية من 30 يوماً إلى 7 أيام لتقليل نافذة الخطر بعد التسريب.
     { sub: user.id, username: user.username, role: user.role || 'staff', tv: user.token_version || 0 },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 }
 
@@ -153,13 +158,17 @@ function verifyTotpToken(token, secret) {
     return !!otplib.verifySync({ secret, token: cleaned, epochTolerance: 1 }).valid;
   } catch (e) { return false; }
 }
-// أكواد احتياطية أحادية الاستخدام (10 أكواد، 8 أرقام لكل كود) — لحالة فقدان جهاز المصادقة.
+// أكواد احتياطية أحادية الاستخدام (10 أكواد، 12 حرف base62 لكل كود ~71bit entropy) — لحالة فقدان جهاز المصادقة.
 // تُخزَّن كـ bcrypt hash فقط، وتُستهلك (تُحذف) فور استخدام أي كود منها مرة واحدة.
-// أرقام عشوائية آمنة تشفيرياً (crypto.randomInt بدل Math.random — الأخير غير آمن لأكواد المصادقة).
 function generateBackupCodes(count = 10) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون 0/O/1/I لتجنب الالتباس
   const codes = [];
   for (let i = 0; i < count; i++) {
-    codes.push(String(crypto.randomInt(10000000, 100000000)));
+    let code = '';
+    const bytes = crypto.randomBytes(12);
+    for (let j = 0; j < 12; j++) code += chars[bytes[j] % chars.length];
+    // تنسيق XXXX-XXXX-XXXX لسهولة القراءة والنسخ
+    codes.push(code.slice(0,4) + '-' + code.slice(4,8) + '-' + code.slice(8,12));
   }
   return codes;
 }

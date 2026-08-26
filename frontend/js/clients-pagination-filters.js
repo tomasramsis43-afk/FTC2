@@ -4,7 +4,8 @@
    #{prefix}-page-first/prev/next/last */
 function genericPageSize(prefix){
   const v = $(`#${prefix}-page-size`)?.value || '50';
-  return v==='all' ? Infinity : Number(v);
+  if(v==='all') return 1000; // حماية أداء: was Infinity يرندر آلاف الصفوف دفعة واحدة ويجمد المتصفح
+  return Number(v);
 }
 function applyGenericPagination(prefix, rows, state, filterSigParts){
   const sig = JSON.stringify(filterSigParts);
@@ -37,7 +38,8 @@ function bindGenericPagination(prefix, state, renderFn){
 }
 function currentTablePageSize(){
   const v = $('#table-page-size')?.value || '100';
-  return v==='all' ? Infinity : Number(v);
+  if(v==='all') return 1000; // حماية أداء: عرض الكل محدود بـ 1000 لتجنب تجميد المتصفح
+  return Number(v);
 }
 let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالية سريعة (تغيير صفحة/فلتر قبل وصول رد الطلب السابق)
 // الأعمدة المدعومة للفرز من السيرفر (مطابقة لِما يدعمه GET /api/clients بالضبط) — أي فرز

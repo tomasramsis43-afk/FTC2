@@ -720,7 +720,10 @@ function showFatalErrorBox(title, err){
     document.body.appendChild(box);
   }
   const msg = (err && (err.stack || err.message)) || String(err);
-  box.innerHTML = `<div style="direction:rtl; font-family:'Cairo',sans-serif; font-weight:800; margin-bottom:8px; display:flex; justify-content:space-between;"><span>⚠️ خطأ برمجي: ${title}</span><button style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:2px 10px;cursor:pointer;" onclick="document.getElementById('js-error-box').remove()">إغلاق</button></div><pre style="white-space:pre-wrap; margin:0;">${String(msg).replace(/</g,'&lt;')}</pre>`;
+  function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  box.innerHTML = `<div style="direction:rtl; font-family:'Cairo',sans-serif; font-weight:800; margin-bottom:8px; display:flex; justify-content:space-between;"><span>⚠️ خطأ برمجي: ${escHtml(title)}</span><button style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:2px 10px;cursor:pointer;" id="btn-close-error-box">إغلاق</button></div><pre style="white-space:pre-wrap; margin:0;">${escHtml(msg)}</pre>`;
+  const closeBtn = box.querySelector('#btn-close-error-box');
+  if(closeBtn) closeBtn.addEventListener('click', ()=> box.remove());
 }
 window.addEventListener('error', e=>{
   showFatalErrorBox(e.message || 'خطأ غير معروف', e.error);

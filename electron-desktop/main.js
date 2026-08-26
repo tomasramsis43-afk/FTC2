@@ -12,7 +12,11 @@ try {
   const cfgPath = require('path').join(__dirname, 'config.json');
   if (require('fs').existsSync(cfgPath)) {
     const cfg = JSON.parse(require('fs').readFileSync(cfgPath, 'utf8'));
-    if (cfg.serverUrl) REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
+    if (cfg.serverUrl && /^https:\/\//.test(cfg.serverUrl)) {
+      REMOTE_BASE = cfg.serverUrl.replace(/\/$/, '');
+    } else if (cfg.serverUrl) {
+      console.warn('[Config] serverUrl must start with https:// — ignoring:', cfg.serverUrl);
+    }
   }
 } catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
 // نفس ملفات الواجهة اللي تتحدّث فعلياً (بلا الأيقونات والـ manifest الثابتة اللي
@@ -128,6 +132,11 @@ async function checkForFrontendUpdate() {
 function startLocalServer() {
   return new Promise((resolve, reject) => {
     const srv = express();
+    srv.use((req, res, next) => {
+      // تحصين إضافي: منع أي محاولة تجاوز للبروكسي
+      if (req.path.includes('..')) return res.status(400).end();
+      next();
+    });
 
     // ---- بروكسي شفاف لكل طلبات /api/* إلى السيرفر الحقيقي على Render ----
     // قبل هذا التعديل كانت الواجهة بتعمل fetch مباشرة لعنوان Render (أصل http مختلف
@@ -211,6 +220,10 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
+      enableRemoteModule: false,
       // مبقاش لازم webSecurity:false: كل طلبات /api بقت بتروح لنفس أصل الصفحة
       // (127.0.0.1) عبر البروكسي المحلي في startLocalServer، فمفيش أصل مختلف
       // يستدعي تعطيل فحص الأمان في المتصفح المدمج أصلاً.

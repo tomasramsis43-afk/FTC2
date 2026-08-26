@@ -537,6 +537,26 @@ function courseDurationDays(courseType){
   return n.includes('food') || n.includes('غذائي') || n.includes('سلامة') ? 2 : 1;
 }
 
+/* مساعد مشترك: يبني خريطة الصياغة المعتمدة (الأكثر استخداماً) من قائمة قيم */
+function buildCanonicalMap(allValues){
+  const usageCount = new Map();
+  const bump = (raw)=>{
+    const v = String(raw||'').trim().replace(/\s+/g,' ');
+    if(!v) return;
+    const key = v.toLowerCase();
+    if(!usageCount.has(key)) usageCount.set(key, new Map());
+    const variants = usageCount.get(key);
+    variants.set(v, (variants.get(v)||0)+1);
+  };
+  allValues.forEach(bump);
+  const canonicalOf = new Map();
+  usageCount.forEach((variants, key)=>{
+    let best = null, bestCount = -1;
+    variants.forEach((count, variant)=>{ if(count>bestCount){ best = variant; bestCount = count; } });
+    canonicalOf.set(key, best);
+  });
+  return canonicalOf;
+}
 /* ---------------- توحيد أسماء أنواع الدورات (منع التكرار بسبب اختلاف حالة الأحرف أو المسافات الزائدة) ---------------- */
 /* تعيد الاسم "المعتمد" لنوع الدورة كما هو مسجّل في قائمة أنواع الدورات بالإعدادات (settings.courses)،
    بمطابقة غير حساسة لحالة الأحرف وتجاهل المسافات الزائدة — حتى لا يُحسب "Food safety" و"food safety" كنوعين مختلفين */
@@ -551,26 +571,11 @@ function normalizeCourseTypeValue(raw){
    ولا يكرر أي تصحيح تم بالفعل (آمن التكرار). */
 async function cleanupDuplicateCourseTypes(){
   let changed = false;
-  // 1) نحسب عدد مرات استخدام كل صياغة (حالة أحرف) فعلياً في شيت العملاء وشيت الدورات،
-  //    لاختيار الصياغة الأكثر استخدامًا كصياغة معتمدة لكل نوع دورة (بدل الاعتماد على ترتيب الإدخال فقط)
-  const usageCount = new Map(); // lowercase key -> Map(variant -> count)
-  const bump = (raw)=>{
-    const v = String(raw||'').trim().replace(/\s+/g,' ');
-    if(!v) return;
-    const key = v.toLowerCase();
-    if(!usageCount.has(key)) usageCount.set(key, new Map());
-    const variants = usageCount.get(key);
-    variants.set(v, (variants.get(v)||0)+1);
-  };
-  clients.forEach(c=> bump(c.courseType));
-  courseSessions.forEach(s=> bump(s.courseType));
-  (settings.courses||[]).forEach(c=> bump(c.name));
-  const canonicalOf = new Map(); // lowercase key -> chosen variant name
-  usageCount.forEach((variants, key)=>{
-    let best = null, bestCount = -1;
-    variants.forEach((count, variant)=>{ if(count>bestCount){ best = variant; bestCount = count; } });
-    canonicalOf.set(key, best);
-  });
+  const canonicalOf = buildCanonicalMap([
+    ...clients.map(c=>c.courseType),
+    ...courseSessions.map(s=>s.courseType),
+    ...(settings.courses||[]).map(c=>c.name)
+  ]);
   // 2) دمج التكرار داخل قائمة أنواع الدورات نفسها (الإعدادات) حسب الصياغة المعتمدة لكل اسم
   const seenSettings = new Map();
   const dedupedCourses = [];
@@ -628,25 +633,10 @@ function normalizeNationalityValue(raw){
    ولا يكرر أي تصحيح تم بالفعل (آمن التكرار). */
 async function cleanupDuplicateNationalities(){
   let changed = false;
-  // 1) نحسب عدد مرات استخدام كل صياغة (حالة أحرف) فعلياً في شيت العملاء وقائمة الجنسيات بالإعدادات،
-  //    لاختيار الصياغة الأكثر استخداماً كصياغة معتمدة لكل جنسية
-  const usageCount = new Map(); // lowercase key -> Map(variant -> count)
-  const bump = (raw)=>{
-    const v = String(raw||'').trim().replace(/\s+/g,' ');
-    if(!v) return;
-    const key = v.toLowerCase();
-    if(!usageCount.has(key)) usageCount.set(key, new Map());
-    const variants = usageCount.get(key);
-    variants.set(v, (variants.get(v)||0)+1);
-  };
-  clients.forEach(c=> bump(c.nationality));
-  (settings.nationalities||[]).forEach(n=> bump(n));
-  const canonicalOf = new Map(); // lowercase key -> chosen variant name
-  usageCount.forEach((variants, key)=>{
-    let best = null, bestCount = -1;
-    variants.forEach((count, variant)=>{ if(count>bestCount){ best = variant; bestCount = count; } });
-    canonicalOf.set(key, best);
-  });
+  const canonicalOf = buildCanonicalMap([
+    ...clients.map(c=>c.nationality),
+    ...(settings.nationalities||[])
+  ]);
   // 2) دمج التكرار داخل قائمة الجنسيات نفسها (الإعدادات) حسب الصياغة المعتمدة لكل اسم
   const seenSettings = new Set();
   const dedupedNats = [];

@@ -6,8 +6,8 @@
    IBM Plex Mono للأرقام. توهجات لونية خفيفة في الزوايا وخلف العناصر النشطة.
    ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+/* Material Symbols محذوف: التطبيق يستخدم SVG inline فقط، لا يحتاج تحميل 80KB خط أيقونات */
+/* Cairo/Tajawal/IBM محملة عبر <link> في app.html مع preconnect — لا نكرر التحميل هنا */
 
 /* ============= نبض DS TOKENS v1 — Light (فاتح) =============
    الأسماء الكانونية (--brand-*, --text-primary, --warning...) هي المرجع الجديد.
@@ -223,7 +223,9 @@ select option:focus {
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--navy) 55%, transparent) transparent;
+}
+@supports (scrollbar-color: auto) {
+  * { scrollbar-color: color-mix(in srgb, var(--navy) 55%, transparent) transparent; }
 }
 
 ::-webkit-scrollbar {
@@ -255,7 +257,8 @@ body {
     radial-gradient(1000px 460px at 88% -12%, color-mix(in srgb, var(--navy) 5%, transparent), transparent 60%),
     radial-gradient(800px 420px at -10% 25%, color-mix(in srgb, var(--gold) 5%, transparent), transparent 60%),
     var(--bg);
-  background-attachment: fixed;
+  /* background-attachment:fixed يسبب jank على الموبايل — نستخدم scroll كافتراضي */
+  background-attachment: scroll;
   color: var(--text);
   font-family: var(--font-display), 'Tajawal', system-ui, sans-serif;
   font-weight: 500;

@@ -26,10 +26,18 @@ function stripSslModeFromConnectionString(url) {
 
 const pool = new Pool({
   connectionString: stripSslModeFromConnectionString(process.env.DATABASE_URL),
-  // معظم مزودي الاستضافة السحابية (Render/Railway) يتطلبون SSL؛ هذا الإعداد يقبل
-  // شهاداتهم الموقّعة ذاتياً. إن كنت تشغّل Postgres محلياً بدون SSL، احذف هذا السطر.
-  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+  // إصلاح أمني: لا نقبل أي شهادة افتراضياً. استخدم DATABASE_SSL=false للتطوير المحلي فقط.
+  // للإنتاج مع شهادة موثوقة: اضبط DATABASE_SSL=verify و DATABASE_SSL_CA بمحتوى شهادة CA.
+  ssl: process.env.DATABASE_SSL === 'false' ? false
+    : process.env.DATABASE_SSL === 'verify' && process.env.DATABASE_SSL_CA
+    ? { rejectUnauthorized: true, ca: process.env.DATABASE_SSL_CA }
+    : process.env.DATABASE_SSL === 'verify'
+    ? { rejectUnauthorized: true }
+    : { rejectUnauthorized: false },
 });
+if (process.env.DATABASE_SSL !== 'false' && process.env.DATABASE_SSL !== 'verify') {
+  console.warn('⚠️  تحذير أمني: DATABASE_SSL غير مُفعّل للتحقق الكامل (rejectUnauthorized:false). فعّل DATABASE_SSL=verify في الإنتاج مع شهادة CA موثوقة لتجنب هجمات MITM.');
+}
 
 async function ensureSchema() {
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');

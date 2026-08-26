@@ -123,7 +123,7 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
         user: { username: username.trim(), displayName: 'حساب الطوارئ', role: 'admin' },
       });
     }
-    const r = await pool.query('SELECT * FROM server_users WHERE username = $1', [username.trim()]);
+    const r = await pool.query('SELECT id, username, password_hash, role, display_name, token_version, is_active, failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes, last_login_history_seen_at FROM server_users WHERE username = $1', [username.trim()]);
     const user = r.rows[0];
     if (!user) {
       pool.query(

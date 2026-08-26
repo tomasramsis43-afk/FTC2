@@ -279,6 +279,8 @@ CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_username ON magic_link_tokens(u
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
 CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;
+CREATE INDEX IF NOT EXISTS idx_login_history_user_success_time ON login_history(username, success, logged_in_at DESC);
+CREATE INDEX IF NOT EXISTS idx_collection_records_updated_at ON collection_records(collection, updated_at);
 
 -- نسخ احتياطية كاملة مُجدوَلة: "enc" هو نفس محتوى gatherFullBackupData() فى الواجهة، بعد تشفيره
 -- بمفتاح المستخدم (نفس آلية encryptValue المستخدمة لكل بيانات البرنامج) — السيرفر لا يرى ولا
