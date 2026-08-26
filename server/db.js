@@ -45,6 +45,17 @@ if (process.env.DATABASE_SSL !== 'false' && process.env.DATABASE_SSL !== 'verify
   console.warn('⚠️  تحذير أمني: DATABASE_SSL غير مُفعّل للتحقق الكامل (rejectUnauthorized:false). فعّل DATABASE_SSL=verify في الإنتاج مع شهادة CA موثوقة لتجنب هجمات MITM.');
 }
 
+// إصلاح حرج: قواعد Neon (serverless) تُنهي الاتصالات الخاملة في الـ pool من جهتها بين الحين
+// والآخر (connection reset / idle termination على مستوى الشبكة). مكتبة pg تُطلق حدث 'error' على
+// كائن الـ Pool نفسه عند ذلك. بدون مستمع لهذا الحدث هنا، Node.js يعامله كـ uncaught exception
+// ويُسقط العملية بالكامل فوراً — وهو بالضبط ما كان يحدث كل بضع دقائق (انظر سجلات Render:
+// "Error: Connection terminated unexpectedly" / "Emitted 'error' event on BoundPool instance").
+// إضافة هذا المستمع لا "تُصلح" فقد الاتصال (فهو طبيعي ومتوقّع)، بل تمنع تحوّله إلى كراش: الـ pool
+// يتخلص من الاتصال المعطوب ويفتح واحداً جديداً تلقائياً عند الطلب التالي.
+pool.on('error', (err) => {
+  console.error('⚠️  خطأ غير متوقع في اتصال قاعدة البيانات (تمت معالجته دون إسقاط الخادم):', err.message);
+});
+
 async function ensureSchema() {
   const sql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(sql);
