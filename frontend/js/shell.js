@@ -73,13 +73,9 @@ document.addEventListener('keydown', function (e) {
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $all(sel, root) { return Array.from((root || document).querySelectorAll(sel)); }
 
-  /* ── 2) تلميحات أزرار التنقل (تظهر أساساً في وضع Rail المطوي) ── */
+  /* ── 2) تلميحات أزرار التنقل — مُعطّلة بطلب المستخدم (كانت تُظهر صندوق أبيض + سهم عند hover/click) ── */
   function initNavTooltips() {
-    $all('nav.tabs button[data-view]').forEach(function (btn) {
-      var span = btn.querySelector('span');
-      var label = span ? span.textContent.trim() : '';
-      if (label && !btn.hasAttribute('data-tooltip')) btn.setAttribute('data-tooltip', label);
-    });
+    /* intentionally disabled: لا نضيف data-tooltip على أزرار السايد بار */
   }
 
   /* ── 3) شريحة الفترة المالية — مصدر الحقيقة هو فلتر السنة القائم ── */
