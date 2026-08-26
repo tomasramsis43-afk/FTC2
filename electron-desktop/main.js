@@ -19,20 +19,29 @@ try {
 // نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده نت، ونكتبها فوق
 // النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد التثبيت نفسه، عشان الكتابة
 // تكون مسموحة من غير صلاحيات Admin).
-// القائمة مضبوطة على ملفات js المدرجة فعلياً في app.html (22 سكربت defer بنفس
-// الترتيب) + app.html/styles.css/sw.js — كان ينقصها 10 ملفات حقيقية (theme-settings,
-// permissions-sound, accounting-core, backup-restore, undo-redo, clients-*...) وكان
-// فيها ملفان غير موجودين أصلاً (ui-framework.js و module-clients.js كانا مُلغيَّين من
-// الواجهة) — فكانت أي نسخة سطح مكتب حديثة تفقد هؤلاء المُحدَّثين ولا تتحدّث أبداً.
+// ⚠️ هذه القائمة يجب أن تُطابق بالضبط كل <script src="js/..."> الموجودة فعلياً في
+// app.html (بالإضافة لـ app.html نفسه + styles.css + sw.js). أي ملف جديد يُضاف في
+// app.html ولا يُضاف هنا = نسخة سطح المكتب هتفضل شغالة بكود قديم لهذا الملف للأبد
+// من غير أي رسالة خطأ (فشل صامت). آخر مرة اتفحصت القائمة (٢٠٢٦-٠٨) كان ناقص منها:
+// sse-client, shell, sidebar-collapse, module-courses, cockpit-pulse,
+// notification-center, module-followups, client-workspace, vault-workspace,
+// report-studio, grid-enhancements, onboarding — وده سبب مباشر لعطل زرار طي
+// السايدبار (شغال في المتصفح/السيرفر لكن مش موجود أصلاً في نسخة Electron).
+// كذلك أُزيل module-zatca.js من هنا لأنه لم يعد مُدرجاً في app.html (تبويب ZATCA
+// اتشال من الواجهة).
 const SYNCED_FILES = [
   'app.html', 'styles.css', 'sw.js',
-  'js/core-utils.js', 'js/storage-sync.js', 'js/auth-licensing.js',
-  'js/theme-settings.js', 'js/permissions-sound.js', 'js/accounting-core.js',
+  'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
+  'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
+  'js/permissions-sound.js', 'js/accounting-core.js',
   'js/backup-restore.js', 'js/undo-redo.js', 'js/clients-alerts-overview.js',
   'js/clients-cfo-dashboard.js', 'js/clients-pagination-filters.js', 'js/clients-print-modals.js',
   'js/clients-bulk-ops.js', 'js/module-invoices.js', 'js/module-bags.js',
   'js/module-finance.js', 'js/module-reports.js', 'js/module-accounting.js',
-  'js/module-companies.js', 'js/module-purchases.js', 'js/module-zatca.js',
+  'js/module-courses.js', 'js/module-companies.js', 'js/module-purchases.js',
+  'js/cockpit-pulse.js', 'js/notification-center.js', 'js/module-followups.js',
+  'js/client-workspace.js', 'js/vault-workspace.js', 'js/report-studio.js',
+  'js/grid-enhancements.js', 'js/onboarding.js',
   'js/boot.js'
 ];
 let mainWindow;
