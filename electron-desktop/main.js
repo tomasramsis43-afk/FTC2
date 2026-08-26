@@ -19,18 +19,21 @@ try {
 // نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده نت، ونكتبها فوق
 // النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد التثبيت نفسه، عشان الكتابة
 // تكون مسموحة من غير صلاحيات Admin).
-// ⚠️ هذه القائمة يجب أن تُطابق بالضبط كل <script src="js/..."> الموجودة فعلياً في
-// app.html (بالإضافة لـ app.html نفسه + styles.css + sw.js). أي ملف جديد يُضاف في
-// app.html ولا يُضاف هنا = نسخة سطح المكتب هتفضل شغالة بكود قديم لهذا الملف للأبد
-// من غير أي رسالة خطأ (فشل صامت). آخر مرة اتفحصت القائمة (٢٠٢٦-٠٨) كان ناقص منها:
+// ⚠️ هذه القائمة يجب أن تُطابق بالضبط: (أ) كل <script src="js/..."> ثابتة في
+// app.html، (ب) الملفات المُحمَّلة ديناميكياً عبر boot.js (health-education-*،
+// bag-workflow)، (ج) sw-register.js نفسه (مسؤول عن قرار تعطيل الـ Service Worker
+// داخل Electron — لازم يوصل محدّثاً هو الآخر). أي ملف جديد يُضاف في app.html/boot.js
+// ولا يُضاف هنا = نسخة سطح المكتب هتفضل شغالة بكود قديم لهذا الملف للأبد من غير
+// أي رسالة خطأ (فشل صامت). آخر مرة اتفحصت القائمة بالكامل (٢٠٢٦-٠٨) كان ناقص منها:
 // sse-client, shell, sidebar-collapse, module-courses, cockpit-pulse,
 // notification-center, module-followups, client-workspace, vault-workspace,
-// report-studio, grid-enhancements, onboarding — وده سبب مباشر لعطل زرار طي
-// السايدبار (شغال في المتصفح/السيرفر لكن مش موجود أصلاً في نسخة Electron).
-// كذلك أُزيل module-zatca.js من هنا لأنه لم يعد مُدرجاً في app.html (تبويب ZATCA
-// اتشال من الواجهة).
+// report-studio, grid-enhancements, onboarding, sw-register.js,
+// health-education-validity.js, health-education-ui.js, bag-workflow.js —
+// sidebar-collapse.js تحديداً هو سبب عطل زرار طي السايدبار (شغال في المتصفح لكن
+// مش موجود أصلاً في نسخة Electron). كذلك أُزيل module-zatca.js من هنا لأنه لم يعد
+// مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
-  'app.html', 'styles.css', 'sw.js',
+  'app.html', 'styles.css', 'sw.js', 'sw-register.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
@@ -42,6 +45,7 @@ const SYNCED_FILES = [
   'js/cockpit-pulse.js', 'js/notification-center.js', 'js/module-followups.js',
   'js/client-workspace.js', 'js/vault-workspace.js', 'js/report-studio.js',
   'js/grid-enhancements.js', 'js/onboarding.js',
+  'js/health-education-validity.js', 'js/health-education-ui.js', 'js/bag-workflow.js',
   'js/boot.js'
 ];
 let mainWindow;
