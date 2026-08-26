@@ -159,8 +159,26 @@ function startLocalServer() {
       });
     });
 
-    srv.use(express.static(userAssetsDir));
-    srv.use(express.static(path.join(__dirname, 'app-assets')));
+    // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت
+    // تعتمد على الكاش المتصفحي القياسي (HTTP disk cache) للردود القادمة من هذا
+    // الخادم المحلي — ولأن express.static افتراضياً لا يرسل Cache-Control (فقط
+    // Last-Modified/ETag)، كان المتصفح أحياناً "يفترض" حداثة النسخة المخزنة عنده
+    // ويستخدمها مباشرة دون حتى إرسال طلب تحقق (revalidation) للخادم المحلي —
+    // فتظهر المشكلة كأن main.js "لم يحدّث شيئاً" رغم أن الملف الجديد فعلاً موجود
+    // على القرص ومُقدَّم بشكل صحيح من الخادم، والمشكلة الحقيقية غير مرئية إطلاقاً:
+    // طبقة كاش HTTP فى نافذة Chromium نفسها، منفصلة تماماً عن نظام SYNCED_FILES.
+    // الحل: نجبر كل رد من هذا الخادم (HTML/JS/CSS) على عدم التخزين مؤقتاً إطلاقاً،
+    // فتُعاد قراءة الملف من القرص (المُحدَّث دوماً بواسطة checkForFrontendUpdate)
+    // فى كل تحميل للصفحة، بلا أي احتمال لتقديم نسخة قديمة من كاش المتصفح.
+    srv.use((req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
+    });
+
+    srv.use(express.static(userAssetsDir, { etag: false, lastModified: false, cacheControl: false }));
+    srv.use(express.static(path.join(__dirname, 'app-assets'), { etag: false, lastModified: false, cacheControl: false }));
     const listener = srv.listen(PORT, '127.0.0.1', () => resolve());
     listener.on('error', (err) => {
       const { dialog } = require('electron');
