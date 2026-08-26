@@ -247,7 +247,8 @@ router.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin,
     return res.status(400).json({ error: 'القيمة المرسلة غير صحيحة (يجب أن تكون نصاً غير فارغ) — أُوقف الحفظ قبل المساس بالبيانات' });
   }
   try {
-    if (await wouldDowngradeEncryption(req.params.key, value)) {
+    // تحسين أداء: لا داعي لفحص انحدار التشفير لو المفتاح جديد (version=0 = INSERT) — لا توجد قيمة قديمة قد تكون مشفّرة
+    if (knownVersion > 0 && await wouldDowngradeEncryption(req.params.key, value)) {
       console.error(`رُفض حفظ خطير: ${req.user.username} حاول استبدال بيانات مشفّرة بأخرى غير مشفّرة للمفتاح "${req.params.key}"`);
       return res.status(422).json({
         error: 'تم رفض هذا الحفظ وقائياً: البيانات الحالية على السيرفر مشفّرة، لكن جهازك حاول حفظ بيانات غير مشفّرة — على الأرجح لأن مفتاح التشفير غير جاهز على هذا المتصفح/الجهاز (تأكد أنك تفتح البرنامج عبر رابط HTTPS صحيح). أعد تحميل الصفحة وسجّل الدخول من جديد قبل إعادة المحاولة، حتى لا تُفقد بيانات باقي المستخدمين.',
@@ -412,7 +413,10 @@ router.get('/api/client-records/version', requireAuth, async (req, res) => {
 // بالفعل" لمنع تكرارها.
 router.get('/api/client-records/ids', requireAuth, async (req, res) => {
   try {
-    const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> ''`);
+    // فلترة حسب الدور: الاستقبال يرى فقط سجلاته، والباقي يرى المعتمدة فقط — يمنع تسريب أرقام الهوية
+    // بين مستخدمي الاستقبال المعزولين وبين الأدوار الأخرى
+    const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
+    const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> '' ${where}`, params);
     res.json({ ids: r.rows.map(row => ({ id: row.id, clientIdHash: crypto.createHash('sha256').update(row.client_id).digest('hex') })) });
   } catch (e) {
     console.error(e);

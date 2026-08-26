@@ -37,7 +37,7 @@ try {
 // مش موجود أصلاً في نسخة Electron). كذلك أُزيل module-zatca.js من هنا لأنه لم يعد
 // مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
-  'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
+  'app.html', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
@@ -102,22 +102,26 @@ async function prepareAssets() {
 // عشان اللي بينادي الدالة يقرر هل يعمل reload للنافذة المفتوحة بالفعل أو لأ.
 async function checkForFrontendUpdate() {
   let changed = false;
-  for (const file of SYNCED_FILES) {
-    try {
-      const remote = await fetchText(`${REMOTE_BASE}/${file}`);
-      // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
-      if (remote && remote.length > 20) {
-        const destPath = path.join(userAssetsDir, file);
-        let existing = null;
-        try { existing = fs.readFileSync(destPath, 'utf8'); } catch (e) {}
-        if (existing !== remote) {
-          // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
-          fs.mkdirSync(path.dirname(destPath), { recursive: true });
-          fs.writeFileSync(destPath, remote, 'utf8');
-          changed = true;
+  const CONCURRENCY = 5;
+  for (let i = 0; i < SYNCED_FILES.length; i += CONCURRENCY) {
+    const batch = SYNCED_FILES.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(batch.map(async (file) => {
+      try {
+        const remote = await fetchText(`${REMOTE_BASE}/${file}`);
+        // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
+        if (remote && remote.length > 20) {
+          const destPath = path.join(userAssetsDir, file);
+          let existing = null;
+          try { existing = fs.readFileSync(destPath, 'utf8'); } catch (e) {}
+          if (existing !== remote) {
+            // نخلق المجلد الأب تلقائياً (مهم لملفات js/*)
+            fs.mkdirSync(path.dirname(destPath), { recursive: true });
+            fs.writeFileSync(destPath, remote, 'utf8');
+            changed = true;
+          }
         }
-      }
-    } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
+      } catch (e) { /* بدون نت أو السيرفر نايم — نتجاهل ونكمل بالنسخة المحلية */ }
+    }));
   }
   return changed;
 }
@@ -179,8 +183,13 @@ function startLocalServer() {
 
     // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
     // يسمح للواجهة بسحب بيانات الحقائب المصروفة مباشرة من arkkanapp.net مع الحفاظ على الكوكيز
+    const ALLOWED_ARKKAN_PATHS = ['/Municipal/Disbursed-bags.aspx', '/Municipal/Disbursed-bags.aspx/', '/Municipal/', '/SitePages/', '/_layouts/'];
+    function isAllowedArkkanPath(p) { return ALLOWED_ARKKAN_PATHS.some(a => p === a || p.startsWith(a + '?') || p.startsWith(a + '&')); }
     srv.use('/arkkan', (req, res) => {
       const targetPath = req.url; // يحتفظ بالمسار كما هو /Municipal/Disbursed-bags.aspx
+      if (!isAllowedArkkanPath(targetPath) || /\.\.|%2e%2e|@|%00/i.test(targetPath)) {
+        return res.status(403).json({ error: 'مسار غير مسموح به' });
+      }
       const targetUrl = 'https://arkkanapp.net' + targetPath;
       const chunks = [];
       req.on('data', c => chunks.push(c));
