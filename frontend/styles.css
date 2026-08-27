@@ -3562,7 +3562,14 @@ input[type="checkbox"]:checked::after {
    ============================================================================ */
 
 :root {
-  --pro-glass-blur: blur(22px) saturate(1.35);
+  /* إصلاح أداء (٢٠٢٦-٠٨): كانت قيمة الضبابية 22px — تكلفة GPU عالية جداً عند تطبيقها على
+     عشرات العناصر (.card, .panel, .cfo-panel, .modal, .overlay...) في نفس الشاشة، وبتتكرر
+     حساباتها في كل فريم أثناء أي سكرول أو حركة، وهو السبب الرئيسي المُشتبَه به وراء بطء
+     التصفح/التمرير في التطبيق. تقليلها لـ 8px يحافظ على نفس المظهر الزجاجي تقريباً بصرياً
+     (فرق طفيف جداً بالعين المجردة) لكن بتكلفة GPU أقل بكثير — هذا هو المتغير المركزي
+     الوحيد المستخدَم فى كل عناصر الزجاجية، فتعديله هنا يكفي لتحديث كل الموقع دفعة واحدة.
+     - saturate(1.35) خفّفناها لـ 1.15 كذلك (تكلفتها أقل من blur لكنها مو مجانية تماماً). */
+  --pro-glass-blur: blur(8px) saturate(1.15);
   --pro-shadow-ambient: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 48px -28px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.25);
   --pro-shadow-ambient-hover: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 30px 60px -26px color-mix(in srgb, var(--navy) 35%, transparent), 0 2px 8px -2px rgba(0, 0, 0, 0.3);
   --pro-glow-line: linear-gradient(90deg, transparent, color-mix(in srgb, var(--navy) 70%, transparent), color-mix(in srgb, var(--teal) 55%, transparent), transparent);
