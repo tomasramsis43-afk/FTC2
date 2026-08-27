@@ -25,29 +25,40 @@ function parseArkkanRows(html){
   const tables = doc.querySelectorAll('table');
   console.log('[Arkkan Parser] عدد الجداول:', tables.length);
 
-  let allRows = [];
+  let biggestTable = null;
+  let maxRows = 0;
   for(const t of tables){
     const rows = t.querySelectorAll('tr');
     console.log('[Arkkan Parser] جدول فيه', rows.length, 'صف');
-    for(const tr of rows) allRows.push(tr);
+    if(rows.length > maxRows){
+      maxRows = rows.length;
+      biggestTable = t;
+    }
   }
-  if(!allRows.length){
-    console.log('[Arkkan Parser] لا يوجد جداول، أول 2000 حرف:', html.substring(0,2000));
+
+  if(!biggestTable || maxRows < 2){
+    console.log('[Arkkan Parser] لا يوجد جدول بياناتي، أول 2000 حرف:', html.substring(0,2000));
     return [];
   }
 
+  console.log('[Arkkan Parser] === أكبر جدول ('+maxRows+' صف) - HTML أول صفين: ===');
+  const bigRows = biggestTable.querySelectorAll('tr');
+  for(let i=0; i<Math.min(3, bigRows.length); i++){
+    console.log('[Arkkan Parser] صف', i, ':', bigRows[i].innerHTML.substring(0,1500));
+  }
+
   const out=[];
-  for(const tr of allRows){
+  for(let i=0; i<bigRows.length; i++){
+    const tr = bigRows[i];
     const tds=[...tr.querySelectorAll('td')];
     if(tds.length < 3) continue;
+    const texts = tds.map(td=>td.textContent.trim());
     const links=[...tr.querySelectorAll('a')];
     const printLink = links.find(a=>{
       const h=(a.getAttribute('href')||'').toLowerCase();
       return h.includes('sanad')||h.includes('print')||h.includes('detail')||h.includes('request');
     });
-    if(!printLink && links.length===0) continue;
-
-    const texts = tds.map(td=>td.textContent.trim());
+    if(i<5) console.log('[Arkkan Parser] صف', i, '- TDs:', tds.length, '- texts:', texts.join(' | '));
     out.push({
       receiptNo: texts[1]||texts[0]||'',
       bagType: texts[3]||texts[2]||'',
@@ -58,7 +69,7 @@ function parseArkkanRows(html){
       _debug: texts.join(' | ')
     });
   }
-  console.log('[Arkkan Parser] تم استخراج', out.length, 'سجل');
+  console.log('[Arkkan Parser] تم استخراج', out.length, 'سجل من أكبر جدول');
   if(out.length) console.log('[Arkkan Parser] أول سجل:', out[0]._debug);
   return out;
 }
