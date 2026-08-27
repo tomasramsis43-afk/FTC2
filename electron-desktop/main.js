@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -225,6 +225,64 @@ function startLocalServer() {
         if (body.length) proxyReq.write(body);
         proxyReq.end();
       });
+    });
+
+    // ---- استيراد أركان عبر نافذة مخفية (يتغلب على تحميل JavaScript) ----
+    srv.post('/arkkan/scrape', express.json(), async (req, res) => {
+      const { username, password } = req.body || {};
+      if (!username || !password) return res.status(400).json({ error: 'يوزر وباسورد مطلوبين' });
+
+      let hiddenWin = null;
+      try {
+        hiddenWin = new BrowserWindow({
+          width: 1280, height: 900, show: false,
+          webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
+        });
+
+        const targetUrl = 'https://arkkanapp.net/Municipal/Disbursed-bags.aspx';
+        await hiddenWin.loadURL(targetUrl);
+        await new Promise(r => setTimeout(r, 2000));
+
+        const loginResult = await hiddenWin.webContents.executeJavaScript(`
+          (function(){
+            const userField = document.querySelector('[id*="Username"], [name*="Username"], [id*="username"]');
+            const passField = document.querySelector('[id*="Password"], [name*="Password"], [type="password"]');
+            if(userField && passField){
+              userField.value = ${JSON.stringify(username)};
+              passField.value = ${JSON.stringify(password)};
+              const btn = document.querySelector('[id*="btn_submit"], [id*="btnSubmit"], [type="submit"]');
+              if(btn) btn.click();
+              return 'login_submitted';
+            }
+            return 'no_fields_found: ' + document.title;
+          })()
+        `);
+        console.log('[Arkkan Scrape] login:', loginResult);
+        await new Promise(r => setTimeout(r, 5000));
+
+        const data = await hiddenWin.webContents.executeJavaScript(`
+          (function(){
+            const tables = document.querySelectorAll('table');
+            for(const t of tables){
+              if(t.querySelector('th')?.textContent?.includes('هوية')){
+                const rows = [...t.querySelectorAll('tr')].slice(1);
+                return rows.map(tr => {
+                  const tds = [...tr.querySelectorAll('td')];
+                  return tds.map(td => td.textContent.trim());
+                }).filter(r => r.length >= 3);
+              }
+            }
+            return [];
+          })()
+        `);
+        console.log('[Arkkan Scrape] scraped rows:', data.length);
+        res.json({ rows: data });
+      } catch (e) {
+        console.error('[Arkkan Scrape] error:', e);
+        res.status(500).json({ error: e.message });
+      } finally {
+        if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy();
+      }
     });
 
     // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت

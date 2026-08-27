@@ -1,86 +1,61 @@
 /* ============ Arkkan Import - استيراد الحقائب المصروفة من منصة أركان ============ */
-async function arkkanLogin(username, password){
-  const loginHtml = await fetch('/arkkan/Municipal/Disbursed-bags.aspx', {credentials:'include'}).then(r=>r.text());
-  const vs = (loginHtml.match(/name="__VIEWSTATE" value="([^"]+)"/)||[])[1]||'';
-  const vsg = (loginHtml.match(/name="__VIEWSTATEGENERATOR" value="([^"]+)"/)||[])[1]||'';
-  const body = new URLSearchParams({
-    __VIEWSTATE: vs,
-    __VIEWSTATEGENERATOR: vsg,
-    UsernameLog: username,
-    Password: password,
-    __EVENTTARGET: 'btn_submitEnter',
-    __EVENTARGUMENT: ''
-  });
-  const res = await fetch('/arkkan/Municipal/Disbursed-bags.aspx', {
+async function scrapeArkkan(username, password, onProgress){
+  onProgress('جاري فتح صفحة أركان في نافذة مخفية...');
+  const resp = await fetch('/arkkan/scrape', {
     method:'POST',
-    credentials:'include',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: body.toString()
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password})
   });
-  return res.text();
+  if(!resp.ok){
+    const err = await resp.json().catch(()=>({error:'خطأ غير معروف'}));
+    throw new Error(err.error || 'فشل الاتصال ببروكسي أركان');
+  }
+  const data = await resp.json();
+  return data.rows || [];
 }
 
-function parseArkkanRows(html){
-  const doc = new DOMParser().parseFromString(html,'text/html');
+async function importArkkan(from, to, username, password, onProgress){
+  onProgress('جاري استخراج البيانات من أركان...');
+  const rows = await scrapeArkkan(username, password, onProgress);
+  console.log('[Arkkan] عدد الصفوف المستخرجة:', rows.length);
+  if(rows.length) console.log('[Arkkan] أول صف:', rows[0]);
 
-  if(html.includes('2643467158') || html.includes('3211374')){
-    console.log('[Arkkan] بيانات الحقائب موجودة في HTML!');
-  } else {
-    console.log('[Arkkan] بيانات الحقائب غير موجودة في HTML - محملة عن طريق JS');
-  }
+  const filtered = rows.filter(r => {
+    const dateText = r[3] || '';
+    const dateNorm = dateText.split('/').reverse().join('-');
+    if(from && dateNorm < from) return false;
+    if(to && dateNorm > to) return false;
+    return true;
+  });
 
-  const allElements = doc.querySelectorAll('*');
-  let gridId = null;
-  for(const el of allElements){
-    const id = (el.id||'').toLowerCase();
-    if(id.includes('gridview') || id.includes('gv') || id.includes('disbursed') || id.includes('tblresult')){
-      gridId = el.id;
-      console.log('[Arkkan] وجدت عنصر:', el.id, 'نوع:', el.tagName, 'صفوف:', el.querySelectorAll('tr').length);
+  onProgress(`تم استخراج ${rows.length} سجل، بعد الفلترة ${filtered.length} سجل`);
+
+  const bagPrice = num(settings.bagPrice) || 456.55;
+  let imported = 0;
+  for(const r of filtered){
+    const clientId = r[0] || '';
+    const clientName = r[1] || '';
+    const bagType = r[2] || '';
+    const dateRaw = r[3] || '';
+    const date = dateRaw.split('/').reverse().join('-');
+    const receiptNo = r[5] || '';
+
+    let c = clients.find(x => x.clientId === clientId);
+    if(!c){
+      c = {id:uid(), clientId, name:clientName, date, courseType:bagType, bagSource:'stock', bagStatus:'purchased', bagPrice, bagInvoice:receiptNo, bagPurchaseDate:date};
+      clients.push(c);
+    } else {
+      c.bagSource = 'stock'; c.bagStatus = 'purchased'; c.bagPrice = bagPrice; c.bagInvoice = receiptNo; c.bagPurchaseDate = date; c.courseType = bagType;
     }
+    imported++;
   }
 
-  const scripts = doc.querySelectorAll('script');
-  for(const s of scripts){
-    const txt = s.textContent || '';
-    if(txt.includes('GridView') || txt.includes('disbursed') || txt.includes('TableData') || txt.includes('ajax') || txt.includes('fetch') || txt.includes('XMLHttp')){
-      console.log('[Arkkan] Script قد يحمل البيانات:', txt.substring(0,500));
-    }
-  }
-
-  const postBacks = html.match(/__doPostBack\('([^']+)'/g);
-  if(postBacks){
-    console.log('[Arkkan] PostBack events:', [...new Set(postBacks)].join(' | '));
-  }
-
-  const tables = doc.querySelectorAll('table');
-  console.log('[Arkkan] عدد الجداول:', tables.length);
-  for(let ti=0; ti<tables.length; ti++){
-    const rows = tables[ti].querySelectorAll('tr');
-    if(rows.length < 2) continue;
-    const firstCell = rows[0]?.textContent?.trim()?.substring(0,60) || '';
-    console.log('[Arkkan] جدول #'+ti+' ('+rows.length+' صف):', firstCell);
-    if(rows.length >= 3){
-      for(let i=0; i<Math.min(2, rows.length); i++){
-        console.log('[Arkkan]   صف'+i+' TDs:'+rows[i].querySelectorAll('td').length+':', rows[i].innerHTML.substring(0,500));
-      }
-    }
-  }
-
-  return [];
-}
-
-async function importArkkan(from,to, username, password, onProgress){
-  onProgress('جاري تسجيل الدخول لأركان...');
-  await arkkanLogin(username, password);
-
-  onProgress('جاري سحب الصفحة...');
-  const html = await fetch(`/arkkan/Municipal/Disbursed-bags.aspx`, {credentials:'include'}).then(r=>r.text());
-  console.log('[Arkkan] حجم الصفحة:', html.length);
-
-  parseArkkanRows(html);
-
-  onProgress('تم التحليل - راجع Console');
-  return 0;
+  onProgress(`تم تحويل ${imported} سجل، جاري الحفظ...`);
+  await saveClients();
+  await saveBagStock();
+  renderBags();
+  onProgress(`تم استيراد ${imported} حقيبة بنجاح`);
+  return imported;
 }
 
 (function bindArkkanButton(){
@@ -95,11 +70,12 @@ async function importArkkan(from,to, username, password, onProgress){
       const status = document.getElementById('arkkan-status');
       const log = document.getElementById('arkkan-log');
       if(!user || !pass){ alert('أدخل يوزر وباسورد أركان'); return; }
-      btn.disabled=true;
-      if(log) log.textContent='';
+      btn.disabled = true;
+      if(log) log.textContent = '';
       const onProgress = (msg)=>{ if(status) status.textContent=msg; if(log) log.textContent += msg+'\n'; console.log('[Arkkan]',msg); };
       try{
         await importArkkan(from,to,user,pass,onProgress);
+        showToast('تم الاستيراد من أركان');
       }catch(e){ onProgress('خطأ: '+(e.message||e)); showToast('فشل الاستيراد'); console.error(e); }
       finally{ btn.disabled=false; }
     });
