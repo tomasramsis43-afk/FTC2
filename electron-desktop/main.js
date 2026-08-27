@@ -181,53 +181,8 @@ function startLocalServer() {
       });
     });
 
-    // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
-    // يسمح للواجهة بسحب بيانات الحقائب المصروفة مباشرة من arkkanapp.net مع الحفاظ على الكوكيز
-    const ALLOWED_ARKKAN_PATHS = ['/Municipal/Disbursed-bags.aspx', '/Municipal/Disbursed-bags.aspx/', '/Municipal/', '/SitePages/', '/_layouts/'];
-    function isAllowedArkkanPath(p) { return ALLOWED_ARKKAN_PATHS.some(a => p === a || p.startsWith(a + '?') || p.startsWith(a + '&')); }
-    srv.use('/arkkan', (req, res) => {
-      const targetPath = req.url; // يحتفظ بالمسار كما هو /Municipal/Disbursed-bags.aspx
-      if (!isAllowedArkkanPath(targetPath) || /\.\.|%2e%2e|@|%00/i.test(targetPath)) {
-        return res.status(403).json({ error: 'مسار غير مسموح به' });
-      }
-      const targetUrl = 'https://arkkanapp.net' + targetPath;
-      const chunks = [];
-      req.on('data', c => chunks.push(c));
-      req.on('end', () => {
-        const body = Buffer.concat(chunks);
-        const headers = Object.assign({}, req.headers);
-        delete headers.host;
-        delete headers.connection;
-        headers['host'] = 'arkkanapp.net';
-        if (body.length) headers['content-length'] = String(body.length);
-        const u = new URL(targetUrl);
-        const proxyHeaders = Object.assign({}, headers);
-    if (req.headers.cookie) proxyHeaders.cookie = req.headers.cookie;
-    const proxyReq = https.request(
-          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders },
-          proxyRes => {
-            // إصلاح: كوكيز arkkanapp.net تصل بسمة Domain=arkkanapp.net، وتمريرها
-            // كما هي يجعل Chromium يرفضها لأنها لا تطابق أصل الخادم المحلي — فتضيع
-            // الجلسة فور تسجيل الدخول وتُرجع كل الطلبات التالية صفحة الدخول (صفر نتائج بصمت).
-            const respHeaders = Object.assign({}, proxyRes.headers);
-            const rawSetCookie = proxyRes.headers['set-cookie'];
-            if (rawSetCookie) {
-              respHeaders['set-cookie'] = rawSetCookie.map(c => c.replace(/;\s*domain=[^;]+/i, ''));
-            }
-            res.writeHead(proxyRes.statusCode, respHeaders);
-            proxyRes.pipe(res);
-          }
-        );
-        proxyReq.on('error', err => {
-          if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-          res.end('Arkkan proxy error: ' + err.message);
-        });
-        if (body.length) proxyReq.write(body);
-        proxyReq.end();
-      });
-    });
-
     // ---- استيراد أركان عبر نافذة مخفية (يتغلب على تحميل JavaScript) ----
+    // يجب أن يكون قبل البروكسي العام
     srv.post('/arkkan/scrape', express.json(), async (req, res) => {
       const { username, password } = req.body || {};
       if (!username || !password) return res.status(400).json({ error: 'يوزر وباسورد مطلوبين' });
@@ -261,7 +216,7 @@ function startLocalServer() {
         console.log('[Arkkan Scrape] login:', loginResult);
         await new Promise(r => setTimeout(r, 5000));
 
-        // دعم تعدد الصفحات: نسحب كل الصفحات واحد تلو الآخر
+        // دعم تعدد الصفحات
         let allRows = [];
         let pageNum = 1;
         const MAX_PAGES = 50;
@@ -269,7 +224,6 @@ function startLocalServer() {
         while(pageNum <= MAX_PAGES){
           console.log('[Arkkan Scrape] سحب صفحة رقم', pageNum);
 
-          // سحب الجدول الحالي
           const pageRows = await hiddenWin.webContents.executeJavaScript(`
             (function(){
               const tables = document.querySelectorAll('table');
@@ -289,10 +243,8 @@ function startLocalServer() {
           if(!pageRows.length) break;
           allRows.push(...pageRows);
 
-          // البحث عن زر الصفحة التالية (Next)
           const hasNext = await hiddenWin.webContents.executeJavaScript(`
             (function(){
-              // البحث عن رابط "التالي" أو ">>" أو ">":
               const links = [...document.querySelectorAll('a')];
               const nextLink = links.find(a => {
                 const txt = a.textContent.trim();
@@ -300,10 +252,7 @@ function startLocalServer() {
                 return (txt === '>' || txt === '>>' || txt === 'التالي' || txt.includes('Next'))
                   && href.includes('__doPostBack');
               });
-              if(nextLink){
-                nextLink.click();
-                return true;
-              }
+              if(nextLink){ nextLink.click(); return true; }
               return false;
             })()
           `);
@@ -312,7 +261,6 @@ function startLocalServer() {
             console.log('[Arkkan Scrape] لا يوجد صفحة تالية - انتهينا');
             break;
           }
-
           await new Promise(r => setTimeout(r, 3000));
           pageNum++;
         }
@@ -325,6 +273,48 @@ function startLocalServer() {
       } finally {
         if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy();
       }
+    });
+
+    // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
+    const ALLOWED_ARKKAN_PATHS = ['/Municipal/Disbursed-bags.aspx', '/Municipal/Disbursed-bags.aspx/', '/Municipal/', '/SitePages/', '/_layouts/'];
+    function isAllowedArkkanPath(p) { return ALLOWED_ARKKAN_PATHS.some(a => p === a || p.startsWith(a + '?') || p.startsWith(a + '&')); }
+    srv.use('/arkkan', (req, res) => {
+      const targetPath = req.url;
+      if (!isAllowedArkkanPath(targetPath) || /\.\.|%2e%2e|@|%00/i.test(targetPath)) {
+        return res.status(403).json({ error: 'مسار غير مسموح به' });
+      }
+      const targetUrl = 'https://arkkanapp.net' + targetPath;
+      const chunks = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const headers = Object.assign({}, req.headers);
+        delete headers.host;
+        delete headers.connection;
+        headers['host'] = 'arkkanapp.net';
+        if (body.length) headers['content-length'] = String(body.length);
+        const u = new URL(targetUrl);
+        const proxyHeaders = Object.assign({}, headers);
+    if (req.headers.cookie) proxyHeaders.cookie = req.headers.cookie;
+    const proxyReq = https.request(
+          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders },
+          proxyRes => {
+            const respHeaders = Object.assign({}, proxyRes.headers);
+            const rawSetCookie = proxyRes.headers['set-cookie'];
+            if (rawSetCookie) {
+              respHeaders['set-cookie'] = rawSetCookie.map(c => c.replace(/;\s*domain=[^;]+/i, ''));
+            }
+            res.writeHead(proxyRes.statusCode, respHeaders);
+            proxyRes.pipe(res);
+          }
+        );
+        proxyReq.on('error', err => {
+          if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('Arkkan proxy error: ' + err.message);
+        });
+        if (body.length) proxyReq.write(body);
+        proxyReq.end();
+      });
     });
 
     // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت
