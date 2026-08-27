@@ -243,6 +243,7 @@ function startLocalServer() {
         await hiddenWin.loadURL(targetUrl);
         await new Promise(r => setTimeout(r, 2000));
 
+        // تسجيل الدخول
         const loginResult = await hiddenWin.webContents.executeJavaScript(`
           (function(){
             const userField = document.querySelector('[id*="Username"], [name*="Username"], [id*="username"]');
@@ -260,23 +261,64 @@ function startLocalServer() {
         console.log('[Arkkan Scrape] login:', loginResult);
         await new Promise(r => setTimeout(r, 5000));
 
-        const data = await hiddenWin.webContents.executeJavaScript(`
-          (function(){
-            const tables = document.querySelectorAll('table');
-            for(const t of tables){
-              if(t.querySelector('th')?.textContent?.includes('هوية')){
-                const rows = [...t.querySelectorAll('tr')].slice(1);
-                return rows.map(tr => {
-                  const tds = [...tr.querySelectorAll('td')];
-                  return tds.map(td => td.textContent.trim());
-                }).filter(r => r.length >= 3);
+        // دعم تعدد الصفحات: نسحب كل الصفحات واحد تلو الآخر
+        let allRows = [];
+        let pageNum = 1;
+        const MAX_PAGES = 50;
+
+        while(pageNum <= MAX_PAGES){
+          console.log('[Arkkan Scrape] سحب صفحة رقم', pageNum);
+
+          // سحب الجدول الحالي
+          const pageRows = await hiddenWin.webContents.executeJavaScript(`
+            (function(){
+              const tables = document.querySelectorAll('table');
+              for(const t of tables){
+                if(t.querySelector('th')?.textContent?.includes('هوية')){
+                  const rows = [...t.querySelectorAll('tr')].slice(1);
+                  return rows.map(tr => {
+                    const tds = [...tr.querySelectorAll('td')];
+                    return tds.map(td => td.textContent.trim());
+                  }).filter(r => r.length >= 3);
+                }
               }
-            }
-            return [];
-          })()
-        `);
-        console.log('[Arkkan Scrape] scraped rows:', data.length);
-        res.json({ rows: data });
+              return [];
+            })()
+          `);
+          console.log('[Arkkan Scrape] صفحة', pageNum, ':', pageRows.length, 'صف');
+          if(!pageRows.length) break;
+          allRows.push(...pageRows);
+
+          // البحث عن زر الصفحة التالية (Next)
+          const hasNext = await hiddenWin.webContents.executeJavaScript(`
+            (function(){
+              // البحث عن رابط "التالي" أو ">>" أو ">":
+              const links = [...document.querySelectorAll('a')];
+              const nextLink = links.find(a => {
+                const txt = a.textContent.trim();
+                const href = a.getAttribute('href') || '';
+                return (txt === '>' || txt === '>>' || txt === 'التالي' || txt.includes('Next'))
+                  && href.includes('__doPostBack');
+              });
+              if(nextLink){
+                nextLink.click();
+                return true;
+              }
+              return false;
+            })()
+          `);
+
+          if(!hasNext){
+            console.log('[Arkkan Scrape] لا يوجد صفحة تالية - انتهينا');
+            break;
+          }
+
+          await new Promise(r => setTimeout(r, 3000));
+          pageNum++;
+        }
+
+        console.log('[Arkkan Scrape] الإجمالي:', allRows.length, 'سجل من', pageNum, 'صفحة');
+        res.json({ rows: allRows, pages: pageNum });
       } catch (e) {
         console.error('[Arkkan Scrape] error:', e);
         res.status(500).json({ error: e.message });
