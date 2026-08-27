@@ -1,7 +1,7 @@
 /* ============ Arkkan Import - استيراد الحقائب المصروفة من منصة أركان ============ */
 async function scrapeArkkan(username, password, onProgress){
   onProgress('جاري فتح صفحة أركان في نافذة مخفية...');
-  const resp = await fetch('/arkkan/scrape', {
+  const resp = await fetch('/arkkan-scrape', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({username, password})

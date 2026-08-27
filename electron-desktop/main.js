@@ -182,97 +182,94 @@ function startLocalServer() {
     });
 
     // ---- استيراد أركان عبر نافذة مخفية (يتغلب على تحميل JavaScript) ----
-    // يجب أن يكون قبل البروكسي العام
-    srv.post('/arkkan/scrape', express.json(), async (req, res) => {
-      const { username, password } = req.body || {};
-      if (!username || !password) return res.status(400).json({ error: 'يوزر وباسورد مطلوبين' });
+    srv.post('/arkkan-scrape', (req, res) => {
+      let rawBody = '';
+      req.on('data', c => rawBody += c);
+      req.on('end', async () => {
+        let username, password;
+        try { const j = JSON.parse(rawBody); username = j.username; password = j.password; } catch(e) {}
+        if (!username || !password) { res.status(400).json({ error: 'يوزر وباسورد مطلوبين' }); return; }
 
-      let hiddenWin = null;
-      try {
-        hiddenWin = new BrowserWindow({
-          width: 1280, height: 900, show: false,
-          webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
-        });
+        let hiddenWin = null;
+        try {
+          hiddenWin = new BrowserWindow({
+            width: 1280, height: 900, show: false,
+            webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
+          });
 
-        const targetUrl = 'https://arkkanapp.net/Municipal/Disbursed-bags.aspx';
-        await hiddenWin.loadURL(targetUrl);
-        await new Promise(r => setTimeout(r, 2000));
+          const targetUrl = 'https://arkkanapp.net/Municipal/Disbursed-bags.aspx';
+          await hiddenWin.loadURL(targetUrl);
+          await new Promise(r => setTimeout(r, 2000));
 
-        // تسجيل الدخول
-        const loginResult = await hiddenWin.webContents.executeJavaScript(`
-          (function(){
-            const userField = document.querySelector('[id*="Username"], [name*="Username"], [id*="username"]');
-            const passField = document.querySelector('[id*="Password"], [name*="Password"], [type="password"]');
-            if(userField && passField){
-              userField.value = ${JSON.stringify(username)};
-              passField.value = ${JSON.stringify(password)};
-              const btn = document.querySelector('[id*="btn_submit"], [id*="btnSubmit"], [type="submit"]');
-              if(btn) btn.click();
-              return 'login_submitted';
-            }
-            return 'no_fields_found: ' + document.title;
-          })()
-        `);
-        console.log('[Arkkan Scrape] login:', loginResult);
-        await new Promise(r => setTimeout(r, 5000));
-
-        // دعم تعدد الصفحات
-        let allRows = [];
-        let pageNum = 1;
-        const MAX_PAGES = 50;
-
-        while(pageNum <= MAX_PAGES){
-          console.log('[Arkkan Scrape] سحب صفحة رقم', pageNum);
-
-          const pageRows = await hiddenWin.webContents.executeJavaScript(`
+          const loginResult = await hiddenWin.webContents.executeJavaScript(`
             (function(){
-              const tables = document.querySelectorAll('table');
-              for(const t of tables){
-                if(t.querySelector('th')?.textContent?.includes('هوية')){
-                  const rows = [...t.querySelectorAll('tr')].slice(1);
-                  return rows.map(tr => {
-                    const tds = [...tr.querySelectorAll('td')];
-                    return tds.map(td => td.textContent.trim());
-                  }).filter(r => r.length >= 3);
-                }
+              const userField = document.querySelector('[id*="Username"], [name*="Username"], [id*="username"]');
+              const passField = document.querySelector('[id*="Password"], [name*="Password"], [type="password"]');
+              if(userField && passField){
+                userField.value = ${JSON.stringify(username)};
+                passField.value = ${JSON.stringify(password)};
+                const btn = document.querySelector('[id*="btn_submit"], [id*="btnSubmit"], [type="submit"]');
+                if(btn) btn.click();
+                return 'login_submitted';
               }
-              return [];
+              return 'no_fields_found: ' + document.title;
             })()
           `);
-          console.log('[Arkkan Scrape] صفحة', pageNum, ':', pageRows.length, 'صف');
-          if(!pageRows.length) break;
-          allRows.push(...pageRows);
+          console.log('[Arkkan Scrape] login:', loginResult);
+          await new Promise(r => setTimeout(r, 5000));
 
-          const hasNext = await hiddenWin.webContents.executeJavaScript(`
-            (function(){
-              const links = [...document.querySelectorAll('a')];
-              const nextLink = links.find(a => {
-                const txt = a.textContent.trim();
-                const href = a.getAttribute('href') || '';
-                return (txt === '>' || txt === '>>' || txt === 'التالي' || txt.includes('Next'))
-                  && href.includes('__doPostBack');
-              });
-              if(nextLink){ nextLink.click(); return true; }
-              return false;
-            })()
-          `);
+          let allRows = [];
+          let pageNum = 1;
+          const MAX_PAGES = 50;
 
-          if(!hasNext){
-            console.log('[Arkkan Scrape] لا يوجد صفحة تالية - انتهينا');
-            break;
+          while(pageNum <= MAX_PAGES){
+            console.log('[Arkkan Scrape] سحب صفحة رقم', pageNum);
+            const pageRows = await hiddenWin.webContents.executeJavaScript(`
+              (function(){
+                const tables = document.querySelectorAll('table');
+                for(const t of tables){
+                  if(t.querySelector('th')?.textContent?.includes('هوية')){
+                    const rows = [...t.querySelectorAll('tr')].slice(1);
+                    return rows.map(tr => {
+                      const tds = [...tr.querySelectorAll('td')];
+                      return tds.map(td => td.textContent.trim());
+                    }).filter(r => r.length >= 3);
+                  }
+                }
+                return [];
+              })()
+            `);
+            console.log('[Arkkan Scrape] صفحة', pageNum, ':', pageRows.length, 'صف');
+            if(!pageRows.length) break;
+            allRows.push(...pageRows);
+
+            const hasNext = await hiddenWin.webContents.executeJavaScript(`
+              (function(){
+                const links = [...document.querySelectorAll('a')];
+                const nextLink = links.find(a => {
+                  const txt = a.textContent.trim();
+                  const href = a.getAttribute('href') || '';
+                  return (txt === '>' || txt === '>>' || txt === 'التالي' || txt.includes('Next'))
+                    && href.includes('__doPostBack');
+                });
+                if(nextLink){ nextLink.click(); return true; }
+                return false;
+              })()
+            `);
+            if(!hasNext) break;
+            await new Promise(r => setTimeout(r, 3000));
+            pageNum++;
           }
-          await new Promise(r => setTimeout(r, 3000));
-          pageNum++;
-        }
 
-        console.log('[Arkkan Scrape] الإجمالي:', allRows.length, 'سجل من', pageNum, 'صفحة');
-        res.json({ rows: allRows, pages: pageNum });
-      } catch (e) {
-        console.error('[Arkkan Scrape] error:', e);
-        res.status(500).json({ error: e.message });
-      } finally {
-        if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy();
-      }
+          console.log('[Arkkan Scrape] الإجمالي:', allRows.length, 'سجل من', pageNum, 'صفحة');
+          res.json({ rows: allRows, pages: pageNum });
+        } catch (e) {
+          console.error('[Arkkan Scrape] error:', e);
+          res.status(500).json({ error: e.message });
+        } finally {
+          if (hiddenWin && !hiddenWin.isDestroyed()) hiddenWin.destroy();
+        }
+      });
     });
 
     // ---- بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة ----
