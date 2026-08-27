@@ -44,67 +44,13 @@ CREATE TABLE IF NOT EXISTS kv_store (
 );
 
 -- ============================================================
--- ربط هيئة الزكاة والضريبة والجمارك (فاتورة — المرحلة الثانية)
+-- إزالة ربط هيئة الزكاة والضريبة والجمارك (تمت إزالة الميزة بالكامل من الكود
+-- والواجهة). الأسطر أدناه تحذف الجدولين وكل بياناتهما (بما فيها سجل الفواتير
+-- القديم) نهائياً من قاعدة البيانات في أول إقلاع بعد هذا التحديث — إجراء غير
+-- قابل للتراجع عنه.
 -- ============================================================
-
--- بيانات الاعتماد الناتجة عن التسجيل مع الهيئة (CSID). صف واحد فقط عادةً
--- (WHERE is_active = true)، يُحدَّث عند كل تجديد/إصدار شهادة جديدة.
--- المفتاح الخاص والأسرار هنا حسّاسة جداً — هذا الجدول لا يُقرأ أبداً من
--- الواجهة الأمامية، فقط من كود الخادم وقت بناء/توقيع/إرسال الفواتير.
-CREATE TABLE IF NOT EXISTS zatca_credentials (
-  id                  SERIAL PRIMARY KEY,
-  environment         TEXT NOT NULL,              -- 'sandbox' | 'simulation' | 'production'
-  private_key_pem     TEXT,                        -- (اختياري الآن، الحالة الكاملة داخل egs_info) مفتاح secp256k1 الخاص
-  compliance_csid     TEXT,                        -- Binary Security Token (compliance)
-  compliance_secret   TEXT,
-  production_csid     TEXT,                        -- Binary Security Token (production/PCSID)
-  production_secret   TEXT,
-  is_active           BOOLEAN NOT NULL DEFAULT true,
-  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-);
--- الحالة الكاملة لوحدة EGS (بصيغة EGSUnitInfo التي تتوقعها مكتبة zatca-xml-js) —
--- نخزّنها ككائن JSON واحد بدل تفريقها على أعمدة، لتفادي أي عدم تطابق بسيط بين
--- تسمياتنا وتسميات المكتبة. الأعمدة أعلاه تبقى للاستعلام السريع فقط.
-ALTER TABLE zatca_credentials ADD COLUMN IF NOT EXISTS egs_info JSONB;
-ALTER TABLE zatca_credentials ALTER COLUMN private_key_pem DROP NOT NULL;
-
--- سجل كل فاتورة إلكترونية (مبيعات أو إشعار دائن/مردود) تم بناؤها وإرسالها،
--- بما يحقق سلسلة تجزئة الفواتير (كل فاتورة ترتبط بهاش الفاتورة السابقة لها،
--- وهو شرط أساسي من الهيئة). invoice_counter تسلسلي صارم لا يجوز أن يتكرر
--- أو يُحذف صف بعد إرساله بنجاح.
-CREATE TABLE IF NOT EXISTS zatca_invoice_log (
-  id                SERIAL PRIMARY KEY,
-  invoice_uuid      TEXT UNIQUE NOT NULL,
-  invoice_type      TEXT NOT NULL,        -- 'standard' (B2B) | 'simplified' (B2C)
-  document_type     TEXT NOT NULL,        -- 'invoice' | 'credit_note' (مردود مبيعات) | 'debit_note'
-  source_ref        TEXT,                 -- ربط بمعرّف العميل/الحركة داخل التطبيق (clientId أو vaultTx id)
-  invoice_counter   INTEGER NOT NULL,     -- ICV تسلسلي عام لكل الفواتير
-  previous_hash     TEXT NOT NULL,        -- PIH: هاش الفاتورة السابقة في السلسلة
-  invoice_hash      TEXT NOT NULL,        -- هاش هذه الفاتورة (يصبح previous_hash للفاتورة التالية)
-  xml               TEXT,                 -- UBL 2.1 XML قبل التوقيع
-  signed_xml        TEXT,                 -- XML بعد التوقيع الرقمي (XAdES) — ما يُرسل فعلياً
-  qr_base64         TEXT,                 -- حمولة QR النهائية (9 حقول TLV)
-  status             TEXT NOT NULL DEFAULT 'pending', -- pending|cleared|reported|warning|error
-  zatca_response     JSONB,                -- استجابة الهيئة كاملة (لأغراض التدقيق)
-  created_by         TEXT,
-  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter ON zatca_invoice_log(invoice_counter);
--- قيد تفرد على رقم الفاتورة (ICV): طبقة حماية أخيرة ضد تكرار الرقم في بداية السلسلة أو أي
--- سباق آخر — يمنع إدراج فاتورتين بنفس الرقم مهما تزامن الطلبات (يكمل القفل التنبيهي في lib.js).
--- ملاحظة ترحيل (إصلاح فشل النشر): قواعد بيانات قديمة قد تحتوي صفوفاً مكررة invoice_counter
--- من قبل هذا القيد، ولو تُرك قيد فريد على بيانات مكررة فسيفشل CREATE UNIQUE INDEX ويفشل معه
--- تجهيز قاعدة البيانات بالكامل عند الإقلاع. لذلك نُبقي أحدث صف فقط لكل رقم تسلسلي (نفس
--- الرقم المتكرر غالباً صف قديم أُعيد إدراجه بمعلومة أحدث/أو صف تجريبي من بيئة التدريب)،
--- ثم ننشئ الفهرس الفريد. هذه العملية آمنة وقابلة للإعادة (لا تتأثر بوجود الفهرس من قبل).
-DELETE FROM zatca_invoice_log a
-USING zatca_invoice_log b
-WHERE a.invoice_counter = b.invoice_counter
-  AND a.id <> b.id
-  AND (a.created_at < b.created_at OR (a.created_at = b.created_at AND a.id < b.id));
-CREATE UNIQUE INDEX IF NOT EXISTS idx_zatca_invoice_log_counter_uniq ON zatca_invoice_log(invoice_counter);
-CREATE INDEX IF NOT EXISTS idx_zatca_invoice_log_source ON zatca_invoice_log(source_ref);
+DROP TABLE IF EXISTS zatca_invoice_log;
+DROP TABLE IF EXISTS zatca_credentials;
 
 -- ============================================================
 -- جدول العملاء كصفوف حقيقية مفهرسة (Pagination من السيرفر)

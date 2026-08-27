@@ -32,12 +32,12 @@ router.post('/api/auth/qr-login/create', authLimiter, (req, res) => {
 });
 
 router.get('/api/auth/qr-login/status/:id', authLimiter, (req, res) => {
+  // حماية من Race Condition: استخراج + حذف ذرياً (get-and-delete) لتمنع تمرير التوكن
+  // لطلبين متزامنين — بدل get ثم delete منفصلين قد يتداخلان بين طلبين في Event Loop
   const session = qrSessions.get(req.params.id);
+  if (session) qrSessions.delete(req.params.id);
   if (!session || session.expiresAt < Date.now()) return res.json({ status: 'expired' });
   if (session.status === 'approved') {
-    // نُرجع بيانات الدخول مرة واحدة فقط ثم نحذف الجلسة فوراً — منعاً لإعادة استخدام نفس الاستجابة
-    // (replay) لو تكرر الـ polling بعد التقاطها بالفعل من الديسكتوب.
-    qrSessions.delete(req.params.id);
     return res.json({
       status: 'approved',
       token: session.token,

@@ -45,9 +45,6 @@ function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, 
     .inv-title{text-align:left;}
     .inv-title h2{margin:0; color:${accent}; font-size:22px;}
     .inv-title .no{font-family:monospace; font-size:14px; margin-top:4px;}
-    .zatca-qr{display:flex; flex-direction:column; align-items:center; gap:4px; margin-right:auto;}
-    .zatca-qr img{width:110px; height:110px; border:1px solid ${p.border}; border-radius:6px; padding:4px; background:#fff;}
-    .zatca-qr span{font-size:10.5px; color:${p.muted};}
     .info-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:22px; font-size:13px;}
     .info-box{border:1px solid ${p.border}; border-radius:8px; padding:12px 14px;}
     .info-box h4{margin:0 0 8px; font-size:12.5px; color:${p.muted};}
@@ -67,8 +64,6 @@ function printDocStyles({accent = PRINT_PALETTE.navy, borderColor, amountColor, 
     .sig-line{border-top:1px solid ${p.text}; margin-top:50px; padding-top:8px; font-size:12.5px;}
     @media screen and (max-width:700px){
       .inv-head{flex-wrap:wrap; gap:14px;}
-      .zatca-qr{margin-right:0;}
-      .zatca-qr img{width:84px; height:84px;}
       .info-grid{grid-template-columns:1fr; gap:10px;}
       .totals{width:100%;}
       table.items{font-size:12px;}

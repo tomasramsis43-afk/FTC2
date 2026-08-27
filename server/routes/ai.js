@@ -33,20 +33,28 @@ async function extractInvoiceFile(f) {
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.dataBase64 } }
     : { type: 'image', source: { type: 'base64', media_type: mime, data: f.dataBase64 } };
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 500,
-        system: CI_EXTRACT_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'استخرج البيانات من هذه الفاتورة.' }] }],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    let r;
+    try {
+      r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 500,
+          system: CI_EXTRACT_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: 'استخرج البيانات من هذه الفاتورة.' }] }],
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!r.ok) {
       const errText = await r.text().catch(() => '');
       return { fileName, error: `تعذّرت قراءة الملف (HTTP ${r.status})`, detail: errText.slice(0, 200) };
@@ -54,17 +62,21 @@ async function extractInvoiceFile(f) {
     const data = await r.json();
     const rawText = (data.content || []).map(b => b.text || '').join('').trim();
     const cleaned = rawText.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch { return { fileName, error: 'استجابة الذكاء الاصطناعي غير صالحة (ليست JSON)' }; }
+    // التحقق من صحة البيانات المُستخرجة — يمنع حقن بيانات غير متوقعة
+    const validConf = ['high', 'medium', 'low'];
     return {
       fileName,
-      nationalId: parsed.nationalId ? String(parsed.nationalId).trim() : null,
-      invoiceNo: parsed.invoiceNo ? String(parsed.invoiceNo).trim() : null,
-      date: parsed.date || null,
-      actualValue: parsed.actualValue !== null && parsed.actualValue !== undefined && parsed.actualValue !== '' ? Number(parsed.actualValue) : null,
-      clientNameOnInvoice: parsed.clientNameOnInvoice || null,
-      confidence: parsed.confidence || 'unknown',
+      nationalId: parsed.nationalId ? String(parsed.nationalId).replace(/[^0-9]/g, '').trim() || null : null,
+      invoiceNo: parsed.invoiceNo ? String(parsed.invoiceNo).trim().slice(0, 50) : null,
+      date: typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
+      actualValue: parsed.actualValue !== null && parsed.actualValue !== undefined && parsed.actualValue !== '' ? Math.round(Number(parsed.actualValue) * 100) / 100 : null,
+      clientNameOnInvoice: parsed.clientNameOnInvoice ? String(parsed.clientNameOnInvoice).trim().slice(0, 200) : null,
+      confidence: validConf.includes(parsed.confidence) ? parsed.confidence : 'unknown',
     };
   } catch (e) {
+    if (e.name === 'AbortError') return { fileName, error: 'انتهت مهلة قراءة الملف من الذكاء الاصطناعي (60 ثانية)' };
     return { fileName, error: 'تعذّر تحليل استجابة الذكاء الاصطناعي' };
   }
 }
@@ -118,20 +130,28 @@ router.post('/api/ai/classify-expense', requireAuth, aiLimiter, async (req, res)
     return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
   }
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
-        system: AI_CLASSIFY_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: JSON.stringify({ recipientName: recipientName || null, notes: notes || null, documentRef: documentRef || null, amount: amount || null, availableCategories: availableCategories || [] }) }],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    let r;
+    try {
+      r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 1000,
+          system: AI_CLASSIFY_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: JSON.stringify({ recipientName: recipientName || null, notes: notes || null, documentRef: documentRef || null, amount: amount || null, availableCategories: availableCategories || [] }) }],
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!r.ok) {
       const errText = await r.text().catch(() => '');
       return res.status(502).json({ error: `تعذّر الاتصال بخدمة الذكاء الاصطناعي (HTTP ${r.status})`, detail: errText.slice(0, 200) });
@@ -147,6 +167,7 @@ router.post('/api/ai/classify-expense', requireAuth, aiLimiter, async (req, res)
     }
     res.json({ category: String(parsed.category || '').trim(), isNew: !!parsed.isNew, reason: parsed.reason || '' });
   } catch (e) {
+    if (e.name === 'AbortError') return res.status(504).json({ error: 'انتهت مهلة الاتصال بخدمة الذكاء الاصطناعي' });
     console.error(e);
     res.status(500).json({ error: 'تعذّر الحصول على اقتراح التصنيف' });
   }

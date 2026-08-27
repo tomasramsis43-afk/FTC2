@@ -9,7 +9,6 @@ const { centralErrorHandler } = require('./errors');
 const { loadRolePermissionsCache } = require('./permissions');
 const backupsRouter = require('./routes/backups');
 const aiRouter = require('./routes/ai');
-const zatcaRouter = require('./routes/zatca');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const webauthnRouter = require('./routes/webauthn');
@@ -18,6 +17,7 @@ const qrLoginRouter = require('./routes/qr-login');
 const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter, syncClientsRows } = require('./routes/records');
+const arkkanRouter = require('./routes/arkkan');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -116,7 +116,7 @@ app.use(recordsRouter);
 app.use(aiRouter);
 app.use(backupsRouter);
 app.use(healthRouter);
-app.use(zatcaRouter);
+app.use(arkkanRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {

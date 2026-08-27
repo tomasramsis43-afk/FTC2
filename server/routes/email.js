@@ -16,8 +16,29 @@ const { requireAuth } = require('../auth');
 const { emailLimiter } = require('../rate-limiters');
 const { sendEmail, wrapHtml, alertAdmins, getAdminAlertEmails } = require('../services/email');
 
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 const MAX_ATTACHMENT_BASE64_CHARS = 15 * 1024 * 1024; // ~15MB بعد الترميز، يكفي أي فاتورة/تقرير PDF بمساحة
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// تنظيف HTML المُرسَل من الواجهة — يزيل أي عناصر/سمات خطيرة قد تُستخدم في تصييد أو حقن محتوى
+function sanitizeEmailHtml(html) {
+  if (typeof html !== 'string') return html;
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?\/?>/gi, '')
+    .replace(/<form[\s\S]*?<\/form>/gi, '')
+    .replace(/<base[\s\S]*?\/?>/gi, '')
+    .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/data\s*:/gi, '')
+    .replace(/vbscript\s*:/gi, '')
+    .replace(/expression\s*\(/gi, '');
+}
 
 function parseAttachment(body) {
   const { attachmentBase64, attachmentName, attachmentType } = body || {};
@@ -48,9 +69,9 @@ router.post('/api/email/invoice', requireAuth, emailLimiter, async (req, res) =>
     } catch (e) {
       return res.status(e.status || 400).json({ error: e.message });
     }
-    const html = bodyHtml || wrapHtml(`
-      <p>مرحباً ${clientName || ''}،</p>
-      <p>مرفق فاتورتكم${invoiceNo ? ` رقم <b>${invoiceNo}</b>` : ''}${amount ? ` بمبلغ <b>${amount}</b>` : ''}.</p>
+    const html = sanitizeEmailHtml(bodyHtml) || wrapHtml(`
+      <p>مرحباً ${escapeHtml(clientName || '')}،</p>
+      <p>مرفق فاتورتكم${invoiceNo ? ` رقم <b>${escapeHtml(String(invoiceNo))}</b>` : ''}${amount ? ` بمبلغ <b>${escapeHtml(String(amount))}</b>` : ''}.</p>
       <p style="color:#888; font-size:13px;">شكراً لتعاملكم معنا.</p>
     `);
     const result = await sendEmail({
@@ -87,7 +108,7 @@ router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => 
     } catch (e) {
       return res.status(e.status || 400).json({ error: e.message });
     }
-    const html = bodyHtml || wrapHtml(`<p>مرفق التقرير المطلوب.</p>`);
+    const html = sanitizeEmailHtml(bodyHtml) || wrapHtml(`<p>مرفق التقرير المطلوب.</p>`);
     const result = await sendEmail({
       to: recipients,
       cc: ccList,

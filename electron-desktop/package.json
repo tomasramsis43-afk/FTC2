@@ -1,13 +1,13 @@
 {
     "name":  "ftc2-desktop",
-    "version":  "1.0.8",
+    "version":  "1.0.9",
     "description":  "برنامج إدارة المركز - تطبيق سطح المكتب",
     "main":  "main.js",
     "author":  "FTC2",
     "scripts":  {
                     "start":  "electron .",
-                    "predist":  "node -e \"const fs=require('fs'); const path=require('path'); const src=path.join(__dirname,'..','frontend'); const dest=path.join(__dirname,'app-assets'); fs.cpSync(src,dest,{recursive:true}); console.log('app-assets synced')\"",
-                    "dist":  "npm run predist && electron-builder --win nsis"
+                    "predist":  "node -e \"const fs=require(\u0027fs\u0027); const path=require(\u0027path\u0027); const src=path.join(__dirname,\u0027..\u0027,\u0027frontend\u0027); const dest=path.join(__dirname,\u0027app-assets\u0027); fs.cpSync(src,dest,{recursive:true}); console.log(\u0027app-assets synced\u0027)\"",
+                    "dist":  "npm run predist \u0026\u0026 electron-builder --win nsis"
                 },
     "devDependencies":  {
                             "electron":  "^31.0.0",

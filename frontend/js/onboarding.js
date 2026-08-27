@@ -23,7 +23,9 @@
     shown = true;
     const ov = document.getElementById('onboarding-overlay');
     if(!ov) return;
-    const ci = (settings && settings.centerInfo) || {};
+    if(typeof settings === 'undefined' || settings === null) settings = {};
+    if(!settings.centerInfo) settings.centerInfo = {};
+    const ci = settings.centerInfo;
     document.getElementById('ob-name').value = ci.name || '';
     document.getElementById('ob-tax').value = ci.taxNumber || '';
     document.getElementById('ob-phone').value = ci.phone || '';
@@ -48,6 +50,8 @@
 
   async function finish(){
     try {
+      if(typeof settings === 'undefined' || settings === null) settings = {};
+      if(!settings.centerInfo) settings.centerInfo = {};
       const name = document.getElementById('ob-name').value.trim();
       const tax = document.getElementById('ob-tax').value.trim();
       const phone = document.getElementById('ob-phone').value.trim();
