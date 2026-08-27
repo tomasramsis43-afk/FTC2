@@ -22,31 +22,48 @@ async function arkkanLogin(username, password){
 
 function parseArkkanRows(html){
   const doc = new DOMParser().parseFromString(html,'text/html');
-  const tables = doc.querySelectorAll('table');
-  console.log('[Arkkan] عدد الجداول:', tables.length);
 
-  for(let ti=0; ti<tables.length; ti++){
-    const t = tables[ti];
-    const rows = t.querySelectorAll('tr');
-    if(rows.length < 2) continue;
-    const firstTdText = rows[0]?.querySelector('td')?.textContent?.trim()?.substring(0,80) || '';
-    console.log('[Arkkan] جدول #'+ti+' ('+rows.length+' صف):', firstTdText);
-    if(rows.length >= 3 && rows.length <= 25){
-      for(let i=0; i<Math.min(2, rows.length); i++){
-        console.log('[Arkkan]   صف'+i+':', rows[i].innerHTML.substring(0,800));
-      }
+  if(html.includes('2643467158') || html.includes('3211374')){
+    console.log('[Arkkan] بيانات الحقائب موجودة في HTML!');
+  } else {
+    console.log('[Arkkan] بيانات الحقائب غير موجودة في HTML - محملة عن طريق JS');
+  }
+
+  const allElements = doc.querySelectorAll('*');
+  let gridId = null;
+  for(const el of allElements){
+    const id = (el.id||'').toLowerCase();
+    if(id.includes('gridview') || id.includes('gv') || id.includes('disbursed') || id.includes('tblresult')){
+      gridId = el.id;
+      console.log('[Arkkan] وجدت عنصر:', el.id, 'نوع:', el.tagName, 'صفوف:', el.querySelectorAll('tr').length);
     }
   }
 
-  const forms = doc.querySelectorAll('form');
-  console.log('[Arkkan] عدد الفورمات:', forms.length);
-  const doPostBack = html.match(/__doPostBack/g);
-  console.log('[Arkkan] عدد __doPostBack:', doPostBack ? doPostBack.length : 0);
+  const scripts = doc.querySelectorAll('script');
+  for(const s of scripts){
+    const txt = s.textContent || '';
+    if(txt.includes('GridView') || txt.includes('disbursed') || txt.includes('TableData') || txt.includes('ajax') || txt.includes('fetch') || txt.includes('XMLHttp')){
+      console.log('[Arkkan] Script قد يحمل البيانات:', txt.substring(0,500));
+    }
+  }
 
-  const gridViews = doc.querySelectorAll('[id*="GridView"], [id*="gridview"], [id*="gv"], [id*="tbl"]');
-  console.log('[Arkkan] جداول GridView:', gridViews.length);
-  for(const gv of gridViews){
-    console.log('[Arkkan] GridView id:', gv.id, 'صفوف:', gv.querySelectorAll('tr').length);
+  const postBacks = html.match(/__doPostBack\('([^']+)'/g);
+  if(postBacks){
+    console.log('[Arkkan] PostBack events:', [...new Set(postBacks)].join(' | '));
+  }
+
+  const tables = doc.querySelectorAll('table');
+  console.log('[Arkkan] عدد الجداول:', tables.length);
+  for(let ti=0; ti<tables.length; ti++){
+    const rows = tables[ti].querySelectorAll('tr');
+    if(rows.length < 2) continue;
+    const firstCell = rows[0]?.textContent?.trim()?.substring(0,60) || '';
+    console.log('[Arkkan] جدول #'+ti+' ('+rows.length+' صف):', firstCell);
+    if(rows.length >= 3){
+      for(let i=0; i<Math.min(2, rows.length); i++){
+        console.log('[Arkkan]   صف'+i+' TDs:'+rows[i].querySelectorAll('td').length+':', rows[i].innerHTML.substring(0,500));
+      }
+    }
   }
 
   return [];
@@ -54,8 +71,7 @@ function parseArkkanRows(html){
 
 async function importArkkan(from,to, username, password, onProgress){
   onProgress('جاري تسجيل الدخول لأركان...');
-  const loginResp = await arkkanLogin(username, password);
-  console.log('[Arkkan] حجم استجابة الدخول:', loginResp.length);
+  await arkkanLogin(username, password);
 
   onProgress('جاري سحب الصفحة...');
   const html = await fetch(`/arkkan/Municipal/Disbursed-bags.aspx`, {credentials:'include'}).then(r=>r.text());
@@ -63,13 +79,7 @@ async function importArkkan(from,to, username, password, onProgress){
 
   parseArkkanRows(html);
 
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  console.log('[Arkkan] عنوان الصفحة:', titleMatch ? titleMatch[1] : 'غير معروف');
-
-  const h1 = html.match(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi);
-  if(h1) console.log('[Arkkan] عناوين:', h1.slice(0,5).join(' | '));
-
-  onProgress('تم تحليل الصفحة - راجع Console للتفاصيل');
+  onProgress('تم التحليل - راجع Console');
   return 0;
 }
 
