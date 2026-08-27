@@ -545,9 +545,32 @@ function openModal(id){
   addingClientPayment = false;
   renderClientPaymentsPanel();
   renderClientTimeline();
+  checkClientDuplicate();
   $('#overlay').classList.add('show'); SoundFX.open();
   $('#f-name').focus();
 }
+/* تنبيه فوري (غير مانع) عند تطابق رقم الهوية أو الجوال مع عميل موجود مسبقاً،
+   لمنع تسجيل نفس المتدرب مرتين بالخطأ. لا يمنع الحفظ — فقط يُنبّه الموظف
+   ليتحقق يدوياً (قد يكون تسجيل مشروع لدورة ثانية بنفس الهوية). */
+function checkClientDuplicate(){
+  const box = $('#client-duplicate-warning');
+  if(!box) return;
+  const idVal = $('#f-id').value.trim();
+  const phoneVal = $('#f-phone').value.trim();
+  const dupId = idVal && clients.find(c => c.clientId === idVal && c.id !== editingId);
+  const dupPhone = phoneVal && clients.find(c => c.phone === phoneVal && c.id !== editingId);
+  if(dupId || dupPhone){
+    const parts = [];
+    if(dupId) parts.push(`رقم الهوية (${escapeHtml(idVal)}) مسجّل مسبقاً باسم "${escapeHtml(dupId.name || '')}"`);
+    if(dupPhone && dupPhone !== dupId) parts.push(`رقم الجوال (${escapeHtml(phoneVal)}) مسجّل مسبقاً باسم "${escapeHtml(dupPhone.name || '')}"`);
+    box.innerHTML = `<strong>تنبيه ازدواجية:</strong> ${parts.join('، ')}. تحقق قبل الحفظ.`;
+    box.style.display = '';
+  }else{
+    box.style.display = 'none';
+  }
+}
+$('#f-id').addEventListener('input', checkClientDuplicate);
+$('#f-phone').addEventListener('input', checkClientDuplicate);
 function toggleClientTypeFields(){
   const isCompany = $('#f-clienttype').value === 'company';
   $('#wrap-f-company').style.display = isCompany ? '' : 'none';

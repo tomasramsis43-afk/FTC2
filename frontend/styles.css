@@ -16,40 +16,40 @@
    ملاحظة تقنية: استبدال var() داخل المتغيرات يحدث عند عنصر التعريف ثم يورَّث
    مُستبدَلاً، لذلك تُعاد تعريف الأسماء المستعارة داخل نطاق كل ثيم على حدة. */
 :root {
-  /* ── الهوية (Brand) ── */
-  --brand-primary: #d17e2d; /* AA-nudge 3:1 */
-  --brand-primary-strong: #b3661e;
-  --brand-primary-bright: #f0a857;
+  /* ── الهوية (Brand) — Apple macOS Studio Glass: أزرق نظام + إندجو ثانوي ── */
+  --brand-primary: #2563eb; /* أزرق macOS النظامي */
+  --brand-primary-strong: #1d4ed8;
+  --brand-primary-bright: #60a5fa;
 
-  --brand-secondary: #1ea486; /* AA-nudge 3:1 */
-  --brand-secondary-strong: #167a64;
-  --brand-secondary-bright: #2fd9b0;
-  --brand-secondary-soft: #5fcdb4;
+  --brand-secondary: #4f46e5; /* إندجو ثانوي (أزرار الأيقونات، شارات) */
+  --brand-secondary-strong: #4338ca;
+  --brand-secondary-bright: #818cf8;
+  --brand-secondary-soft: #a5b4fc;
 
-  /* ── الأسطح والخلفيات ── */
-  --bg: #f6f7f9;
-  --surface: rgba(255, 255, 255, 0.92);
+  /* ── الأسطح والخلفيات (زجاج أبيض شفاف) ── */
+  --bg: #f4f5f9;
+  --surface: rgba(255, 255, 255, 0.85);
   --surface-solid: #ffffff;
-  --surface-alt: #eef1f5;
-  --bg-soft: #eef1f5;
-  --border: #e3e7ec;
+  --surface-alt: #f1f5f9;
+  --bg-soft: #f8fafc;
+  --border: #e2e8f0;
 
-  /* ── النصوص ── */
-  --text-primary: #201a2e;
-  --text-secondary: #6c6478;
+  /* ── النصوص (سليت بارد بدل البنفسجي الداكن) ── */
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
 
   /* ── الدلالية (Semantic) ── */
-  --success: #1fa98a;
-  --warning: #e0a72f;
-  --danger: #e0505e;
-  --info: #4a7dd9;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #2563eb;
 
-  /* ── مقاييس الاستدارة ── */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 22px;
+  /* ── مقاييس الاستدارة (Apple: زوايا أوسع) ── */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
   --radius-full: 999px;
 
   /* ── مقياس المسافات (قاعدة 4px) ── */
@@ -62,12 +62,12 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* ── الظلال (Elevation) ── */
-  --shadow-xs: 0 1px 2px rgba(32, 26, 46, 0.05);
-  --shadow-sm: 0 2px 8px rgba(32, 26, 46, 0.08);
-  --shadow-md: 0 8px 24px -8px rgba(32, 26, 46, 0.16);
-  --shadow-lg: 0 16px 40px -12px rgba(32, 26, 46, 0.22);
-  --shadow-brand: 0 12px 28px -14px rgba(217, 131, 47, 0.45);
+  /* ── الظلال (Elevation) — ظلال زجاجية ناعمة ── */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 20px 48px -14px rgba(15, 23, 42, 0.18);
+  --shadow-brand: 0 12px 28px -14px rgba(37, 99, 235, 0.35);
 
   /* ── الخطوط ── */
   --font-display: 'Tajawal', 'IBM Plex Sans Arabic', system-ui, sans-serif;
@@ -87,14 +87,14 @@
   --text-muted: var(--text-secondary);
   --radius: 20px;
   --shadow: var(--shadow-xs);
-  --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.35);
+  --shadow-hover: 0 16px 34px -16px rgba(37, 99, 235, 0.3);
   --on-accent-text: #ffffff;
-  --sidebar-bg: #ffffff;
+  --sidebar-bg: rgba(255, 255, 255, 0.6);
   --sidebar-bg-alt: #f8fafc;
-  --sidebar-text: #1e293b;
+  --sidebar-text: #0f172a;
   --sidebar-text-muted: #64748b;
-  --sidebar-active-bg: linear-gradient(135deg, #f59e0b, #d97706);
-  --sidebar-active-text: #ffffff;
+  --sidebar-active-bg: #ffffff;
+  --sidebar-active-text: #0f172a;
 
   /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
   --color-primary: var(--brand-primary);
@@ -113,40 +113,40 @@
 
 /* ============= نبض DS TOKENS v1 — Dark (داكن) ============= */
 body.dark-theme {
-  /* ── الهوية (Brand) — الداكن واجهة مستقلة لا انقلاب ألوان ── */
-  --brand-primary: #f0a857;
-  --brand-primary-strong: #d98a34;
-  --brand-primary-bright: #ffd9a0;
+  /* ── الهوية (Brand) — Apple macOS Studio Glass الداكن ── */
+  --brand-primary: #3b82f6;
+  --brand-primary-strong: #2563eb;
+  --brand-primary-bright: #93c5fd;
 
-  --brand-secondary: #2fd9b0;
-  --brand-secondary-strong: #21ad8b;
-  --brand-secondary-bright: #7eebd2;
-  --brand-secondary-soft: #7eebd2;
+  --brand-secondary: #818cf8;
+  --brand-secondary-strong: #6366f1;
+  --brand-secondary-bright: #a5b4fc;
+  --brand-secondary-soft: #a5b4fc;
 
-  /* ── الأسطح والخلفيات ── */
-  --bg: #0f1326;
-  --surface: rgba(21, 25, 44, 0.92);
-  --surface-solid: #151a2c;
-  --surface-alt: #1a2038;
-  --bg-soft: #171c30;
-  --border: #262c48;
+  /* ── الأسطح والخلفيات (زجاج سليت داكن) ── */
+  --bg: #0b0f19;
+  --surface: rgba(23, 28, 41, 0.85);
+  --surface-solid: #171c29;
+  --surface-alt: #1e2433;
+  --bg-soft: #141926;
+  --border: #2a3142;
 
   /* ── النصوص ── */
-  --text-primary: #f2f3fa;
-  --text-secondary: #9199bf;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
 
   /* ── الدلالية ── */
-  --success: #2fd9b0;
-  --warning: #eebc55;
-  --danger: #ff6e7a;
-  --info: #7aa3ef;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
 
   /* ── الظلال ── */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.45);
-  --shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 18px 44px -14px rgba(0, 0, 0, 0.6);
-  --shadow-brand: 0 12px 30px -14px rgba(240, 168, 87, 0.5);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 48px -14px rgba(0, 0, 0, 0.55);
+  --shadow-brand: 0 12px 30px -14px rgba(59, 130, 246, 0.45);
 
   /* ═══ إعادة تعريف الأسماء المستعارة في نطاق الداكن (إلزامي) ═══ */
   --navy: var(--brand-primary);
@@ -160,14 +160,14 @@ body.dark-theme {
   --text: var(--text-primary);
   --text-muted: var(--text-secondary);
   --shadow: var(--shadow-xs);
-  --shadow-hover: 0 16px 34px -16px rgba(240, 168, 87, 0.4);
-  --on-accent-text: #0f1326;
-  --sidebar-bg: #0b0e1c;
-  --sidebar-bg-alt: #11152a;
-  --sidebar-text: #9199bf;
-  --sidebar-text-muted: #565c85;
-  --sidebar-active-bg: var(--brand-primary);
-  --sidebar-active-text: #0f1326;
+  --shadow-hover: 0 16px 34px -16px rgba(59, 130, 246, 0.4);
+  --on-accent-text: #0b0f19;
+  --sidebar-bg: rgba(23, 28, 41, 0.55);
+  --sidebar-bg-alt: #141926;
+  --sidebar-text: #94a3b8;
+  --sidebar-text-muted: #566072;
+  --sidebar-active-bg: var(--surface-solid);
+  --sidebar-active-text: #f1f5f9;
 
   /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
   --color-primary: var(--brand-primary);
