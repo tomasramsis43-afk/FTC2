@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1326">
+<meta name="theme-color" content="#0b0d12">
 <title>نظام إدارة عملاء وكورسات المركز</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -1722,7 +1722,7 @@
       <div class="formgrid" style="margin-bottom:10px; max-width:260px;">
         <div class="field"><label>كما في تاريخ</label><input type="date" id="tb2-asof"></div>
       </div>
-      <div id="tb2-imbalance-banner" style="display:none; background:#fdecea; color:#611a15; border:1px solid #f5c2c0; border-radius:8px; padding:10px 14px; margin-bottom:10px; font-weight:700;"></div>
+      <div id="tb2-imbalance-banner" style="display:none; background:color-mix(in srgb, var(--danger) 14%, var(--surface-solid)); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius:8px; padding:10px 14px; margin-bottom:10px; font-weight:700;"></div>
       <div class="table-scroll table-scroll-compact">
         <table>
           <thead><tr><th>الرمز</th><th>الحساب</th><th>التصنيف</th><th>مدين</th><th>دائن</th></tr></thead>
@@ -1841,18 +1841,18 @@
   <section class="view" id="view-settings">
     <div class="panel">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2.4-1.4L14 3h-4l-.16 2.2a7 7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .5.05.95.14 1.4l-2 1.5 2 3.4 2.3-.9c.7.6 1.5 1.1 2.4 1.4L10 21h4l.16-2.2c.9-.3 1.7-.8 2.4-1.4l2.3.9 2-3.4-2-1.5c.09-.45.14-.9.14-1.4z"></path></svg></span> مظهر الواجهة</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">الواجهة تستخدم هوية بصرية واحدة موحّدة: "نبض" — إندجو داكن عميق + كهرماني دافئ (أساسي) + فيروزي (ثانوي وحالات إيجابية)، مع وضع ليلي/نهاري حقيقي لنفس الهوية. يمكنك التبديل بين الوضع الفاتح (النهاري) والوضع الغامق (الليلي) من زر القمر/الشمس بجانب اسم المستخدم.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">الواجهة تستخدم هوية بصرية واحدة موحّدة: "نبض" — كانفس داكن عميق + كهرماني دافئ (أساسي) + فيروزي (ثانوي وحالات إيجابية)، مع وضع ليلي/نهاري حقيقي لنفس الهوية. يمكنك التبديل بين الوضع الفاتح (النهاري) والوضع الغامق (الليلي) من زر القمر/الشمس بجانب اسم المستخدم.</p>
       <div style="display:flex; gap:14px; align-items:center;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#F0A857;"></div>
+        <div style="width:28px; height:28px; border-radius:50%; background:#FF6A47;"></div>
         <div style="color:var(--text-muted); font-size:12px;">كهرماني دافئ (أساسي)</div>
       </div>
       <div style="display:flex; gap:14px; align-items:center; margin-top:10px;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#2FD9B0;"></div>
+        <div style="width:28px; height:28px; border-radius:50%; background:#4FD1C5;"></div>
         <div style="color:var(--text-muted); font-size:12px;">فيروزي (ثانوي وحالات إيجابية)</div>
       </div>
       <div style="display:flex; gap:14px; align-items:center; margin-top:10px;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#0F1326;"></div>
-        <div style="color:var(--text-muted); font-size:12px;">إندجو داكن عميق (خلفية)</div>
+        <div style="width:28px; height:28px; border-radius:50%; background:#0B0D12;"></div>
+        <div style="color:var(--text-muted); font-size:12px;">كانفس داكن عميق (خلفية)</div>
       </div>
     </div>
     <div class="panel" id="panel-app-update" >
@@ -1993,7 +1993,7 @@
       <h3>ربط عمليات مخزون الحقائب بالحركات المالية</h3>
       <div class="hint hint-info">عند التفعيل: أي عملية إيداع/سحب جديدة في "مخزون الحقائب" (بطريقة دفع كاش) تُنشئ تلقائياً حركة مقابلة في "الحركات المالية"، وحذف عملية الحقيبة يحذف حركتها المالية المرتبطة. عند الإلغاء: العمليات الجديدة لن تُنشئ أي حركة مالية، لكن الحركات القديمة المرتبطة بعمليات سابقة تبقى كما هي ولا تتأثر.</div>
       <div class="addrow" style="max-width:340px; align-items:center;">
-        <span id="bagfinancelink-status" style="font-weight: 700; font-size: 13.5px; color: var(--success, #1fa98a);">✅ الربط مُفعَّل حالياً</span>
+        <span id="bagfinancelink-status" style="font-weight: 700; font-size: 13.5px; color: var(--success, #047857);">✅ الربط مُفعَّل حالياً</span>
         <button class="btn btn-danger btn-sm" id="btn-toggle-bagfinancelink">إلغاء الربط</button>
       </div>
     </div>
@@ -2341,7 +2341,7 @@
     <h2>📨 إرسال رسالة واتساب للعملاء المحددين</h2>
     <div id="bulk-msg-setup-view">
       <div class="hint hint-info" style="margin:0 0 10px;">يفتح البرنامج محادثة واتساب (wa.me) لكل عميل بالترتيب مع الرسالة جاهزة، وأنت تضغط زر الإرسال داخل واتساب يدوياً لكل عميل، ثم تنتقل للعميل التالي من هنا. استخدم <b class="mono">{name}</b> داخل النص ليتم استبدالها تلقائياً باسم كل عميل.</div>
-      <div class="computed" style="margin-bottom:10px;">العدد الإجمالي المحدد: <b id="bulk-msg-recipient-count" class="mono">0</b> عميل. <span id="bulk-msg-no-phone-warning" style="color:var(--danger,#FF6E7A); display:none;"> — تنبيه: <b id="bulk-msg-no-phone-count">0</b> منهم بدون رقم جوال مسجّل وسيتم تخطيهم.</span></div>
+      <div class="computed" style="margin-bottom:10px;">العدد الإجمالي المحدد: <b id="bulk-msg-recipient-count" class="mono">0</b> عميل. <span id="bulk-msg-no-phone-warning" style="color:var(--danger,#be123c); display:none;"> — تنبيه: <b id="bulk-msg-no-phone-count">0</b> منهم بدون رقم جوال مسجّل وسيتم تخطيهم.</span></div>
       <div class="field full">
         <label>نص الرسالة</label>
         <textarea id="bulk-msg-text" rows="6" placeholder="اكتب نص الرسالة هنا... مثال: مرحباً {name}، نود تذكيركم بموعد الدورة..."></textarea>
@@ -2361,7 +2361,7 @@
         <label>الجوال</label>
         <div id="bulk-msg-current-phone" class="mono" style="padding:4px 0;"></div>
       </div>
-      <div class="hint hint-info" id="bulk-msg-skip-hint" style="display:none; color:var(--danger,#FF6E7A);">لا يوجد رقم جوال لهذا العميل — تم تخطيه تلقائياً.</div>
+      <div class="hint hint-info" id="bulk-msg-skip-hint" style="display:none; color:var(--danger,#be123c);">لا يوجد رقم جوال لهذا العميل — تم تخطيه تلقائياً.</div>
       <div class="modal-actions" style="justify-content:space-between; margin-top:14px;">
         <button type="button" class="btn btn-ghost" id="btn-bulk-message-close">إنهاء</button>
         <div style="display:flex; gap:10px;">
@@ -2956,12 +2956,12 @@
 </div>
 <!-- /app-wrap -->
 
-<div id="pin-lock-screen" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--navy-dark,#D98A34); color:#fff; align-items:center; justify-content:center; flex-direction:column; gap:14px; text-align:center; padding:20px;">
+<div id="pin-lock-screen" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--navy-dark,#e5502d); color:#fff; align-items:center; justify-content:center; flex-direction:column; gap:14px; text-align:center; padding:20px;">
   <div style="width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,.1); display:flex; align-items:center; justify-content:center; font-size:28px; margin-bottom:4px;">🔒</div>
   <div style="font-size:20px; font-weight:800;">الشاشة مقفلة</div>
   <div style="font-size:13px; opacity:.8;">أدخل رقم PIN للمتابعة</div>
   <input type="password" id="pin-unlock-input" maxlength="4" inputmode="numeric" style="width:170px; text-align:center; font-size:26px; letter-spacing:10px; padding:12px; border-radius:12px; border:none; box-shadow:0 8px 20px rgba(0,0,0,.25);">
-  <div id="pin-unlock-error" style="display:none; color:#ffb3b3; font-size:13px;">رقم غير صحيح</div>
+  <div id="pin-unlock-error" style="display:none; color:#fda4af; font-size:13px;">رقم غير صحيح</div>
   <button type="button" class="btn btn-gold btn-sm" id="btn-pin-unlock-submit" style="margin-top:4px;">فتح</button>
 </div>
 

@@ -16,35 +16,35 @@
    ملاحظة تقنية: استبدال var() داخل المتغيرات يحدث عند عنصر التعريف ثم يورَّث
    مُستبدَلاً، لذلك تُعاد تعريف الأسماء المستعارة داخل نطاق كل ثيم على حدة. */
 :root {
-  /* ── الهوية (Brand) — Apple macOS Studio Glass: أزرق نظام + إندجو ثانوي ── */
-  --brand-primary: #2563eb; /* أزرق macOS النظامي */
-  --brand-primary-strong: #1d4ed8;
-  --brand-primary-bright: #60a5fa;
+  /* ── الهوية (Brand) — نَبْض: كهرماني Ember دافئ (أساسي) + فيروزي هادئ (ثانوي) ── */
+  --brand-primary: #ff6a47; /* Ember 600 */
+  --brand-primary-strong: #e5502d; /* Ember 700 */
+  --brand-primary-bright: #ff8560; /* Ember 400 */
 
-  --brand-secondary: #4f46e5; /* إندجو ثانوي (أزرار الأيقونات، شارات) */
-  --brand-secondary-strong: #4338ca;
-  --brand-secondary-bright: #818cf8;
-  --brand-secondary-soft: #a5b4fc;
+  --brand-secondary: #34afa3; /* Teal 600 */
+  --brand-secondary-strong: #278079; /* Teal 700 */
+  --brand-secondary-bright: #63dccf; /* Teal 400 */
+  --brand-secondary-soft: #7fe4da; /* Teal 300 */
 
-  /* ── الأسطح والخلفيات (زجاج أبيض شفاف) ── */
-  --bg: #f4f5f9;
+  /* ── الأسطح والخلفيات (كانفس نبض الفاتح) ── */
+  --bg: #f3f4f8;
   --surface: rgba(255, 255, 255, 0.85);
   --surface-solid: #ffffff;
   --surface-alt: #f1f5f9;
   --bg-soft: #f8fafc;
   --border: #e2e8f0;
 
-  /* ── النصوص (سليت بارد بدل البنفسجي الداكن) ── */
+  /* ── النصوص ── */
   --text-primary: #0f172a;
   --text-secondary: #64748b;
 
-  /* ── الدلالية (Semantic) ── */
-  --success: #059669;
-  --warning: #d97706;
-  --danger: #dc2626;
-  --info: #2563eb;
+  /* ── الدلالية (Semantic) — متوافقة مع لوحة نبض ── */
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #be123c;
+  --info: #34afa3;
 
-  /* ── مقاييس الاستدارة (Apple: زوايا أوسع) ── */
+  /* ── مقاييس الاستدارة ── */
   --radius-xs: 8px;
   --radius-sm: 12px;
   --radius-md: 16px;
@@ -62,15 +62,15 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  /* ── الظلال (Elevation) — ظلال زجاجية ناعمة ── */
+  /* ── الظلال (Elevation) ── */
   --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
   --shadow-lg: 0 20px 48px -14px rgba(15, 23, 42, 0.18);
-  --shadow-brand: 0 12px 28px -14px rgba(37, 99, 235, 0.35);
+  --shadow-brand: 0 12px 28px -14px rgba(255, 106, 71, 0.35);
 
-  /* ── الخطوط ── */
-  --font-display: 'Tajawal', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  /* ── الخطوط — Cairo موحّد لكل النصوص (يطابق هوية نبض)، IBM Plex Mono للأرقام ── */
+  --font-display: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-heading: 'Cairo', 'Tajawal', sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 
@@ -87,7 +87,7 @@
   --text-muted: var(--text-secondary);
   --radius: 20px;
   --shadow: var(--shadow-xs);
-  --shadow-hover: 0 16px 34px -16px rgba(37, 99, 235, 0.3);
+  --shadow-hover: 0 16px 34px -16px rgba(255, 106, 71, 0.3);
   --on-accent-text: #ffffff;
   --sidebar-bg: rgba(255, 255, 255, 0.6);
   --sidebar-bg-alt: #f8fafc;
@@ -113,40 +113,40 @@
 
 /* ============= نبض DS TOKENS v1 — Dark (داكن) ============= */
 body.dark-theme {
-  /* ── الهوية (Brand) — Apple macOS Studio Glass الداكن ── */
-  --brand-primary: #3b82f6;
-  --brand-primary-strong: #2563eb;
-  --brand-primary-bright: #93c5fd;
+  /* ── الهوية (Brand) — نَبْض: كهرماني أفتح قليلًا للوضوح على الكانفس الداكن ── */
+  --brand-primary: #ff7f5c; /* Ember 500 */
+  --brand-primary-strong: #ff6a47; /* Ember 600 */
+  --brand-primary-bright: #ff9b7d; /* Ember 300 */
 
-  --brand-secondary: #818cf8;
-  --brand-secondary-strong: #6366f1;
-  --brand-secondary-bright: #a5b4fc;
-  --brand-secondary-soft: #a5b4fc;
+  --brand-secondary: #4fd1c5; /* Teal 500 */
+  --brand-secondary-strong: #34afa3; /* Teal 600 */
+  --brand-secondary-bright: #7fe4da; /* Teal 300 */
+  --brand-secondary-soft: #7fe4da;
 
-  /* ── الأسطح والخلفيات (زجاج سليت داكن) ── */
-  --bg: #0b0f19;
-  --surface: rgba(23, 28, 41, 0.85);
-  --surface-solid: #171c29;
-  --surface-alt: #1e2433;
-  --bg-soft: #141926;
-  --border: #2a3142;
+  /* ── الأسطح والخلفيات (كانفس نبض الداكن #0B0D12) ── */
+  --bg: #0b0d12;
+  --surface: rgba(23, 27, 36, 0.85);
+  --surface-solid: #171b24;
+  --surface-alt: #262b38;
+  --bg-soft: #12151c;
+  --border: #333a4a;
 
   /* ── النصوص ── */
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  --text-primary: #f5f6f9;
+  --text-secondary: #99a0b2;
 
-  /* ── الدلالية ── */
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --info: #60a5fa;
+  /* ── الدلالية (نسخ أفتح لضمان التباين على الخلفية الداكنة) ── */
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fda4af;
+  --info: #4fd1c5;
 
   /* ── الظلال ── */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 10px 28px -10px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 20px 48px -14px rgba(0, 0, 0, 0.55);
-  --shadow-brand: 0 12px 30px -14px rgba(59, 130, 246, 0.45);
+  --shadow-brand: 0 12px 30px -14px rgba(255, 127, 92, 0.45);
 
   /* ═══ إعادة تعريف الأسماء المستعارة في نطاق الداكن (إلزامي) ═══ */
   --navy: var(--brand-primary);
@@ -160,14 +160,14 @@ body.dark-theme {
   --text: var(--text-primary);
   --text-muted: var(--text-secondary);
   --shadow: var(--shadow-xs);
-  --shadow-hover: 0 16px 34px -16px rgba(59, 130, 246, 0.4);
-  --on-accent-text: #0b0f19;
-  --sidebar-bg: rgba(23, 28, 41, 0.55);
-  --sidebar-bg-alt: #141926;
-  --sidebar-text: #94a3b8;
+  --shadow-hover: 0 16px 34px -16px rgba(255, 127, 92, 0.4);
+  --on-accent-text: #0b0d12;
+  --sidebar-bg: rgba(23, 27, 36, 0.55);
+  --sidebar-bg-alt: #12151c;
+  --sidebar-text: #99a0b2;
   --sidebar-text-muted: #566072;
   --sidebar-active-bg: var(--surface-solid);
-  --sidebar-active-text: #f1f5f9;
+  --sidebar-active-text: #f5f6f9;
 
   /* ═══ أسماء بريف 2026-08 (Enterprise brief) — aliases فقط، لا قيم جديدة ═══ */
   --color-primary: var(--brand-primary);
@@ -184,14 +184,8 @@ body.dark-theme {
   color-scheme: dark;
 }
 
-/* ════ Dark theme: أيقونات sidebar مع دوائر في الـ dark theme ════ */
-body.dark-theme nav.tabs button[data-view]:not(.active):hover svg {
-  color: var(--gold);
-}
-
-body.dark-theme nav.tabs button[data-view].active svg {
-  color: inherit;
-}
+/* ════ ملاحظة: ألوان أيقونات الـ sidebar ثابتة حسب الفئة (انظر قسم "ألوان الأيقونات حسب الفئة")
+   ولا تُستبدل هنا في الوضع الداكن — نفس اللون في الفاتح والداكن يطابق هوية نبض ════ */
 
 body.dark-theme select,
 body.dark-theme input,
@@ -343,15 +337,7 @@ body {
   }
 }
 
-/* ════ Light theme: أيقونات sidebar مع دوائر في الـ light theme ════ */
-/* ════ Light theme: أيقونات sidebar مع دوائر في الـ light theme ════ */
-body:not(.dark-theme) nav.tabs button[data-view]:not(.active):hover svg {
-  color: #d97706;
-}
-
-body:not(.dark-theme) nav.tabs button[data-view].active svg {
-  color: inherit;
-}
+/* ════ ملاحظة: ألوان أيقونات الـ sidebar ثابتة حسب الفئة، بلا فرق بين الفاتح والداكن ════ */
 
 section.view.active {
   animation: viewFadeIn 0.16s cubic-bezier(0.22, 0.9, 0.32, 1);
@@ -597,7 +583,7 @@ header.top p {
 /* ============= NAVIGATION (الشريط الجانبي 240px — نبض) ============= */
 nav.tabs {
   flex: none;
-  width: 260px;
+  width: 240px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -681,10 +667,10 @@ nav.tabs button {
   gap: 12px;
   width: 100%;
   flex: none;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   padding: 11px 12px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-family: inherit;
   font-size: 15px;
   font-weight: 500;
@@ -692,7 +678,7 @@ nav.tabs button {
   color: var(--sidebar-text);
   text-align: right;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
   position: relative;
   z-index: 1;
 }
@@ -716,10 +702,11 @@ nav.tabs button span {
 }
 
 nav.tabs button.active {
-  background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--gold) 88%, #fff));
-  color: #1a1a1a;
+  background: var(--surface-alt);
+  color: var(--text-primary);
   font-weight: 700;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 40%, transparent), 0 6px 18px -6px color-mix(in srgb, var(--gold) 50%, transparent);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
   animation: navPop 0.14s cubic-bezier(0.22, 0.9, 0.32, 1);
 }
 
@@ -761,15 +748,50 @@ nav.tabs button[data-view] svg {
   pointer-events: none;
 }
 
-/* Hover effect: scale + color change فقط (بدون أي خلفية/إطار خلف الأيقونة) */
+/* Hover effect: scale فقط — لون الأيقونة يفضل ثابت حسب فئتها (زي نبض) */
 nav.tabs button[data-view]:not(.active):hover svg {
   transform: scale(1.08);
-  color: var(--gold);
 }
 
-/* Active state: بدون أي خلفية/إطار خلف الأيقونة — تاخد لون نص الزرار النشط تلقائياً (تباين واضح فوق الخلفية الكهرمانية) */
+/* Active state: بدون أي خلفية/إطار خلف الأيقونة — لون الأيقونة يفضل ثابت حسب فئتها */
 nav.tabs button[data-view].active svg {
-  color: inherit;
+  transform: scale(1.04);
+}
+
+/* ============= ألوان الأيقونات حسب الفئة (يطابق نبض: كل قسم بلون مميز) =============
+   ثابتة في كل الحالات (افتراضي/hover/active) — القسم البصري بيتغير بالخلفية فقط. */
+nav.tabs button[data-view="dashboard"] svg,
+nav.tabs button[data-view="clients"] svg,
+nav.tabs button[data-view="companies"] svg,
+nav.tabs button[data-view="courses"] svg {
+  color: var(--brand-secondary);
+}
+
+nav.tabs button[data-view="courseinvoices"] svg,
+nav.tabs button[data-view="purchases"] svg {
+  color: var(--warning);
+}
+
+nav.tabs button[data-view="bags"] svg {
+  color: #f97316;
+}
+
+nav.tabs button[data-view="vault"] svg {
+  color: #10b981;
+}
+
+nav.tabs button[data-view="accounting"] svg,
+nav.tabs button[data-view="budget"] svg {
+  color: #a855f7;
+}
+
+nav.tabs button[data-view="reports"] svg {
+  color: #f43f5e;
+}
+
+nav.tabs button[data-view="audit"] svg,
+nav.tabs button[data-view="settings"] svg {
+  color: var(--text-secondary);
 }
 
 /* Focus state for accessibility */
@@ -1449,7 +1471,7 @@ section.view.active {
 /* ============= BUTTONS ============= */
 .btn {
   border: none;
-  border-radius: 11px;
+  border-radius: var(--radius-full);
   padding: 11px 20px;
   font-family: inherit;
   font-weight: 600;
@@ -1574,7 +1596,7 @@ section.view.active {
 .btn-sm {
   padding: 8px 14px;
   font-size: 12.5px;
-  border-radius: 9px;
+  border-radius: var(--radius-full);
 }
 
 .btn:disabled {
@@ -2169,12 +2191,12 @@ tbody tr:hover {
   backdrop-filter: blur(24px) saturate(1.25);
   -webkit-backdrop-filter: blur(24px) saturate(1.25);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 24px;
   width: 100%;
   max-width: 640px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow), 0 30px 70px -30px rgba(217, 168, 78, 0.3);
+  box-shadow: var(--shadow), 0 30px 70px -30px rgba(255, 106, 71, 0.25);
   padding: 22px 26px;
 }
 
@@ -2284,23 +2306,24 @@ tbody tr:hover {
 .field select,
 .field textarea {
   width: 100%;
-  padding: 8px 11px;
+  padding: 9px 14px;
   border: 1.5px solid var(--border);
-  border-radius: 10px;
+  border-radius: 16px;
   font-family: inherit;
   font-size: 13px;
-  background: var(--surface-solid);
+  background: var(--bg-soft);
   color: var(--text);
   box-shadow: var(--shadow);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   outline: none;
-  border-color: var(--navy);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 15%, transparent), 0 0 14px -4px color-mix(in srgb, var(--navy) 45%, transparent);
+  background: var(--surface-alt);
+  border-color: color-mix(in srgb, var(--text-primary) 30%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 .modal-actions {
@@ -2348,18 +2371,18 @@ tbody tr:hover {
 /* ============= LOGIN (شاشات التفعيل وتسجيل الدخول) ============= */
 #license-screen,
 #server-login-screen {
-  --auth-bg-deep: #f6f7f9;
-  --auth-bg-mid: #fbfcfd;
+  --auth-bg-deep: #f3f4f8;
+  --auth-bg-mid: #f8fafc;
   --auth-panel: rgba(255, 255, 255, 0.86);
-  --auth-border: rgba(240, 168, 87, 0.18);
-  --auth-cyan: #d9832f;
-  --auth-cyan-bright: #f0a857;
-  --auth-violet: #1fa98a;
-  --auth-text: #201a2e;
-  --auth-text-dim: #6c6478;
+  --auth-border: rgba(255, 106, 71, 0.18);
+  --auth-cyan: #e5502d;
+  --auth-cyan-bright: #ff6a47;
+  --auth-violet: #278079;
+  --auth-text: #0f172a;
+  --auth-text-dim: #64748b;
   background:
-    radial-gradient(650px 380px at 85% -8%, rgba(240, 168, 87, 0.12), transparent 60%),
-    radial-gradient(560px 320px at 5% 15%, rgba(47, 217, 176, 0.1), transparent 60%),
+    radial-gradient(650px 380px at 85% -8%, rgba(255, 106, 71, 0.12), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(79, 209, 197, 0.1), transparent 60%),
     var(--auth-bg-deep);
   background-size: cover, cover, cover;
   background-position: center;
@@ -2368,18 +2391,18 @@ tbody tr:hover {
 
 body.dark-theme #license-screen,
 body.dark-theme #server-login-screen {
-  --auth-bg-deep: #0f1326;
-  --auth-bg-mid: #171d3a;
-  --auth-panel: rgba(21, 25, 44, 0.75);
-  --auth-border: rgba(240, 168, 87, 0.28);
-  --auth-cyan: #f0a857;
-  --auth-cyan-bright: #ffd9a0;
-  --auth-violet: #2fd9b0;
-  --auth-text: #f2f3fa;
-  --auth-text-dim: #9199bf;
+  --auth-bg-deep: #0b0d12;
+  --auth-bg-mid: #171b24;
+  --auth-panel: rgba(23, 27, 36, 0.75);
+  --auth-border: rgba(255, 106, 71, 0.28);
+  --auth-cyan: #ff6a47;
+  --auth-cyan-bright: #ff9b7d;
+  --auth-violet: #4fd1c5;
+  --auth-text: #f5f6f9;
+  --auth-text-dim: #99a0b2;
   background:
-    radial-gradient(650px 380px at 85% -8%, rgba(240, 168, 87, 0.22), transparent 60%),
-    radial-gradient(560px 320px at 5% 15%, rgba(47, 217, 176, 0.12), transparent 60%),
+    radial-gradient(650px 380px at 85% -8%, rgba(255, 106, 71, 0.22), transparent 60%),
+    radial-gradient(560px 320px at 5% 15%, rgba(79, 209, 197, 0.12), transparent 60%),
     var(--auth-bg-deep);
 }
 
@@ -2389,7 +2412,7 @@ body.dark-theme #server-login-screen {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 22px;
-  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(240, 168, 87, 0.06) inset;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(255, 106, 71, 0.06) inset;
   padding: 30px 28px;
   width: 100%;
   max-width: 360px;
@@ -2404,7 +2427,7 @@ body.dark-theme #server-login-screen {
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--auth-border);
   border-radius: 22px;
-  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(240, 168, 87, 0.06) inset;
+  box-shadow: 0 25px 70px -30px rgba(23, 26, 43, 0.35), 0 0 40px rgba(255, 106, 71, 0.06) inset;
   overflow: hidden;
   width: 100%;
   max-width: 560px;
@@ -2455,9 +2478,9 @@ body.dark-theme #server-login-screen {
   overflow: hidden;
   flex: 0 0 190px;
   background:
-    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--gold, #f0a857) 22%, transparent) 0%, transparent 42%),
-    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--teal, #2fd9b0) 16%, transparent) 0%, transparent 46%),
-    rgba(240, 168, 87, 0.05);
+    radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--gold, #ff6a47) 22%, transparent) 0%, transparent 42%),
+    radial-gradient(circle at 82% 78%, color-mix(in srgb, var(--teal, #4fd1c5) 16%, transparent) 0%, transparent 46%),
+    rgba(255, 106, 71, 0.05);
   border-inline-end: 1px solid var(--auth-border);
   display: flex;
   align-items: center;
@@ -2470,11 +2493,11 @@ body.dark-theme #server-login-screen {
   content: '';
   position: absolute;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--gold, #f0a857) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold, #ff6a47) 18%, transparent);
   pointer-events: none;
 }
 .login-logo-panel::before { width: 160px; height: 160px; inset-inline-end: -60px; top: -50px; }
-.login-logo-panel::after { width: 110px; height: 110px; inset-inline-start: -40px; bottom: -35px; border-color: color-mix(in srgb, var(--teal, #2fd9b0) 16%, transparent); }
+.login-logo-panel::after { width: 110px; height: 110px; inset-inline-start: -40px; bottom: -35px; border-color: color-mix(in srgb, var(--teal, #4fd1c5) 16%, transparent); }
 
 .login-logo-panel img,
 .login-logo-panel svg {
@@ -2516,9 +2539,9 @@ body.dark-theme #server-login-screen {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: rgba(240, 168, 87, 0.06);
+  background: rgba(255, 106, 71, 0.06);
   border: 1.5px solid var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15), 0 0 24px rgba(240, 168, 87, 0.25);
+  box-shadow: 0 0 0 3px rgba(255, 106, 71, 0.15), 0 0 24px rgba(255, 106, 71, 0.25);
 }
 
 .login-box .seal img,
@@ -2564,7 +2587,7 @@ body.dark-theme #server-login-screen {
 
 .login-box .field input:focus {
   border-color: var(--auth-cyan);
-  box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15);
+  box-shadow: 0 0 0 3px rgba(255, 106, 71, 0.15);
 }
 
 .login-box .btn-primary {
@@ -2575,12 +2598,12 @@ body.dark-theme #server-login-screen {
   font-weight: 700;
   border: none;
   border-radius: 12px;
-  box-shadow: 0 10px 26px -8px rgba(240, 168, 87, 0.5);
+  box-shadow: 0 10px 26px -8px rgba(255, 106, 71, 0.5);
 }
 
 .login-box .btn-primary:hover {
   background: linear-gradient(135deg, var(--auth-cyan-bright) 0%, var(--auth-violet) 100%);
-  box-shadow: 0 14px 32px -8px rgba(240, 168, 87, 0.6);
+  box-shadow: 0 14px 32px -8px rgba(255, 106, 71, 0.6);
 }
 
 .login-box .field .password-field-wrap {
@@ -2895,13 +2918,13 @@ td select:hover:not(:focus) {
 .toast-item .toast-msg { flex: 1 1 auto; min-width: 0; }
 
 .toast-item.error {
-  background: linear-gradient(135deg, var(--red) 0%, color-mix(in srgb, var(--red) 60%, #b91c1c) 100%);
+  background: linear-gradient(135deg, var(--red) 0%, color-mix(in srgb, var(--red) 60%, #c43f20) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--red) 50%, transparent);
 }
 
 .toast-item.warning {
-  background: linear-gradient(135deg, var(--warning, #d98a34) 0%, color-mix(in srgb, var(--warning, #d98a34) 60%, #92400e) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--warning, #d98a34) 50%, transparent);
+  background: linear-gradient(135deg, var(--warning, #b45309) 0%, color-mix(in srgb, var(--warning, #b45309) 60%, #78350f) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 40px -10px color-mix(in srgb, var(--warning, #b45309) 50%, transparent);
 }
 
 .toast-item.info {
@@ -3652,11 +3675,8 @@ nav.tabs {
 }
 
 nav.tabs button.active {
-  background: linear-gradient(135deg, var(--sidebar-active-bg) 0%, color-mix(in srgb, var(--sidebar-active-bg) 78%, var(--gold)) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 0 0 1px color-mix(in srgb, var(--sidebar-active-bg) 55%, transparent),
-    0 10px 26px -8px color-mix(in srgb, var(--sidebar-active-bg) 60%, transparent);
+  background: var(--surface-alt);
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
 }
 
 nav.tabs button:not(.active) {
@@ -3704,13 +3724,13 @@ thead th.sortable:hover {
 }
 
 @keyframes nabdSealPulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(240, 168, 87, 0.15), 0 0 24px rgba(240, 168, 87, 0.25); }
-  50% { box-shadow: 0 0 0 5px rgba(240, 168, 87, 0.2), 0 0 34px rgba(240, 168, 87, 0.4); }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255, 106, 71, 0.15), 0 0 24px rgba(255, 106, 71, 0.25); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 106, 71, 0.2), 0 0 34px rgba(255, 106, 71, 0.4); }
 }
 
 .login-container,
 .login-box {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 32px 80px -30px rgba(23, 26, 43, 0.45), 0 0 50px rgba(240, 168, 87, 0.08) inset;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 32px 80px -30px rgba(23, 26, 43, 0.45), 0 0 50px rgba(255, 106, 71, 0.08) inset;
 }
 
 /* ---------- شارة المستخدم العلوية: عمق زجاجي خفيف ---------- */
@@ -3960,7 +3980,7 @@ tbody tr {
 
 [data-tooltip]::before {
   content: attr(data-tooltip);
-  background: var(--sidebar-bg, #171b2e);
+  background: var(--sidebar-bg, #171b24);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -3974,7 +3994,7 @@ tbody tr {
   content: "";
   bottom: calc(100% + 3px);
   border: 5px solid transparent;
-  border-top-color: var(--sidebar-bg, #171b2e);
+  border-top-color: var(--sidebar-bg, #171b24);
 }
 
 [data-tooltip]:hover::before,
@@ -4019,8 +4039,8 @@ tbody tr {
 }
 
 .alert-warning {
-  background: color-mix(in srgb, #e0a72f 14%, transparent);
-  border-color: color-mix(in srgb, #e0a72f 32%, transparent);
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  border-color: color-mix(in srgb, #b45309 32%, transparent);
   color: var(--text);
 }
 
@@ -4204,7 +4224,7 @@ body.dark-theme .brand-chip {
   background: #22c55e;
   animation: ssePulse 2.2s ease-out infinite;
 }
-.sse-dot.connecting { background: var(--warning, #e0a72f); }
+.sse-dot.connecting { background: var(--warning, #b45309); }
 .sse-dot.off { background: var(--text-muted); opacity: .6; }
 @keyframes ssePulse {
   0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .45); }
