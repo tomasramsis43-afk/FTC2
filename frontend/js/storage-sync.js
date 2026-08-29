@@ -93,20 +93,32 @@ function markOnline(){
   _ftcIsOffline = false;
   updateOfflineIndicator();
 }
+async function _totalPendingCount(){
+  // المؤشر لازم يعكس الطابورين مع بعض: الطابور القديم (مفاتيح كاملة زي الإعدادات) والطابور
+  // الجديد الخاص بتعديلات السجلات الفردية (عميل/حركة مالية/إلخ) — قبل كده كان بيتجاهل الطابور
+  // الثاني تماماً، فالرقم الظاهر للمستخدم ممكن يبقى غلط (يقول "محدث" وفيه تعديل معلّق فعلياً،
+  // أو العكس).
+  const [kvPending, recPending] = await Promise.all([
+    _pendingCount(),
+    (typeof _pendingRecordCount==='function') ? _pendingRecordCount() : Promise.resolve(0)
+  ]);
+  return (kvPending||0) + (recPending||0);
+}
+
 async function updateOfflineIndicator(){
   try{
     const el = document.getElementById('offline-status-indicator');
     if(!el) return;
     el.style.display = 'flex';
     if(manualOfflineMode){
-      const count = await _pendingCount();
+      const count = await _totalPendingCount();
       el.style.background = '#4a3b1f';
       el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — لا يتصل البرنامج بالسيرفر إطلاقاً، وأي تعديل يُحفظ محلياً فقط حتى تُعيد تفعيل الاتصال';
       el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الرفع لاحقاً` : '');
       return;
     }
     if(_ftcIsOffline){
-      const count = await _pendingCount();
+      const count = await _totalPendingCount();
       el.style.background = '#7a1f1f';
       el.title = 'لا يوجد اتصال بالسيرفر حالياً — البرنامج يعمل من آخر نسخة محفوظة على هذا الجهاز، وأي تعديل سيُحفظ محلياً ويُرفع تلقائياً عند عودة الاتصال';
       el.innerHTML = '⚠️ غير متصل' + (count ? ` (${count} بانتظار الرفع)` : '');
@@ -119,7 +131,7 @@ async function updateOfflineIndicator(){
       el.innerHTML = '🔄 جارٍ الرفع للسيرفر...';
       return;
     }
-    const count = await _pendingCount();
+    const count = await _totalPendingCount();
     if(count > 0){
       el.style.background = '#7a5a1f';
       el.title = 'يوجد تعديلات محفوظة محلياً بانتظار رفعها للسيرفر — جارٍ المحاولة تلقائياً';
@@ -422,6 +434,11 @@ async function flushPendingRecordWrites(){
     } finally {
       _ftcRecordSyncInFlight = false;
       _ftcRecordSyncPromise = null;
+      // هنا كان الخلل: الدالة تخلص من غير ما تحدّث مؤشر الحالة فى الهيدر إطلاقاً، فحتى لو
+      // اترفعت كل التعديلات المعلّقة بنجاح فعلياً، الشاشة تفضل واقفة على رقم قديم ("جارٍ رفع X
+      // تعديل...") للأبد لحد ما حاجة تانية غير مرتبطة تستدعي updateOfflineIndicator بالصدفة —
+      // بعكس flushPendingWrites (طابور kv) اللي دايماً بتحدّث المؤشر فى النهاية.
+      try{ updateOfflineIndicator(); }catch(e){}
     }
   })();
   return _ftcRecordSyncPromise;
