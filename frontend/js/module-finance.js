@@ -318,25 +318,25 @@ function vaultAnomalyIds(){
 function vaultFilteredRows(){
   const from = $('#v-from').value;
   const to = $('#v-to').value;
-  const type = $('#v-filter-type').value;
-  const dest = $('#v-filter-dest').value;
+  const typeVals = selectedFilterValues($('#v-filter-type'));
+  const destVals = selectedFilterValues($('#v-filter-dest'));
   const q = $('#v-search').value.trim().toLowerCase();
   const dupOnly = $('#v-filter-dup')?.checked;
   const dupIds = dupOnly ? vaultDuplicateClientIds() : null;
   const noMethodOnly = $('#v-filter-nomethod')?.checked;
   const anomalyOnly = $('#v-filter-anomaly')?.checked;
   const anomalyIds = anomalyOnly ? vaultAnomalyIds() : null;
-  const frecepV = $('#v-filter-reception') ? $('#v-filter-reception').value : '';
+  const frecepVals = $('#v-filter-reception') ? selectedFilterValues($('#v-filter-reception')) : [];
   return vaultTx.filter(t=>{
     if(anomalyOnly && !anomalyIds.has(t.id)) return false;
-    if(frecepV){
+    if(frecepVals.length){
       const linkedClient = t.autoClientId ? clients.find(c=>c.id===t.autoClientId) : null;
-      if(!linkedClient || linkedClient.createdBy!==frecepV) return false;
+      if(!linkedClient || !frecepVals.includes(linkedClient.createdBy)) return false;
     }
     if(from && t.date < from) return false;
     if(to && t.date > to) return false;
-    if(type && t.type!==type) return false;
-    if(dest && (t.destination||'vault')!==dest) return false;
+    if(typeVals.length && !typeVals.includes(t.type)) return false;
+    if(destVals.length && !destVals.includes(t.destination||'vault')) return false;
     if(dupOnly && !(t.clientId && dupIds.has(t.clientId))) return false;
     if(noMethodOnly && String(t.method||'').trim()) return false;
     if(q){
@@ -883,8 +883,8 @@ function renderVault(){
 
   // إعادة الصفحة إلى الأولى تلقائياً كلما تغيّر البحث أو أي فلتر (وليس عند التنقّل بين الصفحات فقط)
   const vaultFilterSig = JSON.stringify([
-    $('#v-from')?.value, $('#v-to')?.value, $('#v-filter-type')?.value, $('#v-filter-dest')?.value,
-    $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked, $('#v-filter-anomaly')?.checked
+    $('#v-from')?.value, $('#v-to')?.value, selectedFilterValues($('#v-filter-type')), selectedFilterValues($('#v-filter-dest')),
+    $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked, $('#v-filter-anomaly')?.checked, selectedFilterValues($('#v-filter-reception'))
   ]);
   if(vaultFilterSig !== vaultLastFilterSig){ vaultCurrentPage = 1; vaultLastFilterSig = vaultFilterSig; }
 
@@ -1750,17 +1750,17 @@ $('#btn-export-vault').addEventListener('click', ()=>{
 /* ---------------- Audit Log ---------------- */
 function refreshAuditFilterOptions(){
   const sections = [...new Set(auditLog.map(a=>a.section))];
-  populateSelect($('#audit-filter-section'), sections, true);
+  repopulateFilterSelectPreserve($('#audit-filter-section'), sections, '—');
 }
 function auditFilteredRows(){
   const q = $('#audit-search').value.trim().toLowerCase();
-  const action = $('#audit-filter-action').value;
-  const section = $('#audit-filter-section').value;
+  const actionVals = selectedFilterValues($('#audit-filter-action'));
+  const sectionVals = selectedFilterValues($('#audit-filter-section'));
   const dfrom = $('#audit-date-from').value;
   const dto = $('#audit-date-to').value;
   return auditLog.filter(a=>{
-    if(action && a.action!==action) return false;
-    if(section && a.section!==section) return false;
+    if(actionVals.length && !actionVals.includes(a.action)) return false;
+    if(sectionVals.length && !sectionVals.includes(a.section)) return false;
     if(dfrom && a.ts < new Date(dfrom+'T00:00:00').getTime()) return false;
     if(dto && a.ts > new Date(dto+'T23:59:59').getTime()) return false;
     if(q){
@@ -1781,7 +1781,7 @@ function renderAuditLog(){
   const rows = auditFilteredRows();
   $('#audit-empty').style.display = rows.length ? 'none' : 'block';
   const pageRows = applyGenericPagination('audit', rows, auditPageState, [
-    $('#audit-search')?.value, $('#audit-filter-action')?.value, $('#audit-filter-section')?.value,
+    $('#audit-search')?.value, selectedFilterValues($('#audit-filter-action')), selectedFilterValues($('#audit-filter-section')),
     $('#audit-date-from')?.value, $('#audit-date-to')?.value
   ]);
   $('#audit-table-body').innerHTML = pageRows.map(a=>`
