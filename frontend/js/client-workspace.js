@@ -57,16 +57,9 @@ function cwActivityHtml(c){
     </div>`).join('') + '</div>';
 }
 
-const CW_TABS = [
-  { id: 'overview', label: 'نظرة عامة' },
-  { id: 'data', label: 'البيانات' },
-  { id: 'activity', label: 'النشاط' },
-];
-
-function cwSwitchTab(tabId){
-  $all('.cw-tab').forEach(b => b.classList.toggle('active', b.dataset.cwTab === tabId));
-  $all('.cw-tabpanel').forEach(p => p.classList.toggle('active', p.dataset.cwPanel === tabId));
-}
+/* ---- ملف العميل أصبح صفحة واحدة متصلة تعرض كل البيانات معاً (بدل تبويبات منفصلة
+   كانت تخفي الأقسام عن بعضها) — الترتيب: الوضع المالي، الحركات المرتبطة، بيانات العميل،
+   الدورة والحقائب، ثم سجل النشاط، كل قسم بعنوانه الخاص فى تمرير رأسي واحد. ---- */
 
 function openClientWorkspace(id){
   const c = clients.find(x => x.id === id);
@@ -134,22 +127,10 @@ function openClientWorkspace(id){
       </div>
     </div>`;
 
-  /* ---- تبويب النشاط ---- */
-  const activityHtml = `<div class="cw-section">${cwActivityHtml(c)}</div>`;
+  /* ---- سجل النشاط ---- */
+  const activityHtml = `<div class="cw-section"><h4>سجل النشاط</h4>${cwActivityHtml(c)}</div>`;
 
-  $('#cw-tabs').innerHTML = CW_TABS.map((t, i) =>
-    `<button type="button" class="cw-tab${i===0?' active':''}" data-cw-tab="${t.id}">${t.label}</button>`
-  ).join('');
-
-  $('#cw-body').innerHTML = `
-    <div class="cw-tabpanel active" data-cw-panel="overview">${finHtml}${movesHtml}</div>
-    <div class="cw-tabpanel" data-cw-panel="data">${infoHtml}</div>
-    <div class="cw-tabpanel" data-cw-panel="activity">${activityHtml}</div>
-  `;
-
-  $('#cw-tabs').querySelectorAll('.cw-tab').forEach(btn => {
-    btn.addEventListener('click', () => cwSwitchTab(btn.dataset.cwTab));
-  });
+  $('#cw-body').innerHTML = finHtml + movesHtml + infoHtml + activityHtml;
 
   /* ---- الإجراءات: نفس فتحات النماذج القائمة بالضبط ---- */
   const foot = $('#cw-foot');
