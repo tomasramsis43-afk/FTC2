@@ -576,7 +576,7 @@ $('#btn-migrate-sales-purchases')?.addEventListener('click', async ()=>{
   renderAccounting();
 });
 function renderDoubleEntryModule(){
-  if(!$('#view-accounting')) return;
+  if(!$('#coa-code')) return;
   renderChartOfAccountsTable();
   if($('#de-lines') && !$('#de-lines').querySelector('tr')) resetDELinesForm();
   computeDETotals();

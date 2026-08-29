@@ -799,6 +799,7 @@ function refreshEverything(){
   if(isViewActive('reports') && typeof renderReports==='function') renderReports();
   if(isViewActive('budget') && typeof renderBudget==='function') renderBudget();
   if(isViewActive('accounting') && typeof renderAccounting==='function') renderAccounting();
+  if(isViewActive('ledger') && typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
   if(isViewActive('audit') && typeof renderAuditLog==='function') renderAuditLog();
   if(isViewActive('settings') && typeof renderSettings==='function') renderSettings();
   if(isViewActive('settings') && typeof renderUsersList==='function') renderUsersList();
@@ -825,6 +826,7 @@ $('#btn-refresh-all').addEventListener('click', ()=>{
   if(typeof renderReports==='function') renderReports();
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
+  if(typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
   if(typeof renderAuditLog==='function') renderAuditLog();
   if(typeof renderSettings==='function') renderSettings();
   if(typeof renderUsersList==='function') renderUsersList();
@@ -851,6 +853,7 @@ function clearAllSheetFilters(){
     'bst-date-from','bst-date-to',
     'ctf-date-from','ctf-date-to',
     'rp-from','rp-to',
+    'de-filter-search','de-filter-from','de-filter-to',
   ];
   textLikeIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
 
@@ -861,6 +864,7 @@ function clearAllSheetFilters(){
     'cbp-year-filter','ownbag-year-filter',
     'purchase-supplier-filter','purchase-status-filter',
     'audit-filter-action','audit-filter-section',
+    'de-filter-type',
   ];
   selectIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex = 0; });
 
@@ -893,13 +897,14 @@ function clearAllSheetFilters(){
   if(typeof renderReports==='function') renderReports();
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
+  if(typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
   if(typeof renderAuditLog==='function') renderAuditLog();
   showToast('تم إلغاء كل الفلاتر وخانات البحث');
 }
 $('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);
 
 /* ---------------- Nav ---------------- */
-const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','budget'];
+const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','ledger','budget'];
 function canAccessView(view){
   if(currentUserRole==='admin') return true;
   const rp = (settings && settings.rolePermissions) || DEFAULT_SETTINGS.rolePermissions;
@@ -948,6 +953,7 @@ $all('button[data-view]').forEach(btn=>{
       else if(_view==='reports' && typeof renderReports==='function') renderReports();
       else if(_view==='companies' && typeof renderCompanies==='function') renderCompanies();
       else if(_view==='accounting' && typeof renderAccounting==='function') renderAccounting();
+      else if(_view==='ledger' && typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
       else if(_view==='budget' && typeof renderEpmBudget==='function') renderEpmBudget();
       else if(_view==='purchases' && typeof renderPurchases==='function') renderPurchases();
     });

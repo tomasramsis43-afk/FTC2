@@ -61,7 +61,7 @@ const DEFAULT_SETTINGS = {
   // أو فى وضع عدم الاتصال، وتُستبدل تلقائياً بمجرد نجاح الاتصال بالخادم.
   rolePermissions: {
     staff: ['dashboard','clients','companies','courses','courseinvoices','vault','settlements','bags','purchases','reports'],
-    accountant: ['dashboard','clients','vault','settlements','accounting','budget','reports','purchases','companies'],
+    accountant: ['dashboard','clients','vault','settlements','accounting','ledger','budget','reports','purchases','companies'],
     // الاستقبال مقصور على شاشة العملاء (التسجيل) فقط — ولا شيء غيرها إطلاقاً. شاشة "تسوية
     // الاستقبال" أُزيلت من صلاحياته بناءً على طلب صريح: التسوية مسؤولية الأدمن (أو من يفوّضه من
     // الأدوار الأخرى صاحبة صلاحية 'vault'/'settlements' أصلاً) وحدهم، ولا علاقة للاستقبال بها إطلاقاً.
@@ -87,6 +87,7 @@ const ALL_VIEWS = [
   {id:'purchases', label:'المشتريات'},
   {id:'reports', label:'التقارير'},
   {id:'accounting', label:'المحاسبة'},
+  {id:'ledger', label:'دليل الحسابات والقيود اليومية'},
   {id:'budget', label:'الموازنة والتخطيط'},
   {id:'audit', label:'سجل المراجعة'},
   {id:'settings', label:'الإعدادات'}
@@ -249,7 +250,7 @@ const I18N = {
     navDashboard:'لوحة التحكم', navClients:'العملاء', navCompanies:'تحويلات الشركات', navCourses:'الدورات', navVault:'الحركات المالية',
     navBags:'مخزون الحقائب', navReports:'التقارير', navAudit:'سجل المراجعة', navSettings:'الإعدادات',
     navCourseInvoices:'فواتير الدورات', navPurchases:'المشتريات',
-    navAccounting:'المحاسبة', navBudget:'الموازنة والتخطيط',
+    navAccounting:'المحاسبة', navLedger:'دليل الحسابات والقيود اليومية', navBudget:'الموازنة والتخطيط',
     coursesSheetTitle:'شيت الدورات',
     coursesSheetHint:'كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.',
     fromDateTitle:'من تاريخ', toDateTitle:'إلى تاريخ',
@@ -442,7 +443,7 @@ const I18N = {
     navDashboard:'Dashboard', navClients:'Clients', navCompanies:'Company Transfers', navCourses:'Courses', navVault:'Financial Transactions',
     navBags:'Bag Inventory', navReports:'Reports', navAudit:'Audit Log', navSettings:'Settings',
     navCourseInvoices:'Course Invoices', navPurchases:'Purchases',
-    navAccounting:'Accounting', navBudget:'Budget & Planning',
+    navAccounting:'Accounting', navLedger:'Chart of Accounts & Journal Entries', navBudget:'Budget & Planning',
     coursesSheetTitle:'Courses Sheet',
     coursesSheetHint:'Each course has its own number, date, language, and capacity. Enrolled names are automatically pulled from the Clients sheet based on the "course number" recorded for each client. Note: the Food Safety course takes two training days, while other courses take just one day. You can also set the course date in advance from the client registration form (the "course date (in advance)" field), and it will appear here automatically — use the "Upcoming courses" button or the "from/to date" filter to view it.',
     fromDateTitle:'From date', toDateTitle:'To date',

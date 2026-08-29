@@ -22,7 +22,7 @@ let ROLE_PERMISSIONS_CACHE = { admin: null, staff: null, accountant: [], recepti
 // theme-settings.js) — بعدها الجدول نفسه هو المرجع الوحيد ولا علاقة لهذا الثابت بأي تنفيذ لاحق.
 const ROLE_PERMISSIONS_SEED_DEFAULTS = {
   staff: ['dashboard', 'clients', 'companies', 'courses', 'courseinvoices', 'vault', 'settlements', 'bags', 'purchases', 'reports'],
-  accountant: ['dashboard', 'clients', 'vault', 'settlements', 'accounting', 'budget', 'reports', 'purchases', 'companies'],
+  accountant: ['dashboard', 'clients', 'vault', 'settlements', 'accounting', 'ledger', 'budget', 'reports', 'purchases', 'companies'],
   reception: ['clients'],
 };
 async function loadRolePermissionsCache() {
@@ -43,7 +43,7 @@ async function loadRolePermissionsCache() {
   for (const row of r.rows) cache[row.role] = Array.isArray(row.views) ? row.views : [];
   ROLE_PERMISSIONS_CACHE = cache;
 }
-const RESTRICTED_STAFF_VIEWS = ['settings', 'audit', 'accounting', 'budget'];
+const RESTRICTED_STAFF_VIEWS = ['settings', 'audit', 'accounting', 'ledger', 'budget'];
 function roleCanAccessView(role, view) {
   if (role === 'admin') return true;
   const allow = ROLE_PERMISSIONS_CACHE[role];
@@ -53,7 +53,7 @@ function roleCanAccessView(role, view) {
 const EDITABLE_ROLE_PERMISSION_ROLES = ['staff', 'accountant', 'reception'];
 // نفس ALL_VIEWS المعروضة فى شاشة الإعدادات (theme-settings.js) — نتحقق منها هنا حتى لا يستطيع
 // أي admin (أو طلب مُعدَّل يدوياً) حفظ اسم شاشة وهمي أو مسافات فارغة فى الجدول بالغلط.
-const ALL_KNOWN_VIEWS = ['dashboard', 'clients', 'companies', 'courses', 'courseinvoices', 'vault', 'settlements', 'bags', 'purchases', 'reports', 'accounting', 'budget', 'audit', 'settings'];
+const ALL_KNOWN_VIEWS = ['dashboard', 'clients', 'companies', 'courses', 'courseinvoices', 'vault', 'settlements', 'bags', 'purchases', 'reports', 'accounting', 'ledger', 'budget', 'audit', 'settings'];
 // GET /api/role-permissions -> { reception:[...], staff:[...], accountant:[...] } — نفس القيم
 // المُفروضة فعلياً على الـ API، تُستخدم لتعبئة جدول "صلاحيات الأدوار" فى شاشة الإعدادات كمصدر
 // حقيقة وحيد بدل الاعتماد على settings.rolePermissions المشفّرة المحلية فقط.
@@ -117,8 +117,8 @@ const RESTRICTED_STORAGE_KEYS = {
   // الوحيد الأضيق صلاحية هنا؛ منطق roleCanAccessView يغطي 'موظف عام' تلقائياً
   // عبر RESTRICTED_STAFF_VIEWS بما يطابق الواجهة تماماً).
   journalEntries: 'accounting',
-  chartOfAccounts: 'accounting',
-  journalDE: 'accounting',
+  chartOfAccounts: 'ledger',
+  journalDE: 'ledger',
   manualSalesInvoices: 'accounting',
   budgetEntries: 'budget',
   suppliers: 'purchases',
