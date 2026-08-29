@@ -335,10 +335,7 @@ $('#btn-print-courses-report').addEventListener('click', ()=>{
 /* ---------------- Who hasn't joined a given course type ---------------- */
 function refreshMissingCourseOptions(){
   const sel = $('#cs-missing-course');
-  const cur = sel.value;
-  populateSelect(sel, settings.courses.map(c=>c.name), false);
-  sel.insertAdjacentHTML('afterbegin','<option value="">كل أنواع الدورات</option>');
-  sel.value = settings.courses.some(c=>c.name===cur) ? cur : '';
+  repopulateFilterSelectPreserve(sel, settings.courses.map(c=>c.name), 'كل أنواع الدورات');
   refreshMissingNatOptions();
 }
 /* ---- فلتر متعدد الجنسيات لتبويب "من سجّل ولم يُحدَّد له رقم دورة بعد" ---- */
@@ -395,8 +392,7 @@ function registrationAgeLabel(dateStr){
 }
 function effectiveExpectedDate(c){ return c.expectedCourseDate || addDaysISO(c.date, 7); }
 function missingCourseFiltered(){
-  const sel = $('#cs-missing-course');
-  const type = sel ? sel.value : '';
+  const typeVals = selectedFilterValues($('#cs-missing-course'));
   const ffrom = $('#cs-missing-from').value;
   const fto = $('#cs-missing-to').value;
   const efrom = $('#cs-missing-exp-from').value;
@@ -404,7 +400,7 @@ function missingCourseFiltered(){
   const fcid = $('#cs-filter-clientid').value.trim().toLowerCase();
   return clients
     .filter(c=> !c.cancelled && !c.suspended && !String(c.courseNumber||'').trim())
-    .filter(c=> !type || c.courseType===type)
+    .filter(c=> !typeVals.length || typeVals.includes(c.courseType))
     .filter(c=> !missingNatSelected.size || missingNatSelected.has(c.nationality))
     .filter(c=> !ffrom || (c.date && c.date>=ffrom))
     .filter(c=> !fto || (c.date && c.date<=fto))
@@ -416,17 +412,18 @@ function missingCourseFiltered(){
 function renderMissingCourse(){
   const sel = $('#cs-missing-course');
   if(!sel) return;
-  const type = sel.value;
+  const typeVals = selectedFilterValues(sel);
+  const typeLabel = typeVals.join('، ');
   const box = $('#cs-missing-list');
   const countEl = $('#cs-missing-count');
   // العميل يظهر إن لم يُحدَّد له رقم دورة بعد؛ اختيار نوع الدورة (إن وُجد) فلتر إضافي اختياري فقط،
   // أما بقية الفلاتر (الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع ورقم الهوية) فتعمل على كامل الشيت بكل أنواع الدورات
   const missing = missingCourseFiltered();
-  countEl.textContent = type
-    ? `${missing.length} ${tr('missingCourseCountTypeMid')} "${type}" ${tr('missingCourseCountTypeSuffix')}`
+  countEl.textContent = typeVals.length
+    ? `${missing.length} ${tr('missingCourseCountTypeMid')} "${typeLabel}" ${tr('missingCourseCountTypeSuffix')}`
     : `${missing.length} ${tr('missingCourseCountAllSuffix')}`;
   if(!missing.length){
-    box.innerHTML = `<div class="empty-state" style="padding:24px 10px;"><div class="big">✅</div>${type ? `${tr('allDoneTypePrefix')} "${escapeHtml(type)}" ${tr('allDoneTypeSuffix')}` : tr('allDoneAllMsg')}</div>`;
+    box.innerHTML = `<div class="empty-state" style="padding:24px 10px;"><div class="big">✅</div>${typeVals.length ? `${tr('allDoneTypePrefix')} "${escapeHtml(typeLabel)}" ${tr('allDoneTypeSuffix')}` : tr('allDoneAllMsg')}</div>`;
     return;
   }
   box.innerHTML = `<div class="table-scroll cards-mobile"><table>
