@@ -768,3 +768,36 @@ function renderErrorState(container, opts){
     document.getElementById(btnId)?.addEventListener('click', onRetry);
   }
 }
+
+/* ---------- أيقونات SVG محلية (بديل خط Material Symbols غير المُحمَّل) ---------- */
+const PULSE_ICON_PATHS = {
+  person_add: '<circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"></path><path d="M17 8h4M19 6v4"></path>',
+  point_of_sale: '<rect x="3" y="7" width="18" height="12" rx="2"></rect><path d="M3 11h18"></path><path d="M7 15h4"></path><circle cx="16.5" cy="15" r="1.3" fill="currentColor" stroke="none"></circle>',
+  menu_book: '<path d="M12 6.5c-1.6-1.2-3.7-1.8-6-1.8v13c2.3 0 4.4.6 6 1.8" ></path><path d="M12 6.5c1.6-1.2 3.7-1.8 6-1.8v13c-2.3 0-4.4.6-6 1.8" ></path><path d="M12 6.5v13"></path>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M20 20l-4.5-4.5"></path>',
+  notifications: '<path d="M6 9a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 13 6 9z"></path><path d="M10 18a2 2 0 0 0 4 0"></path>',
+  check_circle: '<circle cx="12" cy="12" r="8.5"></circle><path d="M8.3 12.3l2.4 2.4 5-5.2"></path>',
+  close: '<path d="M6 6l12 12M18 6L6 18"></path>',
+  cancel: '<circle cx="12" cy="12" r="8.5"></circle><path d="M9 9l6 6M15 9l-6 6"></path>',
+  badge: '<rect x="4" y="6" width="16" height="14" rx="2"></rect><path d="M9 6V4.8A1.8 1.8 0 0 1 10.8 3h2.4A1.8 1.8 0 0 1 15 4.8V6"></path><circle cx="12" cy="12.5" r="2"></circle><path d="M8.5 18c.5-1.8 1.9-2.8 3.5-2.8s3 1 3.5 2.8"></path>',
+  shopping_bag: '<rect x="3" y="8" width="18" height="12" rx="2"></rect><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>',
+  payments: '<rect x="2.5" y="6" width="15" height="10" rx="2"></rect><circle cx="10" cy="11" r="2.4"></circle><path d="M21.5 9v6a2 2 0 0 1-2 2H7"></path>',
+  vpn_key: '<circle cx="8" cy="12" r="4.2"></circle><path d="M11.8 12h9.7M17.5 12v3.5M20 12v2.5"></path>',
+  save: '<path d="M5 4h11l3 3v13H5z"></path><path d="M8 4v5h7V4"></path><path d="M8 20v-6h8v6"></path>',
+  ios_share: '<path d="M12 3v12"></path><path d="M8 7l4-4 4 4"></path><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"></path>',
+  block: '<circle cx="12" cy="12" r="8.5"></circle><path d="M6.5 17.5l11-11"></path>',
+  add_circle: '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 8v8M8 12h8"></path>',
+  edit: '<path d="M4 20l1-4.2L15.5 5.3a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L8.2 19 4 20z"></path><path d="M14 7l3 3"></path>',
+  do_not_disturb_on: '<circle cx="12" cy="12" r="8.5"></circle><path d="M7.5 12h9"></path>',
+  circle: '<circle cx="12" cy="12" r="5"></circle>'
+};
+
+/**
+ * يرجّع SVG محلي بديل لأيقونات Material Symbols (غير مُحمَّلة كخط في الصفحة).
+ * name: أحد مفاتيح PULSE_ICON_PATHS. size: قياس px (افتراضي 18).
+ */
+function pulseIcon(name, size){
+  const s = size || 18;
+  const inner = PULSE_ICON_PATHS[name] || PULSE_ICON_PATHS.circle;
+  return `<svg class="pulse-icon" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;">${inner}</svg>`;
+}
