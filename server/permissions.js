@@ -53,7 +53,7 @@ function roleCanAccessView(role, view) {
 const EDITABLE_ROLE_PERMISSION_ROLES = ['staff', 'accountant', 'reception'];
 // نفس ALL_VIEWS المعروضة فى شاشة الإعدادات (theme-settings.js) — نتحقق منها هنا حتى لا يستطيع
 // أي admin (أو طلب مُعدَّل يدوياً) حفظ اسم شاشة وهمي أو مسافات فارغة فى الجدول بالغلط.
-const ALL_KNOWN_VIEWS = ['dashboard', 'clients', 'companies', 'courses', 'courseinvoices', 'vault', 'settlements', 'bags', 'purchases', 'reports', 'accounting', 'ledger', 'budget', 'audit', 'settings'];
+const ALL_KNOWN_VIEWS = ['dashboard', 'clients', 'companies', 'courses', 'courseinvoices', 'vault', 'settlements', 'bags', 'purchases', 'reports', 'accounting', 'ledger', 'budget', 'audit', 'settings', 'arkkan-sync'];
 // GET /api/role-permissions -> { reception:[...], staff:[...], accountant:[...] } — نفس القيم
 // المُفروضة فعلياً على الـ API، تُستخدم لتعبئة جدول "صلاحيات الأدوار" فى شاشة الإعدادات كمصدر
 // حقيقة وحيد بدل الاعتماد على settings.rolePermissions المشفّرة المحلية فقط.

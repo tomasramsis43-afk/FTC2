@@ -404,7 +404,11 @@ function closeEntityRingSvg(pct, color){
   </svg>`;
 }
 function renderCloseOverview(c, totalPaid, totalRemaining){
-  const el = $('#close-overview');
+  // ملاحظة: الحاوية المستهدفة (.close-overview) مصمَّمة فعلاً فى styles.css لكنها لم تُضَف بعد
+  // كعنصر فى app.html، وهذه الدالة لا يستدعيها أي كود حالياً — فلا تأثير ظاهر على الواجهة اليوم.
+  // كان السطر التالي يبحث بالخطأ عن معرِّف id="close-overview" غير موجود إطلاقاً بدل الكلاس
+  // .close-overview المعرَّف فعلياً فى الـ CSS — صُحِّح هنا للاتساق فقط، تحسباً لربطها لاحقاً.
+  const el = $('.close-overview');
   if(!el) return;
   const overdueDays = settings.paymentOverdueDays || 30;
   const active = c.filter(x=>!x.suspended && !x.cancelled);

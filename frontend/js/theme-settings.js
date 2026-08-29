@@ -84,6 +84,7 @@ const ALL_VIEWS = [
   {id:'vault', label:'الحركات المالية'},
   {id:'settlements', label:'تسوية الاستقبال'},
   {id:'bags', label:'مخزون الحقائب'},
+  {id:'arkkan-sync', label:'مزامنة أركان'},
   {id:'purchases', label:'المشتريات'},
   {id:'reports', label:'التقارير'},
   {id:'accounting', label:'المحاسبة'},
