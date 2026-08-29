@@ -753,50 +753,57 @@ async function populateReceptionFilterSelects(){
   ['filter-reception','v-filter-reception'].forEach(id=>{
     const sel = document.getElementById(id);
     if(!sel) return;
-    const cur = sel.value;
+    const prevVals = selectedFilterValues(sel);
     sel.innerHTML = '<option value="">كل موظفي الاستقبال</option>' + opts;
-    sel.value = users.some(u=>u.username===cur) ? cur : '';
+    Array.from(sel.options).forEach(o=> o.selected = prevVals.includes(o.value));
+    refreshMultiSelectFilterUI(sel);
   });
   wraps.forEach(w=>{ if(w) w.style.display = users.length ? '' : 'none'; });
 }
 function refreshFilterOptions(){
   if(typeof populateYearFilterSelect==='function') populateYearFilterSelect();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
-  const courseFilterVal = $('#filter-course').value;
+  // فلاتر متعددة الاختيار: نحفظ كل القيم المحددة سابقاً (مش قيمة واحدة بس) قبل إعادة بناء
+  // الخيارات، ونعيد تحديد كل قيمة كانت مختارة ولسه موجودة ضمن الخيارات الجديدة، حتى لا تُفقد
+  // بقية الاختيارات المتعددة في كل مرة يُعاد فيها بناء القائمة (تغيير بحث/بيانات...الخ)
+  const courseFilterVals = selectedFilterValues($('#filter-course'));
   populateSelect($('#filter-course'), settings.courses.map(c=>c.name), false);
   $('#filter-course').insertAdjacentHTML('afterbegin','<option value="__unknown__">⚠ الدورات غير المعلومة (بدون نوع دورة)</option>');
   $('#filter-course').insertAdjacentHTML('afterbegin','<option value="">كل الدورات</option>');
-  $('#filter-course').value = courseFilterVal || '';
+  Array.from($('#filter-course').options).forEach(o=> o.selected = courseFilterVals.includes(o.value));
+  refreshMultiSelectFilterUI($('#filter-course'));
 
-  const natFilterVal = $('#filter-nat').value;
+  const natFilterVals = selectedFilterValues($('#filter-nat'));
   populateSelect($('#filter-nat'), settings.nationalities, false);
   $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="">كل الجنسيات</option>');
-  $('#filter-nat').value = natFilterVal || '';
+  Array.from($('#filter-nat').options).forEach(o=> o.selected = natFilterVals.includes(o.value));
+  refreshMultiSelectFilterUI($('#filter-nat'));
 
-  const companyFilterVal = $('#filter-company').value;
+  const companyFilterVals = selectedFilterValues($('#filter-company'));
   // نجمع أسماء الشركات من القائمة الرئيسية (تبويب تحويلات الشركات) ومن العملاء المسجَّلين فعلياً، حتى تظهر أي شركة أُضيفت هناك فوراً هنا وتبقى الفلترة مرتبطة بين التبويبين
   const companyNamesForFilter = [...new Set([...companies.map(c=>c.name), ...clients.map(c=>c.companyName)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ar'));
   populateSelect($('#filter-company'), companyNamesForFilter, false);
   $('#filter-company').insertAdjacentHTML('afterbegin','<option value="">كل الشركات</option>');
-  $('#filter-company').value = companyNamesForFilter.includes(companyFilterVal) ? companyFilterVal : '';
+  Array.from($('#filter-company').options).forEach(o=> o.selected = companyFilterVals.includes(o.value));
+  refreshMultiSelectFilterUI($('#filter-company'));
 }
 function filteredClients(){
   const q = $('#search').value.trim().toLowerCase();
-  const fc = $('#filter-course').value;
-  const fn = $('#filter-nat').value;
-  const fs = $('#filter-status').value;
-  const fcomp = $('#filter-company').value;
-  const finv = $('#filter-invoice') ? $('#filter-invoice').value : '';
-  const fcn = $('#filter-coursenum') ? $('#filter-coursenum').value : '';
-  const frn = $('#filter-refnum') ? $('#filter-refnum').value : '';
+  const fcVals = selectedFilterValues($('#filter-course'));
+  const fnVals = selectedFilterValues($('#filter-nat'));
+  const fsVals = selectedFilterValues($('#filter-status'));
+  const fcompVals = selectedFilterValues($('#filter-company'));
+  const finvVals = $('#filter-invoice') ? selectedFilterValues($('#filter-invoice')) : [];
+  const fcnVals = $('#filter-coursenum') ? selectedFilterValues($('#filter-coursenum')) : [];
+  const frnVals = $('#filter-refnum') ? selectedFilterValues($('#filter-refnum')) : [];
   const dfrom = $('#cl-date-from').value;
   const dto = $('#cl-date-to').value;
   const paidMinRaw = $('#cl-paid-min').value;
   const paidMaxRaw = $('#cl-paid-max').value;
   const paidMin = paidMinRaw!=='' ? num(paidMinRaw) : null;
   const paidMax = paidMaxRaw!=='' ? num(paidMaxRaw) : null;
-  const frecep = $('#filter-reception') ? $('#filter-reception').value : '';
-  const fbagSource = $('#filter-bag-source') ? $('#filter-bag-source').value : '';
+  const frecepVals = $('#filter-reception') ? selectedFilterValues($('#filter-reception')) : [];
+  const fbagVals = $('#filter-bag-source') ? selectedFilterValues($('#filter-bag-source')) : [];
   const rows = clients.filter(c=>{
     // عزل البيانات: دور 'reception' مستثنى من isOwnRecord الفردية هنا تحديداً، لأن السيرفر
     // أصلاً لا يُرجع له إلا تخزينه الخاص (origin='reception' — مساحة واحدة مشتركة بين كل
@@ -804,24 +811,40 @@ function filteredClients(){
     // clientRecordsVisibilitySql فى server.js وتعليق canSeeAllData فى ui-framework.js.
     if(currentUserRole!=='reception' && !isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
     if(!matchYear(c.date)) return false; // فلتر السنة العلوي (خط دفاع مباشر — بجانب مزامنته لحقلي من/إلى أدناه)
-    if(frecep && c.createdBy!==frecep) return false;
+    if(frecepVals.length && !frecepVals.includes(c.createdBy)) return false;
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
-    if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
-    else if(fc && c.courseType!==fc) return false;
-    if(fn && c.nationality!==fn) return false;
-    if(fs==='paid' && remaining(c)>0) return false;
-    if(fs==='owe' && remaining(c)<=0) return false;
-    if(fcomp && c.companyName!==fcomp) return false;
-    if(finv==='no' && c.invoice && String(c.invoice).trim()) return false;
-    if(finv==='yes' && !(c.invoice && String(c.invoice).trim())) return false;
-    if(fcn==='no' && c.courseNumber && String(c.courseNumber).trim()) return false;
-    if(fcn==='yes' && !(c.courseNumber && String(c.courseNumber).trim())) return false;
-    if(frn==='no' && c.referNum && String(c.referNum).trim()) return false;
-    if(frn==='yes' && !(c.referNum && String(c.referNum).trim())) return false;
+    // كل فلتر متعدد الاختيار: مطابقة "أو" بين القيم المحددة داخل نفس الفلتر — لو مفيش أي
+    // اختيار محدد (مصفوفة فارغة) يبقى معناه "الكل" فلا يُستبعد أي عميل بسبب هذا الفلتر
+    if(fcVals.length){
+      const okCourse = fcVals.some(v => v==='__unknown__' ? !(c.courseType && c.courseType.trim()) : c.courseType===v);
+      if(!okCourse) return false;
+    }
+    if(fnVals.length && !fnVals.includes(c.nationality)) return false;
+    if(fsVals.length){
+      const rem = remaining(c);
+      const okStatus = (fsVals.includes('paid') && rem<=0) || (fsVals.includes('owe') && rem>0);
+      if(!okStatus) return false;
+    }
+    if(fcompVals.length && !fcompVals.includes(c.companyName)) return false;
+    if(finvVals.length){
+      const hasInv = !!(c.invoice && String(c.invoice).trim());
+      const ok = (finvVals.includes('yes') && hasInv) || (finvVals.includes('no') && !hasInv);
+      if(!ok) return false;
+    }
+    if(fcnVals.length){
+      const hasCn = !!(c.courseNumber && String(c.courseNumber).trim());
+      const ok = (fcnVals.includes('yes') && hasCn) || (fcnVals.includes('no') && !hasCn);
+      if(!ok) return false;
+    }
+    if(frnVals.length){
+      const hasRn = !!(c.referNum && String(c.referNum).trim());
+      const ok = (frnVals.includes('yes') && hasRn) || (frnVals.includes('no') && !hasRn);
+      if(!ok) return false;
+    }
     // فلتر الحقيبة (شيت العملاء): فلتر واحد مدمج بقيم مصدر الحقيبة الثلاث — من المخزون (stock)،
     // حقيبة خاصة (own)، أو بدون حقيبة (buy — شراء عادي وليس من المخزون ولا حقيبة خاصة)
-    if(fbagSource && c.bagSource!==fbagSource) return false;
+    if(fbagVals.length && !fbagVals.includes(c.bagSource)) return false;
     if(dfrom && (!c.date || c.date<dfrom)) return false;
     if(dto && (!c.date || c.date>dto)) return false;
     if(paidMin!==null && paidTotal(c)<paidMin) return false;
