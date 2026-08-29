@@ -11,6 +11,13 @@
    ============================================================ */
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
+const path = require('path');
+
+/* مجلد المتصفح نضعه داخل node_modules نفسه ليعيش مع النشر (منصات مثل
+   Render بتمسح الكاش الخارجي /opt/render/.cache فلا نعتمد عليه). لو
+   عايز مسار مخصص حط المتغير ARKKAN_BROWSERS_PATH قبل التشغيل. */
+process.env.PLAYWRIGHT_BROWSERS_PATH =
+  process.env.ARKKAN_BROWSERS_PATH || path.join(__dirname, '..', 'node_modules', '.local-browsers');
 
 let playwright = null;
 try { playwright = require('playwright'); } catch (e) { playwright = null; }
@@ -147,7 +154,12 @@ async function initBrowser() {
   }
   if (_browser) { await _browser.close().catch(() => {}); _browser = null; _page = null; _ready = false; }
 
-  _browser = await playwright.chromium.launch({ headless: HEADLESS });
+  _browser = await playwright.chromium.launch({
+    headless: HEADLESS,
+    // أوساط أمان متوافقة مع الحاويات/الاستضافة (Render): لا حاجة لـ /dev/shm،
+    // ولا لامتيازات root-sandbox.
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
   const ctx = await _browser.newContext();
   _page = await ctx.newPage();
 

@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "postinstall": "node install-browser.js",
     "seed-user": "node seed-user.js",
     "migrate": "node migrate-from-localstorage.js",
     "test": "node --test \"tests/**/*.test.js\""
