@@ -231,10 +231,10 @@ function companiesTakenSummaryHtml(){
     </div>`;
 }
 function companiesFilteredTransfers(){
-  const fname = $('#ctf-company')?.value || '';
+  const fnameVals = selectedFilterValues($('#ctf-company'));
   const dfrom = $('#ctf-date-from')?.value || '';
   const dto = $('#ctf-date-to')?.value || '';
-  const fchannel = $('#ctf-channel')?.value || '';
+  const fchannelVals = selectedFilterValues($('#ctf-channel'));
   const fcid = ($('#ctf-clientid')?.value || '').trim();
   const fcidLower = fcid.toLowerCase();
   const traineeMatches = tr=>{
@@ -243,10 +243,10 @@ function companiesFilteredTransfers(){
     return !!(c && String(c.name||'').toLowerCase().includes(fcidLower));
   };
   return companyTransfers.filter(t=>{
-    if(fchannel && (t.channel||'')!==fchannel) return false;
+    if(fchannelVals.length && !fchannelVals.includes(t.channel||'')) return false;
     // فلتر البحث برقم الهوية أو اسم المتدرب يبحث في كل الحوالات وكل الشركات بغض النظر عن فلتر الشركة/التاريخ
     if(fcid) return (t.trainees||[]).some(traineeMatches);
-    if(fname && t.companyName!==fname) return false;
+    if(fnameVals.length && !fnameVals.includes(t.companyName)) return false;
     if(dfrom && (!t.date || t.date<dfrom)) return false;
     if(dto && (!t.date || t.date>dto)) return false;
     return true;
@@ -256,17 +256,17 @@ function companiesFilteredTransfers(){
    مع فلاتر مستقلة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد يبحث في رقم الهوية أو الاسم أو
    اسم الشركة معاً — بغض النظر عن فلاتر سجل الحوالات أعلاه. */
 function companiesFilteredPersons(){
-  const fname = $('#cpp-company')?.value || '';
+  const fnameVals = selectedFilterValues($('#cpp-company'));
   const dfrom = $('#cpp-date-from')?.value || '';
   const dto = $('#cpp-date-to')?.value || '';
-  const fchannel = $('#cpp-channel')?.value || '';
+  const fchannelVals = selectedFilterValues($('#cpp-channel'));
   const q = ($('#cpp-search')?.value || '').trim().toLowerCase();
   const rows = [];
   companyTransfers.forEach(t=>{
-    if(fname && t.companyName!==fname) return;
+    if(fnameVals.length && !fnameVals.includes(t.companyName)) return;
     if(dfrom && (!t.date || t.date<dfrom)) return;
     if(dto && (!t.date || t.date>dto)) return;
-    if(fchannel && (t.channel||'')!==fchannel) return;
+    if(fchannelVals.length && !fchannelVals.includes(t.channel||'')) return;
     (t.trainees||[]).forEach(tr=>{
       const c = clients.find(x=>x.clientId===tr.clientId);
       if(q){
@@ -280,22 +280,12 @@ function companiesFilteredPersons(){
 }
 let cpersonsPageState = {page:1, sig:''};
 function renderCompanyPersons(){
-  if($('#cpp-company')){
-    const cppVal = $('#cpp-company').value;
-    populateSelect($('#cpp-company'), companies.map(c=>c.name), false);
-    $('#cpp-company').insertAdjacentHTML('afterbegin',`<option value="">${tr('allCompanies')}</option>`);
-    $('#cpp-company').value = companies.some(c=>c.name===cppVal) ? cppVal : '';
-  }
-  if($('#cpp-channel')){
-    const cppChannelVal = $('#cpp-channel').value;
-    populateSelect($('#cpp-channel'), settings.channels.map(c=>c.name), false);
-    $('#cpp-channel').insertAdjacentHTML('afterbegin',`<option value="">${tr('allChannels')}</option>`);
-    $('#cpp-channel').value = settings.channels.some(c=>c.name===cppChannelVal) ? cppChannelVal : '';
-  }
+  repopulateFilterSelectPreserve($('#cpp-company'), companies.map(c=>c.name), tr('allCompanies'));
+  repopulateFilterSelectPreserve($('#cpp-channel'), settings.channels.map(c=>c.name), tr('allChannels'));
   const rows = companiesFilteredPersons();
   const cnt = $('#cpp-count'); if(cnt) cnt.textContent = rows.length;
   const pageRows = applyGenericPagination('cpersons', rows, cpersonsPageState, [
-    $('#cpp-company')?.value, $('#cpp-date-from')?.value, $('#cpp-date-to')?.value, $('#cpp-channel')?.value, $('#cpp-search')?.value
+    selectedFilterValues($('#cpp-company')), $('#cpp-date-from')?.value, $('#cpp-date-to')?.value, selectedFilterValues($('#cpp-channel')), $('#cpp-search')?.value
   ]);
   $('#company-persons-list').innerHTML = rows.length ? `
     <div class="table-scroll table-scroll-compact">
@@ -507,7 +497,9 @@ document.addEventListener('click', e=>{
   const btn = e.target.closest('[data-jumptransfer]');
   if(!btn) return;
   const id = btn.dataset.jumptransfer;
-  $('#ctf-company').value=''; $('#ctf-date-from').value=''; $('#ctf-date-to').value=''; $('#ctf-clientid').value=''; if($('#ctf-channel')) $('#ctf-channel').value='';
+  $('#ctf-company').value=''; refreshMultiSelectFilterUI($('#ctf-company'));
+  $('#ctf-date-from').value=''; $('#ctf-date-to').value=''; $('#ctf-clientid').value='';
+  if($('#ctf-channel')){ $('#ctf-channel').value=''; refreshMultiSelectFilterUI($('#ctf-channel')); }
   const sorted = companyTransfers.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const idx = sorted.findIndex(x=>x.id===id);
   const pageSize = genericPageSize('ctransfers');
@@ -675,24 +667,16 @@ function renderCompanies(){
   updateComputedShare();
 
   // خيارات فلتر الشركة لسجل الحوالات
-  const ctfVal = $('#ctf-company').value;
-  populateSelect($('#ctf-company'), companies.map(c=>c.name), false);
-  $('#ctf-company').insertAdjacentHTML('afterbegin',`<option value="">${tr('allCompanies')}</option>`);
-  $('#ctf-company').value = companies.some(c=>c.name===ctfVal) ? ctfVal : '';
+  repopulateFilterSelectPreserve($('#ctf-company'), companies.map(c=>c.name), tr('allCompanies'));
 
   // خيارات فلتر طريقة الدفع لسجل الحوالات
-  const ctfChannelVal = $('#ctf-channel')?.value;
-  if($('#ctf-channel')){
-    populateSelect($('#ctf-channel'), settings.channels.map(c=>c.name), false);
-    $('#ctf-channel').insertAdjacentHTML('afterbegin',`<option value="">${tr('allChannels')}</option>`);
-    $('#ctf-channel').value = settings.channels.some(c=>c.name===ctfChannelVal) ? ctfChannelVal : '';
-  }
+  repopulateFilterSelectPreserve($('#ctf-channel'), settings.channels.map(c=>c.name), tr('allChannels'));
 
   // سجل الحوالات والمتدربين (مفلترة حسب الشركة وتاريخ الحوالة وطريقة الدفع والبحث برقم الهوية/الاسم)
   const filteredTransfers = companiesFilteredTransfers();
   const sortedTransfers = filteredTransfers.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const ctPageRows = applyGenericPagination('ctransfers', sortedTransfers, ctransfersPageState, [
-    $('#ctf-company')?.value, $('#ctf-date-from')?.value, $('#ctf-date-to')?.value, $('#ctf-clientid')?.value, $('#ctf-channel')?.value
+    selectedFilterValues($('#ctf-company')), $('#ctf-date-from')?.value, $('#ctf-date-to')?.value, $('#ctf-clientid')?.value, selectedFilterValues($('#ctf-channel'))
   ]);
   $('#company-transfers-list').innerHTML = filteredTransfers.length ? ctPageRows.map(t=>{
     const allocated = transferAllocatedTotal(t);
