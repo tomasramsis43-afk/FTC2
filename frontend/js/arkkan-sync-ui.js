@@ -77,6 +77,40 @@ async function arkkanFetchOne(clientId, referNum = '') {
    — بلا فتح نموذج التعديل: يجلب الناقص ويحفظه في البيانات فوراً.
    ══════════════════════════════════════════════ */
 
+/* تحويل قيمة مالية قادمة من أركان إلى رقم نظيف */
+function arkkanNumPrice(v){ return parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '')) || v; }
+
+/* يبني التصحيح الواحد لواحد من بيانات أركان إلى العميل (فقط الحقول الناقصة).
+   يشمل أيضاً حقول شيت "فواتير الدورات": القيمة الفعلية من الإيصال وتاريخ صدوره. */
+function arkkanPatchFromData(c, data){
+  const patch = {};
+  if (!c.invoice && data.invoice) patch.invoice = data.invoice;
+  if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
+  if (!c.date && data.date) patch.date = arkkanToInputDate(data.date);
+  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
+    patch.coursePrice = arkkanNumPrice(data.coursePrice);
+  if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
+  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
+  if (!c.startDate && data.startDate) patch.startDate = data.startDate;
+  // فواتير الدورات: القيمة الفعلية من الإيصال وتاريخ صدوره (يُحدّثان الشيت ويُرحّلان للقيد المزدوج)
+  if ((c.receiptActualValue === undefined || c.receiptActualValue === null || c.receiptActualValue === '') && data.coursePrice)
+    patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
+  if (!c.receiptIssueDate && data.date) patch.receiptIssueDate = arkkanToInputDate(data.date);
+  return patch;
+}
+
+/* بعد تحديث حقول فواتير الدورات: ترحيل القيد المزدوج (إن لم يكن مرحّلاً بعد) + تحديث الشيت */
+async function arkkanPostInvoiceIfNeeded(c, patch){
+  const invChanged = ('receiptActualValue' in patch) || ('receiptIssueDate' in patch);
+  if (!invChanged) return;
+  const posted = typeof autoPostCourseInvoice === 'function' && autoPostCourseInvoice(c);
+  if (posted && typeof saveJournalDE === 'function') await saveJournalDE();
+  if (typeof logAudit === 'function'){
+    await logAudit('edit','فواتير الدورات', `تحديث تلقائي من أركان: القيمة الفعلية وتاريخ صدور فاتورة الدورة للعميل: ${c.name} (${c.invoice||''})${posted?' — ورُحّلت تلقائياً للقيد المزدوج':''}`);
+  }
+  if (typeof renderCourseInvoices === 'function') renderCourseInvoices();
+}
+
 /* يجلب بيانات العميل من أركان وقدّمها على الحقول الناقصة واحد لواحد
    (نفس منطق المزامنة)، ثم يحفظ الكائن في الخادم تلقائياً. */
 async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
@@ -85,19 +119,12 @@ async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
   if (idx === -1) throw new Error('العميل غير موجود في القائمة');
 
   const c = clients[idx];
-  const patch = {};
-  if (!c.invoice && data.invoice) patch.invoice = data.invoice;
-  if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
-  if (!c.date && data.date) patch.date = arkkanToInputDate(data.date);
-  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
-    patch.coursePrice = parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice;
-  if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
-  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
-  if (!c.startDate && data.startDate) patch.startDate = data.startDate;
+  const patch = arkkanPatchFromData(c, data);
 
   if (Object.keys(patch).length > 0) {
     Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
+    await arkkanPostInvoiceIfNeeded(clients[idx], patch);
   }
   return { updated: Object.keys(patch).length, client: clients[idx] };
 }
@@ -211,19 +238,13 @@ async function arkkanBulkSync() {
     try {
       if (!_arkkanBulkRunning) break;
       const data = await arkkanFetchOne(c.clientId, c.referNum || '');
-      const patch = {};
-      if (!c.invoice && data.invoice) patch.invoice = data.invoice;
-      if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
-      if (!c.date && data.date) patch.date = arkkanToInputDate(data.date);
-      if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice) patch.coursePrice = parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice;
-      if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
-      if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
-      if (!c.startDate && data.startDate) patch.startDate = data.startDate;
+      const patch = arkkanPatchFromData(c, data);
 
       if (Object.keys(patch).length > 0) {
         const idx = clients.findIndex(x => x.clientId === c.clientId);
         if (idx !== -1) Object.assign(clients[idx], patch);
         if (typeof saveClients === 'function') await saveClients();
+        await arkkanPostInvoiceIfNeeded(clients[idx] || c, patch);
         updated++;
         arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
         if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
