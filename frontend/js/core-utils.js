@@ -339,13 +339,36 @@ function _openKvIdb(){
     try{
       if(!window.indexedDB){ resolve(null); return; }
       const req = indexedDB.open(KV_IDB_NAME, 3);
+      // ثغرة "عزل مستخدم ثانٍ" كانت هنا: لو تاب قديم (مفتوح من قبل آخر تحديث للسيرفر) لسه شغّال
+      // ومتصل بقاعدة IndexedDB بنسخة أقدم، أي تاب جديد يطلب نسخة أحدث (3) يتوقف تماماً بلا أي
+      // خطأ ظاهر — المتصفح "يحجب" (blocked) فتح الاتصال الجديد لحد ما كل الاتصالات القديمة تُغلَق،
+      // ولأننا ما كناش نسمع لحدث versionchange لنغلق الاتصال القديم تلقائياً، كان المستخدم الثاني
+      // يفضل عالقاً فعلياً (لا تحميل، لا خطأ) لحد ما المستخدم الأول يقفل تابه/متصفحه بنفسه.
+      // الحل: (أ) لما نتصل بنجاح، نسمع لـ onversionchange ونقفل هذا الاتصال فوراً لو تاب تانٍ
+      // محتاج يفتح نسخة أحدث — فيتحرر الحجب في الحال بدل انتظار إغلاق التاب يدوياً. (ب) onblocked
+      // كخط رجعة احترازي: لو لسبب ما الإغلاق لم يحدث فوراً، لا نترك الوعد معلّقاً للأبد — نرجع
+      // null بعد مهلة قصيرة فيعمل النظام تلقائياً بـ localStorage كخط رجعة بدل التجمّد الكامل.
+      let blockedTimer = null;
+      req.onblocked = ()=>{
+        console.warn('[Core] IDB blocked: يوجد تاب آخر مفتوح على نسخة أقدم — سيُغلَق تلقائياً إن أمكن');
+        if(!blockedTimer){
+          blockedTimer = setTimeout(()=>{ resolve(null); }, 3000);
+        }
+      };
       req.onupgradeneeded = ()=>{
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_STORE)) req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore kv failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore pending failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(RECORD_PENDING_STORE)) req.result.createObjectStore(RECORD_PENDING_STORE, { keyPath: 'ckey' }); }catch(e){ console.error('[Core] IDB createObjectStore pendingRecords failed:', e); }
       };
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> resolve(null); // فشل الفتح — سنستخدم localStorage كخط رجعة
+      req.onsuccess = ()=>{
+        if(blockedTimer){ clearTimeout(blockedTimer); blockedTimer = null; }
+        const db = req.result;
+        // أهم سطر لحل المشكلة: أي تاب تانٍ يطلب نسخة أحدث لاحقاً (بعد ديبلوي جديد) هذا الاتصال
+        // يقفل نفسه فوراً بدل الاستمرار مفتوحاً ويحجب التاب الجديد لحد ما هذا التاب يُقفل يدوياً.
+        db.onversionchange = ()=>{ try{ db.close(); }catch(e){} _kvIdbPromise = null; };
+        resolve(db);
+      };
+      req.onerror = ()=>{ if(blockedTimer){ clearTimeout(blockedTimer); blockedTimer = null; } resolve(null); }; // فشل الفتح — سنستخدم localStorage كخط رجعة
     }catch(e){ resolve(null); }
   });
   return _kvIdbPromise;
