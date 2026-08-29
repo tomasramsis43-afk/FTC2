@@ -85,7 +85,6 @@ function cwInfoHtml(c){
         ${row('الدورة', escapeHtml(c.courseType || ''))}
         ${row('رقم الدورة', escapeHtml(c.courseNumber || ''))}
         ${row('رقم الفاتورة', escapeHtml(c.invoice || ''))}
-        ${row('تاريخ الفاتورة', formatDateDisplay(c.date) || '')}
         ${row('قيمة الفاتورة', (c.coursePrice != null && c.coursePrice !== '') ? fmt(num(c.coursePrice)) : '')}
         ${row('تاريخ الدورة', formatDateDisplay(c.startDate) || '')}
         ${row('رقم إيصال الحقيبة', escapeHtml(c.bagInvoice || ''))}
