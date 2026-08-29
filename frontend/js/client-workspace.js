@@ -61,9 +61,48 @@ function cwActivityHtml(c){
    كانت تخفي الأقسام عن بعضها) — الترتيب: الوضع المالي، الحركات المرتبطة، بيانات العميل،
    الدورة والحقائب، ثم سجل النشاط، كل قسم بعنوانه الخاص فى تمرير رأسي واحد. ---- */
 
+/* بطاقات بيانات الكرت (بيانات العميل + الدورة والحقائب) — دالة منفصلة حتى
+   نحدّثها فوراً بعد "جلب من أركان" من غير إعادة فتح الكلت */
+function cwInfoHtml(c){
+  const row = (k, v) => v ? `<div class="cw-item"><small>${k}</small><b>${v}</b></div>` : '';
+  return `
+    <div class="cw-section">
+      <h4>بيانات العميل</h4>
+      <div class="cw-grid">
+        ${row('رقم الهوية', escapeHtml(c.clientId || ''))}
+        ${row('الجوال', phoneCellHtml ? phoneCellHtml(c.phone) : escapeHtml(c.phone || ''))}
+        ${row('الجنسية', escapeHtml(c.nationality || ''))}
+        ${row('تاريخ التسجيل', formatDateDisplay(c.date) || '')}
+        ${row('الرقم المرجعي', escapeHtml(c.referNum || ''))}
+        ${row('الشركة', escapeHtml(c.companyName || ''))}
+        ${row('قناة الدفع', typeof paymentChannelsLabel === 'function' ? escapeHtml(paymentChannelsLabel(c)) : '')}
+        ${row('البريد', escapeHtml(c.email || ''))}
+      </div>
+    </div>
+    <div class="cw-section">
+      <h4>الدورة والحقائب</h4>
+      <div class="cw-grid">
+        ${row('الدورة', escapeHtml(c.courseType || ''))}
+        ${row('رقم الدورة', escapeHtml(c.courseNumber || ''))}
+        ${row('رقم الفاتورة', escapeHtml(c.invoice || ''))}
+        ${row('تاريخ الفاتورة', formatDateDisplay(c.date) || '')}
+        ${row('قيمة الفاتورة', (c.coursePrice != null && c.coursePrice !== '') ? fmt(num(c.coursePrice)) : '')}
+        ${row('تاريخ الدورة', formatDateDisplay(c.startDate) || '')}
+        ${row('رقم إيصال الحقيبة', escapeHtml(c.bagInvoice || ''))}
+        ${row('تاريخ الحقيبة', formatDateDisplay(c.bagPurchaseDate) || '')}
+        ${row('الحقيبة', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
+        ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
+        ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
+      </div>
+    </div>`;
+}
+
+let _cwClientId = null; // العميل المفتوح حالياً في الكرت (لزرار جلب أركان)
+
 function openClientWorkspace(id){
   const c = clients.find(x => x.id === id);
   if(!c) return;
+  _cwClientId = id;
   const ov = $('#client-workspace-overlay');
   if(!ov) return;
 
@@ -100,32 +139,7 @@ function openClientWorkspace(id){
     </div>`;
 
   /* ---- بطاقات البيانات (تبويب البيانات) ---- */
-  const row = (k, v) => v ? `<div class="cw-item"><small>${k}</small><b>${v}</b></div>` : '';
-  const infoHtml = `
-    <div class="cw-section">
-      <h4>بيانات العميل</h4>
-      <div class="cw-grid">
-        ${row('رقم الهوية', escapeHtml(c.clientId || ''))}
-        ${row('الجوال', phoneCellHtml ? phoneCellHtml(c.phone) : escapeHtml(c.phone || ''))}
-        ${row('الجنسية', escapeHtml(c.nationality || ''))}
-        ${row('تاريخ التسجيل', formatDateDisplay(c.date) || '')}
-        ${row('الرقم المرجعي', escapeHtml(c.referNum || ''))}
-        ${row('الشركة', escapeHtml(c.companyName || ''))}
-        ${row('قناة الدفع', typeof paymentChannelsLabel === 'function' ? escapeHtml(paymentChannelsLabel(c)) : '')}
-        ${row('البريد', escapeHtml(c.email || ''))}
-      </div>
-    </div>
-    <div class="cw-section">
-      <h4>الدورة والحقائب</h4>
-      <div class="cw-grid">
-        ${row('الدورة', escapeHtml(c.courseType || ''))}
-        ${row('رقم الدورة', escapeHtml(c.courseNumber || ''))}
-        ${row('رقم الفاتورة', escapeHtml(c.invoice || ''))}
-        ${row('الحقيبة', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
-        ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
-        ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
-      </div>
-    </div>`;
+  const infoHtml = cwInfoHtml(c);
 
   /* ---- سجل النشاط ---- */
   const activityHtml = `<div class="cw-section"><h4>سجل النشاط</h4>${cwActivityHtml(c)}</div>`;
@@ -137,6 +151,7 @@ function openClientWorkspace(id){
   const acts = [];
   if(typeof canReceptionEditClient !== 'function' || canReceptionEditClient(c)){
     acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">تعديل البيانات</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً">⏬ جلب من أركان</button>`);
   }
   acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-invoice">الفاتورة</button>`);
   if(canAccessView('vault') && typeof openVaultModal === 'function'){
@@ -170,6 +185,7 @@ document.addEventListener('click', e => {
   const wid = e.target.dataset ? e.target.dataset.workspace : null;
   if(wid){ openClientWorkspace(wid); return; }
   if(e.target.id === 'btn-cw-close'){ closeClientWorkspace(); return; }
+  if(e.target.id === 'cw-arkkan' && _cwClientId){ arkkanFetchCardButton(_cwClientId, e.target); return; }
   if(e.target.id === 'client-workspace-overlay') closeClientWorkspace();
 });
 document.addEventListener('keydown', e => {

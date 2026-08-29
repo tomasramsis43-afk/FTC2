@@ -72,69 +72,62 @@ async function arkkanFetchOne(clientId, referNum = '') {
 }
 
 /* ══════════════════════════════════════════════
-   1) زرار "جلب من أركان" في نموذج العميل
+   1) جلب بيانات العميل من أركان + حفظ تلقائي
+   يُستدعى من زرار "جلب من أركان" في كرت العميل (ملف العميل)
+   — بلا فتح نموذج التعديل: يجلب الناقص ويحفظه في البيانات فوراً.
    ══════════════════════════════════════════════ */
-document.addEventListener('click', async e => {
-  if (!e.target.closest('#btn-arkkan-fetch')) return;
-  const btn = $('#btn-arkkan-fetch');
-  const statusEl = $('#arkkan-fetch-status');
-  const clientId = $('#f-id')?.value?.trim();
 
+/* يجلب بيانات العميل من أركان وقدّمها على الحقول الناقصة واحد لواحد
+   (نفس منطق المزامنة)، ثم يحفظ الكائن في الخادم تلقائياً. */
+async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
+  const data = await arkkanFetchOne(clientId, referNum); // يرمي خطأ لو فشل
+  const idx = clients.findIndex(x => x.clientId === clientId);
+  if (idx === -1) throw new Error('العميل غير موجود في القائمة');
+
+  const c = clients[idx];
+  const patch = {};
+  if (!c.invoice && data.invoice) patch.invoice = data.invoice;
+  if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
+  if (!c.date && data.date) patch.date = arkkanToInputDate(data.date);
+  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
+    patch.coursePrice = parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice;
+  if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
+  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
+  if (!c.startDate && data.startDate) patch.startDate = data.startDate;
+
+  if (Object.keys(patch).length > 0) {
+    Object.assign(clients[idx], patch);
+    if (typeof saveClients === 'function') await saveClients();
+  }
+  return { updated: Object.keys(patch).length, client: clients[idx] };
+}
+
+/* معالج زر "جلب من أركان" الموجود في كرت العميل */
+async function arkkanFetchCardButton(id, btn) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
-  if (!clientId) { showToast('أدخل رقم الهوية أولاً', 'error'); return; }
+  if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
 
   btn.disabled = true;
   const oldLabel = btn.innerHTML;
-  btn.textContent = '⏳ جاري الجلب من أركان...';
-  if (statusEl) statusEl.textContent = '';
+  btn.textContent = '⏳ جاري الجلب والحفظ...';
 
   try {
-    const referNum = $('#f-refer')?.value?.trim() || '';
-    if (statusEl) statusEl.textContent = 'فتح المتصفح وجلب البيانات...';
-
-    // استدعاء مباشر: الخادم نفسه يجهّز المتصفح المخفي ويجلب البيانات
-    const data = await arkkanFetchOne(clientId, referNum);
-
-    let filled = 0;
-    const setIfEmpty = (sel, val) => {
-      const el = $(sel);
-      if (!el || el.value) return false;
-      el.value = val;
-      return true;
-    };
-    if (data.invoice)         filled += setIfEmpty('#f-invoice', data.invoice) ? 1 : 0;
-    if (data.courseNumber)    filled += setIfEmpty('#f-coursenum', data.courseNumber) ? 1 : 0;
-    if (data.date)            filled += setIfEmpty('#f-date', arkkanToInputDate(data.date)) ? 1 : 0;
-    if (data.coursePrice)     filled += setIfEmpty('#f-courseprice', parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice) ? 1 : 0;
-    if (data.bagInvoice)      filled += setIfEmpty('#f-baginvoice', data.bagInvoice) ? 1 : 0;
-
-    // تحديث كائن العميل في الذاكرة بالحقول الظاهرة وغير الظاهرة
-    const idx = clients.findIndex(c => c.clientId === clientId);
-    if (idx !== -1) {
-      const c = clients[idx];
-      if (data.invoice && !c.invoice) c.invoice = data.invoice;
-      if (data.courseNumber && !c.courseNumber) c.courseNumber = data.courseNumber;
-      if (data.date && !c.date) c.date = arkkanToInputDate(data.date);
-      if (data.coursePrice && (c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0)) c.coursePrice = parseFloat(data.coursePrice) || c.coursePrice;
-      if (data.bagInvoice && !c.bagInvoice) c.bagInvoice = data.bagInvoice;
-      if (data.bagPurchaseDate && !c.bagPurchaseDate) c.bagPurchaseDate = data.bagPurchaseDate;
-      if (data.startDate && !c.startDate) c.startDate = data.startDate;
+    const res = await arkkanFetchAndAutoUpdate(c.clientId, c.referNum || '');
+    if (res.updated > 0) {
+      showToast(`✅ تم جلب وحفظ ${res.updated} حقل من أركان`, 'success');
+      if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id); // تحديث الكارت فوراً
+    } else {
+      showToast('بيانات الكارت مكتملة بالفعل من أركان — لا جديد', 'info');
     }
-
-    showToast(
-      filled > 0
-        ? `✅ تم جلب ${filled} حقل من أركان`
-        : 'لم تُجلب بيانات جديدة (قد تكون مكتملة أصلاً)',
-      filled > 0 ? 'success' : 'info'
-    );
   } catch (err) {
     showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 90), 'error');
-    if (statusEl) statusEl.textContent = '';
   } finally {
     btn.disabled = false;
     btn.innerHTML = oldLabel;
   }
-});
+}
 
 /* ══════════════════════════════════════════════
    2) صفحة المزامنة الكاملة (Bulk Sync)
