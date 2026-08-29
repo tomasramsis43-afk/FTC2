@@ -824,3 +824,140 @@ function pulseIcon(name, size){
   const inner = PULSE_ICON_PATHS[name] || PULSE_ICON_PATHS.circle;
   return `<svg class="pulse-icon" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;">${inner}</svg>`;
 }
+
+/* ============= فلاتر متعددة الاختيار (Checkbox Dropdown) ============= */
+/*
+  تحويل عام لأي <select> فلتر (مُعلَّم بـ data-multi-filter) إلى قائمة منسدلة فيها Checkbox
+  جنب كل خيار، بحيث يمكن تحديد أكتر من اختيار مرة واحدة. لا يُطبَّق على حقول الفورمات (سجل
+  واحد له قيمة واحدة) ولا على محددات فترة التقرير (سنة/شهر) — هذه تبقى اختيار واحد كالمعتاد.
+  الـ <select> الأصلي يبقى مخفياً في الـ DOM كمصدر وحيد للحقيقة (options + selected)، وأي كود
+  قديم يعيد ملء خياراته ديناميكياً (select.innerHTML = ...) يستمر في العمل بلا أي تعديل.
+*/
+function selectedFilterValues(sel){
+  if(!sel) return [];
+  return Array.from(sel.selectedOptions || []).map(o=>o.value).filter(v=>v!=='');
+}
+/* مطابقة "أو" داخل نفس الفلتر: لو مفيش أي اختيار محدد (يعني "الكل") يرجع true دايماً */
+function matchesMultiFilter(sel, value){
+  const vals = selectedFilterValues(sel);
+  if(!vals.length) return true;
+  return vals.includes(value);
+}
+/* يُستدعى من أي كود يصفّر/يغيّر اختيار فلتر متعدد برمجياً (زر "مسح الفلاتر" مثلاً) بدل تفاعل
+   المستخدم المباشر مع القائمة — عشان يحدّث نص الزر الظاهر ليطابق التحديد الفعلي في الـ select
+   المخفي، لأن هذا التحديث برمجياً لا يمر بمعالج النقر الداخلي للـ widget أصلاً */
+function refreshMultiSelectFilterUI(sel){
+  if(!sel || !sel.dataset.msfInit) return;
+  const wrap = sel.closest('.msf-wrap');
+  const btn = wrap?.querySelector('.msf-toggle');
+  if(!btn) return;
+  const opts = Array.from(sel.selectedOptions);
+  const allOpt = Array.from(sel.options).find(o=>o.value==='');
+  let label;
+  if(!opts.length) label = allOpt ? allOpt.textContent : 'الكل';
+  else if(opts.length===1) label = opts[0].textContent;
+  else label = `${opts.length} اختيارات محددة`;
+  btn.innerHTML = `<span class="msf-label">${escapeHtml(label)}</span><span class="msf-caret">▾</span>`;
+}
+/* يعيد بناء خيارات select فلتر متعدد الاختيار (populateSelect) مع الحفاظ على كل القيم
+   المحددة سابقاً (وليس قيمة واحدة فقط) طالما لا تزال ضمن الخيارات الجديدة. يُستخدم في كل مكان
+   يُعاد فيه ملء خيارات فلتر ديناميكياً (شركات/طرق دفع/موظفين...) عند كل رندر */
+function repopulateFilterSelectPreserve(sel, values, emptyLabel){
+  if(!sel) return;
+  const prevVals = selectedFilterValues(sel);
+  populateSelect(sel, values, false);
+  if(emptyLabel!==undefined) sel.insertAdjacentHTML('afterbegin', `<option value="">${emptyLabel}</option>`);
+  Array.from(sel.options).forEach(o=> o.selected = prevVals.includes(o.value));
+  refreshMultiSelectFilterUI(sel);
+}
+function initMultiSelectFilters(root){
+  const scope = (root && root.querySelectorAll) ? root : document;
+  scope.querySelectorAll('select[data-multi-filter]').forEach(sel=>{
+    if(sel.dataset.msfInit) return;
+    sel.dataset.msfInit = '1';
+    sel.multiple = true;
+    sel.style.display = 'none';
+    sel.tabIndex = -1;
+
+    const wrap = document.createElement('span');
+    wrap.className = 'msf-wrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'msf-toggle';
+    if(sel.title) btn.title = sel.title;
+    wrap.appendChild(btn);
+
+    const menu = document.createElement('div');
+    menu.className = 'msf-menu';
+    document.body.appendChild(menu);
+
+    function allOption(){ return Array.from(sel.options).find(o=>o.value===''); }
+
+    function buildMenu(){
+      menu.innerHTML = Array.from(sel.options).map((o,i)=>`
+        <label class="msf-item">
+          <input type="checkbox" data-msf-idx="${i}" ${o.selected?'checked':''}>
+          <span>${escapeHtml(o.textContent)}</span>
+        </label>`).join('');
+    }
+    function updateBtn(){ refreshMultiSelectFilterUI(sel); }
+    function positionMenu(){
+      const r = btn.getBoundingClientRect();
+      const menuW = Math.max(r.width, 190);
+      let left = r.right - menuW;
+      if(left < 6) left = 6;
+      menu.style.position = 'fixed';
+      menu.style.top = (r.bottom + 4) + 'px';
+      menu.style.left = left + 'px';
+      menu.style.minWidth = menuW + 'px';
+    }
+    function closeMenu(){ menu.classList.remove('open'); }
+
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const willOpen = !menu.classList.contains('open');
+      document.querySelectorAll('.msf-menu.open').forEach(m=>{ if(m!==menu) m.classList.remove('open'); });
+      if(willOpen){ buildMenu(); positionMenu(); menu.classList.add('open'); }
+      else closeMenu();
+    });
+    menu.addEventListener('click', e=>{
+      const label = e.target.closest('.msf-item');
+      if(!label) return;
+      e.stopPropagation();
+      const checkbox = label.querySelector('input');
+      const idx = Number(checkbox.dataset.msfIdx);
+      const opt = sel.options[idx];
+      const allOpt = allOption();
+      if(opt === allOpt){
+        Array.from(sel.options).forEach(o=> o.selected = (o===allOpt));
+      } else {
+        opt.selected = !opt.selected;
+        if(allOpt) allOpt.selected = false;
+        if(!Array.from(sel.selectedOptions).length && allOpt) allOpt.selected = true;
+      }
+      buildMenu();
+      updateBtn();
+      // بعض أماكن الكود القديم تستمع لـ 'input' على عناصر select (بدل 'change') — نُطلق الاثنين
+      // معاً لضمان توافق كل أنماط الاستماع الموجودة في الكود الحالي بلا استثناء
+      sel.dispatchEvent(new Event('input', {bubbles:true}));
+      sel.dispatchEvent(new Event('change', {bubbles:true}));
+    });
+    document.addEventListener('click', closeMenu);
+    window.addEventListener('resize', ()=>{ if(menu.classList.contains('open')) positionMenu(); });
+    window.addEventListener('scroll', ()=>{ if(menu.classList.contains('open')) positionMenu(); }, true);
+    // احتياطي: أي كود خارجي يغيّر تحديد هذا الفلتر برمجياً ثم يُطلق change بنفسه (نمط شائع في
+    // الكود القديم) يحدّث شكل الزر تلقائياً حتى بدون المرور بمعالج النقر الداخلي أعلاه
+    sel.addEventListener('change', updateBtn);
+
+    // لو الكود القديم يعيد بناء خيارات الـ select ديناميكياً (شركات/موردين/مستخدمين...)، نحدّث
+    // نص الزر تلقائياً عند أي تغيير في الخيارات حتى لا يظل الزر يعرض بيانات قديمة
+    new MutationObserver(updateBtn).observe(sel, {childList:true, subtree:true});
+
+    updateBtn();
+  });
+}
+document.addEventListener('DOMContentLoaded', ()=> initMultiSelectFilters(document));
+if(document.readyState==='interactive' || document.readyState==='complete') initMultiSelectFilters(document);
