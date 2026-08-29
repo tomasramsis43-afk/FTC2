@@ -3,12 +3,12 @@
 function purchaseTax(subtotal){ return subtotal * VAT_RATE; }
 function purchaseMatchesFilters(p){
   const q = ($('#purchase-search')?.value||'').trim().toLowerCase();
-  const supF = $('#purchase-supplier-filter')?.value||'';
-  const statusF = $('#purchase-status-filter')?.value||'';
+  const supVals = selectedFilterValues($('#purchase-supplier-filter'));
+  const statusVals = selectedFilterValues($('#purchase-status-filter'));
   const from = $('#purchase-date-from')?.value||'';
   const to = $('#purchase-date-to')?.value||'';
-  if(supF && p.supplierId!==supF) return false;
-  if(statusF && p.status!==statusF) return false;
+  if(supVals.length && !supVals.includes(p.supplierId)) return false;
+  if(statusVals.length && !statusVals.includes(p.status)) return false;
   if(from && p.date < from) return false;
   if(to && p.date > to) return false;
   if(q){
@@ -65,7 +65,12 @@ function populatePurchaseSupplierSelects(){
   const opts = suppliers.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
   const sel = $('#pu-supplier'); if(sel) sel.innerHTML = opts || '<option value="">أضف مورداً أولاً</option>';
   const filt = $('#purchase-supplier-filter');
-  if(filt){ const cur = filt.value; filt.innerHTML = '<option value="">كل الموردين</option>' + opts; filt.value = cur; }
+  if(filt){
+    const prevVals = selectedFilterValues(filt);
+    filt.innerHTML = '<option value="">كل الموردين</option>' + opts;
+    Array.from(filt.options).forEach(o=> o.selected = prevVals.includes(o.value));
+    refreshMultiSelectFilterUI(filt);
+  }
 }
 function renderPurchasesTable(){
   const body = $('#purchases-body');
