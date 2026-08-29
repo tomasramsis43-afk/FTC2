@@ -19,7 +19,19 @@ const ARKKAN_FIELD_LABELS = {
   startDate:    'تاريخ الدورة'
 };
 
+/* تاريخ الدورة من تبويب الدورات: تاريخ الجلسة المسجّلة بنفس رقم الدورة،
+   أو تاريخ الدورة المتوقعة المسجّل على العميل — حتى لا يظهر العميل
+   ناقص "تاريخ الدورة" رغم أن جدول الدورات يعرفه. */
+function arkkanCourseDate(c){
+  if (Array.isArray(courseSessions)) {
+    const s = courseSessions.find(x => x.courseNumber === c.courseNumber && x.date);
+    if (s && s.date) return s.date; // بصيغة YYYY-MM-DD
+  }
+  return c.expectedCourseDate || '';
+}
+
 function arkkanFieldMissing(c, f) {
+  if (f === 'startDate') return !(c.startDate || arkkanCourseDate(c));
   const v = c[f];
   if (v === undefined || v === null || v === '') return true;
   if (f === 'coursePrice') return (Number(v) || 0) === 0; // قيمة صفر = لم تُسجَّل
@@ -91,6 +103,8 @@ function arkkanPatchFromData(c, data){
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
+  // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
+  if (!c.startDate) { const cd = arkkanCourseDate(c); if (cd) patch.startDate = cd; }
   return patch;
 }
 
@@ -159,7 +173,7 @@ function renderArkkanSyncTable() {
       <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-date">${escapeHtml(c.date || '—')}</td>
       <td class="col-courseprice">${escapeHtml(String(c.coursePrice ?? '—'))}</td>
-      <td class="col-startdate">${escapeHtml(c.startDate || '—')}</td>
+      <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
@@ -267,7 +281,7 @@ function arkkanRefreshRowCells(c) {
   set('.col-coursenum', c.courseNumber);
   set('.col-date', c.date);
   set('.col-courseprice', c.coursePrice);
-  set('.col-startdate', c.startDate);
+  set('.col-startdate', c.startDate || arkkanCourseDate(c));
   set('.col-baginvoice', c.bagInvoice);
   set('.col-bagdate', c.bagPurchaseDate);
   const missEl = row.querySelector('.col-missing');
