@@ -214,7 +214,7 @@ $('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
   ADVANCED_FILTER_IDS.forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
-    if(el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+    if(el.tagName === 'SELECT'){ el.selectedIndex = 0; refreshMultiSelectFilterUI(el); } else el.value = '';
   });
   updateAdvancedFiltersBadge();
   renderTable();
