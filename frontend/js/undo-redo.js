@@ -866,7 +866,7 @@ function clearAllSheetFilters(){
     'audit-filter-action','audit-filter-section',
     'de-filter-type',
   ];
-  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex = 0; });
+  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el){ el.selectedIndex = 0; refreshMultiSelectFilterUI(el); } });
 
   ['v-filter-dup','v-filter-nomethod'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
 
