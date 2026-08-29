@@ -80,16 +80,16 @@ function renderApprovalNoticesBanner(){
   if(!notices.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="panel panel-accent panel-accent-navy" style="margin-bottom:10px;">
     <h3 style="margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-      <span><span class="msi">notifications</span> نتائج اعتماد عملياتك</span>
+      <span>${pulseIcon('notifications', 18)} نتائج اعتماد عملياتك</span>
       <button class="btn btn-ghost btn-sm" id="btn-approval-notices-clear" title="إخفاء كل هذه الإشعارات">إخفاء الكل</button>
     </h3>
     <div>${notices.map(n=> `
       <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border);">
-        <span class="msi" style="font-size:16px;">${n.decision==='approved' ? 'check_circle' : 'block'}</span>
+        <span>${pulseIcon(n.decision==='approved' ? 'check_circle' : 'block', 16)}</span>
         <span style="font-size:13px; color:${n.decision==='approved' ? 'var(--teal)' : 'var(--red)'};">
           ${n.decision==='approved' ? 'تم اعتماد عمليتك' : 'تم رفض وحذف عمليتك'} (${escapeHtml(pendingCollectionLabel(n.collection))}): ${escapeHtml(n.desc||'')}
         </span>
-        <button class="btn btn-ghost btn-sm" data-approval-notice-dismiss="${escapeHtml(n.id)}" title="إخفاء هذا الإشعار"><span class="msi">close</span></button>
+        <button class="btn btn-ghost btn-sm" data-approval-notice-dismiss="${escapeHtml(n.id)}" title="إخفاء هذا الإشعار">${pulseIcon('close', 16)}</button>
       </div>`).join('')}
     </div>
   </div>`;
@@ -163,8 +163,8 @@ function renderPendingApprovalsPanel(){
     <h3 style="margin:0 0 10px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.5V11c0 5 3 8.3 7 9.5 4-1.2 7-4.5 7-9.5V5.5L12 3z"></path><path d="M9 12l2 2 4-4.5"></path></svg></span> عمليات قيد اعتماد الأدمن (${visiblePendingApprovals.length})</h3>
     <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">سجّلها موظفو الاستقبال — لا تظهر لأي دور آخر ولا تدخل الحسابات والتقارير حتى الاعتماد. (حركات الخزنة/الحقائب المرتبطة بعميل معلّق تُعتمد أو تُرفض تلقائياً مع العميل من شيت العملاء)</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير"><span class="msi">check_circle</span> اعتماد الكل (${visiblePendingApprovals.length})</button>
-      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع"><span class="msi">cancel</span> رفض الكل (${visiblePendingApprovals.length})</button>
+      <button class="btn btn-gold btn-sm" id="btn-pa-approve-all" title="اعتماد كل العمليات المعلّقة دفعة واحدة لتدخل في الحسابات والتقارير">${pulseIcon('check_circle',18)} اعتماد الكل (${visiblePendingApprovals.length})</button>
+      <button class="btn btn-danger btn-sm" id="btn-pa-reject-all" title="رفض وحذف كل العمليات المعلّقة نهائياً — لا يمكن التراجع">${pulseIcon('cancel',18)} رفض الكل (${visiblePendingApprovals.length})</button>
     </div>
     <div class="table-scroll cards-mobile">
     <table>
@@ -176,8 +176,8 @@ function renderPendingApprovalsPanel(){
           <td data-label="سجّلها">${escapeHtml(item.createdBy||'—')}</td>
           <td class="mono" data-label="التاريخ">${item.updatedAt ? escapeHtml(new Date(item.updatedAt).toLocaleString('ar-EG-u-nu-latn')) : '—'}</td>
           <td class="card-full" data-label="" style="white-space:nowrap;">
-            <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير"><span class="msi">check_circle</span> اعتماد</button>
-            <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً"><span class="msi">cancel</span> رفض</button>
+            <button class="btn btn-gold btn-sm" data-pa-approve data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="اعتماد العملية لتدخل في الحسابات والتقارير">${pulseIcon('check_circle',16)} اعتماد</button>
+            <button class="btn btn-danger btn-sm" data-pa-reject data-pa-collection="${item.collection}" data-pa-id="${item.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">${pulseIcon('cancel',16)} رفض</button>
           </td>
         </tr>`).join('')}</tbody>
     </table>
@@ -338,7 +338,7 @@ function renderSmartAlerts(){
     <h3 style="margin:0 0 8px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> تنبيهات تحتاج انتباهك</h3>
     ${visibleAlerts.map(a=> `<div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border);">
       <span class="sa-alert-item" ${a.view?`data-sa-view="${a.view}"`:(a.action?`data-sa-action="${a.action}" data-sa-action-key="${a.actionKey||''}"`:'')} style="display:flex; align-items:center; gap:8px; flex:1; ${(a.view||a.action)?'cursor:pointer;':''}">
-        <span class="msi" style="font-size:18px;">${a.icon}</span>
+        <span>${pulseIcon(a.icon, 18)}</span>
         <span style="font-size:13px; color:${a.level==='red'?'var(--red)':'var(--gold-dark)'};">${escapeHtml(a.text)}</span>
       </span>
       <button type="button" class="btn btn-ghost btn-sm" data-sa-remind="${a.key}" data-sa-remind-text="${escapeHtml(a.text)}" title="أضِف تذكير متابعة لهذا التنبيه واخفِه حتى الغد">🔔 ذكّرني غداً</button>
