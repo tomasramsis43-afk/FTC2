@@ -194,9 +194,12 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && $('#client-workspace-overlay')?.classList.contains('show')) closeClientWorkspace();
 });
+// نطاق فتح الكرت بالنقر المزدوج مقصور على اسم العميل فقط (span.client-name-trigger) —
+// وليس أي مكان آخر في الصف (كان أي دبل كليك في أي خلية بالصف كله يفتح الكرت، ما كان
+// يتعارض أحياناً مع تحديد نص داخل خلايا أخرى مثل الهاتف/رقم الهوية بالنقر المزدوج).
 $('#table-body')?.addEventListener('dblclick', e => {
-  const tr = e.target.closest('tr');
-  if(!tr) return;
-  const chk = tr.querySelector('.row-select-client');
-  if(chk && chk.dataset.id) openClientWorkspace(chk.dataset.id);
+  const nameEl = e.target.closest('.client-name-trigger');
+  if(!nameEl) return;
+  const id = nameEl.dataset.workspaceName;
+  if(id) openClientWorkspace(id);
 });

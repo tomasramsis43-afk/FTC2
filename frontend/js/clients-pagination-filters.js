@@ -179,7 +179,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
     const nameBadges = `${escapeHtml(c.name)}${c.cancelled ? ' <span class="stamp owe">ملغى</span>' : ''}${c.absent ? ' <span class="stamp owe">غياب</span>' : ''}${c.suspended ? ' <span class="stamp owe">موقوف</span>' : ''}${isPendingApproval ? ' <span class="stamp owe" title="سجّله الاستقبال — بانتظار اعتماد الأدمن، لا يدخل الحسابات/التقارير حتى الاعتماد">⏳ قيد الاعتماد</span>' : ''}${isRejectedApproval ? ' <span class="stamp owe" title="رفضه الأدمن — سيُحذف نهائياً تلقائياً خلال 15 يوماً من الرفض، سجّل عميلاً جديداً لو أردت إعادة المحاولة">⛔ مرفوض من الأدمن</span>' : ''}`;
     return `<tr class="${rowStatusClass}"${(c.cancelled || c.suspended) ? ' style="opacity:.55;"' : ''}>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-client" data-id="${c.id}" ${selectedClientIds.has(c.id)?'checked':''}></td>
-      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم">${nameBadges}</td>
+      <td class="sticky-col sticky-col-2 card-full" data-label="الاسم"><span class="client-name-trigger" data-workspace-name="${c.id}" title="نقر مزدوج لفتح ملف العميل الكامل">${nameBadges}</span></td>
       <td data-label="رقم الهاتف">${phoneCellHtml(c.phone)}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td class="mono" data-label="الرقم المرجعي">${escapeHtml(c.referNum||'—')}</td>
@@ -197,7 +197,7 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div class="row-menu-panel" role="menu">
-            <button class="btn btn-ghost btn-sm" data-workspace="${c.id}" title="فتح ملف العميل الكامل (أو انقر نقراً مزدوجاً على الصف)">📂 فتح الملف</button>
+            <button class="btn btn-ghost btn-sm" data-workspace="${c.id}" title="فتح ملف العميل الكامل (أو انقر نقراً مزدوجاً على اسم العميل)">📂 فتح الملف</button>
             ${(isPendingApproval && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approve="${c.id}" title="اعتماد هذا العميل ليدخل الحسابات والتقارير كباقي العملاء">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-reject="${c.id}" title="رفض هذا التسجيل المعلّق — يبقى ظاهراً للاستقبال 15 يوماً ثم يُحذف نهائياً تلقائياً">✖ رفض</button>` : ''}
             <button class="btn btn-gold btn-sm" data-invoice="${c.id}">${tr('invoiceBtn')}</button>
             ${c.taxInvoiceNo ? `<button class="btn btn-ghost btn-sm" data-emailinvoice="${c.id}" title="إرسال الفاتورة بالإيميل للعميل">✉️ إرسال بالإيميل</button>` : ''}
