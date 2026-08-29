@@ -158,6 +158,41 @@ async function arkkanFetchCardButton(id, btn) {
   }
 }
 
+/* زر "جلب" بجانب صف واحد في شيت المزامنة: يجلب بيانات هذا العميل فقط
+   ويملأ الناقص ويحفظ — دون الحاجة للمزامنة الكاملة لكل العملاء. */
+async function arkkanSyncOne(clientId, btn) {
+  const c = clients.find(x => x.clientId === clientId);
+  if (!c) return;
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+
+  const statusEl = $(`#arkkan-status-${cssEscapeId(clientId)}`);
+  const oldLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
+
+  try {
+    const data = await arkkanFetchOne(clientId, c.referNum || '');
+    const patch = arkkanPatchFromData(c, data);
+    if (Object.keys(patch).length > 0) {
+      Object.assign(c, patch); // c هو نفس الكائن داخل clients
+      if (typeof saveClients === 'function') await saveClients();
+      arkkanRefreshRowCells(c);
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
+      showToast(`✅ تم جلب وحفظ ${Object.keys(patch).length} حقل من أركان`, 'success');
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
+      showToast('لا توجد بيانات جديدة ناقصة لهذا العميل', 'info');
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
+    showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 90), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldLabel;
+  }
+}
+
 /* ══════════════════════════════════════════════
    2) صفحة المزامنة الكاملة (Bulk Sync)
    ══════════════════════════════════════════════ */
@@ -183,6 +218,7 @@ function renderArkkanSyncTable() {
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)">جلب</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
 }
@@ -302,6 +338,7 @@ document.addEventListener('click', () => {
 });
 
 document.addEventListener('click', e => {
+  if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
