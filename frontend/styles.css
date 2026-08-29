@@ -4744,18 +4744,30 @@ body.dark-theme .doc-paper { background: #201a10; color: #f3ead8; }
   outline: none;
 }
 .studio-ico {
-  font-size: 22px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
   color: var(--brand-primary-strong);
   background: color-mix(in srgb, var(--gold) 13%, transparent);
   border-radius: var(--radius-sm, 10px);
-  padding: 7px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.studio-ico svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
   flex: none;
+  pointer-events: none;
 }
 body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
-.studio-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.studio-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .studio-body b { font-size: 13px; color: var(--text-primary); }
 .studio-body small { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
-.studio-actions { display: flex; gap: 6px; margin-top: 6px; }
+.studio-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 8px; }
 
 /* ============================================================
    نبض — Phase 5: Grid Enhancements (أعمدة/عروض محفوظة/سياق)
