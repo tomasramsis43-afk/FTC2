@@ -232,8 +232,8 @@
     <div id="approval-notices-banner"></div>
     <div class="toolbar toolbar-card">
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
-      <select id="filter-status"><option value="" data-i18n="allStatuses">كل حالات السداد</option><option value="paid" data-i18n="fullyPaid">مسدد بالكامل</option><option value="owe" data-i18n="owing">متبقي عليه</option></select>
-      <select id="filter-course"><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
+      <select id="filter-status" data-multi-filter><option value="" data-i18n="allStatuses">كل حالات السداد</option><option value="paid" data-i18n="fullyPaid">مسدد بالكامل</option><option value="owe" data-i18n="owing">متبقي عليه</option></select>
+      <select id="filter-course" data-multi-filter><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
       <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-advanced-filters" aria-expanded="false"><span data-i18n="advancedFilters">فلاتر متقدمة</span> <span id="advanced-filters-count" class="filters-count-badge" style="display:none;">0</span> ▾</button>
       <span class="spacer"></span>
       <div class="overflow-wrap">
@@ -255,19 +255,19 @@
       <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
     </div>
     <div class="toolbar advanced-filters-panel" id="advanced-filters-panel" style="display:none;">
-      <select id="filter-nat"><option value="" data-i18n="allNats">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
-      <select id="filter-company"><option value="" data-i18n="allCompanies">كل الشركات</option><option value="المراعي">المراعي</option><option value="شركة الغربي">شركة الغربي</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="محمد القحطاني">محمد القحطاني</option><option value="محمد محمد">محمد محمد</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Beauty Word">Beauty Word</option><option value="CARMEY EST">CARMEY EST</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="ON OFF CO">ON OFF CO</option></select>
-      <select id="filter-invoice"><option value="" data-i18n="allClientsInvoice">كل العملاء (رقم الفاتورة)</option><option value="no" data-i18n="noInvoiceNum">بدون رقم فاتورة</option><option value="yes" data-i18n="hasInvoiceNum">لديه رقم فاتورة</option></select>
-      <select id="filter-coursenum"><option value="" data-i18n="allClientsCourseNum">كل العملاء (رقم الدورة)</option><option value="no" data-i18n="noCourseNumOpt">بدون رقم دورة</option><option value="yes" data-i18n="hasCourseNumOpt">لديه رقم دورة</option></select>
-      <select id="filter-refnum"><option value="" data-i18n="allClientsRefNum">كل العملاء (الرقم المرجعي)</option><option value="no" data-i18n="noRefNumOpt">بدون رقم مرجعي</option><option value="yes" data-i18n="hasRefNumOpt">لديه رقم مرجعي</option></select>
-      <select id="filter-bag-source" title="فلترة بمصدر حقيبة العميل" data-i18n-title="titleFilterBagSource">
+      <select id="filter-nat" data-multi-filter><option value="" data-i18n="allNats">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
+      <select id="filter-company" data-multi-filter><option value="" data-i18n="allCompanies">كل الشركات</option><option value="المراعي">المراعي</option><option value="شركة الغربي">شركة الغربي</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="محمد القحطاني">محمد القحطاني</option><option value="محمد محمد">محمد محمد</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Beauty Word">Beauty Word</option><option value="CARMEY EST">CARMEY EST</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="ON OFF CO">ON OFF CO</option></select>
+      <select id="filter-invoice" data-multi-filter><option value="" data-i18n="allClientsInvoice">كل العملاء (رقم الفاتورة)</option><option value="no" data-i18n="noInvoiceNum">بدون رقم فاتورة</option><option value="yes" data-i18n="hasInvoiceNum">لديه رقم فاتورة</option></select>
+      <select id="filter-coursenum" data-multi-filter><option value="" data-i18n="allClientsCourseNum">كل العملاء (رقم الدورة)</option><option value="no" data-i18n="noCourseNumOpt">بدون رقم دورة</option><option value="yes" data-i18n="hasCourseNumOpt">لديه رقم دورة</option></select>
+      <select id="filter-refnum" data-multi-filter><option value="" data-i18n="allClientsRefNum">كل العملاء (الرقم المرجعي)</option><option value="no" data-i18n="noRefNumOpt">بدون رقم مرجعي</option><option value="yes" data-i18n="hasRefNumOpt">لديه رقم مرجعي</option></select>
+      <select id="filter-bag-source" data-multi-filter title="فلترة بمصدر حقيبة العميل" data-i18n-title="titleFilterBagSource">
         <option value="" data-i18n="allBagSource">كل العملاء (الحقيبة)</option>
         <option value="stock" data-i18n="bagSourceStockOpt">حقائب من المخزون</option>
         <option value="own" data-i18n="bagSourceOwnOpt">حقائب خاصة</option>
         <option value="buy" data-i18n="bagSourceNoneOpt">بدون حقيبة</option>
       </select>
       <span id="filter-reception-wrap" style="display:none;">
-        <select id="filter-reception" title="عرض عملاء موظف استقبال بعينه فقط" data-i18n-title="titleFilterReception">
+        <select id="filter-reception" data-multi-filter title="عرض عملاء موظف استقبال بعينه فقط" data-i18n-title="titleFilterReception">
           <option value="" data-i18n="allReception">كل موظفي الاستقبال</option>
         </select>
       </span>
@@ -350,10 +350,10 @@
       <h3 style="padding:18px 20px 0;" data-i18n="compPersonsTitle">كل الأشخاص التابعين للشركات</h3>
       <div class="hint hint-info" style="padding:0 20px 10px;" data-i18n="compPersonsHint">قائمة موحّدة تجمع كل الأشخاص/المتدربين التابعين لجميع الشركات في كل حوالاتها، مع الفلاتر اللازمة (الشركة، تاريخ الحوالة، طريقة الدفع) وصندوق بحث موحد (رقم الهوية / الاسم / اسم الشركة).</div>
       <div class="toolbar" style="padding:0 20px 12px;">
-        <select id="cpp-company"><option value="" data-i18n="allCompanies">كل الشركات</option></select>
+        <select id="cpp-company" data-multi-filter><option value="" data-i18n="allCompanies">كل الشركات</option></select>
         <input type="date" id="cpp-date-from" title="تاريخ الحوالة من" data-i18n-title="transferDateFrom">
         <input type="date" id="cpp-date-to" title="تاريخ الحوالة إلى" data-i18n-title="transferDateTo">
-        <select id="cpp-channel"><option value="" data-i18n="allChannels">كل طرق الدفع</option></select>
+        <select id="cpp-channel" data-multi-filter><option value="" data-i18n="allChannels">كل طرق الدفع</option></select>
         <input type="text" id="cpp-search" placeholder="بحث موحد: رقم الهوية / الاسم / اسم الشركة" style="min-width:240px;" data-i18n-placeholder="unifiedSearchPlaceholder">
         <span class="spacer"></span>
         <button class="btn btn-gold btn-sm" id="btn-link-unlinked-persons" data-i18n="linkUnlinkedBtn">ربط غير المرتبطين بشيت العملاء</button>
@@ -407,10 +407,10 @@
     <div class="panel" style="padding:0; overflow-x:auto;">
       <h3 style="padding:18px 20px 0;" data-i18n="compLogTitle">سجل تحويلات الشركات والمتدربين التابعين لها</h3>
       <div class="toolbar" style="padding:0 20px 12px;">
-        <select id="ctf-company"><option value="" data-i18n="allCompanies">كل الشركات</option><option value="شركة الغربي">شركة الغربي</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="محمد محمد">محمد محمد</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="Beauty Word">Beauty Word</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="المراعي">المراعي</option><option value="ON OFF CO">ON OFF CO</option><option value="CARMEY EST">CARMEY EST</option><option value="محمد القحطاني">محمد القحطاني</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option></select>
+        <select id="ctf-company" data-multi-filter><option value="" data-i18n="allCompanies">كل الشركات</option><option value="شركة الغربي">شركة الغربي</option><option value="مؤسسة روعة الفن للمقاولات">مؤسسة روعة الفن للمقاولات</option><option value="شركة ميثاق البن">شركة ميثاق البن</option><option value="FAYEZ FARIS FALAH ALOTAIBI">FAYEZ FARIS FALAH ALOTAIBI</option><option value="MOHAMED EID MOHAMED GHALY">MOHAMED EID MOHAMED GHALY</option><option value="فائز المطيري فائز المطيري">فائز المطيري فائز المطيري</option><option value="محمد محمد">محمد محمد</option><option value="EHTERAF ALTTAAM CO">EHTERAF ALTTAAM CO</option><option value="Beauty Word">Beauty Word</option><option value="مؤسسة وصوف القهوة">مؤسسة وصوف القهوة</option><option value="المراعي">المراعي</option><option value="ON OFF CO">ON OFF CO</option><option value="CARMEY EST">CARMEY EST</option><option value="محمد القحطاني">محمد القحطاني</option><option value="ABDULRHMAN S CO">ABDULRHMAN S CO</option><option value="Lulu Saudi Hypermarkets LLC">Lulu Saudi Hypermarkets LLC</option><option value="شركة المهباج الشامية للتجارة">شركة المهباج الشامية للتجارة</option><option value="شركة محمد سامي السعود">شركة محمد سامي السعود</option><option value="مؤسسة نحو الرؤى لتقديم المشروبات">مؤسسة نحو الرؤى لتقديم المشروبات</option><option value="مؤسسة نحو الاتجاه لتقديم المشروبات">مؤسسة نحو الاتجاه لتقديم المشروبات</option></select>
         <input type="date" id="ctf-date-from" title="تاريخ الحوالة من" data-i18n-title="transferDateFrom">
         <input type="date" id="ctf-date-to" title="تاريخ الحوالة إلى" data-i18n-title="transferDateTo">
-        <select id="ctf-channel"><option value="" data-i18n="allChannels">كل طرق الدفع</option><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select>
+        <select id="ctf-channel" data-multi-filter><option value="" data-i18n="allChannels">كل طرق الدفع</option><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select>
         <input type="text" id="ctf-clientid" placeholder="بحث برقم الهوية أو اسم المتدرب (في كل الحوالات)" data-i18n-placeholder="searchByIdOrTraineeName">
         <span class="spacer"></span>
         <div class="overflow-wrap">
@@ -522,7 +522,7 @@
       <h3 style="margin:0 0 10px;" data-i18n="missingCourseTitle">من سجّل ولم يُحدَّد له رقم دورة بعد</h3>
       <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 12px;" data-i18n="missingCourseHint">تُعرض القائمة أدناه لكل عملاء الشيت الذين لم يُحدَّد لهم رقم دورة بعد. يمكنك اختيار نوع دورة معيّن لتضييق العرض عليه فقط، وفلاتر الجنسية وتاريخ التسجيل وتاريخ الدورة المتوقع تعمل على كامل القائمة بجميع أنواع الدورات.</p>
       <div class="toolbar" style="margin-bottom:10px;">
-        <select id="cs-missing-course"><option value="" data-i18n="allCourseTypesOpt">كل أنواع الدورات</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
+        <select id="cs-missing-course" data-multi-filter><option value="" data-i18n="allCourseTypesOpt">كل أنواع الدورات</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
         <input type="date" id="cs-missing-from" title="تاريخ التسجيل من" data-i18n-title="dateFrom">
         <input type="date" id="cs-missing-to" title="تاريخ التسجيل إلى" data-i18n-title="dateTo">
         <input type="date" id="cs-missing-exp-from" title="تاريخ الدورة المتوقع من" data-i18n-title="expectedCourseDateFromTitle">
@@ -664,7 +664,7 @@
       <input type="text" id="ci-search" placeholder="بحث بالاسم / رقم الهوية / رقم الفاتورة">
       <input type="date" id="ci-date-from" title="تاريخ صدور الفاتورة من">
       <input type="date" id="ci-date-to" title="تاريخ صدور الفاتورة إلى">
-      <select id="ci-filter-diff">
+      <select id="ci-filter-diff" data-multi-filter>
         <option value="">كل الفواتير</option>
         <option value="match">مطابقة (بدون فرق)</option>
         <option value="diff">بها فرق</option>
@@ -790,15 +790,15 @@
       <div class="toolbar">
         <input type="date" id="v-from" title="من تاريخ">
         <input type="date" id="v-to" title="إلى تاريخ">
-        <select id="v-filter-dest">
+        <select id="v-filter-dest" data-multi-filter>
           <option value="">كل الحسابات</option>
           <option value="vault">الخزنة (كاش)</option>
           <option value="bank">البنك</option>
           <option value="network">الشبكة</option>
         </select>
-        <select id="v-filter-type"><option value="">كل الحركات</option><option value="in">وارد فقط</option><option value="out">صادر فقط</option></select>
+        <select id="v-filter-type" data-multi-filter><option value="">كل الحركات</option><option value="in">وارد فقط</option><option value="out">صادر فقط</option></select>
         <span id="v-filter-reception-wrap" style="display:none;">
-          <select id="v-filter-reception" title="عرض عمليات موظف استقبال بعينه فقط">
+          <select id="v-filter-reception" data-multi-filter title="عرض عمليات موظف استقبال بعينه فقط">
             <option value="">كل موظفي الاستقبال</option>
           </select>
         </span>
@@ -1240,8 +1240,8 @@
       <p class="hint-info" style="padding:0 20px; font-size:12.5px; color:var(--text-muted); margin:6px 0 12px;">كل فاتورة تُسجَّل بحالة "مدفوعة" تُنشئ تلقائياً حركة صادر مطابقة في "الحركات المالية" — بلا إدخال مزدوج.</p>
       <div class="toolbar" style="padding:0 20px 12px;">
         <input type="text" id="purchase-search" placeholder="بحث برقم الفاتورة / المورد / الصنف">
-        <select id="purchase-supplier-filter" style="max-width:180px;"></select>
-        <select id="purchase-status-filter" style="max-width:150px;">
+        <select id="purchase-supplier-filter" data-multi-filter style="max-width:180px;"></select>
+        <select id="purchase-status-filter" data-multi-filter style="max-width:150px;">
           <option value="">كل الحالات</option>
           <option value="paid">مدفوعة</option>
           <option value="unpaid">غير مدفوعة (آجلة)</option>
@@ -1749,7 +1749,7 @@
         <input type="text" id="de-filter-search" placeholder="بحث بالبيان">
         <input type="date" id="de-filter-from" title="من تاريخ">
         <input type="date" id="de-filter-to" title="إلى تاريخ">
-        <select id="de-filter-type">
+        <select id="de-filter-type" data-multi-filter>
           <option value="">كل القيود</option>
           <option value="auto">تلقائي فقط</option>
           <option value="manual">يدوي فقط</option>
@@ -1850,14 +1850,14 @@
     </div>
     <div class="toolbar">
       <input type="text" id="audit-search" placeholder="بحث بالمستخدم / القسم / الوصف">
-      <select id="audit-filter-action">
+      <select id="audit-filter-action" data-multi-filter>
         <option value="">كل العمليات</option>
         <option value="add">إضافة</option>
         <option value="edit">تعديل</option>
         <option value="delete">حذف</option>
       </select>
-      <select id="audit-filter-section"><option value="">—</option><option value="الإعدادات">الإعدادات</option><option value="العملاء">العملاء</option><option value="النظام">النظام</option><option value="مخزون الحقائب">مخزون الحقائب</option><option value="الحركات المالية">الحركات المالية</option><option value="تحويلات الشركات">تحويلات الشركات</option><option value="فواتير الدورات">فواتير الدورات</option><option value="الدورات">الدورات</option><option value="المشتريات">المشتريات</option></select>
-      <select id="audit-filter-user"><option value="">كل المستخدمين</option></select>
+      <select id="audit-filter-section" data-multi-filter><option value="">—</option><option value="الإعدادات">الإعدادات</option><option value="العملاء">العملاء</option><option value="النظام">النظام</option><option value="مخزون الحقائب">مخزون الحقائب</option><option value="الحركات المالية">الحركات المالية</option><option value="تحويلات الشركات">تحويلات الشركات</option><option value="فواتير الدورات">فواتير الدورات</option><option value="الدورات">الدورات</option><option value="المشتريات">المشتريات</option></select>
+      <select id="audit-filter-user" data-multi-filter><option value="">كل المستخدمين</option></select>
       <input type="date" id="audit-date-from" title="من تاريخ">
       <input type="date" id="audit-date-to" title="إلى تاريخ">
       <span class="spacer"></span>
