@@ -6,6 +6,7 @@
    لو تعذّر الاتصال بالكامل لفترة، الفحص الدوري يضمن عدم بقاء الشاشة قديمة لأكثر من دقيقتين). */
 let _sseConnection = null;
 let _sseDebounceTimer = null;
+let _visibilityDebounceTimer = null;
 
 // تجميع عدة أحداث متقاربة (مثال: استيراد جماعي يولّد عشرات إشعارات التغيير خلال ثوانٍ) فى فحص
 // مزامنة واحد بدل فحص منفصل لكل حدث — فرق التأخير (300ms) لا يُلاحَظ من المستخدم إطلاقاً.
@@ -38,10 +39,17 @@ function disconnectRealtimeEvents(){
 // (دقيقتين) أو عمل تحديث يدوي بنفسه. الحل: أول ما التاب يرجع مرئياً (visibilitychange)، نُشغّل
 // فحص مزامنة فوري فى نفس اللحظة — وأيضاً نتأكد أن اتصال SSE نفسه ما زال مفتوحاً (لو أُغلق تماماً
 // دون أن يعيد EventSource فتحه لأي سبب) ونعيد فتحه احتياطاً.
+// 
+// تحسين: أضفنا debounce (500ms) على restore من minimize — المتصفح يحتاج وقت صغير ليستعيد تركيزه
+// الكامل قبل تشغيل مزامنة ثقيلة (renderAllViewsAfterLoad)، وإلا يحدث lag ملحوظ أول ثانية.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState !== 'visible') return;
-  if(typeof backgroundSyncCheck === 'function') backgroundSyncCheck().catch(()=>{});
-  if(SERVER_AUTH_TOKEN && (!_sseConnection || _sseConnection.readyState === EventSource.CLOSED)){
-    connectRealtimeEvents();
-  }
+  
+  clearTimeout(_visibilityDebounceTimer);
+  _visibilityDebounceTimer = setTimeout(() => {
+    if(typeof backgroundSyncCheck === 'function') backgroundSyncCheck().catch(()=>{});
+    if(SERVER_AUTH_TOKEN && (!_sseConnection || _sseConnection.readyState === EventSource.CLOSED)){
+      connectRealtimeEvents();
+    }
+  }, 500);
 });
