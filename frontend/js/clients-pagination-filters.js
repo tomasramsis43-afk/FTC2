@@ -51,23 +51,28 @@ function clientsQueryIsSimple(){
   // (هذا فقط يختار أي مسار عرض يُستخدم — لا يُعيد تعيين مصفوفة clients نفسها بأي شكل).
   if(!canSeeAllData()) return false;
   if(showSuspendedOnly || showUnpurchasedBagsOnly) return false;
-  if($('#filter-company')?.value) return false;
-  if($('#filter-invoice')?.value) return false;
-  if($('#filter-coursenum')?.value) return false;
-  if($('#filter-refnum')?.value) return false;
-  if($('#filter-bag-source')?.value) return false;
+  if(selectedFilterValues($('#filter-company')).length) return false;
+  if(selectedFilterValues($('#filter-invoice')).length) return false;
+  if(selectedFilterValues($('#filter-coursenum')).length) return false;
+  if(selectedFilterValues($('#filter-refnum')).length) return false;
+  if(selectedFilterValues($('#filter-bag-source')).length) return false;
   if(($('#cl-paid-min')?.value||'') !== '' || ($('#cl-paid-max')?.value||'') !== '') return false;
-  if($('#filter-status')?.value) return false; // مدين/مسدد يحتاج حساب المتبقي الكامل (خصومات، دفعات...)
+  if(selectedFilterValues($('#filter-status')).length) return false; // مدين/مسدد يحتاج حساب المتبقي الكامل (خصومات، دفعات...)
   if(clientsSortState.key && !SERVER_SORTABLE_CLIENT_COLS[clientsSortState.key]) return false;
+  // المسار السريع (السيرفر) يدعم قيمة واحدة فقط لنوع الدورة/الجنسية عبر الـ API — لو المستخدم
+  // حدد أكتر من قيمة في الفلتر متعدد الاختيار الجديد، نجبر المسار المحلي الكامل (فلترة "أو"
+  // بين عدة قيم تحتاج معالجة محلية لا يدعمها استعلام السيرفر البسيط الحالي)
+  if(selectedFilterValues($('#filter-course')).length > 1) return false;
+  if(selectedFilterValues($('#filter-nat')).length > 1) return false;
   return true;
 }
 async function renderTable(){
   const mySeq = ++renderTableSeq;
   const filterSig = JSON.stringify([
-    $('#search')?.value, $('#filter-course')?.value, $('#filter-nat')?.value, $('#filter-status')?.value,
-    $('#filter-company')?.value, $('#filter-invoice')?.value, $('#filter-coursenum')?.value, $('#filter-refnum')?.value, $('#cl-date-from')?.value, $('#cl-date-to')?.value,
+    $('#search')?.value, selectedFilterValues($('#filter-course')), selectedFilterValues($('#filter-nat')), selectedFilterValues($('#filter-status')),
+    selectedFilterValues($('#filter-company')), selectedFilterValues($('#filter-invoice')), selectedFilterValues($('#filter-coursenum')), selectedFilterValues($('#filter-refnum')), $('#cl-date-from')?.value, $('#cl-date-to')?.value,
     $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly,
-    $('#filter-bag-source')?.value
+    selectedFilterValues($('#filter-bag-source'))
   ]);
   if(filterSig !== tableLastFilterSig){ tableCurrentPage = 1; tableLastFilterSig = filterSig; }
   const pageSize = currentTablePageSize();
@@ -82,8 +87,8 @@ async function renderTable(){
       params.set('page', tableCurrentPage);
       params.set('pageSize', pageSize);
       const q = ($('#search')?.value||'').trim(); if(q) params.set('search', q);
-      const fc = $('#filter-course')?.value; if(fc && fc!=='__unknown__') params.set('courseType', fc);
-      const fn = $('#filter-nat')?.value; if(fn) params.set('nationality', fn);
+      const fc = selectedFilterValues($('#filter-course'))[0] || ''; if(fc && fc!=='__unknown__') params.set('courseType', fc);
+      const fn = selectedFilterValues($('#filter-nat'))[0] || ''; if(fn) params.set('nationality', fn);
       const dfrom = $('#cl-date-from')?.value; if(dfrom) params.set('dateFrom', dfrom);
       const dto = $('#cl-date-to')?.value; if(dto) params.set('dateTo', dto);
       if(clientsSortState.key){ params.set('sort', clientsSortState.key); params.set('order', clientsSortState.dir===-1?'desc':'asc'); }
