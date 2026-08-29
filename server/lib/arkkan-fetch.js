@@ -82,14 +82,28 @@ async function fetchClientData({ clientId, referNum = '' }) {
   await fr.fill('#ctl00_Student_id_fltr_txtIdentityNo', String(clientId));
   if (referNum) await fr.fill('#ctl00_Student_id_fltr_Txt_ref', String(referNum)).catch(() => {});
   await fr.click('#ctl00_Student_id_fltr_btnConfirm');
-  await wait(4000);
 
+  // انتظار متكيّف: نراقب تغيّر بيانات شبكة الدورات بدل نوم ثابت 4 ثوانٍ
+  // (الصفحة قابلة لإعادة الاستخدام، فقد تظهر بيانات العميل السابق وهمياً).
+  // نقرأ الحالة القديمة فقط لو كانت القائمة فيها صفوف فعلاً (بلا انتظار بلا داعٍ).
+  const hasBefore = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count();
+  const before = hasBefore
+    ? (await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems .Course_number').first().innerText({ timeout: 800 }).catch(() => '')).trim()
+    : '';
   let nC = 0;
-  for (let t = 0; t < 8 && !nC; t++) {
-    await wait(1000);
-    nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count();
+  const tC = Date.now();
+  while (Date.now() - tC < 9000) {
+    const rows = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0);
+    if (rows === 0) {
+      if (before) { nC = 0; break; } // اكتملت المعالجة والقائمة فارغة فعلاً
+    } else {
+      const now = (await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems .Course_number').first().innerText({ timeout: 1500 }).catch(() => '')).trim();
+      if (!before || (now && now !== before)) { nC = rows; break; } // تحمّلت بيانات جديدة
+    }
+    await wait(250);
   }
-  const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count();
+  if (!nC) { await wait(1200); nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0); }
+  const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count().catch(() => 0);
 
   // ── إيصال الدورة: نأخذ فقط سطر الدورة الذي يبدأ رقمه بـ FHD (رقم الدورة
   //    ورقم الفاتورة معاً). لو ما فيش سطر FHD نتبع السلوك القديم: أول سطر. ──
@@ -122,8 +136,8 @@ async function fetchClientData({ clientId, referNum = '' }) {
 
       const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recF = null;
-      for (let t = 0; t < 20 && !recF; t++) {
-        await wait(1000);
+      for (let t = 0; t < 160 && !recF; t++) {
+        await wait(120);
         recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
       if (!recF) break;
@@ -133,7 +147,11 @@ async function fetchClientData({ clientId, referNum = '' }) {
       result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
       result.date        = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
       await closeDialog(pg);
-      await wait(1500);
+      // ننتظر اختفاء إطار الإيصال — أسرع من نوم ثابت 1.5 ثانية
+      const t1 = Date.now();
+      while (Date.now() - t1 < 5000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
+        await wait(150);
+      }
       fr = pg.frames().find(f => f.url().includes('Arkan/frm8157')) || await ensureDetailsFrame(pg);
 
       // مع سطور FHD: الفاتورة لا تُقبل إلا إذا بدأت بـ FHD — وإلا نجرب السطر التالي
@@ -170,8 +188,8 @@ async function fetchClientData({ clientId, referNum = '' }) {
       // إطارات مفتوحة الآن → نقرأ الإطار الجديد فقط غير الموجود قبل
       const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recFb = null;
-      for (let t = 0; t < 20 && !recFb; t++) {
-        await wait(1000);
+      for (let t = 0; t < 160 && !recFb; t++) {
+        await wait(120);
         recFb = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
       if (!recFb) continue;
@@ -186,7 +204,11 @@ async function fetchClientData({ clientId, referNum = '' }) {
       }
 
       await closeDialog(pg);
-      await wait(1500);
+      // ننتظر اختفاء إطار الإيصال — أسرع من نوم ثابت 1.5 ثانية
+      const t1 = Date.now();
+      while (Date.now() - t1 < 5000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
+        await wait(150);
+      }
     }
 
     result.bagInvoice = bagBest.invoice;

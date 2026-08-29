@@ -305,7 +305,7 @@ async function arkkanBulkSync() {
     const counter = $('#arkkan-bulk-counter');
     if (counter) counter.textContent = `✅ ${updated} محدّث · ❌ ${failed} فشل · ${done}/${missing.length}`;
 
-    if (!_arkkanBulkStop) await new Promise(r => setTimeout(r, 2500));
+    if (!_arkkanBulkStop) await new Promise(r => setTimeout(r, 700));
   }
 
   _arkkanBulkRunning = false;
