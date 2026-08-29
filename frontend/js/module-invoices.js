@@ -20,19 +20,20 @@ function filteredCourseInvoices(){
   const q = ($('#ci-search')?.value || '').trim().toLowerCase();
   const dfrom = $('#ci-date-from')?.value || '';
   const dto = $('#ci-date-to')?.value || '';
-  const diffFilter = $('#ci-filter-diff')?.value || '';
+  const diffFilterVals = selectedFilterValues($('#ci-filter-diff'));
   let rows = courseInvoiceClients();
   if(q){
     rows = rows.filter(c=> [c.name,c.clientId,c.invoice].some(v=> String(v||'').toLowerCase().includes(q)));
   }
   if(dfrom) rows = rows.filter(c=> c.receiptIssueDate && c.receiptIssueDate>=dfrom);
   if(dto) rows = rows.filter(c=> c.receiptIssueDate && c.receiptIssueDate<=dto);
-  if(diffFilter==='empty'){
-    rows = rows.filter(c=> !(num(c.receiptActualValue)>0));
-  }else if(diffFilter==='match'){
-    rows = rows.filter(c=> num(c.receiptActualValue)>0 && Math.abs(num(c.receiptActualValue) - centerIncome(c)) < 0.01);
-  }else if(diffFilter==='diff'){
-    rows = rows.filter(c=> num(c.receiptActualValue)>0 && Math.abs(num(c.receiptActualValue) - centerIncome(c)) >= 0.01);
+  if(diffFilterVals.length){
+    rows = rows.filter(c=>{
+      const empty = !(num(c.receiptActualValue)>0);
+      const match = num(c.receiptActualValue)>0 && Math.abs(num(c.receiptActualValue) - centerIncome(c)) < 0.01;
+      const diff = num(c.receiptActualValue)>0 && Math.abs(num(c.receiptActualValue) - centerIncome(c)) >= 0.01;
+      return (diffFilterVals.includes('empty') && empty) || (diffFilterVals.includes('match') && match) || (diffFilterVals.includes('diff') && diff);
+    });
   }
   rows.sort((a,b)=> (b.receiptIssueDate||b.date||'').localeCompare(a.receiptIssueDate||a.date||''));
   return applyCiColumnSort(rows);
@@ -98,7 +99,7 @@ function renderCourseInvoices(){
   `;
 
   const ciPageRows = applyGenericPagination('ci', rows, ciPageState, [
-    $('#ci-search')?.value, $('#ci-date-from')?.value, $('#ci-date-to')?.value, $('#ci-filter-diff')?.value
+    $('#ci-search')?.value, $('#ci-date-from')?.value, $('#ci-date-to')?.value, selectedFilterValues($('#ci-filter-diff'))
   ]);
   body.innerHTML = rows.length ? ciPageRows.map(c=>{
     const actual = num(c.receiptActualValue);
