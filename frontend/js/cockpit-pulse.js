@@ -106,7 +106,7 @@ function renderCockpitPulse(){
         ${items.length ? `<div class="act-stream">${items.map(it => {
           const meta = PULSE_ACT_META[it.action] || { label: it.action || '', color:'var(--text-muted)', icon:'circle' };
           return `<div class="act-row">
-            <span class="msi act-ico" style="color:${meta.color};">${meta.icon}</span>
+            <span class="act-ico" style="color:${meta.color};">${pulseIcon(meta.icon, 18)}</span>
             <div class="act-body">
               <div class="act-text"><b>${escapeHtml(it.user || '')}</b> ${escapeHtml(meta.label)} — ${escapeHtml(String(it.description || it.section || ''))}</div>
               <div class="act-time">${pulseRelTime(it.ts)} · ${escapeHtml(it.section || '')}</div>
@@ -144,7 +144,7 @@ function renderCockpitPulse(){
       <div class="pulse-card">
         <div class="pulse-card-head"><h3>إجراءات سريعة</h3></div>
         <div class="qa-grid">${qa.map((q, i) =>
-          `<button type="button" class="btn btn-ghost btn-sm qa-btn" data-qa-idx="${i}"><span class="msi" style="font-size:17px;">${q.icon}</span>${escapeHtml(q.label)}</button>`
+          `<button type="button" class="btn btn-ghost btn-sm qa-btn" data-qa-idx="${i}">${pulseIcon(q.icon, 17)}${escapeHtml(q.label)}</button>`
         ).join('')}</div>
       </div>`;
     el.__qaRuns = qa.map(q => q.run);
