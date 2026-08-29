@@ -956,6 +956,10 @@ $all('button[data-view]').forEach(btn=>{
       else if(_view==='ledger' && typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
       else if(_view==='budget' && typeof renderEpmBudget==='function') renderEpmBudget();
       else if(_view==='purchases' && typeof renderPurchases==='function') renderPurchases();
+      else if(_view==='arkkan-sync'){
+        if(typeof renderArkkanSyncTable==='function') renderArkkanSyncTable();
+        if(typeof arkkanUpdateAgentStatus==='function') arkkanUpdateAgentStatus();
+      }
     });
   });
 });
