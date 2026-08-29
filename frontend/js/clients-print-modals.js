@@ -506,7 +506,7 @@ function openModal(id){
   $('#f-refer').value = c?.referNum || '';
   $('#f-invoice').value = c?.invoice || '';
   $('#f-baginvoice').value = c?.bagInvoice || '';
-  $('#f-date').value = c?.date || '';
+  $('#f-date').value = c?.date || todayISO();
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
   // مستخدم الاستقبال ممنوع من شراء/تسليم أي حقيبة: نعطّل خيار "تسليم من المخزون المتوفر"
