@@ -13,6 +13,16 @@
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const path = require('path');
 
+/* مفتاح رقمي للمقارنة الزمنية (يدعم YYYY/MM/DD و DD/MM/YYYY) لتحديد الأحدث */
+function dateKey(v) {
+  const s = String(v || '').trim();
+  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return m[1] + String(m[2]).padStart(2, '0') + String(m[3]).padStart(2, '0');
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) return m[3] + String(m[2]).padStart(2, '0') + String(m[1]).padStart(2, '0');
+  return s;
+}
+
 /* مجلد المتصفح نضعه داخل node_modules نفسه ليعيش مع النشر (منصات مثل
    Render بتمسح الكاش الخارجي /opt/render/.cache فلا نعتمد عليه). لو
    عايز مسار مخصص حط المتغير ARKKAN_BROWSERS_PATH قبل التشغيل. */
@@ -81,67 +91,106 @@ async function fetchClientData({ clientId, referNum = '' }) {
   }
   const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count();
 
-  // إطارات الإيصالات الموجودة قبل الضغط — لنقرأ الإطار الجديد فقط لا القديم.
-  const framesBefore = pg.frames().filter(f => /\/Documents\//.test(f.url()));
-
-  // ── إيصال الدورة ──
+  // ── إيصال الدورة: نأخذ فقط سطر الدورة الذي يبدأ رقمه بـ FHD (رقم الدورة
+  //    ورقم الفاتورة معاً). لو ما فيش سطر FHD نتبع السلوك القديم: أول سطر. ──
   if (nC > 0) {
-    const c0 = fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').first();
-    result.courseNumber = (await c0.locator('.Course_number').innerText().catch(() => '')).trim();
-    result.startDate    = (await c0.locator('.Startdate').innerText().catch(() => '')).trim();
-
-    const clicked = await fr.evaluate(() => {
-      const el = document.querySelector('#ctl00_Courses_Students_GridView1 tr.RowItems');
-      if (!el) return false;
-      const a = el.querySelector('a');
-      const inp = [...el.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
-      const t = (a && (a.textContent || '').includes('الايصال')) ? a : inp;
-      if (t) { t.click(); return true; }
-      return false;
+    const courseRows = await fr.evaluate(() => {
+      return [...document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')].map((r, i) => ({
+        i,
+        cn: (r.querySelector('.Course_number')?.innerText || '').trim(),
+        start: (r.querySelector('.Startdate')?.innerText || '').trim()
+      }));
     });
 
-    if (clicked) {
+    const fhdRows = courseRows.filter(r => /^FHD/i.test(r.cn));
+    const rowsToUse = fhdRows.length ? fhdRows : courseRows;
+
+    for (const cr of rowsToUse) {
+      result.courseNumber = cr.cn;
+      result.startDate = cr.start;
+
+      const clicked = await fr.evaluate((i) => {
+        const el = document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')[i];
+        if (!el) return false;
+        const a = el.querySelector('a');
+        const inp = [...el.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
+        const t = (a && (a.textContent || '').includes('الايصال')) ? a : inp;
+        if (t) { t.click(); return true; }
+        return false;
+      }, cr.i);
+      if (!clicked) break;
+
+      const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recF = null;
       for (let t = 0; t < 20 && !recF; t++) {
         await wait(1000);
-        recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesBefore.includes(f));
+        recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
-      if (recF) {
-        const txt = await recF.evaluate(() => document.body.innerText);
-        result.invoice     = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
-        result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
-        result.date        = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
-        await closeDialog(pg);
-        await wait(1500);
-        fr = pg.frames().find(f => f.url().includes('Arkan/frm8157')) || await ensureDetailsFrame(pg);
+      if (!recF) break;
+
+      const txt = await recF.evaluate(() => document.body.innerText);
+      result.invoice     = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
+      result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
+      result.date        = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+      await closeDialog(pg);
+      await wait(1500);
+      fr = pg.frames().find(f => f.url().includes('Arkan/frm8157')) || await ensureDetailsFrame(pg);
+
+      // مع سطور FHD: الفاتورة لا تُقبل إلا إذا بدأت بـ FHD — وإلا نجرب السطر التالي
+      if (fhdRows.length && !/^FHD/i.test(result.invoice)) {
+        result.invoice = ''; result.coursePrice = ''; result.date = '';
+        continue;
       }
+      break;
     }
   }
 
-  // ── إيصال الحقيبة ──
+  // ── إيصالات الحقيبة: قد يكون هناك أكثر من إيصال (حقيبتان مثلاً) —
+  //    نفتح جميعها ونأخذ بيانات الأحدث (الأكبر تاريخاً) بكل حقولها. ──
   if (fr && nB > 0) {
-    const clickedB = await fr.evaluate(() => {
-      const el = document.querySelector('#ctl00_Training_bags_GridView1 tr.RowItems');
-      if (!el) return false;
-      const inp = [...el.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
-      if (inp) { inp.click(); return true; }
-      return false;
+    const bagRows = await fr.evaluate(() => {
+      return [...document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')]
+        .map((r, i) => {
+          const inp = [...r.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
+          return inp ? i : null;
+        })
+        .filter(i => i !== null);
     });
 
-    if (clickedB) {
+    let bagBest = { invoice: '', bagPurchaseDate: '' };
+    for (const idx of bagRows) {
+      const clickedB = await fr.evaluate((i) => {
+        const row = document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')[i];
+        const inp = row && [...row.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
+        if (inp) { inp.click(); return true; }
+        return false;
+      }, idx);
+      if (!clickedB) continue;
+
+      // إطارات مفتوحة الآن → نقرأ الإطار الجديد فقط غير الموجود قبل
+      const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recFb = null;
       for (let t = 0; t < 20 && !recFb; t++) {
         await wait(1000);
-        recFb = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesBefore.includes(f));
+        recFb = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
-      if (recFb) {
-        const txt = await recFb.evaluate(() => document.body.innerText);
-        result.bagInvoice      = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
-        result.bagPurchaseDate = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
-        await closeDialog(pg);
-        await wait(1500);
+      if (!recFb) continue;
+
+      const txt = await recFb.evaluate(() => document.body.innerText);
+      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
+      const dt  = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+
+      // الأحدث = الأكبر تاريخاً — نأخذه بكل بياناته (الرقم والتاريخ معاً)
+      if (dt && dateKey(dt) > dateKey(bagBest.bagPurchaseDate)) {
+        bagBest = { invoice: inv, bagPurchaseDate: dt };
       }
+
+      await closeDialog(pg);
+      await wait(1500);
     }
+
+    result.bagInvoice = bagBest.invoice;
+    result.bagPurchaseDate = bagBest.bagPurchaseDate;
   }
 
   return result;
