@@ -6,11 +6,30 @@
    بلا أي برنامج منفصل، وبضغطة زرار واحدة داخل البرنامج.
    ============================================================ */
 
-/* ── الحقول التي نجلبها من أركان ── */
+/* ── الحقول التي نجلبها من أركان (حقول "كارت العميل") ──
+   نعرض في مزامنة أركان فقط العملاء الناقص فيهم أي حقل من هذه السبعة. */
 const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate'];
+const ARKKAN_FIELD_LABELS = {
+  invoice:      'رقم الفاتورة',
+  courseNumber: 'رقم الدورة',
+  date:         'تاريخ الفاتورة',
+  coursePrice:  'قيمة الفاتورة',
+  bagInvoice:   'رقم إيصال الحقيبة',
+  bagPurchaseDate: 'تاريخ الحقيبة',
+  startDate:    'تاريخ الدورة'
+};
 
+function arkkanFieldMissing(c, f) {
+  const v = c[f];
+  if (v === undefined || v === null || v === '') return true;
+  if (f === 'coursePrice') return (Number(v) || 0) === 0; // قيمة صفر = لم تُسجَّل
+  return false;
+}
+function arkkanMissingFields(c) {
+  return ARKKAN_FIELDS.filter(f => arkkanFieldMissing(c, f));
+}
 function clientIsMissingArkkanData(c) {
-  return ARKKAN_FIELDS.some(f => f === 'coursePrice' ? !(c[f] !== undefined && c[f] !== '' && c[f] !== 0) : !c[f]);
+  return arkkanMissingFields(c).length > 0;
 }
 
 function arkkanAuthHeaders() {
@@ -134,12 +153,14 @@ function renderArkkanSyncTable() {
     <tr id="arkkan-row-${escapeHtml(c.clientId)}">
       <td>${escapeHtml(c.clientId)}</td>
       <td>${escapeHtml(c.name || '—')}</td>
-      <td>${escapeHtml(c.invoice || '—')}</td>
-      <td>${escapeHtml(c.courseNumber || '—')}</td>
-      <td>${escapeHtml(c.date || '—')}</td>
-      <td>${escapeHtml(String(c.coursePrice ?? '—'))}</td>
-      <td>${escapeHtml(c.bagInvoice || '—')}</td>
-      <td>${escapeHtml(c.bagPurchaseDate || '—')}</td>
+      <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
+      <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-date">${escapeHtml(c.date || '—')}</td>
+      <td class="col-courseprice">${escapeHtml(String(c.coursePrice ?? '—'))}</td>
+      <td class="col-startdate">${escapeHtml(c.startDate || '—')}</td>
+      <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
+      <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
+      <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
 }
@@ -211,6 +232,7 @@ async function arkkanBulkSync() {
         if (idx !== -1) Object.assign(clients[idx], patch);
         if (typeof saveClients === 'function') await saveClients();
         updated++;
+        arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
         if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
       } else {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
@@ -239,6 +261,22 @@ async function arkkanBulkSync() {
 /* أداة تأمين لأي id في محدد CSS */
 function cssEscapeId(id) {
   return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/* تحديث خلايا صف العميل بالبيانات الحالية (بعد كل جلب ناجح) */
+function arkkanRefreshRowCells(c) {
+  const row = document.querySelector(`#arkkan-row-${cssEscapeId(c.clientId)}`);
+  if (!row) return;
+  const set = (sel, val) => { const el = row.querySelector(sel); if (el) el.textContent = val || '—'; };
+  set('.col-invoice', c.invoice);
+  set('.col-coursenum', c.courseNumber);
+  set('.col-date', c.date);
+  set('.col-courseprice', c.coursePrice);
+  set('.col-startdate', c.startDate);
+  set('.col-baginvoice', c.bagInvoice);
+  set('.col-bagdate', c.bagPurchaseDate);
+  const missEl = row.querySelector('.col-missing');
+  if (missEl) missEl.textContent = arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، ');
 }
 
 /* عند فتح تبويب مزامنة أركان: نعرض الجدول ونحدّث الحالة */
