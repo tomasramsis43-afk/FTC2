@@ -3,7 +3,18 @@
    لذلك تُستخرج الضريبة من داخل المبلغ (÷1.15) وليس تُضاف فوقه، اتساقاً مع باقي حسابات النظام */
 function courseInvoiceVat(value){ return vatFromGross(value); }
 function courseInvoiceClients(){
-  return clients.filter(c=> !c.suspended && String(c.invoice||'').trim());
+  // القاعدة الافتراضية: العميل يظهر في هذا الشيت تلقائياً بمجرد حصوله على "رقم دورة" — قبل
+  // حتى إدخال رقم الفاتورة — حتى يمكن متابعته من هنا فوراً، ثم تُحدَّث بياناته (رقم الفاتورة،
+  // تاريخ الصدور، القيمة الفعلية...) من شيت العملاء أو من هذا الشيت نفسه لاحقاً.
+  // الاستثناء: عميل مُلغى أو موقوف — لا يُرحَّل تلقائياً بمجرد رقم الدورة فقط، لكن لو كان له
+  // بالفعل رقم فاتورة مُدخَل مسبقاً (كان مرحّلاً وهو نشط ثم أُلغي/أُوقف لاحقاً) يبقى ظاهراً هنا
+  // حتى لا تُفقد متابعة فاتورته، مع توسيمه بوضوح (ملغي/موقوف) بجانب اسمه في الجدول.
+  return clients.filter(c=>{
+    const hasCourseNumber = String(c.courseNumber||'').trim();
+    const hasInvoice = String(c.invoice||'').trim();
+    if(c.cancelled || c.suspended) return !!hasInvoice;
+    return !!hasCourseNumber;
+  });
 }
 function filteredCourseInvoices(){
   const q = ($('#ci-search')?.value || '').trim().toLowerCase();
@@ -100,7 +111,7 @@ function renderCourseInvoices(){
     const diffColor = diff===null ? '' : (Math.abs(diff)<0.01 ? 'teal' : 'red');
     return `
     <tr>
-      <td class="sticky-col sticky-col-2" data-label="العميل">${escapeHtml(c.name||'')}</td>
+      <td class="sticky-col sticky-col-2" data-label="العميل">${escapeHtml(c.name||'')}${c.cancelled ? ' <span class="cw-badge danger">ملغي</span>' : (c.suspended ? ' <span class="cw-badge muted">موقوف</span>' : '')}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
       <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
@@ -111,7 +122,7 @@ function renderCourseInvoices(){
       <td class="mono" data-label="بدون ضريبة">${actualNoVat===null ? '—' : fmt(actualNoVat)}</td>
       <td class="mono ${diffColor}" data-label="الفرق">${diffLabel}</td>
     </tr>`;
-  }).join('') : `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد فواتير دورات مطابقة — تأكد من إدخال "رقم الفاتورة" لكل عميل في شيت العملاء أولاً</td></tr>`;
+  }).join('') : `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد فواتير دورات مطابقة — تأكد من تسجيل "رقم الدورة" لكل عميل من شيت العملاء أولاً</td></tr>`;
 }
 onSearchInput('#ci-search', renderCourseInvoices);
 bindGenericPagination('ci', ciPageState, renderCourseInvoices);
@@ -154,7 +165,8 @@ function courseInvoiceExportRow(c){
   const sys = centerIncome(c);
   const actualNoVat = hasValue ? (actual - vat) : '';
   return {
-    'اسم العميل': c.name||'',
+    'اسم العميل': c.name||'' ,
+    'الحالة': c.cancelled ? 'ملغي' : (c.suspended ? 'موقوف' : ''),
     'رقم الهوية': c.clientId||'',
     'الدورة': c.courseType||'',
     'رقم الفاتورة': c.invoice||'',
