@@ -199,10 +199,17 @@ async function arkkanSyncOne(clientId, btn) {
 let _arkkanBulkRunning = false;
 let _arkkanBulkStop = false;
 
+/* عملاء ناقصي البيانات المؤهلون — مرتبين من الأحدث تسجيلاً (c.date) إلى الأقدم */
+function arkkanMissingClients() {
+  return (clients || [])
+    .filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
 function renderArkkanSyncTable() {
   const tbody = $('#arkkan-sync-tbody');
   if (!tbody) return;
-  const missing = (clients || []).filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c));
+  const missing = arkkanMissingClients();
   const counter = $('#arkkan-bulk-counter');
   if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}`;
 
@@ -262,7 +269,7 @@ async function arkkanBulkSync() {
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const missing = (clients || []).filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c));
+  const missing = arkkanMissingClients();
   let done = 0, updated = 0, failed = 0;
 
   showToast(`بدأت المزامنة: ${missing.length} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
