@@ -63,6 +63,7 @@ function clientsQueryIsSimple(){
   // حدد أكتر من قيمة في الفلتر متعدد الاختيار الجديد، نجبر المسار المحلي الكامل (فلترة "أو"
   // بين عدة قيم تحتاج معالجة محلية لا يدعمها استعلام السيرفر البسيط الحالي)
   if(selectedFilterValues($('#filter-course')).length > 1) return false;
+  if(selectedFilterValues($('#filter-course')).includes('__unknown__')) return false;
   if(selectedFilterValues($('#filter-nat')).length > 1) return false;
   return true;
 }
@@ -150,6 +151,11 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
   const filtered = filteredRowsCache || _filteredCache.rows || filteredClients();
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
   const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
+  // كروت فلتر الدورات: تُحسب من نفس بيانات العملاء لكن بتجاهل فلتر الدورة نفسه، كي يعكس
+  // العدد داخل كل كرت "لو اخترت هذه الدورة" مع بقية الفلاتر الشغالة فعلاً، لا بعد تطبيقه هو نفسه.
+  if(typeof renderCourseStatCards==='function' && typeof filteredClients==='function'){
+    renderCourseStatCards(filteredClients({skipCourseFilter:true}));
+  }
   // حساب الإجماليات في تمريرة واحدة بدل تمريرتين
   let paidSum = 0, remSum = 0;
   for(const c of filtered){ paidSum += paidTotal(c); if(!c.suspended && !c.cancelled) remSum += remaining(c); }

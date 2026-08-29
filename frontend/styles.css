@@ -3361,6 +3361,29 @@ body.dark-theme .hint-warn {
   color: var(--text-muted);
 }
 
+#view-clients .client-stats .stat.course-stat {
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+
+#view-clients .client-stats .stat.course-stat:hover {
+  border-color: var(--teal);
+}
+
+#view-clients .client-stats .stat.course-stat:active {
+  transform: scale(0.97);
+}
+
+#view-clients .client-stats .stat.course-stat.active {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 16%, var(--surface-solid));
+}
+
+#view-clients .client-stats .stat.course-stat.active b {
+  color: var(--teal);
+}
+
 /* رأس جدول العملاء — خلفية مصمتة حتى لا تظهر خلايا الأعمدة الثابتة أثناء السكرول
    وتجعل شريط الرأس يبدو مقطوعاً (كانت 85% شفافة) */
 #view-clients thead th {

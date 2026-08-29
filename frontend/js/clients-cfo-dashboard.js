@@ -787,9 +787,10 @@ function refreshFilterOptions(){
   Array.from($('#filter-company').options).forEach(o=> o.selected = companyFilterVals.includes(o.value));
   refreshMultiSelectFilterUI($('#filter-company'));
 }
-function filteredClients(){
+function filteredClients(opts){
+  opts = opts || {};
   const q = $('#search').value.trim().toLowerCase();
-  const fcVals = selectedFilterValues($('#filter-course'));
+  const fcVals = opts.skipCourseFilter ? [] : selectedFilterValues($('#filter-course'));
   const fnVals = selectedFilterValues($('#filter-nat'));
   const fsVals = selectedFilterValues($('#filter-status'));
   const fcompVals = selectedFilterValues($('#filter-company'));
@@ -897,6 +898,52 @@ let tableCurrentPage = 1;
 let tableLastFilterSig = '';
 let showSuspendedOnly = false;
 let showUnpurchasedBagsOnly = false;
+
+/* كروت فلتر الدورات أسفل صندوق إحصائيات شيت العملاء — بديل الكروت لقائمة "كل الدورات"
+   المنسدلة القديمة. تُبنى الكروت مباشرة من خيارات select#filter-course الحقيقي (الذي يبقى
+   مصدر الحقيقة الوحيد ومخفياً في الـ DOM دون تغليفه بواجهة Checkbox العامة — راجع
+   data-multi-filter في core-utils.js)، فترث تلقائياً أي دورة جديدة تُضاف من الإعدادات دون أي
+   تعديل هنا. الضغط على كرت يبدّل تحديد الخيار المطابق له في الـ select نفسه، فتستمر كل بقية
+   منظومة الفلترة (filteredClients، المسار السريع، الفلاتر المتقدمة، العروض المحفوظة، مسح
+   الفلاتر...) في العمل بلا أي تعديل إضافي لأنها كلها تقرأ من نفس الـ select عبر
+   selectedFilterValues(). rows: نتيجة filteredClients({skipCourseFilter:true}) يمررها المستدعي
+   لتفادي حسابها مرتين — العدد داخل كل كرت يعكس بقية الفلاتر الشغالة فعلاً بمعزل عن فلتر الدورة. */
+function renderCourseStatCards(rows){
+  const wrap = $('#course-stat-cards');
+  const sel = $('#filter-course');
+  if(!wrap || !sel) return;
+  const selectedVals = selectedFilterValues(sel);
+  const counts = {};
+  (rows||[]).forEach(c=>{
+    const k = (c.courseType && c.courseType.trim()) ? c.courseType : '__unknown__';
+    counts[k] = (counts[k]||0)+1;
+  });
+  wrap.innerHTML = Array.from(sel.options).filter(o=>o.value!=='').map(o=>{
+    const key = o.value;
+    return `<div class="stat course-stat${selectedVals.includes(key)?' active':''}" data-course-key="${escapeHtml(key)}">
+      <b class="mono">${counts[key]||0}</b><span>${escapeHtml(o.textContent)}</span>
+    </div>`;
+  }).join('');
+}
+$('#course-stat-cards')?.addEventListener('click', e=>{
+  const card = e.target.closest('.course-stat');
+  if(!card) return;
+  const sel = $('#filter-course');
+  if(!sel) return;
+  const key = card.dataset.courseKey;
+  const opt = Array.from(sel.options).find(o=>o.value===key);
+  if(!opt) return;
+  opt.selected = !opt.selected;
+  // مطابق لسلوك قائمة "كل الدورات" (خيار قيمته فارغة): إلغاء تحديدها تلقائياً عند اختيار دورة،
+  // وإعادة تحديدها تلقائياً لو انتهى الأمر بعدم وجود أي دورة مختارة (يساوي "كل الدورات")
+  const allOpt = Array.from(sel.options).find(o=>o.value==='');
+  if(allOpt){
+    allOpt.selected = false;
+    if(!Array.from(sel.selectedOptions).length) allOpt.selected = true;
+  }
+  sel.dispatchEvent(new Event('input', {bubbles:true}));
+  sel.dispatchEvent(new Event('change', {bubbles:true}));
+});
 
 /* تغيير نطاق الرسوم البيانية في لوحة التحكم يعيد رسم اللوحة فوراً (فقط لو كانت لوحة
    التحكم هي الشاشة الظاهرة حالياً) دون إعادة تحميل الصفحة. */

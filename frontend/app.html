@@ -233,7 +233,7 @@
     <div class="toolbar toolbar-card">
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
       <select id="filter-status" data-multi-filter><option value="" data-i18n="allStatuses">كل حالات السداد</option><option value="paid" data-i18n="fullyPaid">مسدد بالكامل</option><option value="owe" data-i18n="owing">متبقي عليه</option></select>
-      <select id="filter-course" data-multi-filter><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
+      <select id="filter-course" multiple style="display:none;"><option value="" data-i18n="allCourses">كل الدورات</option><option value="__unknown__" data-i18n="unknownCourseType">⚠ الدورات غير المعلومة (بدون نوع دورة)</option><option value="Food safety">Food safety</option><option value="barber">barber</option><option value="Beauty salon">Beauty salon</option><option value="Laundry">Laundry</option></select>
       <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-advanced-filters" aria-expanded="false"><span data-i18n="advancedFilters">فلاتر متقدمة</span> <span id="advanced-filters-count" class="filters-count-badge" style="display:none;">0</span> ▾</button>
       <span class="spacer"></span>
       <div class="overflow-wrap">
@@ -284,6 +284,7 @@
       <div class="stat"><b id="clients-filtered-remaining" class="mono">0</b><span data-i18n="thRemaining">المتبقي</span></div>
       <div class="stat"><b id="clients-total-count" class="mono">5853</b><span data-i18n="totalClientsCount">إجمالي العملاء</span></div>
     </div>
+    <div class="client-stats" id="course-stat-cards" style="margin-bottom:10px;"></div>
     <div class="toolbar" id="bulk-actions-bar" style="display:none; background:rgba(180,72,58,.08); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
       <span><span data-i18n="selectedNowPrefix">محدد حالياً:</span> <b id="bulk-selected-count" class="mono">0</b> <span data-i18n="clientWord">عميل</span></span>
       <button type="button" class="btn btn-ghost btn-sm" id="btn-select-all-filtered"><span data-i18n="selectAllFilteredPrefix">تحديد كل النتائج المطابقة للفلتر</span> (<span id="bulk-filtered-total">766</span>)</button>
