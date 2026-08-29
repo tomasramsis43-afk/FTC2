@@ -195,13 +195,14 @@ function filteredJournalDE(){
   const q = ($('#de-filter-search')?.value || '').trim().toLowerCase();
   const from = $('#de-filter-from')?.value || '';
   const to = $('#de-filter-to')?.value || '';
-  const type = $('#de-filter-type')?.value || '';
+  const typeVals = selectedFilterValues($('#de-filter-type'));
   let rows = journalDE.slice();
   if(q) rows = rows.filter(e=> String(e.description||'').toLowerCase().includes(q));
   if(from) rows = rows.filter(e=> (e.date||'') >= from);
   if(to) rows = rows.filter(e=> (e.date||'') <= to);
-  if(type==='auto') rows = rows.filter(e=> !!e.isAuto);
-  else if(type==='manual') rows = rows.filter(e=> !e.isAuto);
+  if(typeVals.length){
+    rows = rows.filter(e=> (typeVals.includes('auto') && !!e.isAuto) || (typeVals.includes('manual') && !e.isAuto));
+  }
   return rows;
 }
 function renderJournalDEList(){
@@ -236,7 +237,7 @@ function renderJournalDEList(){
 $('#de-filter-type')?.addEventListener('change', renderJournalDEList);
 $('#btn-de-filter-clear')?.addEventListener('click', ()=>{
   ['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=>{ if($(sel)) $(sel).value=''; });
-  if($('#de-filter-type')) $('#de-filter-type').value='';
+  if($('#de-filter-type')){ $('#de-filter-type').value=''; refreshMultiSelectFilterUI($('#de-filter-type')); }
   renderJournalDEList();
 });
 $('#de-entries-body')?.addEventListener('click', async e=>{
