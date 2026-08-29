@@ -1,191 +1,217 @@
 /* ============================================================
-   arkkan-sync-ui.js — واجهة مزامنة أركان داخل FTC2
-   ============================================================
-   يتواصل مع arkkan-agent.js الشغّال محلياً على localhost:9955
-   ويستخدم نظام تحديث العملاء الموجود في FTC2 مباشرة.
+   arkkan-sync-ui.js — واجهة مزامنة بيانات أركان داخل البرنامج
+   ------------------------------------------------------------
+   يتواصل مع مسارات الخادم نفسها (/api/arkkan/status و /api/arkkan/fetch)
+   التي تجلب البيانات من أركان عبر متصفح مخفي داخل الخادم —
+   بلا أي برنامج منفصل، وبضغطة زرار واحدة داخل البرنامج.
    ============================================================ */
 
-const ARKKAN_AGENT = 'http://localhost:9955';
-
-// ── الحقول التي نجلبها من أركان ──
+/* ── الحقول التي نجلبها من أركان ── */
 const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate'];
 
 function clientIsMissingArkkanData(c) {
-  return ARKKAN_FIELDS.some(f => !c[f]);
+  return ARKKAN_FIELDS.some(f => f === 'coursePrice' ? !(c[f] !== undefined && c[f] !== '' && c[f] !== 0) : !c[f]);
 }
 
-// ══════════════════════════════════════════════
-//  فحص اتصال الـ Agent
-// ══════════════════════════════════════════════
-async function arkkanCheckAgent() {
+function arkkanAuthHeaders() {
+  return SERVER_AUTH_TOKEN ? { 'Authorization': 'Bearer ' + SERVER_AUTH_TOKEN } : {};
+}
+
+/* تاريخ أركان (2026/07/21) → صيغة input type=date (2026-07-21) */
+function arkkanToInputDate(v) {
+  if (!v) return '';
+  const m = String(v).trim().match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (!m) return v;
+  const [, y, mo, d] = m;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+async function arkkanCheckReady() {
   try {
-    const r = await fetch(`${ARKKAN_AGENT}/ping`, { signal: AbortSignal.timeout(3000) });
-    return r.ok;
-  } catch { return false; }
+    const r = await fetch(API_BASE + '/api/arkkan/status', {
+      headers: arkkanAuthHeaders(),
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch { return { ready: false, playwrightInstalled: false }; }
 }
 
-async function arkkanUpdateAgentStatus() {
-  const el = $('#arkkan-agent-status');
-  const btn = $('#btn-arkkan-bulk-start');
-  if (!el) return;
-  const ok = await arkkanCheckAgent();
-  if (ok) {
-    el.className = 'hint hint-success';
-    el.innerHTML = '✅ العميل المحلي (arkkan-agent) يعمل وجاهز للمزامنة.';
-    if (btn) btn.disabled = false;
-  } else {
-    el.className = 'hint hint-error';
-    el.innerHTML = `❌ العميل المحلي غير متصل — شغّل <b>arkkan-agent.js</b> على جهازك أولاً:<br>
-      <code style="font-size:11px; user-select:all;">node arkkan-agent.js</code>`;
-    if (btn) btn.disabled = true;
-  }
-}
-
-// ══════════════════════════════════════════════
-//  جلب بيانات عميل واحد من الـ Agent
-// ══════════════════════════════════════════════
 async function arkkanFetchOne(clientId, referNum = '') {
-  const r = await fetch(`${ARKKAN_AGENT}/fetch`, {
+  const r = await fetch(API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
     body: JSON.stringify({ clientId, referNum }),
-    signal: AbortSignal.timeout(60000)
+    signal: AbortSignal.timeout(95000)
   });
-  if (!r.ok) throw new Error(`Agent error: ${r.status}`);
+  if (!r.ok) {
+    let msg = 'فشل السيرفر (' + r.status + ')';
+    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
   return r.json();
 }
 
-// ══════════════════════════════════════════════
-//  زرار "جلب من أركان" في نموذج العميل
-// ══════════════════════════════════════════════
+/* ══════════════════════════════════════════════
+   1) زرار "جلب من أركان" في نموذج العميل
+   ══════════════════════════════════════════════ */
 document.addEventListener('click', async e => {
   if (!e.target.closest('#btn-arkkan-fetch')) return;
   const btn = $('#btn-arkkan-fetch');
+  const statusEl = $('#arkkan-fetch-status');
   const clientId = $('#f-id')?.value?.trim();
+
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
   if (!clientId) { showToast('أدخل رقم الهوية أولاً', 'error'); return; }
 
-  const agentOk = await arkkanCheckAgent();
-  if (!agentOk) {
-    showToast('arkkan-agent غير متصل — شغّله على جهازك أولاً', 'error');
-    return;
-  }
-
   btn.disabled = true;
-  btn.textContent = '⏳ جاري الجلب...';
+  const oldLabel = btn.innerHTML;
+  btn.textContent = '⏳ جاري الجلب من أركان...';
+  if (statusEl) statusEl.textContent = '';
 
   try {
     const referNum = $('#f-refer')?.value?.trim() || '';
+    if (statusEl) statusEl.textContent = 'فتح المتصفح وجلب البيانات...';
+
+    // استدعاء مباشر: الخادم نفسه يجهّز المتصفح المخفي ويجلب البيانات
     const data = await arkkanFetchOne(clientId, referNum);
 
     let filled = 0;
-    // نملأ فقط الحقول الفاضية
-    if (!$('#f-invoice')?.value && data.invoice)         { $('#f-invoice').value = data.invoice; filled++; }
-    if (!$('#f-coursenum')?.value && data.courseNumber)  { $('#f-coursenum').value = data.courseNumber; filled++; }
-    if (!$('#f-date')?.value && data.date)               { $('#f-date').value = data.date; filled++; }
-    if (!$('#f-courseprice')?.value && data.coursePrice) { $('#f-courseprice').value = data.coursePrice; filled++; }
-    if (!$('#f-baginvoice')?.value && data.bagInvoice)   { $('#f-baginvoice').value = data.bagInvoice; filled++; }
+    const setIfEmpty = (sel, val) => {
+      const el = $(sel);
+      if (!el || el.value) return false;
+      el.value = val;
+      return true;
+    };
+    if (data.invoice)         filled += setIfEmpty('#f-invoice', data.invoice) ? 1 : 0;
+    if (data.courseNumber)    filled += setIfEmpty('#f-coursenum', data.courseNumber) ? 1 : 0;
+    if (data.date)            filled += setIfEmpty('#f-date', arkkanToInputDate(data.date)) ? 1 : 0;
+    if (data.coursePrice)     filled += setIfEmpty('#f-courseprice', parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice) ? 1 : 0;
+    if (data.bagInvoice)      filled += setIfEmpty('#f-baginvoice', data.bagInvoice) ? 1 : 0;
 
-    // تحديث حقل تاريخ الحقيبة لو موجود
-    if (data.bagPurchaseDate) {
-      const idx = clients.findIndex(c => c.clientId === clientId);
-      if (idx !== -1 && !clients[idx].bagPurchaseDate) {
-        clients[idx].bagPurchaseDate = data.bagPurchaseDate;
-      }
+    // تحديث كائن العميل في الذاكرة بالحقول الظاهرة وغير الظاهرة
+    const idx = clients.findIndex(c => c.clientId === clientId);
+    if (idx !== -1) {
+      const c = clients[idx];
+      if (data.invoice && !c.invoice) c.invoice = data.invoice;
+      if (data.courseNumber && !c.courseNumber) c.courseNumber = data.courseNumber;
+      if (data.date && !c.date) c.date = arkkanToInputDate(data.date);
+      if (data.coursePrice && (c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0)) c.coursePrice = parseFloat(data.coursePrice) || c.coursePrice;
+      if (data.bagInvoice && !c.bagInvoice) c.bagInvoice = data.bagInvoice;
+      if (data.bagPurchaseDate && !c.bagPurchaseDate) c.bagPurchaseDate = data.bagPurchaseDate;
+      if (data.startDate && !c.startDate) c.startDate = data.startDate;
     }
 
-    if (filled > 0) {
-      showToast(`✅ تم جلب ${filled} حقل من أركان`, 'success');
-    } else {
-      showToast('لم تُجلب بيانات جديدة (قد تكون مكتملة أصلاً)', 'info');
-    }
+    showToast(
+      filled > 0
+        ? `✅ تم جلب ${filled} حقل من أركان`
+        : 'لم تُجلب بيانات جديدة (قد تكون مكتملة أصلاً)',
+      filled > 0 ? 'success' : 'info'
+    );
   } catch (err) {
-    showToast(`خطأ في جلب البيانات: ${err.message.slice(0, 80)}`, 'error');
+    showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 90), 'error');
+    if (statusEl) statusEl.textContent = '';
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg> جلب من أركان`;
+    btn.innerHTML = oldLabel;
   }
 });
 
-// ══════════════════════════════════════════════
-//  صفحة المزامنة الكاملة (Bulk Sync)
-// ══════════════════════════════════════════════
+/* ══════════════════════════════════════════════
+   2) صفحة المزامنة الكاملة (Bulk Sync)
+   ══════════════════════════════════════════════ */
 let _arkkanBulkRunning = false;
-let _arkkanBulkStop    = false;
+let _arkkanBulkStop = false;
 
 function renderArkkanSyncTable() {
   const tbody = $('#arkkan-sync-tbody');
   if (!tbody) return;
   const missing = (clients || []).filter(c => c.clientId && clientIsMissingArkkanData(c));
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصين: ${missing.length}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات: ${missing.length}`;
 
   tbody.innerHTML = missing.map(c => `
-    <tr id="arkkan-row-${c.clientId}">
+    <tr id="arkkan-row-${escapeHtml(c.clientId)}">
       <td>${escapeHtml(c.clientId)}</td>
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.invoice || '—')}</td>
       <td>${escapeHtml(c.courseNumber || '—')}</td>
       <td>${escapeHtml(c.date || '—')}</td>
-      <td>${escapeHtml(String(c.coursePrice || '—'))}</td>
+      <td>${escapeHtml(String(c.coursePrice ?? '—'))}</td>
       <td>${escapeHtml(c.bagInvoice || '—')}</td>
       <td>${escapeHtml(c.bagPurchaseDate || '—')}</td>
-      <td id="arkkan-status-${c.clientId}"><span style="color:var(--text-muted);">في الانتظار</span></td>
+      <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
+}
+
+async function arkkanUpdateStatus() {
+  const el = $('#arkkan-agent-status');
+  const btn = $('#btn-arkkan-bulk-start');
+  if (!el) return;
+  el.className = 'hint hint-info';
+  el.innerHTML = '⏳ جاري التحقق من الجاهزية...';
+
+  const st = await arkkanCheckReady();
+  if (st.ready) {
+    el.className = 'hint hint-success';
+    el.innerHTML = '✅ الخادم جاهز — المتصفح المخفي يعمل وسيجلب البيانات مباشرة.';
+    if (btn) btn.disabled = false;
+  } else if (st.playwrightInstalled === false) {
+    el.className = 'hint hint-error';
+    el.innerHTML = `❌ مكتبة playwright غير مثبتة في السيرفر. شغّل في مجلد الخادم:<br>
+      <code style="font-size:11px; user-select:all;">npm install playwright && npx playwright install chromium</code>`;
+    if (btn) btn.disabled = true;
+  } else {
+    el.className = 'hint hint-info';
+    el.innerHTML = '⏳ المتصفح المخفي قيد التجهيز (يستغرق ثوانٍ عادة) — أعد المحاولة بعد لحظات، أو اضغط "بدء المزامنة".';
+    if (btn) btn.disabled = false; // fetch يجهّز تلقائياً
+  }
 }
 
 async function arkkanBulkSync() {
   if (_arkkanBulkRunning) return;
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+
   _arkkanBulkRunning = true;
-  _arkkanBulkStop    = false;
+  _arkkanBulkStop = false;
 
   const startBtn = $('#btn-arkkan-bulk-start');
-  const stopBtn  = $('#btn-arkkan-bulk-stop');
+  const stopBtn = $('#btn-arkkan-bulk-stop');
   const progress = $('#arkkan-progress-bar');
-  const wrap     = $('#arkkan-progress-bar-wrap');
+  const wrap = $('#arkkan-progress-bar-wrap');
   if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn)  stopBtn.style.display  = '';
-  if (wrap)     wrap.style.display     = '';
+  if (stopBtn) stopBtn.style.display = '';
+  if (wrap) wrap.style.display = '';
 
   const missing = (clients || []).filter(c => c.clientId && clientIsMissingArkkanData(c));
   let done = 0, updated = 0, failed = 0;
 
+  showToast(`بدأت المزامنة: ${missing.length} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+
   for (const c of missing) {
     if (_arkkanBulkStop) break;
 
-    const statusEl = $(`#arkkan-status-${c.clientId}`);
+    const statusEl = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
 
     try {
+      if (!_arkkanBulkRunning) break;
       const data = await arkkanFetchOne(c.clientId, c.referNum || '');
       const patch = {};
-      if (!c.invoice        && data.invoice)        patch.invoice        = data.invoice;
-      if (!c.courseNumber   && data.courseNumber)   patch.courseNumber   = data.courseNumber;
-      if (!c.date           && data.date)           patch.date           = data.date;
-      if (!c.coursePrice    && data.coursePrice)    patch.coursePrice    = parseFloat(data.coursePrice) || data.coursePrice;
-      if (!c.bagInvoice     && data.bagInvoice)     patch.bagInvoice     = data.bagInvoice;
-      if (!c.bagPurchaseDate&& data.bagPurchaseDate)patch.bagPurchaseDate= data.bagPurchaseDate;
-      if (!c.startDate      && data.startDate)      patch.startDate      = data.startDate;
+      if (!c.invoice && data.invoice) patch.invoice = data.invoice;
+      if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
+      if (!c.date && data.date) patch.date = arkkanToInputDate(data.date);
+      if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice) patch.coursePrice = parseFloat(String(data.coursePrice).replace(/[^\d.,]/g, '').replace(',', '')) || data.coursePrice;
+      if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
+      if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
+      if (!c.startDate && data.startDate) patch.startDate = data.startDate;
 
       if (Object.keys(patch).length > 0) {
-        // تحديث في الـ clients array المحلي
         const idx = clients.findIndex(x => x.clientId === c.clientId);
         if (idx !== -1) Object.assign(clients[idx], patch);
-
-        // حفظ في FTC2 بالطريقة المعتادة (نفس saveClient)
-        if (typeof saveClientById === 'function') {
-          await saveClientById(c.clientId);
-        }
-
+        if (typeof saveClients === 'function') await saveClients();
         updated++;
         if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
-
-        // تحديث الصف في الجدول
-        const row = $(`#arkkan-row-${c.clientId}`);
-        if (row) {
-          row.cells[2].textContent = clients[clients.findIndex(x => x.clientId === c.clientId)]?.invoice || '—';
-          row.cells[3].textContent = clients[clients.findIndex(x => x.clientId === c.clientId)]?.courseNumber || '—';
-          row.cells[4].textContent = clients[clients.findIndex(x => x.clientId === c.clientId)]?.date || '—';
-        }
       } else {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
       }
@@ -195,49 +221,48 @@ async function arkkanBulkSync() {
     }
 
     done++;
-    if (progress) progress.style.width = `${Math.round(done / missing.length * 100)}%`;
+    if (progress) progress.style.width = `${Math.round(done / Math.max(missing.length, 1) * 100)}%`;
     const counter = $('#arkkan-bulk-counter');
     if (counter) counter.textContent = `✅ ${updated} محدّث · ❌ ${failed} فشل · ${done}/${missing.length}`;
 
-    // تأخير بين كل عميل
     if (!_arkkanBulkStop) await new Promise(r => setTimeout(r, 2500));
   }
 
   _arkkanBulkRunning = false;
   if (startBtn) startBtn.style.display = '';
-  if (stopBtn)  stopBtn.style.display  = 'none';
+  if (stopBtn) stopBtn.style.display = 'none';
+  if (wrap) wrap.style.display = 'none';
+  renderArkkanSyncTable();
   showToast(`اكتملت المزامنة: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
 }
 
-// ══════════════════════════════════════════════
-//  ربط الأحداث
-// ══════════════════════════════════════════════
+/* أداة تأمين لأي id في محدد CSS */
+function cssEscapeId(id) {
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/* عند فتح تبويب مزامنة أركان: نعرض الجدول ونحدّث الحالة */
+document.addEventListener('click', () => {
+  if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
+    renderArkkanSyncTable();
+  }
+});
+
 document.addEventListener('click', e => {
-  if (e.target.closest('#btn-arkkan-check-agent'))  { arkkanUpdateAgentStatus(); return; }
-  if (e.target.closest('#btn-arkkan-bulk-start'))   { arkkanBulkSync(); return; }
-  if (e.target.closest('#btn-arkkan-bulk-stop'))    { _arkkanBulkStop = true; return; }
+  if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
+  if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
+  if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
 });
 
-// تحديث الجدول عند تغيّر بيانات العملاء
-const _origRenderForArkkan = typeof renderTable === 'function' ? renderTable : null;
-function refreshArkkanView() {
-  if ($('#view-arkkan-sync')?.classList.contains('active')) {
-    renderArkkanSyncTable();
+/* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
+function initArkkanSyncView() {
+  const navBtn = document.querySelector('nav.tabs button[data-view="arkkan-sync"]');
+  if (navBtn) {
+    navBtn.addEventListener('click', () => {
+      renderArkkanSyncTable();
+      arkkanUpdateStatus();
+    });
   }
 }
-
-// عند فتح تبويب مزامنة أركان
-document.addEventListener('viewChanged', e => {
-  if (e?.detail?.view === 'arkkan-sync') {
-    renderArkkanSyncTable();
-    arkkanUpdateAgentStatus();
-  }
-});
-
-// ── saveClientById: يستدعي saveClients() العادية بعد تحديث الـ clients array ──
-async function saveClientById(clientId) {
-  // saveClients() بتحفظ الـ array كاملة — كافية هنا
-  if (typeof saveClients === 'function') {
-    await saveClients();
-  }
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initArkkanSyncView);
+else initArkkanSyncView();

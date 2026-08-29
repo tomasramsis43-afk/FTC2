@@ -18,6 +18,7 @@ const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter, syncClientsRows } = require('./routes/records');
 const arkkanRouter = require('./routes/arkkan');
+const arkkanSyncRouter = require('./routes/arkkan-sync');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -117,6 +118,7 @@ app.use(aiRouter);
 app.use(backupsRouter);
 app.use(healthRouter);
 app.use(arkkanRouter);
+app.use(arkkanSyncRouter);
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
