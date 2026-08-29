@@ -4888,3 +4888,60 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
 }
 .ob-dot.active { background: var(--brand-primary); width: 18px; border-radius: var(--radius-full, 999px); }
 .ob-step .field { margin-bottom: 9px; }
+
+/* ============= فلاتر متعددة الاختيار (Checkbox Dropdown) — msf-* ============= */
+.msf-wrap { display: inline-block; position: relative; }
+.msf-toggle {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 15px;
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  font-size: 14px;
+  background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  max-width: 220px;
+}
+.msf-toggle:hover, .msf-toggle:focus { border-color: var(--navy); outline: none; }
+.msf-toggle .msf-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: start;
+}
+.msf-toggle .msf-caret { color: var(--text-muted); font-size: 11px; flex: none; }
+.msf-menu {
+  display: none;
+  z-index: 3000;
+  background: var(--surface-solid);
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  padding: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.msf-menu.open { display: block; }
+.msf-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.msf-item:hover { background: color-mix(in srgb, var(--navy) 12%, transparent); }
+.msf-item input[type="checkbox"] { flex: none; cursor: pointer; accent-color: var(--navy); }
+.msf-item span { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) {
+  .msf-toggle { max-width: 100%; width: 100%; }
+}
