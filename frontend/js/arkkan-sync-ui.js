@@ -44,6 +44,12 @@ function clientIsMissingArkkanData(c) {
   return arkkanMissingFields(c).length > 0;
 }
 
+/* العميل يُعالج في مزامنة أركان فقط لو ليه رقم مرجعي (salt service: جلب البيانات
+   بدون رقم مرجعي لا يحدد العميل بدقة) — بمجرد إضافة رقم مرجعي يظهر تلقائياً */
+function clientEligibleForArkkan(c) {
+  return !!(c.clientId && String(c.referNum || '').trim());
+}
+
 function arkkanAuthHeaders() {
   return SERVER_AUTH_TOKEN ? { 'Authorization': 'Bearer ' + SERVER_AUTH_TOKEN } : {};
 }
@@ -161,9 +167,9 @@ let _arkkanBulkStop = false;
 function renderArkkanSyncTable() {
   const tbody = $('#arkkan-sync-tbody');
   if (!tbody) return;
-  const missing = (clients || []).filter(c => c.clientId && clientIsMissingArkkanData(c));
+  const missing = (clients || []).filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c));
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصي البيانات: ${missing.length}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}`;
 
   tbody.innerHTML = missing.map(c => `
     <tr id="arkkan-row-${escapeHtml(c.clientId)}">
@@ -220,7 +226,7 @@ async function arkkanBulkSync() {
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const missing = (clients || []).filter(c => c.clientId && clientIsMissingArkkanData(c));
+  const missing = (clients || []).filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c));
   let done = 0, updated = 0, failed = 0;
 
   showToast(`بدأت المزامنة: ${missing.length} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
