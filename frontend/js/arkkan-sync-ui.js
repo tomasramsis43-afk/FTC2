@@ -396,6 +396,28 @@ function arkkanExamCell(v) {
   return `<span style="color:${color}; font-weight:600;">${escapeHtml(s)}</span>`;
 }
 
+/* آخر اختبار تم للعميل: يقرأ examResult (آخر نتيجة)، ولو فاضي يرجع لأول محاولة مخزّنة
+   لها نتيجة ناجح/راسب — نفس معيار التصنيف المستخدم في صناديق نتائج الاختبارات */
+function arkkanExamStatusOf(c) {
+  const er = String(c.examResult || '').trim();
+  if (er) return { r: er, d: c.examLastDate || '' };
+  const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
+  const last = att.slice().reverse().find(a => a && String(a.r || '').trim() && (String(a.r).includes('ناجح') || String(a.r).includes('راسب')));
+  if (last) return { r: last.r, d: last.d || '' };
+  return null;
+}
+
+/* شارة حالة آخر اختبار (ناجح أخضر / راسب أحمر) تُعرض في شيت العملاء وفي كرت العميل */
+function arkkanExamBadgeHtml(c) {
+  const s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
+  if (!s) return '';
+  const r = String(s.r).trim();
+  const tip = `آخر اختبار تم: ${r}${s.d ? ' — بتاريخ ' + s.d : ''}`;
+  if (r.includes('ناجح')) return `<span class="stamp paid" title="${escapeHtml(tip)}">ناجح ✓</span>`;
+  if (r.includes('راسب')) return `<span class="stamp owe" title="${escapeHtml(tip)}">راسب</span>`;
+  return '';
+}
+
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
   const pbody = $('#arkkan-exams-passed-tbody');

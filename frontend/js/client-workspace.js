@@ -65,6 +65,20 @@ function cwActivityHtml(c){
    نحدّثها فوراً بعد "جلب من أركان" من غير إعادة فتح الكلت */
 function cwInfoHtml(c){
   const row = (k, v) => v ? `<div class="cw-item"><small>${k}</small><b>${v}</b></div>` : '';
+  /* نتيجة آخر اختبار تم (ناجح/راسب) — تُعرض في كرت العميل من بيانات أركان المخزّنة */
+  const exam = (typeof arkkanExamStatusOf === 'function') ? arkkanExamStatusOf(c) : null;
+  const examSection = exam ? `
+    <div class="cw-section">
+      <h4>نتيجة الاختبار (آخر اختبار تم)</h4>
+      <div class="cw-grid">
+        <div class="cw-item"><small>آخر اختبار</small>${String(exam.r).includes('ناجح')
+          ? '<b style="color:var(--success, green);">ناجح ✓</b>'
+          : String(exam.r).includes('راسب')
+            ? '<b style="color:var(--danger, red);">راسب</b>'
+            : `<b>${escapeHtml(exam.r)}</b>`}</div>
+        ${exam.d ? row('تاريخ آخر اختبار', escapeHtml(exam.d)) : ''}
+      </div>
+    </div>` : '';
   return `
     <div class="cw-section">
       <h4>بيانات العميل</h4>
@@ -93,7 +107,7 @@ function cwInfoHtml(c){
         ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
         ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
       </div>
-    </div>`;
+    </div>${examSection}`;
 }
 
 let _cwClientId = null; // العميل المفتوح حالياً في الكرت (لزرار جلب أركان)
