@@ -643,6 +643,27 @@ function arkkanResumeFieldSync() {
   if (String(el.value) !== String(v)) el.value = v;
 }
 
+/* نافذة استئناف المقارنة مع أركان — عدد ساعات مستقل تماماً عن نافذة الجلب:
+   علامة arkkanCompareCheck تُحفظ على العميل بعد فحصه بالمقارنة وتجعله يُتخطى
+   خلال هذه النافذة عند إعادة تشغيل مقارنة موقوفة (فيكمل من حيث توقف).
+   تُضبط من حقل "فترة تخطي المقارنة المُعاد" في التبويب وتُحفظ في
+   settings.arkkanCompareResumeHours — أو بـ window.ARKKAN_COMPARE_RESUME_HOURS؛
+   الافتراضي 24 ساعة. */
+function arkkanCompareResumeMs() {
+  let h = settings && settings.arkkanCompareResumeHours;
+  if (!(Number(h) > 0)) h = parseInt(window.ARKKAN_COMPARE_RESUME_HOURS || '24', 10) || 24;
+  return Number(h) * 3600 * 1000;
+}
+
+/* مزامنة حقل "فترة تخطي المقارنة المُعاد" في التبويب مع الإعداد المحفوظ */
+function arkkanCompareResumeFieldSync() {
+  const el = $('#set-arkkan-compare-resume-hours');
+  if (!el) return;
+  const h = settings && settings.arkkanCompareResumeHours;
+  const v = Number(h) > 0 ? Number(h) : (parseInt(window.ARKKAN_COMPARE_RESUME_HOURS || '24', 10) || 24);
+  if (String(el.value) !== String(v)) el.value = v;
+}
+
 async function arkkanExamSyncCard(clientId, btn) {
   const c = (clients || []).find(x => String(x.clientId) === String(clientId));
   if (!c) return;
@@ -738,20 +759,31 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
       const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
       const stEl = $(statusId);
 
-      /* وضع الجلب فقط: نخطي من فُحصوا في هذه الجلسة (ذاكرة) أو حديثاً (علامة محفوظة
-         على العميل نفسه) وبياناتهم لم تتغير — إعادة التشغيل تكمل من حيث توقف بدل البدء من الصفر */
+      /* وضع الجلب: نخطي من فُحصوا حديثاً وبياناتهم لم تتغير — فيكمل من حيث توقف.
+         وضع المقارنة: نافذة تخطي مستقلة بحساب ساعات خاص بها (arkkanCompareCheck) —
+         من فُورن نتيجة حديثاً لا يُعاد سؤاله عن أركان ويُتخطى حتى انتهاء النافذة. */
       const sigNow = arkkanExamSig(cur);
       const chk = cur && cur.arkkanExamCheck;
       const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < arkkanResumeMs();
-      if (!compare && (_examSession[k] === sigNow || resumeSkip)) {
+      const cmpChk = cur && cur.arkkanCompareCheck;
+      const cmpSkip = compare && cmpChk && Date.now() - cmpChk < arkkanCompareResumeMs();
+
+      const skipEl =
+        compare
+          ? '<span style="color:var(--text-muted);">⏭️ فُورن حديثاً — تخطٍّ</span>'
+          : '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
+      const skipAndContinue = () => {
         skipped++;
-        if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
+        if (stEl) stEl.innerHTML = skipEl;
         done++;
         if (progress) progress.style.width = `${Math.round(done / Math.max(rowsTotal, 1) * 100)}%`;
         const counterEl = $(counterSel);
-        if (counterEl) counterEl.textContent = `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`;
-        continue;
-      }
+        if (counterEl) counterEl.textContent = compare
+          ? `⏭️ ${skipped} · ⤭ ${same} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`
+          : `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`;
+      };
+      if (!compare && (_examSession[k] === sigNow || resumeSkip)) { skipAndContinue(); continue; }
+      if (cmpSkip) { skipAndContinue(); continue; }
       if (!compare && _examSession[k]) delete _examSession[k];
 
       if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
@@ -761,11 +793,18 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
         const sigNew = arkkanExamSig(Object.assign({}, cur, patch));
         if (arkkanExamSig(cur) === sigNew) {
           same++;
+          /* مطابق بدون تغيير: نسجّل الفحص على المقارنة حتى لا يُعاد في نافذة
+             التخطي الخاصة بها أثناء إعادة تشغيل مقارنة موقوفة (يُحفظ الختامي) */
+          const idx0 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+          if (idx0 !== -1) clients[idx0].arkkanCompareCheck = Date.now();
           _examSession[k] = sigNew;
           return null; // مطابق بدون تغيير
         }
         const [oldTxt, newTxt] = diffText(cur, data.lastResult);
-        if (idx !== -1) Object.assign(clients[idx], patch);
+        if (idx !== -1) {
+          Object.assign(clients[idx], patch);
+          clients[idx].arkkanCompareCheck = Date.now();
+        }
         await queueSave();
         updated++;
         _examSession[k] = arkkanExamSig(clients[idx] || c);
@@ -842,6 +881,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   };
 
   await Promise.all(Array.from({ length: Math.min(POOL, rowsTotal) }, () => processOne()));
+  await queueSave(); // حفظ علامات التخطي المتبقية (مطابق/فُحص حديثاً)
 
   st.running = false;
   if (startBtn) startBtn.style.display = '';
@@ -849,7 +889,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   if (wrap) wrap.style.display = 'none';
   renderArkkanExamsTable();
   showToast(compare
-    ? `${doneMsg}: ${updated} حُدِّثت تلقائياً، ${same} مطابق، ${failed} فشل`
+    ? `${doneMsg}: ${updated} حُدِّثت تلقائياً، ${same} مطابق، ${failed} فشل${skipped ? `، ${skipped} تجاوز (فُورن حديثاً)` : ''}`
     : `${doneMsg}: ${updated} محدّث، ${failed} فشل، ${skipped} تخطّي (بلا تغيير)`, updated > 0 ? 'success' : 'info');
 }
 
@@ -958,6 +998,7 @@ function arkkanRefreshRowCells(c) {
 document.addEventListener('click', () => {
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
     arkkanResumeFieldSync();
+    arkkanCompareResumeFieldSync();
     renderArkkanSyncTable();
     renderArkkanExamsTable();
   }
@@ -988,6 +1029,7 @@ function initArkkanSyncView() {
   if (navBtn) {
     navBtn.addEventListener('click', () => {
       arkkanResumeFieldSync();
+      arkkanCompareResumeFieldSync();
       renderArkkanSyncTable();
       renderArkkanExamsTable();
       arkkanUpdateStatus();
@@ -997,14 +1039,17 @@ function initArkkanSyncView() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initArkkanSyncView);
 else initArkkanSyncView();
 
-/* حفظ فترة التخطي من الحقل عند تغييرها */
+/* حفظ فترتي التخطي (جلب / مقارنة) من حقليهما عند تغيير أي منهما */
 document.addEventListener('change', async e => {
-  if (e.target && e.target.id === 'set-arkkan-resume-hours') {
+  const id = e.target && e.target.id;
+  if (id === 'set-arkkan-resume-hours' || id === 'set-arkkan-compare-resume-hours') {
+    const isCompare = id === 'set-arkkan-compare-resume-hours';
+    const key = isCompare ? 'arkkanCompareResumeHours' : 'arkkanResumeHours';
     const v = Math.max(1, Math.min(720, parseInt(e.target.value, 10) || 24));
     if (!settings || typeof DEFAULT_SETTINGS === 'undefined') settings = { arkkanResumeHours: 24 };
-    settings.arkkanResumeHours = v;
+    settings[key] = v;
     try { await saveSettings(); } catch {}
-    arkkanResumeFieldSync();
-    showToast(`فترة تخطي الفحص المُعاد = ${v} ساعة — يُطبق من التشغيل القادم`, 'info');
+    (isCompare ? arkkanCompareResumeFieldSync : arkkanResumeFieldSync)();
+    showToast(`${isCompare ? 'فترة تخطي المقارنة المُعاد' : 'فترة تخطي الفحص المُعاد'} = ${v} ساعة — يُطبق من التشغيل القادم`, 'info');
   }
 });

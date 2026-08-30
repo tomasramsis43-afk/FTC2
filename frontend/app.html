@@ -1278,10 +1278,15 @@
         ⏳ جاري التحقق من حالة العميل المحلي (arkkan-agent)...
       </div>
 
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <label for="set-arkkan-resume-hours" style="font-size:12.5px; color:var(--text-muted);">فترة تخطي الفحص المُعاد (ساعات):</label>
         <input type="number" id="set-arkkan-resume-hours" min="1" max="720" step="1" style="width:72px;" title="مدة يُحترم فيها شرط «فُحص حديثاً» عند إعادة تشغيل أي جلب — فالإيقاف ثم إعادة التشغيل يكمل من حيث توقف بدل البدء من الصفر">
         <span style="font-size:11.5px; color:var(--text-muted);">أي إيقاف ثم إعادة تشغيل لأي صندوق (حتى بعد تحديث الصفحة) يكمل من حيث توقف — يتخطى من فُحصوا حديثاً خلال هذه المدة.</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <label for="set-arkkan-compare-resume-hours" style="font-size:12.5px; color:var(--text-muted);">فترة تخطي المقارنة المُعاد (ساعات):</label>
+        <input type="number" id="set-arkkan-compare-resume-hours" min="1" max="720" step="1" style="width:72px;" title="نافذة مستقلة عن الجلب: مدة يُتخطى فيها من فُورنوا بالمقارنة مؤخراً — إيقاف المقارنة ثم إعادة تشغيلها يكمل من حيث توقف بدل البدء من الصفر">
+        <span style="font-size:11.5px; color:var(--text-muted);">للمقارنة فقط وبحساب خاص بها: إيقاف مقارنة ثم إعادة تشغيلها يتخطى من قُورنوا حديثاً ويستمر من حيث توقف.</span>
       </div>
 
       <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
