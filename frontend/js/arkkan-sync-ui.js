@@ -41,8 +41,7 @@ function arkkanMissingFields(c) {
   return ARKKAN_FIELDS.filter(f => arkkanFieldMissing(c, f));
 }
 function clientIsMissingArkkanData(c) {
-  // ناقص البيانات المعتاد، أو عميل حقيبة خاصة لم يُرحَّل له تاريخ الحقيبة الخاصة بعد
-  return arkkanMissingFields(c).length > 0 || (c.bagSource === 'own' && !c.bagOwnDate);
+  return arkkanMissingFields(c).length > 0;
 }
 
 /* العميل يُعالج في مزامنة أركان فقط لو ليه رقم مرجعي (salt service: جلب البيانات
@@ -108,8 +107,6 @@ function arkkanPatchFromData(c, data){
   if (!c.invoice && data.invoice) patch.invoice = data.invoice;
   if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
-  // تاريخ الحقيبة الخاصة (bagOwnDate) يُرحّل فوراً لعملاء الحقيبة الخاصة فقط
-  if (c.bagSource === 'own' && !c.bagOwnDate && data.bagOwnDate) patch.bagOwnDate = data.bagOwnDate;
   if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
   // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
@@ -227,7 +224,6 @@ function renderArkkanSyncTable() {
       <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
-      <td class="col-bagowndate">${c.bagSource === 'own' ? escapeHtml(c.bagOwnDate || '—') : '—'}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)">جلب</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
@@ -497,7 +493,6 @@ function arkkanRefreshRowCells(c) {
   set('.col-startdate', c.startDate || arkkanCourseDate(c));
   set('.col-baginvoice', c.bagInvoice);
   set('.col-bagdate', c.bagPurchaseDate);
-  set('.col-bagowndate', c.bagSource === 'own' ? c.bagOwnDate : '—');
   const missEl = row.querySelector('.col-missing');
   if (missEl) missEl.textContent = arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، ');
 }
