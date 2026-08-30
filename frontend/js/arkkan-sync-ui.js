@@ -358,11 +358,15 @@ function arkkanExamPassed(c) {
   return String(c.examResult || '').includes('ناجح');
 }
 
-/* جميع العملاء المؤهلين (برقم مرجعي) مرتّبين من الأحدث تسجيلاً إلى الأقدم */
+/* العميل راسب = نتيجة آخر اختبار "راسب" → ينتقل إلى صندوق الراسبين */
+function arkkanExamFailed(c) {
+  return !arkkanExamPassed(c) && String(c.examResult || '').includes('راسب');
+}
+
+/* صندوق النتائج الرئيسي: بلا نتيجة بعد (لم يُجلب له اختبار مكتمل بعد) */
 function arkkanExamClients() {
-  // الجلب الجماعي والعداد في صندوق النتائج: غير الناجحين فقط
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c))
+    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -370,6 +374,13 @@ function arkkanExamClients() {
 function arkkanExamPassedClients() {
   return (clients || [])
     .filter(c => clientEligibleForArkkan(c) && arkkanExamPassed(c))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* عملاء صندوق الراسبين: صندوق مستقل يجلب لنفسه، وإذا نجحوا ينتقلون للنجاح */
+function arkkanExamFailedClients() {
+  return (clients || [])
+    .filter(c => clientEligibleForArkkan(c) && arkkanExamFailed(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -384,13 +395,17 @@ function arkkanExamCell(v) {
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
   const pbody = $('#arkkan-exams-passed-tbody');
-  const rows = arkkanExamClients();          // غير الناجحين — يحتاجون جلباً
-  const passed = arkkanExamPassedClients();  // الناجحون — صندوق النجاح
+  const fbody = $('#arkkan-exams-failed-tbody');
+  const noResult = arkkanExamClients();        // صندوق النتائج: بلا نتيجة بعد
+  const passed = arkkanExamPassedClients();    // صندوق النجاح
+  const failed = arkkanExamFailedClients();    // صندوق الراسبين (مستقل بجلبه)
 
   const counter = $('#arkkan-exams-counter');
-  if (counter) counter.textContent = `العملاء المتبقون للجلب (غير ناجح): ${rows.length}`;
+  if (counter) counter.textContent = `العملاء بلا نتيجة بعد (يحتاجون جلباً): ${noResult.length}`;
   const pcounter = $('#arkkan-exams-passed-counter');
   if (pcounter) pcounter.textContent = `الناجحون (اكتمل جلب نتائجهم): ${passed.length}`;
+  const fcounter = $('#arkkan-exams-failed-counter');
+  if (fcounter) fcounter.textContent = `الراسبون (صندوق مستقل — يجلب لنفسه): ${failed.length}`;
 
   const cells = c => {
     const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
@@ -400,7 +415,7 @@ function renderArkkanExamsTable() {
   };
 
   if (tbody) {
-    tbody.innerHTML = rows.map(c => `
+    tbody.innerHTML = noResult.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
@@ -419,6 +434,18 @@ function renderArkkanExamsTable() {
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
+    </tr>`).join('');
+  }
+
+  if (fbody) {
+    fbody.innerHTML = failed.map(c => `
+    <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
+      <td>${escapeHtml(c.name || '—')}</td>
+      <td>${escapeHtml(c.clientId)}</td>
+      ${cells(c)}
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
+      <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
   }
 }
@@ -461,34 +488,40 @@ async function arkkanExamSyncOne(clientId, btn) {
   }
 }
 
-let _arkkanExamsRunning = false;
-let _arkkanExamsStop = false;
+/* حالة كل جلب جماعي منفصلة (صندوق النتائج / صندوق الراسبين) */
+const _examBulkStates = {};
+function examBulkState(name) {
+  return _examBulkStates[name] || (_examBulkStates[name] = { running: false, stop: false });
+}
 
-async function arkkanExamsBulk() {
-  if (_arkkanExamsRunning) return;
+/* مشغّل جلب جماعي عام — كل صندوق يجلب لنفسه بعناصره وصفوفه */
+async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel, counterSel, doneMsg }) {
+  const st = examBulkState(name);
+  if (st.running) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
 
-  _arkkanExamsRunning = true;
-  _arkkanExamsStop = false;
+  st.running = true;
+  st.stop = false;
 
-  const startBtn = $('#btn-arkkan-exams-start');
-  const stopBtn = $('#btn-arkkan-exams-stop');
-  const progress = $('#arkkan-exams-progress');
-  const wrap = $('#arkkan-exams-progress-wrap');
+  const startBtn = $(startSel);
+  const stopBtn = $(stopSel);
+  const progress = $(progressSel);
+  const wrap = $(progressSel.replace('progress', 'progress-wrap'));
   if (startBtn) startBtn.style.display = 'none';
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const rows = arkkanExamClients();
+  const rows = getRows();
   let done = 0, updated = 0, failed = 0;
 
-  showToast(`بدأ جلب نتائج الاختبارات: ${rows.length} عميل`, 'info');
+  showToast(`بدأ الجلب: ${rows.length} عميل`, 'info');
 
   for (const c of rows) {
-    if (_arkkanExamsStop) break;
+    if (st.stop) break;
 
-    const st = $(`#arkkan-exam-status-${cssEscapeId(c.clientId)}`);
-    if (st) st.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
+    const statusId = `#arkkan-exam-status-${cssEscapeId(c.clientId)}`;
+    const stEl = $(statusId);
+    if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
 
     try {
       const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
@@ -499,28 +532,54 @@ async function arkkanExamsBulk() {
       updated++;
       arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
       const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
-      if (st) st.innerHTML = passed
+      if (stEl) stEl.innerHTML = passed
         ? '<span style="color:var(--success, green);">✅ ناجح</span>'
         : '<span style="color:var(--success, green);">✅</span>';
     } catch (err) {
       failed++;
-      if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+      if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
     }
 
     done++;
     if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
-    const counter = $('#arkkan-exams-counter');
+    const counter = $(counterSel);
     if (counter) counter.textContent = `✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
 
-    if (!_arkkanExamsStop) await new Promise(r => setTimeout(r, 700));
+    if (!st.stop) await new Promise(r => setTimeout(r, 700));
   }
 
-  _arkkanExamsRunning = false;
+  st.running = false;
   if (startBtn) startBtn.style.display = '';
   if (stopBtn) stopBtn.style.display = 'none';
   if (wrap) wrap.style.display = 'none';
   renderArkkanExamsTable();
-  showToast(`اكتمل جلب نتائج الاختبارات: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
+  showToast(`${doneMsg}: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
+}
+
+/* جلب جماعي في صندوق النتائج الرئيسي: بلا نتيجة بعد */
+function arkkanExamsBulk() {
+  return arkkanExamBulkRun({
+    name: 'exams',
+    getRows: arkkanExamClients,
+    startSel: '#btn-arkkan-exams-start',
+    stopSel: '#btn-arkkan-exams-stop',
+    progressSel: '#arkkan-exams-progress',
+    counterSel: '#arkkan-exams-counter',
+    doneMsg: 'اكتمل جلب نتائج الاختبارات'
+  });
+}
+
+/* جلب جماعي في صندوق الراسبين: مستقل، لو نجح عميل ينتقل لصندوق النجاح */
+function arkkanExamsFailedBulk() {
+  return arkkanExamBulkRun({
+    name: 'failed',
+    getRows: arkkanExamFailedClients,
+    startSel: '#btn-arkkan-exams-failed-start',
+    stopSel: '#btn-arkkan-exams-failed-stop',
+    progressSel: '#arkkan-exams-failed-progress',
+    counterSel: '#arkkan-exams-failed-counter',
+    doneMsg: 'اكتمل جلب نتائج الراسبين'
+  });
 }
 
 /* تحديث خلايا صف العميل بالبيانات الحالية (بعد كل جلب ناجح) */
@@ -554,7 +613,9 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
-  if (e.target.closest('#btn-arkkan-exams-stop')) { _arkkanExamsStop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-stop')) { examBulkState('exams').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-failed-start')) { arkkanExamsFailedBulk(); return; }
+  if (e.target.closest('#btn-arkkan-exams-failed-stop')) { examBulkState('failed').stop = true; return; }
 });
 
 /* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
