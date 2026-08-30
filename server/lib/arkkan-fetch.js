@@ -231,6 +231,10 @@ async function fetchClientData({ clientId, referNum = '' }) {
    نرتب المحاولات زمنياً (الإعادات ثم الأخير) ونعيد آخر 4 فقط + تاريخ آخر اختبار. */
 async function fetchExamScores({ clientId, referNum = '' }) {
   const result = { attempts: [], lastDate: '', lastResult: '', lastGrade: '' };
+
+  // أول طلب يشغّل المتصفح المخفي ويتسجل لصفحة أركان تلقائياً (مثل الجلب الرئيسي)
+  if (!_ready) await initBrowser();
+
   const pg = _page;
   if (!pg) throw new Error('المتصفح غير جاهز بعد');
 
