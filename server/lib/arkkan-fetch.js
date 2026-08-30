@@ -139,20 +139,37 @@ function closeDialog(pg) {
 }
 
 /* التأكد من وجود إطار تفاصيل المتدرب (frm8157) — لو فُقد (انتهاء جلسة
-   أو إعادة تحميل) نعيد الدخول إلى صفحة أركان ثم نفتح تفاصيل المتدرب. */
+   أو إعادة تحميل) نعيد الدخول إلى صفحة أركان ثم نفتح تفاصيل المتدرب.
+
+   كل الانتظارات هنا متكيّفة: نراقب ظهور كل عنصر (الرابط ثم الإطار) كل 150ms
+   ونكسر أول ما يظهر — بدل النوم الثابت الطويل (كان 2500+3500ms، ويصير
+   يُدفع عند كل ريفرش ذكي بعد كل عميل، فتقليله يسرّع الجلب ملحوظاً). */
 async function ensureDetailsFrame(pg) {
   let fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
   if (fr) return fr;
 
   await pg.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await wait(2500);
-  await pg.evaluate(() => {
-    const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
-    if (a) a.click();
-  });
-  await pg.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-  await wait(3500);
-  return pg.frames().find(f => f.url().includes('Arkan/frm8157'));
+
+  // 1) انتظار متكيّف لظهور رابط "تفاصيل متدرب" في الصفحة الرئيسية
+  let clicked = false;
+  const tA = Date.now();
+  while (Date.now() - tA < 8000 && !clicked) {
+    clicked = await pg.evaluate(() => {
+      const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
+      if (a) { a.click(); return true; }
+      return false;
+    }).catch(() => false);
+    if (!clicked) await wait(150);
+  }
+
+  // 2) انتظار متكيّف لظهور إطار التفاصيل بدل نوم ثابت طويل
+  const tB = Date.now();
+  while (Date.now() - tB < 8000) {
+    const f = pg.frames().find(x => x.url().includes('Arkan/frm8157'));
+    if (f) return f;
+    await wait(150);
+  }
+  return pg.frames().find(x => x.url().includes('Arkan/frm8157')) || null;
 }
 
 /* ملء بيانات العميل والضغط على تأكيد والانتظار المتكيّف لحين تحميل شبكة
@@ -186,7 +203,14 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
     }
     await wait(250);
   }
-  if (!nC) { await wait(1200); nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0); }
+  // ذيل متكيّف: لو ما طهرتش صفوف نقفل على ظهورها خلال ثانية (بدل نوم ثابت 1200ms)
+  if (!nC) {
+    const tT = Date.now();
+    while (Date.now() - tT < 1200 && !nC) {
+      nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0);
+      if (!nC) await wait(150);
+    }
+  }
   const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count().catch(() => 0);
   return { fr, nC, nB };
 }
