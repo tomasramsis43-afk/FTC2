@@ -107,6 +107,8 @@ function arkkanPatchFromData(c, data){
   if (!c.invoice && data.invoice) patch.invoice = data.invoice;
   if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
+  // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
+  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
   if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
   // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
