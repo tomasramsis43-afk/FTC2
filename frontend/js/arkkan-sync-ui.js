@@ -321,6 +321,166 @@ function cssEscapeId(id) {
   return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+/* ══════════════════════════════════════════════
+   3) نتائج الاختبارات (الرسوب والنجاح)
+   صندوق مستقل أسفل صندوق المزامنة — يجلب من أركان آخر 4
+   محاولات اختبار لكل عميل (بعدة إعادة) + تاريخ آخر اختبار.
+   ══════════════════════════════════════════════ */
+
+async function arkkanExamFetchOne(clientId, referNum = '') {
+  const r = await fetch(API_BASE + '/api/arkkan/exams', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
+    body: JSON.stringify({ clientId, referNum }),
+    signal: AbortSignal.timeout(95000)
+  });
+  if (!r.ok) {
+    let msg = 'فشل السيرفر (' + r.status + ')';
+    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+/* يبني التصحيح من بيانات نتائج الاختبار إلى العميل */
+function arkkanPatchExamsFromData(c, data) {
+  return {
+    examAttempts: Array.isArray(data.attempts) ? data.attempts : [],
+    examLastDate: data.lastDate || '',
+    examResult: data.lastResult || ''
+  };
+}
+
+/* جميع العملاء المؤهلين (برقم مرجعي) مرتبين من الأحدث تسجيلاً إلى الأقدم */
+function arkkanExamClients() {
+  return (clients || [])
+    .filter(c => clientEligibleForArkkan(c))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* خلية نتيجة: ناجح أخضر / راسب أحمر */
+function arkkanExamCell(v) {
+  const s = String(v || '').trim();
+  if (!s) return '<span style="color:var(--text-muted);">—</span>';
+  const color = s.includes('ناجح') ? 'var(--success, green)' : s.includes('راسب') ? 'var(--danger, red)' : 'inherit';
+  return `<span style="color:${color}; font-weight:600;">${escapeHtml(s)}</span>`;
+}
+
+function renderArkkanExamsTable() {
+  const tbody = $('#arkkan-exams-tbody');
+  if (!tbody) return;
+  const rows = arkkanExamClients();
+  const counter = $('#arkkan-exams-counter');
+  if (counter) counter.textContent = `العملاء المؤهلون لنتائج الاختبارات: ${rows.length}`;
+
+  tbody.innerHTML = rows.map(c => {
+    const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
+    const cells = [0, 1, 2, 3].map(i =>
+      `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>'}</td>`
+    ).join('');
+    return `<tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
+      <td>${escapeHtml(c.name || '—')}</td>
+      <td>${escapeHtml(c.clientId)}</td>
+      ${cells}
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
+      <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function arkkanRefreshExamCells(c) {
+  const row = document.querySelector(`#arkkan-exam-row-${cssEscapeId(c.clientId)}`);
+  if (!row) return;
+  const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
+  [...row.querySelectorAll('.col-exam-attempt')].forEach((el, i) => {
+    el.innerHTML = att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>';
+  });
+  const de = row.querySelector('.col-examdate');
+  if (de) de.textContent = c.examLastDate || '—';
+}
+
+async function arkkanExamSyncOne(clientId, btn) {
+  const c = (clients || []).find(x => String(x.clientId) === String(clientId));
+  if (!c) return;
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+  const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
+  if (st) st.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
+  try {
+    const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+    const patch = arkkanPatchExamsFromData(c, data);
+    const idx = clients.findIndex(x => x.clientId === c.clientId);
+    if (idx !== -1) Object.assign(clients[idx], patch);
+    if (typeof saveClients === 'function') await saveClients();
+    arkkanRefreshExamCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
+    if (st) st.innerHTML = '<span style="color:var(--success, green);">✅ تم</span>';
+  } catch (err) {
+    if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ ${escapeHtml(err.message.slice(0, 60))}</span>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
+  }
+}
+
+let _arkkanExamsRunning = false;
+let _arkkanExamsStop = false;
+
+async function arkkanExamsBulk() {
+  if (_arkkanExamsRunning) return;
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+
+  _arkkanExamsRunning = true;
+  _arkkanExamsStop = false;
+
+  const startBtn = $('#btn-arkkan-exams-start');
+  const stopBtn = $('#btn-arkkan-exams-stop');
+  const progress = $('#arkkan-exams-progress');
+  const wrap = $('#arkkan-exams-progress-wrap');
+  if (startBtn) startBtn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = '';
+  if (wrap) wrap.style.display = '';
+
+  const rows = arkkanExamClients();
+  let done = 0, updated = 0, failed = 0;
+
+  showToast(`بدأ جلب نتائج الاختبارات: ${rows.length} عميل`, 'info');
+
+  for (const c of rows) {
+    if (_arkkanExamsStop) break;
+
+    const st = $(`#arkkan-exam-status-${cssEscapeId(c.clientId)}`);
+    if (st) st.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
+
+    try {
+      const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+      const patch = arkkanPatchExamsFromData(c, data);
+      const idx = clients.findIndex(x => x.clientId === c.clientId);
+      if (idx !== -1) Object.assign(clients[idx], patch);
+      if (typeof saveClients === 'function') await saveClients();
+      updated++;
+      arkkanRefreshExamCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
+      if (st) st.innerHTML = '<span style="color:var(--success, green);">✅</span>';
+    } catch (err) {
+      failed++;
+      if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+    }
+
+    done++;
+    if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
+    const counter = $('#arkkan-exams-counter');
+    if (counter) counter.textContent = `✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
+
+    if (!_arkkanExamsStop) await new Promise(r => setTimeout(r, 700));
+  }
+
+  _arkkanExamsRunning = false;
+  if (startBtn) startBtn.style.display = '';
+  if (stopBtn) stopBtn.style.display = 'none';
+  if (wrap) wrap.style.display = 'none';
+  renderArkkanExamsTable();
+  showToast(`اكتمل جلب نتائج الاختبارات: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
+}
+
 /* تحديث خلايا صف العميل بالبيانات الحالية (بعد كل جلب ناجح) */
 function arkkanRefreshRowCells(c) {
   const row = document.querySelector(`#arkkan-row-${cssEscapeId(c.clientId)}`);
@@ -337,18 +497,22 @@ function arkkanRefreshRowCells(c) {
   if (missEl) missEl.textContent = arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، ');
 }
 
-/* عند فتح تبويب مزامنة أركان: نعرض الجدول ونحدّث الحالة */
+/* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
 document.addEventListener('click', () => {
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
     renderArkkanSyncTable();
+    renderArkkanExamsTable();
   }
 });
 
 document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
+  if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
+  if (e.target.closest('#btn-arkkan-exams-stop')) { _arkkanExamsStop = true; return; }
 });
 
 /* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
@@ -357,6 +521,7 @@ function initArkkanSyncView() {
   if (navBtn) {
     navBtn.addEventListener('click', () => {
       renderArkkanSyncTable();
+      renderArkkanExamsTable();
       arkkanUpdateStatus();
     });
   }

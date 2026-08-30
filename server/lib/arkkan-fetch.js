@@ -66,16 +66,9 @@ async function ensureDetailsFrame(pg) {
   return pg.frames().find(f => f.url().includes('Arkan/frm8157'));
 }
 
-/* جلب بيانات عميل واحد من صفحة تفاصيل المتدرب المفتوحة. */
-async function fetchClientData({ clientId, referNum = '' }) {
-  const result = {
-    invoice: '', courseNumber: '', date: '',
-    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', startDate: ''
-  };
-
-  const pg = _page;
-  if (!pg) throw new Error('المتصفح غير جاهز بعد');
-
+/* ملء بيانات العميل والضغط على تأكيد والانتظار المتكيّف لحين تحميل شبكة
+   الدورات — يعيد إطار تفاصيل المتدرب (fr) وعدد صفوف الدورات (nC) والحقائب (nB). */
+async function loadStudent(pg, { clientId, referNum = '' }) {
   let fr = await ensureDetailsFrame(pg);
   if (!fr) throw new Error('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
 
@@ -104,6 +97,20 @@ async function fetchClientData({ clientId, referNum = '' }) {
   }
   if (!nC) { await wait(1200); nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0); }
   const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count().catch(() => 0);
+  return { fr, nC, nB };
+}
+
+/* جلب بيانات عميل واحد من صفحة تفاصيل المتدرب المفتوحة. */
+async function fetchClientData({ clientId, referNum = '' }) {
+  const result = {
+    invoice: '', courseNumber: '', date: '',
+    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', startDate: ''
+  };
+
+  const pg = _page;
+  if (!pg) throw new Error('المتصفح غير جاهز بعد');
+
+  const { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
 
   // ── إيصال الدورة: نأخذ فقط سطر الدورة الذي يبدأ رقمه بـ FHD (رقم الدورة
   //    ورقم الفاتورة معاً). لو ما فيش سطر FHD نتبع السلوك القديم: أول سطر. ──
@@ -218,6 +225,79 @@ async function fetchClientData({ clientId, referNum = '' }) {
   return result;
 }
 
+/* نتائج اختبارات عميل من صفحة frm8159 في أركان:
+   - جدول "الاختبارات" = آخر اختبار (بتاريخه ونتيجته ودرجاته)
+   - جدول "سجل اعادة الاختبارات" = المحاولات السابقة الراسخة (بلا تواريخ)
+   نرتب المحاولات زمنياً (الإعادات ثم الأخير) ونعيد آخر 4 فقط + تاريخ آخر اختبار. */
+async function fetchExamScores({ clientId, referNum = '' }) {
+  const result = { attempts: [], lastDate: '', lastResult: '', lastGrade: '' };
+  const pg = _page;
+  if (!pg) throw new Error('المتصفح غير جاهز بعد');
+
+  await loadStudent(pg, { clientId, referNum });
+
+  const fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
+  const clicked = await (fr ? fr.evaluate(() => {
+    const btn = [...document.querySelectorAll('input, button')].find(el =>
+      (el.value || el.innerText || '').trim() === 'الاختبارات');
+    if (btn) { btn.click(); return true; }
+    return false;
+  }) : Promise.resolve(false)).catch(() => false);
+  if (!clicked) throw new Error('زر الاختبارات غير متاح لهذا العميل — قد يكون بلا دورة مسجّلة في أركان');
+
+  let frT = null;
+  for (let t = 0; t < 200 && !frT; t++) {
+    await wait(120);
+    frT = pg.frames().find(f => f.url().includes('frm8159'));
+  }
+  if (!frT) throw new Error('تعذّر فتح صفحة نتائج الاختبارات في أركان');
+
+  // الإطار قد يظهر قبل تحميل محتواه، وقد تُحمَّل الجداول تباعاً —
+  // ننتظر حتى يثبت المحتوى (3 قراءات متطابقة) لضمان اكتمال كل الصفوف.
+  const readGrids = () => frT.evaluate(() => {
+    const rowsOf = (gv) => [...document.querySelectorAll(gv + ' tr.RowItems')]
+      .map(tr => [...tr.querySelectorAll('td')].map(td => td.innerText.trim()));
+    return {
+      exam:   rowsOf('#ctl00_Exam_master2_GridView1'), // [key, تاريخ, دورة, متدرب, نتيجة, درجات]
+      retake: rowsOf('#ctl00_Exam_master3_GridView1')  // [key, متدرب, نتيجة, درجات]
+    };
+  });
+
+  let parsed = null;
+  let last = null;
+  let stable = 0;
+  for (let t = 0; t < 80; t++) {
+    parsed = await readGrids().catch(() => ({ exam: [], retake: [] }));
+    if (JSON.stringify(parsed) === JSON.stringify(last)) stable++; else stable = 0;
+    last = parsed;
+    if (stable >= 3) break;   // تكرّر المحتوى ثلاث مرات → اكتمل التحميل
+    await wait(150);
+  }
+  if (!parsed) parsed = { exam: [], retake: [] };
+
+  const attempts = [];
+  for (const r of parsed.retake) attempts.push({ r: r[2], g: r[3], d: '' });
+  for (const r of parsed.exam) attempts.push({ r: r[4], g: r[5], d: r[1].replace(/^تم الاختبار بتاريخ\s*/, '') });
+
+  const last4 = attempts.slice(-4);
+  result.attempts = last4;
+  if (last4.length) {
+    const last = last4[last4.length - 1];
+    result.lastResult = last.r;
+    result.lastGrade = last.g;
+    result.lastDate = last.d || '';
+  }
+
+  // إغلاق نافذة الاختبارات (زر ×Close الذي يفتح فيه زر "إعادة الاختبارات" في حالة وجوده)
+  await frT.evaluate(() => {
+    const b = document.querySelector('button.close');
+    if (b) b.click();
+  }).catch(() => {});
+  await wait(800);
+
+  return result;
+}
+
 /* تهيئة/إعادة تهيئة المتصفح وصفحة أركان. */
 async function initBrowser() {
   if (!playwright) {
@@ -285,4 +365,4 @@ async function close() {
   _browser = null; _page = null; _ready = false;
 }
 
-module.exports = { getStatus, warm, fetchOne, close };
+module.exports = { getStatus, warm, fetchOne, fetchExamScores, close };

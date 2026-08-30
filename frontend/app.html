@@ -1317,6 +1317,51 @@
         </table>
       </div>
     </div>
+
+    <div class="panel" style="border-right:4px solid var(--gold);">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        <div>
+          <h3 style="margin:0 0 2px;">نتائج الاختبارات (الرسوب والنجاح)</h3>
+          <p class="hint" style="margin:0;">يجلب لكل عميل لديه <b>رقم مرجعي</b> آخر 4 محاولات للاختبار من أركان: آخر اختبار (بتاريخه) + "سجل اعادة الاختبارات" (المحاولات الراسخة). <b>ناجح</b> بالأخضر و<b>راسب</b> بالأحمر.</p>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <button type="button" class="btn btn-gold" id="btn-arkkan-exams-start">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          جلب نتائج الاختبارات
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-stop" style="display:none;">⏹ إيقاف</button>
+        <span class="spacer"></span>
+        <span id="arkkan-exams-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+
+      <div id="arkkan-exams-progress-wrap" style="display:none; margin-bottom:12px;">
+        <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
+          <div id="arkkan-exams-progress" style="height:100%; width:0%; background:var(--gold); border-radius:99px; transition:width .3s;"></div>
+        </div>
+      </div>
+
+      <div class="table-scroll" style="max-height:60vh;">
+        <table>
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>رقم الهوية</th>
+              <th>المحاولة 1</th>
+              <th>المحاولة 2</th>
+              <th>المحاولة 3</th>
+              <th>المحاولة 4</th>
+              <th>تاريخ آخر اختبار</th>
+              <th>جلب</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="arkkan-exams-tbody"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section class="view" id="view-reports">

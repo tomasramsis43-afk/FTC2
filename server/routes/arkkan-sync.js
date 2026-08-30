@@ -48,4 +48,23 @@ router.post('/api/arkkan/fetch', requireAuth, async (req, res) => {
   }
 });
 
+/* POST /api/arkkan/exams — جلب نتائج اختبارات عميل من أركان (الرسوب والنجاح).
+   body: { clientId, referNum? } → يعيد آخر 4 محاولات + تاريخ آخر اختبار. */
+router.post('/api/arkkan/exams', requireAuth, async (req, res) => {
+  const { clientId, referNum } = req.body || {};
+  const id = String(clientId || '').trim();
+  if (!id) return res.status(400).json({ error: 'رقم الهوية مطلوب' });
+
+  try {
+    const data = await withTimeout(
+      arkkan.fetchExamScores({ clientId: id, referNum: String(referNum || '').trim() }),
+      90000
+    );
+    res.json(data);
+  } catch (e) {
+    const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
+    res.status(status).json({ error: e.message });
+  }
+});
+
 module.exports = router;
