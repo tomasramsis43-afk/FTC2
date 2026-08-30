@@ -150,7 +150,15 @@ async function wipeServerDataForFreshRestore(){
 // معلّقات وإعادة محاولة تعارضات). بعد المسح الكامل السيرفر فارغ، فكل سجل يُرسَل برقم نسخة 0
 // فيُدرج فوراً بلا أي تعارض — بضع طلبات فقط بدل عشرات، وبلا أي آليات معقدة.
 async function pushCurrentDataToServer(){
-  if(isCurrentlyOffline()) return; // بدون اتصال تُؤجَّل كاملة (راجع RESTORE_RESYNC_FLAG_KEY)
+  if(isCurrentlyOffline()) return;
+  const ARABIC = {
+    bagStock:'سجل الحقائب', vaultTx:'الحركات المالية', vaultDenomTx:'سجل الفئات',
+    bankStatementRows:'كشف البنك', courseSessions:'جلسات الدورات', auditLog:'سجل المراجعة',
+    companies:'الشركات', companyTransfers:'تحويلات الشركات', journalEntries:'قيود اليومية',
+    chartOfAccounts:'شجرة الحسابات', journalDE:'القيد المزدوج', budgetEntries:'الميزانية',
+    suppliers:'الموردين', purchases:'المشتريات', manualSalesInvoices:'فواتير المبيعات',
+    scheduledVaultTx:'المدفوعات المجدولة', followUpTasks:'المتابعات',
+  };
   const collections = [
     ['bagStock', bagStock], ['vaultTx', vaultTx], ['vaultDenomTx', vaultDenomTx], ['bankStatementRows', bankStatementRows],
     ['courseSessions', courseSessions], ['auditLog', auditLog], ['companies', companies], ['companyTransfers', companyTransfers],
@@ -160,30 +168,34 @@ async function pushCurrentDataToServer(){
   ];
   const active = collections.filter(([, arr])=> (arr||[]).some(x=> x && x.id));
   const cl = (clients||[]).filter(c=> c && c.id);
-  const totalSteps = active.length + (cl.length ? 1 : 0) + 1; // +1 للإعدادات
+  const totalSteps = active.length + (cl.length ? 1 : 0) + 1;
   showAppLoadingOverlay();
   setAppLoadingProgress(0);
   try{
     let done = 0;
     for(const [name, arr] of active){
       const pct = Math.round((done / totalSteps) * 100);
-      setAppLoadingOverlayText(`جاري رفع البيانات إلى السيرفر... ${done+1} من ${totalSteps} (${pct}%)`);
+      const arabicName = ARABIC[name] || name;
+      setAppLoadingOverlayText(`⏳ جاري رفع: ${arabicName}... (${pct}%)`);
       setAppLoadingProgress(pct);
       await fastUploadCollection(name, arr.filter(x=> x && x.id));
       done++;
+      setAppLoadingOverlayText(`✅ تم رفع: ${arabicName} — انتظار الخطوة التالية...`);
+      setAppLoadingProgress(Math.round((done / totalSteps) * 100));
     }
     if(cl.length){
       const pct = Math.round((done / totalSteps) * 100);
-      setAppLoadingOverlayText(`جاري رفع بيانات العملاء... (${pct}%)`);
+      setAppLoadingOverlayText(`⏳ جاري رفع بيانات العملاء... (${pct}%)`);
       setAppLoadingProgress(pct);
       await fastUploadClients(cl);
       done++;
+      setAppLoadingOverlayText(`✅ تم رفع العملاء — انتظار الخطوة التالية...`);
+      setAppLoadingProgress(Math.round((done / totalSteps) * 100));
     }
-    const pct = Math.round((done / totalSteps) * 100);
-    setAppLoadingOverlayText(`جاري حفظ الإعدادات... (${pct}%)`);
-    setAppLoadingProgress(pct);
+    setAppLoadingOverlayText(`⏳ جاري حفظ الإعدادات...`);
     await Promise.allSettled([saveSettings(), saveUsers(), saveZakatAdjustments()]);
     setAppLoadingProgress(100);
+    setAppLoadingOverlayText('✅ تم رفع جميع البيانات بنجاح');
   }finally{
     hideAppLoadingOverlay();
   }
