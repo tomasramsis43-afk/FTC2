@@ -358,9 +358,13 @@ function arkkanExamPassed(c) {
   return String(c.examResult || '').includes('ناجح');
 }
 
-/* العميل راسب = نتيجة آخر اختبار "راسب" → ينتقل إلى صندوق الراسبين */
+/* العميل راسب = آخر محاولة (examResult) أو أي محاولة مخزّنة "راسب" → ينتقل إلى صندوق الراسبين.
+   بعض العملاء القدامى محفوظ عندهم "راسب" في المحاولات دون examResult — نكشفه من المحاولات أيضاً */
 function arkkanExamFailed(c) {
-  return !arkkanExamPassed(c) && String(c.examResult || '').includes('راسب');
+  if (arkkanExamPassed(c)) return false;
+  if (String(c.examResult || '').includes('راسب')) return true;
+  return (Array.isArray(c.examAttempts) ? c.examAttempts : [])
+    .some(a => String((a && a.r) || '').includes('راسب'));
 }
 
 /* صندوق النتائج الرئيسي: بلا نتيجة بعد (لم يُجلب له اختبار مكتمل بعد) */
