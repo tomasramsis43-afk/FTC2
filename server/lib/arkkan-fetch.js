@@ -78,9 +78,10 @@ const BROWSER_ARGS = [
   '--blink-settings=imagesEnabled=false'
 ];
 
-/* إغلاق المتصفح تلقائياً بعد فترة خمول (حتى لا يظل Chromium مفتوحاً بلا داعٍ
-   على الاستضافة). أثناء الجلب الجماعي الطلبات متتالية فلا يُغلق أبداً. */
-const IDLE_MS = Math.max(10000, parseInt(process.env.ARKKAN_IDLE_MS || '120000', 10) || 120000);
+/* إغلاق المتصفح تلقائياً بعد فترة خمول قصيرة (حتى لا يظل Chromium مفتوحاً بلا داعٍ
+   على الاستضافة). أثناء الجلب الجماعي الطلبات متتالية فلا يُغلق أبداً؛ وبمجرد
+   انتهاء آخر عملية ~30 ثانية نقفل المتصفح بالكامل (تفريغ ذاكرته). */
+const IDLE_MS = Math.max(10000, parseInt(process.env.ARKKAN_IDLE_MS || '30000', 10) || 30000);
 
 let _browser = null;
 let _ctx = null;
@@ -495,8 +496,8 @@ async function initBrowser() {
   _ready = true;
   console.log('✅ جاهزية أركان داخل السيرفر — متصفح مخفي مفتوح');
 
-  // صفحات التوازي الإضافية تُبنى في الخلفية (فشلها لا يوقف العمل — الأساسي يكفي)
-  spawnExtraPages().catch(e => console.error('[arkkan] تعذّر فتح صفحات التوازي:', e.message));
+  // لا نفتح أي صفحة إضافية هنا إطلاقاً — التوازي يتوسع فقط عند الحاجة الفعلية
+  // (جلب جماعي متوازٍ) عبر maybeGrow، وليس مع كل فتح للمتصفح (راجع fetchOne).
 }
 
 /* بناء صفحات التوازي الإضافية — كل عامل في سياق (كوكيز/جلسة) مستقل تماماً:
@@ -608,10 +609,21 @@ async function warm() {
   await ensureInit();
 }
 
+/* توسيع التوازي عند الحاجة فقط: لو طلبات متوازية فعلاً (جلب جماعي) وكل العمالة
+   مشغولة ولم نبلغ السقف — نفتح عاملاً إضافياً. جلب واحد (زر في كرت العميل مثلاً)
+   لا يفتح أي صفحة إضافية أبداً، فلا يُفتح المتصفح/صفحاته إلا عند الحاجة الحقيقية. */
+function maybeGrow() {
+  const active = _workers.reduce((s, w) => s + (w.busy > 0 ? 1 : 0), 0);
+  if (_workers.length < MAX_WORKERS && active >= _workers.length) {
+    spawnExtraPages().catch(e => console.error('[arkkan] تعذّر توسيع التوازي:', e.message));
+  }
+}
+
 function fetchOne(payload) {
   return ensureInit().then(() => {
     const pg = pickPage();
     if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    maybeGrow();
     _lastUsed = Date.now();
     return enqueueOn(pg, () => fetchClientData(pg, payload));
   });
@@ -622,6 +634,7 @@ function fetchExamScores(payload) {
   return ensureInit().then(() => {
     const pg = pickPage();
     if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    maybeGrow();
     _lastUsed = Date.now();
     return enqueueOn(pg, () => fetchExamScoresOn(pg, payload));
   });
