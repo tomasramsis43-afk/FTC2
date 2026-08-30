@@ -464,10 +464,12 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
     );
     if (upsert.rows[0]) {
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-      notifyChange(
-        `تعديل بيانات عميل${plainClientId ? ' — ' + plainClientId : ''}`,
-        `<p>قام المستخدم <b>${req.user.username}</b> بتعديل بيانات عميل (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الحالة: ${upsert.rows[0].status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-      );
+      if (upsert.rows[0].version === 1) {
+        notifyChange(
+          `إضافة عميل جديد${plainClientId ? ' — ' + plainClientId : ''}`,
+          `<p>قام المستخدم <b>${req.user.username}</b> بإضافة عميل جديد (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        );
+      }
       return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
     }
     const current = await pool.query('SELECT version, enc FROM client_records WHERE id = $1', [req.params.id]);
@@ -718,10 +720,6 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
     await client.query('COMMIT');
     if (migrated > 0) {
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-      notifyChange(
-        `ترحيل/استيراد جماعي لبيانات عملاء — ${migrated} سجل`,
-        `<p>قام المستخدم <b>${req.user.username}</b> بترحيل جماعي لـ <b>${migrated}</b> سجل عميل${conflictedIds.length ? ` — تعارض: ${conflictedIds.length}` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-      );
     }
     res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
   } catch (e) {
