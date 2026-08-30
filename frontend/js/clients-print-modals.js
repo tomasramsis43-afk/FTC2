@@ -962,9 +962,14 @@ $('#client-form').addEventListener('submit', async e=>{
     }else{
       await saveClients();
     }
-    syncClientLedgerEntry(savedClient);
+    // نستدعي syncClientLedgerEntry فقط لو تغيّر حقل مالي فعلاً (المدفوع/طريقة الدفع/التاريخ/الفاتورة)
+    // حتى لا تُعاد كتابة الحركات المالية عند أي تعديل بسيط غير مالي (اسم/جنسية/هاتف ...)
+    const FINANCIAL_FIELDS = ['paid','paid2','channel','channel2','date','networkInvoice','networkInvoice2','companyTransferAllocated','companyTransferId'];
+    const prevForLedger = wasEdit ? (prevClientForEvents || {}) : {};
+    const ledgerChanged = !wasEdit || FINANCIAL_FIELDS.some(f => String(savedClient[f]||'') !== String(prevForLedger[f]||''));
+    if(ledgerChanged) syncClientLedgerEntry(savedClient);
     await syncBagStockIssues();
-    await saveVaultTx();
+    if(ledgerChanged) await saveVaultTx();
     await saveSettings();
     await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
     if(!wasEdit){
