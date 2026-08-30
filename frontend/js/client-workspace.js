@@ -93,6 +93,10 @@ function cwInfoHtml(c){
         ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
         ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
       </div>
+    </div>
+    <div class="cw-section" id="cw-exam-section">
+      <h4>نتيجة الاختبار</h4>
+      <div class="cw-exam-content">${typeof arkkanExamCardContent === 'function' ? arkkanExamCardContent(c) : ''}</div>
     </div>`;
 }
 

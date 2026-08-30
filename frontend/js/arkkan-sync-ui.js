@@ -426,6 +426,31 @@ function arkkanExamBadgeHtml(c) {
   return '';
 }
 
+/* محتوى قسم "نتيجة الاختبار" داخل كرت العميل — آخر نتيجة + التاريخ + المحاولات الأخيرة */
+function arkkanExamCardContent(c) {
+  const s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
+  const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
+  const last = s ? String(s.r).trim() : '';
+  const badge = last.includes('ناجح')
+    ? '<span class="stamp paid">ناجح ✓</span>'
+    : last.includes('راسب')
+      ? '<span class="stamp owe">راسب</span>'
+      : `<span class="stamp" style="color:var(--text-muted);">${escapeHtml(last || 'لم يُختبَر بعد')}</span>`;
+  const d = (s && s.d) || c.examLastDate || '';
+  const dateTxt = d ? (typeof formatDateDisplay === 'function' ? formatDateDisplay(d) : escapeHtml(d)) : '—';
+  const attempts = att.length
+    ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">` + att.slice(0, 4).map((a, i) => {
+        const r = String((a && a.r) || '—').trim();
+        const cls = r.includes('ناجح') ? 'paid' : r.includes('راسب') ? 'owe' : '';
+        return `<span class="stamp ${cls}" title="محاولة ${i + 1} — ${escapeHtml((a && a.d) || '')}">م${i + 1}: ${escapeHtml(r)}</span>`;
+      }).join('') + `</div>`
+    : '';
+  return `<div class="cw-grid">
+      <div class="cw-item"><small>آخر نتيجة</small><b>${badge}</b></div>
+      <div class="cw-item"><small>تاريخ آخر اختبار</small><b>${dateTxt}</b></div>
+    </div>${attempts}`;
+}
+
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
   const nbody = $('#arkkan-exams-needing-tbody');
@@ -571,6 +596,8 @@ async function arkkanExamSyncCard(clientId, btn) {
     // تحديث شارة الاسم في شيت العملاء وصناديق النتائج فوراً
     if (typeof renderTable === 'function') renderTable();
     if (typeof renderArkkanExamsTable === 'function') renderArkkanExamsTable();
+    const cse = $('#cw-exam-section .cw-exam-content');
+    if (cse && typeof arkkanExamCardContent === 'function') cse.innerHTML = arkkanExamCardContent(clients[idx] || c);
     showToast(msg, has ? 'success' : 'info');
   } catch (err) {
     showToast('فشل جلب النتيجة: ' + (err.message || err), 'error');
