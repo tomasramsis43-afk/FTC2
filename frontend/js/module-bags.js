@@ -326,14 +326,15 @@ function renderOwnBagClients(){
       <td data-label="الدورة">${escapeHtml(c.courseType||'—')}</td>
       <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
       <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
-    </tr>`).join('') : `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">لا يوجد عملاء وفّروا حقيبتهم الخاصة</td></tr>`;
+      <td class="mono" data-label="تاريخ الحقيبة الخاصة">${formatDateDisplay(c.bagOwnDate)||'—'}</td>
+    </tr>`).join('') : `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:20px;">لا يوجد عملاء وفّروا حقيبتهم الخاصة</td></tr>`;
 }
 onSearchInput('#ownbag-search', renderOwnBagClients);
 $('#ownbag-year-filter')?.addEventListener('change', renderOwnBagClients);
 bindGenericPagination('ownbag', ownbagPageState, renderOwnBagClients);
 $('#btn-export-ownbag')?.addEventListener('click', ()=>{
-  const headers = ['الاسم','رقم الهوية','الجنسية','رقم الهاتف','الدورة','رقم الفاتورة','تاريخ التسجيل'];
-  const rows = ownBagClientsFiltered().map(c=>[c.name,c.clientId,c.nationality,c.phone,c.courseType,c.invoice,c.date]);
+  const headers = ['الاسم','رقم الهوية','الجنسية','رقم الهاتف','الدورة','رقم الفاتورة','تاريخ التسجيل','تاريخ الحقيبة الخاصة'];
+  const rows = ownBagClientsFiltered().map(c=>[c.name,c.clientId,c.nationality,c.phone,c.courseType,c.invoice,c.date,c.bagOwnDate||'']);
   const csv = '\uFEFF'+[headers, ...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');

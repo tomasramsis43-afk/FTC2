@@ -509,6 +509,7 @@ function openModal(id){
   $('#f-date').value = c?.date || todayISO();
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
+  $('#f-bagowndate').value = c?.bagOwnDate || '';
   // مستخدم الاستقبال ممنوع من شراء/تسليم أي حقيبة: نعطّل خيار "تسليم من المخزون المتوفر"
   // (وهو ما يُعتبر شراء/صرف فوري لحقيبة من المخزون) ونجبر مصدر الحقيبة على "مطلوب الشراء"
   // إن كان محدَّداً على "من المخزون" — يبقى بإمكانه فقط اختيار "مطلوب الشراء" أو "حقيبة العميل الخاصة".
@@ -644,6 +645,7 @@ function toggleBagFields(){
   const isOwn = $('#f-bagsource').value === 'own';
   $('#wrap-bagprice').style.display = isOwn ? 'none' : '';
   $('#wrap-baginvoice').style.display = isOwn ? 'none' : '';
+  $('#wrap-bagowndate').style.display = isOwn ? '' : 'none';
   if(isOwn) $('#f-bagprice').value = 0;
   else if(num($('#f-bagprice').value)===0) $('#f-bagprice').value = settings.bagPrice;
   updateComputed();
@@ -869,6 +871,7 @@ $('#client-form').addEventListener('submit', async e=>{
     date: $('#f-date').value,
     coursePrice: num($('#f-courseprice').value),
     bagSource: $('#f-bagsource').value,
+    bagOwnDate: $('#f-bagsource').value==='own' ? ($('#f-bagowndate').value || '') : undefined,
     bagPrice: $('#f-bagsource').value==='own' ? 0 : num($('#f-bagprice').value),
     discount: num($('#f-discount').value),
     paid: num($('#f-paid').value),
