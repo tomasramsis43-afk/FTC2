@@ -173,8 +173,9 @@ async function ensureDetailsFrame(pg) {
   return pg.frames().find(x => x.url().includes('Arkan/frm8157')) || null;
 }
 
-/* ملء بيانات العميل والضغط على تأكيد والانتظار المتكيّف لحين تحميل شبكة
-   الدورات — يعيد إطار تفاصيل المتدرب (fr) وعدد صفوف الدورات (nC) والحقائب (nB). */
+/* ملء بيانات العميل والضغط على تأكيد والانتظار المتكيّف لحين استقرار شبكتي
+   الدورات والحقائب معاً — يعيد إطار تفاصيل المتدرب (fr) وعدد صفوف الدورات (nC)
+   والحقائب (nB). */
 async function loadStudent(pg, { clientId, referNum = '' }) {
   // تنظيف أي تغطيات عالقة من طلبات سابقة تحجب أزرار أركان قبل أي تفاعل
   await clearArkanDialogs(pg);
@@ -185,34 +186,36 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
   if (referNum) await fr.fill('#ctl00_Student_id_fltr_Txt_ref', String(referNum)).catch(() => {});
   await fr.click('#ctl00_Student_id_fltr_btnConfirm');
 
-  // انتظار متكيّف: نراقب تغيّر بيانات شبكة الدورات بدل نوم ثابت 4 ثوانٍ
-  // (الصفحة قابلة لإعادة الاستخدام، فقد تظهر بيانات العميل السابق وهمياً).
-  // نقرأ الحالة القديمة فقط لو كانت القائمة فيها صفوف فعلاً (بلا انتظار بلا داعٍ).
-  const hasBefore = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count();
-  const before = hasBefore
-    ? (await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems .Course_number').first().innerText({ timeout: 800 }).catch(() => '')).trim()
-    : '';
-  let nC = 0;
-  const tC = Date.now();
-  while (Date.now() - tC < 9000) {
-    const rows = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0);
-    if (rows === 0) {
-      if (before) { nC = 0; break; } // اكتملت المعالجة والقائمة فارغة فعلاً
-    } else {
-      const now = (await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems .Course_number').first().innerText({ timeout: 1500 }).catch(() => '')).trim();
-      if (!before || (now && now !== before)) { nC = rows; break; } // تحمّلت بيانات جديدة
-    }
+  /* انتظار استقرار الشبكتين معاً (بدل مقارنة "قبل/بعد" لشبكة الدورات فقط
+     وقراءة شبكة الحقائب فوراً بلا انتظار خالص): أركان (ASP.NET) يحمّل الدورات
+     والحقائب في Update Panels منفصلة قد تكتمل بتوقيتات مختلفة — القراءة الفورية
+     للحقائب كانت أحياناً تلتقط بيانات حقيبة *العميل السابق* على نفس الصفحة
+     قبل ما الـPanel بتاعها يكمل تحديثه. الاستقرار (نفس المحتوى في قراءتين
+     متتاليتين) أدق من مقارنة "قبل/بعد" أيضاً لأنه لا ينخدع بعميلين مسجَّلين
+     في نفس رقم الدورة (شائع بمركز تدريب) فيظنّ الصفحة لم تتغيّر. */
+  const readSig = () => fr.evaluate(() => {
+    const txt = (sel) => [...document.querySelectorAll(sel)].map(r => r.innerText.trim());
+    return {
+      rowsC: txt('#ctl00_Courses_Students_GridView1 tr.RowItems'),
+      rowsB: txt('#ctl00_Training_bags_GridView1 tr.RowItems')
+    };
+  }).catch(() => ({ rowsC: [], rowsB: [] }));
+
+  let last = null, stable = 0;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 9000) {
+    const sig = await readSig();
+    const same = last &&
+      JSON.stringify(sig.rowsC) === JSON.stringify(last.rowsC) &&
+      JSON.stringify(sig.rowsB) === JSON.stringify(last.rowsB);
+    stable = same ? stable + 1 : 0;
+    last = sig;
+    if (stable >= 2) break; // تكرّر نفس محتوى الشبكتين مرتين متتاليتين → اكتمل التحديث
     await wait(250);
   }
-  // ذيل متكيّف: لو ما طهرتش صفوف نقفل على ظهورها خلال ثانية (بدل نوم ثابت 1200ms)
-  if (!nC) {
-    const tT = Date.now();
-    while (Date.now() - tT < 1200 && !nC) {
-      nC = await fr.locator('#ctl00_Courses_Students_GridView1 tr.RowItems').count().catch(() => 0);
-      if (!nC) await wait(150);
-    }
-  }
-  const nB = await fr.locator('#ctl00_Training_bags_GridView1 tr.RowItems').count().catch(() => 0);
+
+  const nC = (last && last.rowsC.length) || 0;
+  const nB = (last && last.rowsB.length) || 0;
   return { fr, nC, nB };
 }
 
