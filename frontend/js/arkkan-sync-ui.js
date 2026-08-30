@@ -109,8 +109,12 @@ function arkkanPatchFromData(c, data){
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
   if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
-  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice)
+  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice) {
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
+    // نرحّل القيمة كمان لشيت فواتير الدورات (receiptActualValue) لو فاضية
+    if (c.receiptActualValue === undefined || c.receiptActualValue === null || c.receiptActualValue === '')
+      patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
+  }
   // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
   if (!c.startDate) { const cd = arkkanCourseDate(c); if (cd) patch.startDate = cd; }
   return patch;
@@ -129,6 +133,9 @@ async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
   if (Object.keys(patch).length > 0) {
     Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
+    // لو رحّلنا receiptActualValue من أركان → نطلق القيد المزدوج تلقائياً
+    if (patch.receiptActualValue !== undefined && typeof autoPostCourseInvoice === 'function')
+      autoPostCourseInvoice(clients[idx]);
   }
   return { updated: Object.keys(patch).length, client: clients[idx] };
 }
