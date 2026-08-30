@@ -351,10 +351,23 @@ function arkkanPatchExamsFromData(c, data) {
   };
 }
 
-/* جميع العملاء المؤهلين (برقم مرجعي) مرتبين من الأحدث تسجيلاً إلى الأقدم */
+/* العميل ناجح = نتيجة آخر اختبار "ناجح" → اكتمل جلبه وينتقل إلى صندوق النجاح */
+function arkkanExamPassed(c) {
+  return String(c.examResult || '').includes('ناجح');
+}
+
+/* جميع العملاء المؤهلين (برقم مرجعي) مرتّبين من الأحدث تسجيلاً إلى الأقدم */
 function arkkanExamClients() {
+  // الجلب الجماعي والعداد في صندوق النتائج: غير الناجحين فقط
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c))
+    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* عملاء صندوق النجاح: من أكملوا بالنجاح (لا يُعرض لهم جلب أصلاً) */
+function arkkanExamPassedClients() {
+  return (clients || [])
+    .filter(c => clientEligibleForArkkan(c) && arkkanExamPassed(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -368,25 +381,44 @@ function arkkanExamCell(v) {
 
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
-  if (!tbody) return;
-  const rows = arkkanExamClients();
-  const counter = $('#arkkan-exams-counter');
-  if (counter) counter.textContent = `العملاء المؤهلون لنتائج الاختبارات: ${rows.length}`;
+  const pbody = $('#arkkan-exams-passed-tbody');
+  const rows = arkkanExamClients();          // غير الناجحين — يحتاجون جلباً
+  const passed = arkkanExamPassedClients();  // الناجحون — صندوق النجاح
 
-  tbody.innerHTML = rows.map(c => {
+  const counter = $('#arkkan-exams-counter');
+  if (counter) counter.textContent = `العملاء المتبقون للجلب (غير ناجح): ${rows.length}`;
+  const pcounter = $('#arkkan-exams-passed-counter');
+  if (pcounter) pcounter.textContent = `الناجحون (اكتمل جلب نتائجهم): ${passed.length}`;
+
+  const cells = c => {
     const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
-    const cells = [0, 1, 2, 3].map(i =>
+    return [0, 1, 2, 3].map(i =>
       `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>'}</td>`
     ).join('');
-    return `<tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
+  };
+
+  if (tbody) {
+    tbody.innerHTML = rows.map(c => `
+    <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
-      ${cells}
+      ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
-    </tr>`;
-  }).join('');
+    </tr>`).join('');
+  }
+
+  if (pbody) {
+    pbody.innerHTML = passed.map(c => `
+    <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
+      <td>${escapeHtml(c.name || '—')}</td>
+      <td>${escapeHtml(c.clientId)}</td>
+      ${cells(c)}
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
+    </tr>`).join('');
+  }
 }
 
 function arkkanRefreshExamCells(c) {
@@ -403,19 +435,24 @@ function arkkanRefreshExamCells(c) {
 async function arkkanExamSyncOne(clientId, btn) {
   const c = (clients || []).find(x => String(x.clientId) === String(clientId));
   if (!c) return;
+  if (arkkanExamPassed(c)) { showToast('العميل ناجح — نتائجه مكتملة في صندوق النجاح', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
-  const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
-  if (st) st.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
     const patch = arkkanPatchExamsFromData(c, data);
-    const idx = clients.findIndex(x => x.clientId === c.clientId);
+    const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
-    arkkanRefreshExamCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
-    if (st) st.innerHTML = '<span style="color:var(--success, green);">✅ تم</span>';
+    const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
+    // إعادة الرسم: الناجح ينتقل إلى صندوق النجاح ويختفي من قائمة الجلب
+    renderArkkanExamsTable();
+    const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
+    if (st) st.innerHTML = passed
+      ? '<span style="color:var(--success, green);">✅ ناجح — انتقل إلى صندوق النجاح</span>'
+      : '<span style="color:var(--success, green);">✅ تم</span>';
   } catch (err) {
+    const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
     if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ ${escapeHtml(err.message.slice(0, 60))}</span>`;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
@@ -454,12 +491,15 @@ async function arkkanExamsBulk() {
     try {
       const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
       const patch = arkkanPatchExamsFromData(c, data);
-      const idx = clients.findIndex(x => x.clientId === c.clientId);
+      const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
       if (idx !== -1) Object.assign(clients[idx], patch);
       if (typeof saveClients === 'function') await saveClients();
       updated++;
-      arkkanRefreshExamCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
-      if (st) st.innerHTML = '<span style="color:var(--success, green);">✅</span>';
+      arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
+      const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
+      if (st) st.innerHTML = passed
+        ? '<span style="color:var(--success, green);">✅ ناجح</span>'
+        : '<span style="color:var(--success, green);">✅</span>';
     } catch (err) {
       failed++;
       if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
