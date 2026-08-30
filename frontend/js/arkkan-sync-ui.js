@@ -525,6 +525,36 @@ function arkkanExamSig(c) {
   ]);
 }
 
+async function arkkanExamSyncCard(clientId, btn) {
+  const c = (clients || []).find(x => String(x.clientId) === String(clientId));
+  if (!c) return;
+  if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ المزامنة...'; }
+  try {
+    const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+    const patch = arkkanPatchExamsFromData(c, data);
+    const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
+    if (idx !== -1) Object.assign(clients[idx], patch);
+    if (typeof saveClients === 'function') await saveClients();
+    _examSession[String(clientId)] = arkkanExamSig(clients[idx] || c);
+    const exam = arkkanExamStatusOf(clients[idx] || c);
+    const has = exam && String(exam.r).trim();
+    const msg = has
+      ? (String(exam.r).includes('ناجح')
+        ? '✅ النتيجة محفّزة: ناجح'
+        : String(exam.r).includes('راسب') ? 'النتيجة محدّثة: راسب' : 'تم تحديث النتيجة: ' + String(exam.r))
+      : 'تمت المزامنة — لا توجد نتيجة اختبار مسجّلة بعد';
+    // تحديث شارة الاسم في شيت العملاء وصناديق النتائج فوراً
+    if (typeof renderTable === 'function') renderTable();
+    if (typeof renderArkkanExamsTable === 'function') renderArkkanExamsTable();
+    showToast(msg, has ? 'success' : 'info');
+  } catch (err) {
+    showToast('فشل جلب النتيجة: ' + (err.message || err), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 مزامنة النتيجة'; }
+  }
+}
+
 /* حالة كل جلب جماعي منفصلة (صندوق النتائج / صندوق الراسبين) */
 const _examBulkStates = {};
 function examBulkState(name) {
