@@ -222,7 +222,7 @@ function renderArkkanSyncTable() {
       <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
       <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-date">${escapeHtml(c.date || '—')}</td>
-      <td class="col-courseprice">${escapeHtml(String(c.coursePrice ?? '—'))}</td>
+      <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : (c.coursePrice ?? '—')))}</td>
       <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
@@ -980,7 +980,7 @@ function arkkanRefreshRowCells(c) {
   set('.col-invoice', c.invoice);
   set('.col-coursenum', c.courseNumber);
   set('.col-date', c.date);
-  set('.col-courseprice', c.coursePrice);
+  set('.col-courseprice', c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : c.coursePrice);
   set('.col-startdate', c.startDate || arkkanCourseDate(c));
   set('.col-baginvoice', c.bagInvoice);
   set('.col-bagdate', c.bagPurchaseDate);
