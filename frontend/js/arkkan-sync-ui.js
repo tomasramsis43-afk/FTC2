@@ -632,9 +632,10 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   if (wrap) wrap.style.display = '';
 
   const rows = getRows();
+  const rowsTotal = rows.length;
   let done = 0, updated = 0, same = 0, failed = 0, skipped = 0;
 
-  showToast(compare ? `بدأت المقارنة مع أركان: ${rows.length} عميل` : `بدأ الجلب: ${rows.length} عميل`, 'info');
+  showToast(compare ? `بدأت المقارنة مع أركان: ${rowsTotal} عميل` : `بدأ الجلب: ${rowsTotal} عميل`, 'info');
 
   const diffText = (cur, srcResult) => {
     const os = arkkanExamStatusOf(cur);
@@ -643,108 +644,125 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
     return [oldTxt, newTxt];
   };
 
-  for (const c of rows) {
-    if (st.stop) break;
+  /* حفظ متسلسل دائماً (حتى مع توازي الجلب): يمنع تنافس عاملين على كتابة نسخ
+     كاملة من قائمة العملاء في نفس اللحظة (خاصة قبل تثبيت الـ baseline). */
+  let saveChain = Promise.resolve();
+  const queueSave = () => {
+    const p = saveChain.then(() => (typeof saveClients === 'function' ? saveClients() : null));
+    saveChain = p.then(() => {}, () => {});
+    return p;
+  };
 
-    const k = String(c.clientId);
-    const cur = (clients || []).find(x => String(x.clientId) === k) || c;
-    const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
-    const stEl = $(statusId);
+  /* طلبات متوازية — تستفيد من صفحات أركان المتعددة على السيرفر (ARKKAN_CONCURRENCY)؛
+     عدّلها من أداة المطوّر برقم مختلف: window.ARKKAN_BULK_CONCURRENCY = 2. */
+  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '3', 10) || 3));
+  let workerIdx = 0;
 
-    /* رُغب جلبه في هذه الجلسة وبياناته لم تتغير → نخطيه بدل إعادته من الأول (وضع الجلب فقط) */
-    if (!compare && _examSession[k] && _examSession[k] === arkkanExamSig(cur)) {
-      skipped++;
-      if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
-      done++;
-      if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
-      const counterEl = $(counterSel);
-      if (counterEl) counterEl.textContent = `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
-      if (!st.stop) await new Promise(r => setTimeout(r, 50));
-      continue;
-    }
-    if (!compare && _examSession[k]) delete _examSession[k];
+  const processOne = async () => {
+    while (!st.stop) {
+      const ci = workerIdx++;
+      if (ci >= rowsTotal) return;
+      const c = rows[ci];
 
-    if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
+      const k = String(c.clientId);
+      const cur = (clients || []).find(x => String(x.clientId) === k) || c;
+      const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
+      const stEl = $(statusId);
 
-    const saveIfDiff = async (data, patch) => {
-      const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
-      const sigNew = arkkanExamSig(Object.assign({}, cur, patch));
-      if (arkkanExamSig(cur) === sigNew) {
-        same++;
-        _examSession[k] = sigNew;
-        return null; // مطابق بدون تغيير
+      /* رُغب جلبه في هذه الجلسة وبياناته لم تتغير → نخطيه بدل إعادته من الأول (وضع الجلب فقط) */
+      if (!compare && _examSession[k] && _examSession[k] === arkkanExamSig(cur)) {
+        skipped++;
+        if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
+        done++;
+        if (progress) progress.style.width = `${Math.round(done / Math.max(rowsTotal, 1) * 100)}%`;
+        const counterEl = $(counterSel);
+        if (counterEl) counterEl.textContent = `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`;
+        continue;
       }
-      const [oldTxt, newTxt] = diffText(cur, data.lastResult);
-      if (idx !== -1) Object.assign(clients[idx], patch);
-      if (typeof saveClients === 'function') await saveClients();
-      updated++;
-      _examSession[k] = arkkanExamSig(clients[idx] || c);
-      arkkanRefreshExamCells(clients[idx] || c);
-      return [oldTxt, newTxt];
-    };
+      if (!compare && _examSession[k]) delete _examSession[k];
 
-    try {
-      const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
-      const patch = arkkanPatchExamsFromData(c, data);
-      if (compare) {
-        const diff = await saveIfDiff(data, patch);
-        if (stEl) stEl.innerHTML = diff
-          ? `<span style="color:#8e44ad;" title="قبل: ${escapeHtml(diff[0])} · بعد: ${escapeHtml(diff[1])}">✅ محدَّث: ${escapeHtml(diff[0])} → ${escapeHtml(diff[1])}</span>`
-          : '<span style="color:var(--text-muted);">⏭️ مطابق للمخزَّن</span>';
-      } else {
+      if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
+
+      const saveIfDiff = async (data, patch) => {
         const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+        const sigNew = arkkanExamSig(Object.assign({}, cur, patch));
+        if (arkkanExamSig(cur) === sigNew) {
+          same++;
+          _examSession[k] = sigNew;
+          return null; // مطابق بدون تغيير
+        }
+        const [oldTxt, newTxt] = diffText(cur, data.lastResult);
         if (idx !== -1) Object.assign(clients[idx], patch);
-        if (typeof saveClients === 'function') await saveClients();
+        await queueSave();
         updated++;
         _examSession[k] = arkkanExamSig(clients[idx] || c);
-        arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
-        const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
-        if (stEl) stEl.innerHTML = passed
-          ? '<span style="color:var(--success, green);">✅ ناجح</span>'
-          : '<span style="color:var(--success, green);">✅</span>';
-      }
-    } catch (err) {
-      /* فشل عابر (بطء شبكة/تحميل) — محاولة واحدة تلقائية قبل اعتبار العميل فاشلاً */
-      let ok = false;
+        arkkanRefreshExamCells(clients[idx] || c);
+        return [oldTxt, newTxt];
+      };
+
       try {
-        if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳ محاولة ثانية...</span>';
-        const data2 = await arkkanExamFetchOne(c.clientId, c.referNum || '');
-        const patch2 = arkkanPatchExamsFromData(c, data2);
+        const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+        const patch = arkkanPatchExamsFromData(c, data);
         if (compare) {
-          const diff2 = await saveIfDiff(data2, patch2);
-          if (stEl) stEl.innerHTML = diff2
-            ? `<span style="color:#8e44ad;">✅ محدَّث (من المحاولة الثانية)</span>`
-            : '<span style="color:var(--text-muted);">⏭️ مطابق (من المحاولة الثانية)</span>';
+          const diff = await saveIfDiff(data, patch);
+          if (stEl) stEl.innerHTML = diff
+            ? `<span style="color:#8e44ad;" title="قبل: ${escapeHtml(diff[0])} · بعد: ${escapeHtml(diff[1])}">✅ محدَّث: ${escapeHtml(diff[0])} → ${escapeHtml(diff[1])}</span>`
+            : '<span style="color:var(--text-muted);">⏭️ مطابق للمخزَّن</span>';
         } else {
-          const idx2 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
-          if (idx2 !== -1) Object.assign(clients[idx2], patch2);
-          if (typeof saveClients === 'function') await saveClients();
-          _examSession[k] = arkkanExamSig(clients[idx2] || c);
+          const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+          if (idx !== -1) Object.assign(clients[idx], patch);
+          await queueSave();
           updated++;
+          _examSession[k] = arkkanExamSig(clients[idx] || c);
           arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
-          const passed2 = idx2 !== -1 && arkkanExamPassed(clients[idx2]);
-          if (stEl) stEl.innerHTML = passed2
+          const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
+          if (stEl) stEl.innerHTML = passed
             ? '<span style="color:var(--success, green);">✅ ناجح</span>'
-            : '<span style="color:var(--success, green);">✅ (من المحاولة الثانية)</span>';
+            : '<span style="color:var(--success, green);">✅</span>';
         }
-        ok = true;
-      } catch (err2) { /* يبقى الخطأ الأخير */ }
-      if (!ok) {
-        failed++;
-        delete _examSession[k];
-        if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+      } catch (err) {
+        /* فشل عابر (بطء شبكة/تحميل) — محاولة واحدة تلقائية قبل اعتبار العميل فاشلاً */
+        let ok = false;
+        try {
+          if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳ محاولة ثانية...</span>';
+          const data2 = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+          const patch2 = arkkanPatchExamsFromData(c, data2);
+          if (compare) {
+            const diff2 = await saveIfDiff(data2, patch2);
+            if (stEl) stEl.innerHTML = diff2
+              ? `<span style="color:#8e44ad;">✅ محدَّث (من المحاولة الثانية)</span>`
+              : '<span style="color:var(--text-muted);">⏭️ مطابق (من المحاولة الثانية)</span>';
+          } else {
+            const idx2 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+            if (idx2 !== -1) Object.assign(clients[idx2], patch2);
+            await queueSave();
+            _examSession[k] = arkkanExamSig(clients[idx2] || c);
+            updated++;
+            arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
+            const passed2 = idx2 !== -1 && arkkanExamPassed(clients[idx2]);
+            if (stEl) stEl.innerHTML = passed2
+              ? '<span style="color:var(--success, green);">✅ ناجح</span>'
+              : '<span style="color:var(--success, green);">✅ (من المحاولة الثانية)</span>';
+          }
+          ok = true;
+        } catch (err2) { /* يبقى الخطأ الأخير */ }
+        if (!ok) {
+          failed++;
+          delete _examSession[k];
+          if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+        }
       }
+
+      done++;
+      if (progress) progress.style.width = `${Math.round(done / Math.max(rowsTotal, 1) * 100)}%`;
+      const counter = $(counterSel);
+      if (counter) counter.textContent = compare
+        ? `⤭ ${same} مطابق · ✅ ${updated} محدَّث · ❌ ${failed} فشل · ${done}/${rowsTotal}`
+        : `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`;
     }
+  };
 
-    done++;
-    if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
-    const counter = $(counterSel);
-    if (counter) counter.textContent = compare
-      ? `⤭ ${same} مطابق · ✅ ${updated} محدَّث · ❌ ${failed} فشل · ${done}/${rows.length}`
-      : `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
-
-    if (!st.stop) await new Promise(r => setTimeout(r, 700));
-  }
+  await Promise.all(Array.from({ length: Math.min(POOL, rowsTotal) }, () => processOne()));
 
   st.running = false;
   if (startBtn) startBtn.style.display = '';

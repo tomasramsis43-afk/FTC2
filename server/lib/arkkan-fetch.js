@@ -5,6 +5,10 @@
    (Playwright) فيجلب بيانات عميل من منصة أركان — بلا الحاجة لأي
    برنامج منفصل، ويخدمها عبر مسارات API التي يستهلكها البرنامج مباشرة.
 
+   التوازي: عدد صفحات العمالة = ARKKAN_CONCURRENCY (افتراضياً 3،
+   ووضعه 1 يعيد السلوك التسلسلي القديم) — كل صفحة جلسة واحدة
+   مستقلة بنفس الـ cookies، تُسلسل طلباتها داخلياً فقط.
+
    المتطلبات (تُثبَّت مرة واحدة في مجلد server):
      npm install playwright
      npx playwright install chromium
@@ -35,10 +39,17 @@ try { playwright = require('playwright'); } catch (e) { playwright = null; }
 const ARKKAN_URL = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
 const HEADLESS = true;
 
+/* درجة التوازي: كل عامل صفحة متصفح مستقلة في نفس الجلسة (جلسات ASP.NET تتحمل
+   عدة تبويبات) — رقم أكبر = تزويد أسرع، وضعه 1 ليعود السلوك التسلسلي القديم.
+   نصيحة: على الاستضافة ابدأ باثنين/ثلاثة وراقب إن لم تُبطئ أركان. */
+const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_CONCURRENCY || '3', 10) || 3));
+
 let _browser = null;
-let _page = null;
+let _ctx = null;
+let _workers = [];               // [{ page, queue }] — صفحة لكل عامل وطابورها الخاص
 let _ready = false;
-let _queue = Promise.resolve();   // طابور: صفحة واحدة مشتركة — الطلبات تتسلسل
+let _initChain = Promise.resolve();  // تأمين تهيئة واحدة فقط عند أول طلب
+let _rr = 0;                     // مؤشر توزيع الطلبات بالتناوب على العمالة
 
 /* إخفاء أي نوافذ toasty/تغطيات عالقة من جلسات سابقة تحجب النقرات
    (تتراكم مع الإيصالات ونوافذ الاختبارات على الخادم الذي يعمل طويلاً) */
@@ -111,14 +122,13 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
   return { fr, nC, nB };
 }
 
-/* جلب بيانات عميل واحد من صفحة تفاصيل المتدرب المفتوحة. */
-async function fetchClientData({ clientId, referNum = '' }) {
+/* جلب بيانات عميل واحد من صفحة تفاصيل المتدرب المفتوحة (pg = صفحة العامل). */
+async function fetchClientData(pg, { clientId, referNum = '' }) {
   const result = {
     invoice: '', courseNumber: '', date: '',
     coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: ''
   };
 
-  const pg = _page;
   if (!pg) throw new Error('المتصفح غير جاهز بعد');
 
   let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
@@ -251,13 +261,9 @@ async function fetchClientData({ clientId, referNum = '' }) {
    - جدول "الاختبارات" = آخر اختبار (بتاريخه ونتيجته ودرجاته)
    - جدول "سجل اعادة الاختبارات" = المحاولات السابقة الراسخة (بلا تواريخ)
    نرتب المحاولات زمنياً (الإعادات ثم الأخير) ونعيد آخر 4 فقط + تاريخ آخر اختبار. */
-async function fetchExamScores({ clientId, referNum = '' }) {
+async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
   const result = { attempts: [], lastDate: '', lastResult: '', lastGrade: '' };
 
-  // أول طلب يشغّل المتصفح المخفي ويتسجل لصفحة أركان تلقائياً (مثل الجلب الرئيسي)
-  if (!_ready) await initBrowser();
-
-  const pg = _page;
   if (!pg) throw new Error('المتصفح غير جاهز بعد');
 
   await loadStudent(pg, { clientId, referNum });
@@ -339,18 +345,18 @@ async function fetchExamScores({ clientId, referNum = '' }) {
     const b = document.querySelector('button.close');
     if (b) b.click();
   }).catch(() => {});
-  await wait(600);
+  await wait(300);
   await clearArkanDialogs(pg); // تنظيف أي تغطيات خلفها النافذة ليبقى الاعتماد في الطلب التالي
 
   return result;
 }
 
-/* تهيئة/إعادة تهيئة المتصفح وصفحة أركان. */
+/* تهيئة/إعادة تهيئة المتصفح وصفحة أركان (وعوامل التوازي في الخلفية). */
 async function initBrowser() {
   if (!playwright) {
     throw new Error('مكتبة playwright غير مثبتة في السيرفر — شغّل أولاً: npm install playwright');
   }
-  if (_browser) { await _browser.close().catch(() => {}); _browser = null; _page = null; _ready = false; }
+  if (_browser) { await _browser.close().catch(() => {}); _browser = null; _ctx = null; _workers = []; _ready = false; }
 
   _browser = await playwright.chromium.launch({
     headless: HEADLESS,
@@ -358,58 +364,114 @@ async function initBrowser() {
     // ولا لامتيازات root-sandbox.
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
   });
-  const ctx = await _browser.newContext();
-  _page = await ctx.newPage();
+  _ctx = await _browser.newContext();
+  const page0 = await _ctx.newPage();
+  pushWorker(page0);
 
-  await _page.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' });
+  await page0.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' });
   await wait(2500);
-  await _page.evaluate(() => {
+  await page0.evaluate(() => {
     const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
     if (a) a.click();
   });
-  await _page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+  await page0.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
   await wait(3500);
 
-  const fr = _page.frames().find(f => f.url().includes('Arkan/frm8157'));
+  const fr = page0.frames().find(f => f.url().includes('Arkan/frm8157'));
   if (!fr) throw new Error('تعذّر الوصول لصفحة تفاصيل المتدرب — تحقق من الإنترنت والوصول لموقع أركان');
 
   _ready = true;
   console.log('✅ جاهزية أركان داخل السيرفر — متصفح مخفي مفتوح');
+
+  // صفحات التوازي الإضافية تُبنى في الخلفية (فشلها لا يوقف العمل — الأساسي يكفي)
+  spawnExtraPages().catch(e => console.error('[arkkan] تعذّر فتح صفحات التوازي:', e.message));
 }
 
-/* تشغيل مهمة كجزء من الطابور المتسلسل (صفحة مشتركة = لا توازٍ). */
-function enqueue(fn) {
-  const p = _queue.then(() => fn(), () => fn());
-  _queue = p.catch(() => {});
+/* بناء صفحات التوازي الإضافية في نفس الجلسة (نفس الـ cookies) — كل صفحة
+   تتصفح أركان وتفتح تفاصيل المتدرب تماماً مثل الصفحة الأساسية. */
+async function spawnExtraPages() {
+  const need = Math.max(0, MAX_WORKERS - _workers.length);
+  if (!need) return;
+  const results = await Promise.allSettled(Array.from({ length: need }, async () => {
+    const pg = await _ctx.newPage();
+    try {
+      if (!(await ensureDetailsFrame(pg))) throw new Error('لا إطار تفاصيل المتدرب');
+      pushWorker(pg);
+    } catch (e) {
+      await pg.close().catch(() => {});
+      throw e;
+    }
+  }));
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`[arkkan] صفحات التوازي جاهزة: ${_workers.length}/${MAX_WORKERS} (فشل ${results.length - ok})`);
+}
+
+/* إضافة عامل (صفحة) لتجمّع التوازي مع طابوره المستقل. */
+function pushWorker(page) {
+  if (_workers.some(w => w.page === page)) return;
+  _workers.push({ page, queue: Promise.resolve() });
+}
+
+/* تشغيل مهمة على صفحة عامل محدد — كل عامل طابوره المتسلسل الخاص حتى لا تتعارض
+   نقرات/تنقّلات صفحتين على نفس الصفحة؛ التوازي يتم بين صفحات مختلفة فقط. */
+function enqueueOn(page, fn) {
+  let w = _workers.find(x => x.page === page);
+  if (!w) { w = { page, queue: Promise.resolve() }; _workers.push(w); }
+  const p = w.queue.then(() => fn(), () => fn());
+  w.queue = p.then(() => {}, () => {});
   return p;
 }
 
-/* التأكد من الجاهزية (مع إعادة المحاولة لو انهار المتصفح). */
+/* تأمين تهيئة واحدة فقط للمتصفح عند أول طلب (متزامنة بين عدة طلبات دفعة واحدة). */
+function ensureInit() {
+  if (_ready) return Promise.resolve();
+  const p = _initChain.then(() => (_ready ? null : initBrowser()));
+  _initChain = p.then(() => {}, () => {});
+  return p;
+}
+
+/* اختيار صفحة عامل بالتناوب (توزيع الحمل المتساوي على العمالة الجاهزة). */
+function pickPage() {
+  if (!_workers.length) return null;
+  _rr = (_rr + 1) % _workers.length;
+  return _workers[_rr].page;
+}
+
+/* التأكد من الجاهزية (مع إعادة البناء الكاملة لو انهار أي جزء من المتصفح). */
 async function warm() {
-  if (_browser && _page && _page.isClosed()) {
-    _browser = null; _page = null; _ready = false;
-  }
-  if (_ready) return;
-  await enqueue(initBrowser);
+  const dead = (_browser && !_browser.isConnected()) || _workers.some(w => w.page.isClosed());
+  if (dead) await close().catch(() => {});
+  await ensureInit();
 }
 
 function fetchOne(payload) {
-  return enqueue(async () => {
-    if (!_ready) await initBrowser();
-    return fetchClientData(payload);
+  return ensureInit().then(() => {
+    const pg = pickPage();
+    if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    return enqueueOn(pg, () => fetchClientData(pg, payload));
+  });
+}
+
+/* جلب نتائج اختبارات عميل — على صفحة من تجمّع العمالة (توازٍ مع فحص واحد/جماعي). */
+function fetchExamScores(payload) {
+  return ensureInit().then(() => {
+    const pg = pickPage();
+    if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    return enqueueOn(pg, () => fetchExamScoresOn(pg, payload));
   });
 }
 
 function getStatus() {
+  const p0 = _workers[0] && !_workers[0].page.isClosed() ? _workers[0].page : null;
   return {
-    ready: !!(_ready && _browser && _page && !_page.isClosed()),
+    ready: !!(_ready && _browser && p0),
     playwrightInstalled: !!playwright
   };
 }
 
 async function close() {
   await _browser?.close().catch(() => {});
-  _browser = null; _page = null; _ready = false;
+  _browser = null; _ctx = null; _workers = []; _ready = false;
 }
 
 module.exports = { getStatus, warm, fetchOne, fetchExamScores, close };
