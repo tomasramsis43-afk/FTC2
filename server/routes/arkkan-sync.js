@@ -22,7 +22,11 @@ function withTimeout(promise, ms) {
 }
 
 /* GET /api/arkkan/status — حالة جاهزية المتصفح المخفي.
-   لا نجهّز تلقائياً هنا — المتصفح يبدأ فقط عند أول طلب جلب فعلي. */\nrouter.get('/api/arkkan/status', requireAuth, async (req, res) => {\n  res.json(arkkan.getStatus());\n});
+   لا نجهّز تلقائياً هنا — المتصفح يبدأ عند أول طلب جلب فعلي فقط
+   حتى لا يظل Chromium مفتوحاً بلا داعٍ يستهلك ذاكرة الاستضافة. */
+router.get('/api/arkkan/status', requireAuth, async (req, res) => {
+  res.json(arkkan.getStatus());
+});
 
 /* POST /api/arkkan/fetch — جلب بيانات عميل من أركان.
    body: { clientId, referNum? } */
@@ -40,8 +44,6 @@ router.post('/api/arkkan/fetch', requireAuth, async (req, res) => {
   } catch (e) {
     const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
     res.status(status).json({ error: e.message });
-  } finally {
-    arkkan.close().catch(() => {});
   }
 });
 
@@ -61,8 +63,6 @@ router.post('/api/arkkan/exams', requireAuth, async (req, res) => {
   } catch (e) {
     const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
     res.status(status).json({ error: e.message });
-  } finally {
-    arkkan.close().catch(() => {});
   }
 });
 

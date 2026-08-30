@@ -654,8 +654,8 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   };
 
   /* طلبات متوازية — تستفيد من صفحات أركان المتعددة على السيرفر (ARKKAN_CONCURRENCY)؛
-     عدّلها من أداة المطوّر برقم مختلف: window.ARKKAN_BULK_CONCURRENCY = 2. */
-  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '3', 10) || 3));
+     عدّلها من أداة المطوّر برقم مختلف: window.ARKKAN_BULK_CONCURRENCY = 1. */
+  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '2', 10) || 2));
   let workerIdx = 0;
 
   const processOne = async () => {

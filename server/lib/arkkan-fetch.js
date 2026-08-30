@@ -42,9 +42,13 @@ const ARKKAN_URL = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
 const HEADLESS = true;
 
 /* درجة التوازي: كل عامل صفحة متصفح مستقلة في نفس الجلسة (جلسات ASP.NET تتحمل
-   عدة تبويبات) — رقم أكبر = تزويد أسرع، وضعه 1 ليعود السلوك التسلسلي القديم.
-   نصيحة: على الاستضافة ابدأ باثنين/ثلاثة وراقب إن لم تُبطئ أركان. */
-const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_CONCURRENCY || '3', 10) || 3));
+   عدة تبويبات) — رقم أكبر = جلب أسرع، ووضعه 1 ليعود السلوك التسلسلي القديم.
+   على الاستضافة ذات الذاكرة المحدودة ابدأ بهاتين، وراقب استخدام الذاكرة. */
+const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_CONCURRENCY || '2', 10) || 2));
+
+/* إغلاق المتصفح تلقائياً بعد فترة خمول (حتى لا يظل Chromium مفتوحاً بلا داعٍ
+   على الاستضافة). أثناء الجلب الجماعي الطلبات متتالية فلا يُغلق أبداً. */
+const IDLE_MS = Math.max(10000, parseInt(process.env.ARKKAN_IDLE_MS || '120000', 10) || 120000);
 
 let _browser = null;
 let _ctx = null;
@@ -52,6 +56,7 @@ let _workers = [];               // [{ page, queue }] — صفحة لكل عام
 let _ready = false;
 let _initChain = Promise.resolve();  // تأمين تهيئة واحدة فقط عند أول طلب
 let _rr = 0;                     // مؤشر توزيع الطلبات بالتناوب على العمالة
+let _lastUsed = 0;               // آخر نشاط فعلي — لعتبة إغلاق الخمول
 
 /* إخفاء أي نوافذ toasty/تغطيات عالقة من جلسات سابقة تحجب النقرات
    (تتراكم مع الإيصالات ونوافذ الاختبارات على الخادم الذي يعمل طويلاً) */
@@ -463,6 +468,7 @@ function fetchOne(payload) {
   return ensureInit().then(() => {
     const pg = pickPage();
     if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    _lastUsed = Date.now();
     return enqueueOn(pg, () => fetchClientData(pg, payload));
   });
 }
@@ -472,6 +478,7 @@ function fetchExamScores(payload) {
   return ensureInit().then(() => {
     const pg = pickPage();
     if (!pg) throw new Error('المتصفح غير جاهز بعد');
+    _lastUsed = Date.now();
     return enqueueOn(pg, () => fetchExamScoresOn(pg, payload));
   });
 }
@@ -488,5 +495,14 @@ async function close() {
   await _browser?.close().catch(() => {});
   _browser = null; _ctx = null; _workers = []; _ready = false;
 }
+
+/* مؤقّت إغلاق الخمول: كل 30 ثانية، إن لم تصل طلبات منذ IDLE_MS
+   والمتصفح مفتوح نغلقه لتفريغ الذاكرة — يُعاد فتحه عند أول طلب تالٍ. */
+setInterval(() => {
+  if (_ready && _lastUsed && Date.now() - _lastUsed > IDLE_MS) {
+    console.log('[arkkan] لا طلبات منذ فترة — إغلاق المتصفح لتخفيف الذاكرة');
+    close().catch(() => {});
+  }
+}, 30000).unref();
 
 module.exports = { getStatus, warm, fetchOne, fetchExamScores, close };
