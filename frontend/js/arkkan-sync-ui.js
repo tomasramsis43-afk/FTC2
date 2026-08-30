@@ -621,9 +621,29 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
         ? '<span style="color:var(--success, green);">✅ ناجح</span>'
         : '<span style="color:var(--success, green);">✅</span>';
     } catch (err) {
-      failed++;
-      delete _examSession[k];
-      if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+      /* فشل عابر (بطء شبكة/تحميل) — محاولة واحدة تلقائية قبل اعتبار العميل فاشلاً */
+      let ok = false;
+      try {
+        if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳ محاولة ثانية...</span>';
+        const data2 = await arkkanExamFetchOne(c.clientId, c.referNum || '');
+        const patch2 = arkkanPatchExamsFromData(c, data2);
+        const idx2 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+        if (idx2 !== -1) Object.assign(clients[idx2], patch2);
+        if (typeof saveClients === 'function') await saveClients();
+        _examSession[k] = arkkanExamSig(clients[idx2] || c);
+        updated++;
+        arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
+        const passed2 = idx2 !== -1 && arkkanExamPassed(clients[idx2]);
+        if (stEl) stEl.innerHTML = passed2
+          ? '<span style="color:var(--success, green);">✅ ناجح</span>'
+          : '<span style="color:var(--success, green);">✅ (من المحاولة الثانية)</span>';
+        ok = true;
+      } catch (err2) { /* يبقى الخطأ الأخير */ }
+      if (!ok) {
+        failed++;
+        delete _examSession[k];
+        if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+      }
     }
 
     done++;

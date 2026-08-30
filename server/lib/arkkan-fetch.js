@@ -262,14 +262,20 @@ async function fetchExamScores({ clientId, referNum = '' }) {
 
   await loadStudent(pg, { clientId, referNum });
 
-  const fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
-  const clicked = await (fr ? fr.evaluate(() => {
-    const btn = [...document.querySelectorAll('input, button')].find(el =>
-      (el.value || el.innerText || '').trim() === 'الاختبارات');
-    if (btn) { btn.click(); return true; }
-    return false;
-  }) : Promise.resolve(false)).catch(() => false);
-  if (!clicked) throw new Error('زر الاختبارات غير متاح لهذا العميل — قد يكون بلا دورة مسجّلة في أركان');
+  // زر "الاختبارات" قد يتأخر تحميله مع بعض العملاء (صفحة بطيئة/كثيفة) —
+  // نراقبه لحظات قبل الحكم بعدم توفره، ليقل الفشل الوهمي في الجلب الجماعي.
+  let fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
+  let clicked = false;
+  for (let t = 0; t < 40 && !clicked; t++) {
+    clicked = await (fr ? fr.evaluate(() => {
+      const btn = [...document.querySelectorAll('input, button')].find(el =>
+        (el.value || el.innerText || '').trim() === 'الاختبارات');
+      if (btn) { btn.click(); return true; }
+      return false;
+    }) : Promise.resolve(false)).catch(() => false);
+    if (!clicked) await wait(150);
+  }
+  if (!clicked) throw new Error('لا توجد صفحة اختبارات لهذا العميل في أركان — تأكد من صحة الرقم المرجعي أو من تسجيل دورة له في أركان');
 
   // نلاحق إطار نتائج الاختبارات الجديد فقط (غير الموجود قبل الضغط) حتى لا
   // نقرأ إطاراً قديماً عالقاً من عميل سابق؛ وإلا نأخذ آخر إطار متاح.
