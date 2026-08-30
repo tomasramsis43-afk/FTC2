@@ -272,43 +272,62 @@ async function arkkanBulkSync() {
   if (wrap) wrap.style.display = '';
 
   const missing = arkkanMissingClients();
+  const total = missing.length;
   let done = 0, updated = 0, failed = 0;
 
-  showToast(`بدأت المزامنة: ${missing.length} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+  showToast(`بدأت المزامنة: ${total} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
 
-  for (const c of missing) {
-    if (_arkkanBulkStop) break;
+  /* حفظ متسلسل دائماً (حتى مع توازي الجلب) حتى لا تتداخل كتابة العملاء
+     بين عدة طلبات في نفس اللحظة (خاصة قبل تثبيت الـ baseline). */
+  let saveChain = Promise.resolve();
+  const queueSave = () => {
+    const p = saveChain.then(() => (typeof saveClients === 'function' ? saveClients() : null));
+    saveChain = p.then(() => {}, () => {});
+    return p;
+  };
 
-    const statusEl = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
+  /* طلبات متوازية — تستفيد من صفحات أركان المتعددة على السيرفر (ARKKAN_CONCURRENCY)؛
+     عدّلها: window.ARKKAN_BULK_CONCURRENCY = 1. */
+  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '2', 10) || 2));
+  let workerIdx = 0;
 
-    try {
-      if (!_arkkanBulkRunning) break;
-      const data = await arkkanFetchOne(c.clientId, c.referNum || '');
-      const patch = arkkanPatchFromData(c, data);
+  const processOne = async () => {
+    while (!_arkkanBulkStop) {
+      const ci = workerIdx++;
+      if (ci >= total) return;
+      const c = missing[ci];
 
-      if (Object.keys(patch).length > 0) {
-        const idx = clients.findIndex(x => x.clientId === c.clientId);
-        if (idx !== -1) Object.assign(clients[idx], patch);
-        if (typeof saveClients === 'function') await saveClients();
-        updated++;
-        arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
-        if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
-      } else {
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
+      const statusEl = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري الجلب...</span>';
+
+      try {
+        if (!_arkkanBulkRunning) break;
+        const data = await arkkanFetchOne(c.clientId, c.referNum || '');
+        const patch = arkkanPatchFromData(c, data);
+
+        if (Object.keys(patch).length > 0) {
+          const idx = clients.findIndex(x => x.clientId === c.clientId);
+          if (idx !== -1) Object.assign(clients[idx], patch);
+          await queueSave();
+          updated++;
+          arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
+          if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
+        } else {
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
+        }
+      } catch (err) {
+        failed++;
+        if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
       }
-    } catch (err) {
-      failed++;
-      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
+
+      done++;
+      if (progress) progress.style.width = `${Math.round(done / Math.max(total, 1) * 100)}%`;
+      const counter = $('#arkkan-bulk-counter');
+      if (counter) counter.textContent = `✅ ${updated} محدّث · ❌ ${failed} فشل · ${done}/${total}`;
     }
+  };
 
-    done++;
-    if (progress) progress.style.width = `${Math.round(done / Math.max(missing.length, 1) * 100)}%`;
-    const counter = $('#arkkan-bulk-counter');
-    if (counter) counter.textContent = `✅ ${updated} محدّث · ❌ ${failed} فشل · ${done}/${missing.length}`;
-
-    if (!_arkkanBulkStop) await new Promise(r => setTimeout(r, 700));
-  }
+  await Promise.all(Array.from({ length: Math.min(POOL, total) }, () => processOne()));
 
   _arkkanBulkRunning = false;
   if (startBtn) startBtn.style.display = '';

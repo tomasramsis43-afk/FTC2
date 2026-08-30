@@ -5,9 +5,9 @@
    (Playwright) فيجلب بيانات عميل من منصة أركان — بلا الحاجة لأي
    برنامج منفصل، ويخدمها عبر مسارات API التي يستهلكها البرنامج مباشرة.
 
-   التوازي: عدد صفحات العمالة = ARKKAN_CONCURRENCY (افتراضياً 3،
-   ووضعه 1 يعيد السلوك التسلسلي القديم) — كل صفحة جلسة واحدة
-   مستقلة بنفس الـ cookies، تُسلسل طلباتها داخلياً فقط.
+   التوازي: عدد صفحات العمالة = ARKKAN_CONCURRENCY (افتراضياً 2،
+   ووضعه 1 يعيد السلوك التسلسلي القديم) — كل عامل في جلسة/كوكيز مستقلة
+   عن غيره، يُسلسل طلباته داخلياً فقط، فلا تتداخل بيانات العملاء.
 
    المتطلبات (تُثبَّت مرة واحدة في مجلد server):
      npm install playwright
@@ -407,18 +407,21 @@ async function initBrowser() {
   spawnExtraPages().catch(e => console.error('[arkkan] تعذّر فتح صفحات التوازي:', e.message));
 }
 
-/* بناء صفحات التوازي الإضافية في نفس الجلسة (نفس الـ cookies) — كل صفحة
-   تتصفح أركان وتفتح تفاصيل المتدرب تماماً مثل الصفحة الأساسية. */
+/* بناء صفحات التوازي الإضافية — كل عامل في سياق (كوكيز/جلسة) مستقل تماماً:
+   أركان نظام ASP.NET يحتفظ بحالة "العميل الحالي" على مستوى الجلسة، فالمشاركة
+   في نفس الجلسة كانت تُدخل بيانات عميل على عميل آخر. كل عامل يتصفح أركان
+   بنفسه فينشئ جلسة تخصه، فلا تتداخل البيانات أبداً بين العمال. */
 async function spawnExtraPages() {
   const need = Math.max(0, MAX_WORKERS - _workers.length);
   if (!need) return;
   const results = await Promise.allSettled(Array.from({ length: need }, async () => {
-    const pg = await _ctx.newPage();
+    const bx = await _browser.newContext();
+    const pg = await bx.newPage();
     try {
       if (!(await ensureDetailsFrame(pg))) throw new Error('لا إطار تفاصيل المتدرب');
       pushWorker(pg);
     } catch (e) {
-      await pg.close().catch(() => {});
+      await bx.close().catch(() => {});
       throw e;
     }
   }));
