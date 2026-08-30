@@ -89,11 +89,11 @@ test('totpOtpauthUrl: يحتوي اسم المُصدر FTC2 واسم المست�
 
 // --- أكواد النسخ الاحتياطي (Backup codes) ---
 
-test('generateBackupCodes: يرجع العدد المطلوب، كل كود 8 أرقام، ولا تكرار بينها', () => {
+test('generateBackupCodes: يرجع العدد المطلوب، كل كود بصيغة XXXX-XXXX-XXXX (base62)، ولا تكرار بينها', () => {
   const codes = generateBackupCodes(10);
   assert.equal(codes.length, 10);
-  for (const c of codes) assert.match(c, /^\d{8}$/);
-  assert.equal(new Set(codes).size, 10, 'لازم كل الأكواد فريدة (احتمال التصادم شبه معدوم مع 10 من أصل 90 مليون احتمال)');
+  for (const c of codes) assert.match(c, /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+  assert.equal(new Set(codes).size, 10, 'لازم كل الأكواد فريدة (احتمال التصادم شبه معدوم مع entropy ~71bit)');
 });
 
 test('consumeBackupCode: كود صحيح -> ok:true ويُحذف من القائمة المتبقية', async () => {
