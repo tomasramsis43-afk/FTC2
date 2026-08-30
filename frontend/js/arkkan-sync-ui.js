@@ -524,6 +524,7 @@ async function arkkanExamSyncOne(clientId, btn) {
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
     _examSession[String(clientId)] = arkkanExamSig(clients[idx] || c);
+    arkkanExamReviewAdd({ clientId: String(clientId), name: c.name, sourceResult: data.lastResult || '', sourceDate: data.lastDate || '', savedResult: patch.examResult || '', savedDate: patch.examLastDate || '', ok: true });
     const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
     // إعادة الرسم: الناجح ينتقل إلى صندوق النجاح ويختفي من قائمة الجلب
     renderArkkanExamsTable();
@@ -534,6 +535,7 @@ async function arkkanExamSyncOne(clientId, btn) {
   } catch (err) {
     const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
     if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ ${escapeHtml(err.message.slice(0, 60))}</span>`;
+    arkkanExamReviewAdd({ clientId: String(clientId), name: c.name, ok: false, err: (err && err.message) || String(err) });
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
   }
@@ -561,6 +563,7 @@ async function arkkanExamSyncCard(clientId, btn) {
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
     _examSession[String(clientId)] = arkkanExamSig(clients[idx] || c);
+    arkkanExamReviewAdd({ clientId: String(clientId), name: c.name, sourceResult: data.lastResult || '', sourceDate: data.lastDate || '', savedResult: patch.examResult || '', savedDate: patch.examLastDate || '', ok: true });
     const exam = arkkanExamStatusOf(clients[idx] || c);
     const has = exam && String(exam.r).trim();
     const msg = has
@@ -574,6 +577,7 @@ async function arkkanExamSyncCard(clientId, btn) {
     showToast(msg, has ? 'success' : 'info');
   } catch (err) {
     showToast('فشل جلب النتيجة: ' + (err.message || err), 'error');
+    arkkanExamReviewAdd({ clientId: String(clientId), name: c.name, ok: false, err: (err && err.message) || String(err) });
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 مزامنة النتيجة'; }
   }
@@ -639,6 +643,7 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
       if (typeof saveClients === 'function') await saveClients();
       updated++;
       _examSession[k] = arkkanExamSig(clients[idx] || c);
+      arkkanExamReviewAdd({ clientId: String(c.clientId), name: c.name, sourceResult: data.lastResult || '', sourceDate: data.lastDate || '', savedResult: patch.examResult || '', savedDate: patch.examLastDate || '', ok: true });
       arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
       const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
       if (stEl) stEl.innerHTML = passed
@@ -656,6 +661,7 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
         if (typeof saveClients === 'function') await saveClients();
         _examSession[k] = arkkanExamSig(clients[idx2] || c);
         updated++;
+        arkkanExamReviewAdd({ clientId: String(c.clientId), name: c.name, sourceResult: data2.lastResult || '', sourceDate: data2.lastDate || '', savedResult: patch2.examResult || '', savedDate: patch2.examLastDate || '', ok: true });
         arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
         const passed2 = idx2 !== -1 && arkkanExamPassed(clients[idx2]);
         if (stEl) stEl.innerHTML = passed2
@@ -667,6 +673,7 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
         failed++;
         delete _examSession[k];
         if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
+        arkkanExamReviewAdd({ clientId: String(c.clientId), name: c.name, ok: false, err: (err && err.message) || String(err) });
       }
     }
 
@@ -741,11 +748,121 @@ function arkkanRefreshRowCells(c) {
   if (missEl) missEl.textContent = arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، ');
 }
 
+/* ══════════════════════════════════════════════
+   7) مراجعة الجلب المستخرج — سجل تلقائي لكل جلب نتيجة من أركان
+   + تصحيح يدوي للنتيجة (للأدمن) عند اكتشاف أي جلب خاطئ
+   ══════════════════════════════════════════════ */
+const ARKKAN_REVIEW_MAX = 200;
+let _arkkanExamReview = null;
+function arkkanExamReviewGet() {
+  if (!_arkkanExamReview) {
+    try { _arkkanExamReview = JSON.parse(localStorage.getItem('arkkan_exam_review_log') || '[]'); }
+    catch { _arkkanExamReview = []; }
+    if (!Array.isArray(_arkkanExamReview)) _arkkanExamReview = [];
+  }
+  return _arkkanExamReview;
+}
+function arkkanExamReviewAdd(entry) {
+  const log = arkkanExamReviewGet();
+  log.unshift(Object.assign({ ts: Date.now() }, entry));
+  if (log.length > ARKKAN_REVIEW_MAX) log.length = ARKKAN_REVIEW_MAX;
+  try { localStorage.setItem('arkkan_exam_review_log', JSON.stringify(log)); } catch {}
+  renderArkkanExamReview();
+}
+function arkkanReviewTime(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+}
+function renderArkkanExamReview() {
+  const tbody = $('#arkkan-exam-review-tbody');
+  if (!tbody) return;
+  const log = arkkanExamReviewGet();
+  const cnt = $('#arkkan-exam-review-count');
+  if (cnt) cnt.textContent = `آخر ${log.length} عملية`;
+  const admin = currentUserRole === 'admin';
+  tbody.innerHTML = log.map(e => {
+    const isManual = e.kind === 'manual';
+    const statusCol = isManual
+      ? '<span style="color:#8e44ad; font-weight:600;">✏️ تعديل يدوي</span>'
+      : e.ok
+        ? '<span style="color:var(--success, green); font-weight:600;">✅ جلب ناجح</span>'
+        : `<span style="color:var(--danger, red);" title="${escapeHtml(e.err || 'فشل الجلب')}">❌ فشل — ${escapeHtml(String(e.err || 'خطأ غير معروف').slice(0, 36))}</span>`;
+    const correct = admin && e.clientId
+      ? `<button type="button" class="btn btn-ghost btn-sm" data-arkkan-review-correct="${escapeHtml(e.clientId)}" style="padding:2px 10px; font-size:12px;">✏️ تصحيح</button>`
+      : '<span style="color:var(--text-muted); font-size:12px;">أدمن فقط</span>';
+    return `<tr>
+      <td style="white-space:nowrap; font-size:12px; color:var(--text-muted);">${escapeHtml(arkkanReviewTime(e.ts))}</td>
+      <td>${escapeHtml(e.name || '—')}<br><span style="font-size:11.5px; color:var(--text-muted);">${escapeHtml(e.clientId || '')}</span></td>
+      <td>${isManual ? arkkanExamCell(e.savedResult) : arkkanExamCell(e.sourceResult)}</td>
+      <td>${escapeHtml(isManual ? e.savedDate : e.sourceDate || '—')}</td>
+      <td>${arkkanExamCell(e.savedResult)}${e.savedDate ? `<br><span style="font-size:11.5px; color:var(--text-muted);">${escapeHtml(e.savedDate)}</span>` : ''}</td>
+      <td>${statusCol}</td>
+      <td>${correct}</td>
+    </tr>`;
+  }).join('');
+}
+function arkkanExamReviewClear() {
+  customConfirm('هل تريد مسح سجل مراجعة الجلب بالكامل؟ (لا يُمسح أي شيء من بيانات العملاء — السجل للمراجعة فقط)', () => {
+    _arkkanExamReview = [];
+    try { localStorage.removeItem('arkkan_exam_review_log'); } catch {}
+    renderArkkanExamReview();
+    showToast('تم مسح سجل المراجعة', 'info');
+  });
+}
+
+/* التصحيح اليدوي للنتيجة — مودال يحدد النتيجة والتاريخ لعميل معين */
+let _arkkanReviewCorrectClientId = null;
+function arkkanExamOpenCorrection(clientId) {
+  const c = (clients || []).find(x => String(x.clientId) === String(clientId));
+  if (!c) return;
+  _arkkanReviewCorrectClientId = clientId;
+  const nameEl = $('#arkkan-exam-correct-client');
+  if (nameEl) nameEl.textContent = `العميل: ${c.name || '—'} (${clientId})`;
+  const st = arkkanExamStatusOf(c);
+  const sel = $('#arkkan-exam-correct-result');
+  if (sel) sel.value = st && String(st.r).includes('ناجح') ? 'ناجح' : st && String(st.r).includes('راسب') ? 'راسب' : '';
+  const dateEl = $('#arkkan-exam-correct-date');
+  if (dateEl) dateEl.value = arkkanToInputDate(c.examLastDate || (st ? st.d : ''));
+  arkkanExamCorrectOverlayShow();
+}
+function arkkanExamCorrectOverlayShow() {
+  const ov = $('#arkkan-exam-correct-overlay');
+  if (ov) { ov.classList.add('show'); if (typeof SoundFX !== 'undefined' && SoundFX.open) SoundFX.open(); }
+}
+function arkkanExamCorrectOverlayHide() {
+  const ov = $('#arkkan-exam-correct-overlay');
+  if (ov) ov.classList.remove('show');
+  _arkkanReviewCorrectClientId = null;
+}
+async function arkkanExamSaveCorrection() {
+  const clientId = _arkkanReviewCorrectClientId;
+  if (!clientId) return;
+  const result = ($('#arkkan-exam-correct-result') || {}).value || '';
+  const raw = ($('#arkkan-exam-correct-date') || {}).value || '';
+  const date = raw ? String(raw).replace(/-/g, '/') : '';
+  const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
+  if (idx === -1) { showToast('العميل غير موجود في القائمة', 'error'); arkkanExamCorrectOverlayHide(); return; }
+  const c = clients[idx];
+  Object.assign(c, {
+    examResult: result,
+    examLastDate: date,
+    examAttempts: result ? [{ r: result, d: date }] : []
+  });
+  if (typeof saveClients === 'function') await saveClients();
+  _examSession[String(clientId)] = arkkanExamSig(c);
+  arkkanExamReviewAdd({ kind: 'manual', clientId, name: c.name, savedResult: result, savedDate: date, ok: true });
+  renderArkkanExamsTable();
+  if (typeof renderTable === 'function') renderTable();
+  showToast('تم تصحيح نتيجة الاختبار يدوياً', 'success');
+  arkkanExamCorrectOverlayHide();
+}
+
 /* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
 document.addEventListener('click', () => {
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
     renderArkkanSyncTable();
     renderArkkanExamsTable();
+    renderArkkanExamReview();
   }
 });
 
@@ -761,7 +878,14 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-arkkan-exams-failed-stop')) { examBulkState('failed').stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-needing-start')) { arkkanExamsNeedingBulk(); return; }
   if (e.target.closest('#btn-arkkan-exams-needing-stop')) { examBulkState('needing').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-review-clear')) { arkkanExamReviewClear(); return; }
+  if (e.target.closest('[data-arkkan-review-correct]')) { arkkanExamOpenCorrection(e.target.closest('[data-arkkan-review-correct]').dataset.arkkanReviewCorrect); return; }
 });
+
+$('#arkkan-exam-correct-close')?.addEventListener('click', arkkanExamCorrectOverlayHide);
+$('#arkkan-exam-correct-cancel')?.addEventListener('click', arkkanExamCorrectOverlayHide);
+$('#arkkan-exam-correct-save')?.addEventListener('click', () => { arkkanExamSaveCorrection(); });
+$('#arkkan-exam-correct-overlay')?.addEventListener('click', e => { if (e.target.id === 'arkkan-exam-correct-overlay') arkkanExamCorrectOverlayHide(); });
 
 /* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
 function initArkkanSyncView() {
@@ -770,6 +894,7 @@ function initArkkanSyncView() {
     navBtn.addEventListener('click', () => {
       renderArkkanSyncTable();
       renderArkkanExamsTable();
+      renderArkkanExamReview();
       arkkanUpdateStatus();
     });
   }
