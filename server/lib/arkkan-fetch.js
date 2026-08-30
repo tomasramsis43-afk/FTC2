@@ -40,6 +40,15 @@ let _page = null;
 let _ready = false;
 let _queue = Promise.resolve();   // طابور: صفحة واحدة مشتركة — الطلبات تتسلسل
 
+/* إخفاء أي نوافذ toasty/تغطيات عالقة من جلسات سابقة تحجب النقرات
+   (تتراكم مع الإيصالات ونوافذ الاختبارات على الخادم الذي يعمل طويلاً) */
+function clearArkanDialogs(pg) {
+  return pg.evaluate(() => {
+    const els = document.querySelectorAll('.toastyDialog_msgContainer, .toastyDialog_msgMask, [id^="toastyDialog_"], #iframeSearch');
+    for (const el of els) el.style.display = 'none';
+  }).catch(() => {});
+}
+
 /* إغلاق نافذة الإيصال (لن نمسح حاويات الـ toastyDialog لأن هذا يكسر
    الـ plugin ويفشل الإيصال التالي — نضغط زر الإغلاق المخصص فقط). */
 function closeDialog(pg) {
@@ -69,6 +78,8 @@ async function ensureDetailsFrame(pg) {
 /* ملء بيانات العميل والضغط على تأكيد والانتظار المتكيّف لحين تحميل شبكة
    الدورات — يعيد إطار تفاصيل المتدرب (fr) وعدد صفوف الدورات (nC) والحقائب (nB). */
 async function loadStudent(pg, { clientId, referNum = '' }) {
+  // تنظيف أي تغطيات عالقة من طلبات سابقة تحجب أزرار أركان قبل أي تفاعل
+  await clearArkanDialogs(pg);
   let fr = await ensureDetailsFrame(pg);
   if (!fr) throw new Error('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
 
@@ -260,39 +271,53 @@ async function fetchExamScores({ clientId, referNum = '' }) {
   }) : Promise.resolve(false)).catch(() => false);
   if (!clicked) throw new Error('زر الاختبارات غير متاح لهذا العميل — قد يكون بلا دورة مسجّلة في أركان');
 
+  // نلاحق إطار نتائج الاختبارات الجديد فقط (غير الموجود قبل الضغط) حتى لا
+  // نقرأ إطاراً قديماً عالقاً من عميل سابق؛ وإلا نأخذ آخر إطار متاح.
+  const framesNow = pg.frames().filter(f => f.url().includes('frm8159'));
   let frT = null;
   for (let t = 0; t < 200 && !frT; t++) {
     await wait(120);
-    frT = pg.frames().find(f => f.url().includes('frm8159'));
+    frT = pg.frames().find(f => f.url().includes('frm8159') && !framesNow.includes(f));
   }
+  if (!frT) frT = pg.frames().find(f => f.url().includes('frm8159'));
   if (!frT) throw new Error('تعذّر فتح صفحة نتائج الاختبارات في أركان');
 
   // الإطار قد يظهر قبل تحميل محتواه، وقد تُحمَّل الجداول تباعاً —
-  // ننتظر حتى يثبت المحتوى (3 قراءات متطابقة) لضمان اكتمال كل الصفوف.
+  // ننتظر ظهور البيانات (لا نكتفي بـ"ثبات فارغ")، وننهي مبكراً لو ظهرت
+  // الجداول فعلاً بلا صفوف (العميل بلا اختبارات).
   const readGrids = () => frT.evaluate(() => {
     const rowsOf = (gv) => [...document.querySelectorAll(gv + ' tr.RowItems')]
       .map(tr => [...tr.querySelectorAll('td')].map(td => td.innerText.trim()));
     return {
       exam:   rowsOf('#ctl00_Exam_master2_GridView1'), // [key, تاريخ, دورة, متدرب, نتيجة, درجات]
-      retake: rowsOf('#ctl00_Exam_master3_GridView1')  // [key, متدرب, نتيجة, درجات]
+      retake: rowsOf('#ctl00_Exam_master3_GridView1'), // [key, متدرب, نتيجة, درجات]
+      ready:  !!(document.getElementById('ctl00_Exam_master2_GridView1') || document.getElementById('ctl00_Exam_master3_GridView1'))
     };
   });
 
   let parsed = null;
   let last = null;
   let stable = 0;
-  for (let t = 0; t < 80; t++) {
-    parsed = await readGrids().catch(() => ({ exam: [], retake: [] }));
-    if (JSON.stringify(parsed) === JSON.stringify(last)) stable++; else stable = 0;
-    last = parsed;
-    if (stable >= 3) break;   // تكرّر المحتوى ثلاث مرات → اكتمل التحميل
-    await wait(150);
+  for (let t = 0; t < 60; t++) {
+    parsed = await readGrids().catch(() => ({ exam: [], retake: [], ready: false }));
+    const hasData = parsed.exam.length || parsed.retake.length;
+    if (hasData) {
+      const same = last &&
+        JSON.stringify(parsed.exam) === JSON.stringify(last.exam) &&
+        JSON.stringify(parsed.retake) === JSON.stringify(last.retake);
+      stable = same ? stable + 1 : 0;
+      last = { exam: parsed.exam, retake: parsed.retake };
+      if (stable >= 2) break; // تكرّرت البيانات مرتين → اكتمل التحميل
+    } else if (parsed.ready) {
+      break; // الجداول ظهرت من غير صفوف → لا توجد اختبارات لهذا العميل
+    }
+    await wait(200);
   }
-  if (!parsed) parsed = { exam: [], retake: [] };
+  if (!parsed) parsed = { exam: [], retake: [], ready: false };
 
   const attempts = [];
   for (const r of parsed.retake) attempts.push({ r: r[2], g: r[3], d: '' });
-  for (const r of parsed.exam) attempts.push({ r: r[4], g: r[5], d: r[1].replace(/^تم الاختبار بتاريخ\s*/, '') });
+  for (const r of parsed.exam) attempts.push({ r: r[4], g: r[5], d: r[1].replace(/^تم\s+الاختبار\s+بتاريخ\s*/, '') });
 
   const last4 = attempts.slice(-4);
   result.attempts = last4;
@@ -308,7 +333,8 @@ async function fetchExamScores({ clientId, referNum = '' }) {
     const b = document.querySelector('button.close');
     if (b) b.click();
   }).catch(() => {});
-  await wait(800);
+  await wait(600);
+  await clearArkanDialogs(pg); // تنظيف أي تغطيات خلفها النافذة ليبقى الاعتماد في الطلب التالي
 
   return result;
 }
