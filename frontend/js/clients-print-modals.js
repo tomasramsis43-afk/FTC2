@@ -644,7 +644,7 @@ $('#f-paid2').addEventListener('input', updateComputed);
 function toggleBagFields(){
   const isOwn = $('#f-bagsource').value === 'own';
   $('#wrap-bagprice').style.display = isOwn ? 'none' : '';
-  $('#wrap-baginvoice').style.display = isOwn ? 'none' : '';
+  $('#wrap-baginvoice').style.display = '';
   $('#wrap-bagowndate').style.display = isOwn ? '' : 'none';
   if(isOwn) $('#f-bagprice').value = 0;
   else if(num($('#f-bagprice').value)===0) $('#f-bagprice').value = settings.bagPrice;
