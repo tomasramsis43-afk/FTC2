@@ -242,7 +242,15 @@ async function arkkanUpdateStatus() {
   const st = await arkkanCheckReady();
   if (st.ready) {
     el.className = 'hint hint-success';
-    el.innerHTML = '✅ الخادم جاهز — المتصفح المخفي يعمل وسيجلب البيانات مباشرة.';
+    const mem = st.memory;
+    let memTxt = '';
+    if (mem) {
+      const freePct = mem.totalMB ? Math.round((mem.freeMB / mem.totalMB) * 100) : 0;
+      const low = freePct < 12;
+      const workersTxt = st.workers && st.maxWorkers ? ` · عوامل التوازي: ${st.workers}/${st.maxWorkers}` : '';
+      memTxt = ` · ذاكرة السيرفر: ${mem.freeMB}MB حر من ${mem.totalMB}MB (${freePct}%)${low ? ' <span style="color:#e84118;">— منخفضة، الجلب سيعمل بعامل واحد حفاظاً على الاستقرار</span>' : ''}${workersTxt}`;
+    }
+    el.innerHTML = '✅ الخادم جاهز — المتصفح المخفي يعمل وسيجلب البيانات مباشرة.' + memTxt;
     if (btn) btn.disabled = false;
   } else if (st.playwrightInstalled === false) {
     el.className = 'hint hint-error';

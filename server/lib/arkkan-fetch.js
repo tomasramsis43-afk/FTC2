@@ -17,6 +17,7 @@
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { execSync } = require('child_process');
 
 /* مفتاح رقمي للمقارنة الزمنية (يدعم YYYY/MM/DD و DD/MM/YYYY) لتحديد الأحدث */
@@ -41,10 +42,38 @@ try { playwright = require('playwright'); } catch (e) { playwright = null; }
 const ARKKAN_URL = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
 const HEADLESS = true;
 
-/* درجة التوازي: كل عامل صفحة متصفح مستقلة في نفس الجلسة (جلسات ASP.NET تتحمل
-   عدة تبويبات) — رقم أكبر = جلب أسرع، ووضعه 1 ليعود السلوك التسلسلي القديم.
-   على الاستضافة ذات الذاكرة المحدودة ابدأ بهاتين، وراقب استخدام الذاكرة. */
-const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_CONCURRENCY || '2', 10) || 2));
+/* درجة التوازي: كل عامل صفحة متصفح مستقلة في جلسة/كوكيز مستقلة — رقم أكبر = جلب
+   أسرع، ووضعه 1 ليعود السلوك التسلسلي القديم. على الاستضافة محدودة الذاكرة
+   (مثل خطة Render المجانية 512MB) نضبط الافتراضي حسب الذاكرة المتاحة تلقائياً:
+     ذاكرة < 768MB  → 1 عامل (الأأمن، واطئ الذاكرة)
+     ذاكرة < 1.5GB  → 2 عامل
+     وإلا           → 4 عامل
+   تجاوز يدوي بأي وقت عبر ARKKAN_CONCURRENCY (يُقيَّد بـ 1..4). */
+function defaultWorkers() {
+  const mb = os.totalmem() / (1024 * 1024);
+  if (mb < 768) return 1;
+  if (mb < 1536) return 2;
+  return 4;
+}
+const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_CONCURRENCY || String(defaultWorkers()), 10) || defaultWorkers()));
+
+/* أوساط إطلاق Chromium موفّرة للذاكرة (مهمة على الحاويات صغيرة الذاكرة):
+   لا نوّلد عمليات/فروع زائدة، نوقف تحميل الإضافات والخلفيات، ونحدّ سقف
+   ذاكرة JS لكل عملية حتى لا يرتفع الاستهلاك خارج الخطة. */
+const BROWSER_ARGS = [
+  '--no-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--disable-software-rasterizer',
+  '--no-zygote',
+  '--disable-extensions',
+  '--disable-background-networking',
+  '--disable-component-update',
+  '--disable-sync',
+  '--disable-default-apps',
+  '--disable-features=site-per-process',
+  '--js-flags=--max-old-space-size=256'
+];
 
 /* إغلاق المتصفح تلقائياً بعد فترة خمول (حتى لا يظل Chromium مفتوحاً بلا داعٍ
    على الاستضافة). أثناء الجلب الجماعي الطلبات متتالية فلا يُغلق أبداً. */
@@ -52,11 +81,23 @@ const IDLE_MS = Math.max(10000, parseInt(process.env.ARKKAN_IDLE_MS || '120000',
 
 let _browser = null;
 let _ctx = null;
-let _workers = [];               // [{ page, queue }] — صفحة لكل عامل وطابورها الخاص
+let _workers = [];               // [{ page, ctx, queue, busy, lastUse }] — عامل لكل صفحة وطابورها
 let _ready = false;
 let _initChain = Promise.resolve();  // تأمين تهيئة واحدة فقط عند أول طلب
 let _rr = 0;                     // مؤشر توزيع الطلبات بالتناوب على العمالة
 let _lastUsed = 0;               // آخر نشاط فعلي — لعتبة إغلاق الخمول
+
+/* علي مدار الجلب نستخرج النصوص والجداول فقط — فلا حاجة لتحميل الصور والخطوط
+   والوسائط وأوراق الأنماط (تستهلك ذاكرة ووقتاً بلا أي فائدة). منعها يخفّض
+   استهلاك الذاكرة بشكل ملموس على الاستضافة الصغيرة ويسرّع الجلب نفسه. */
+function blockHeavyResources(bx) {
+  if (!bx || !bx.route) return;
+  bx.route('**/*', route => {
+    const t = route.request().resourceType();
+    if (t === 'image' || t === 'media' || t === 'font' || t === 'stylesheet') return route.abort();
+    return route.continue().catch(() => {});
+  }).catch(() => {});
+}
 
 /* إخفاء أي نوافذ toasty/تغطيات عالقة من جلسات سابقة تحجب النقرات
    (تتراكم مع الإيصالات ونوافذ الاختبارات على الخادم الذي يعمل طويلاً) */
@@ -380,13 +421,12 @@ async function initBrowser() {
 
   _browser = await playwright.chromium.launch({
     headless: HEADLESS,
-    // أوساط أمان متوافقة مع الحاويات/الاستضافة (Render): لا حاجة لـ /dev/shm،
-    // ولا لامتيازات root-sandbox.
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+    args: BROWSER_ARGS
   });
   _ctx = await _browser.newContext();
+  blockHeavyResources(_ctx);
   const page0 = await _ctx.newPage();
-  pushWorker(page0);
+  pushWorker(page0, _ctx);
 
   await page0.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' });
   await wait(2500);
@@ -411,39 +451,88 @@ async function initBrowser() {
    أركان نظام ASP.NET يحتفظ بحالة "العميل الحالي" على مستوى الجلسة، فالمشاركة
    في نفس الجلسة كانت تُدخل بيانات عميل على عميل آخر. كل عامل يتصفح أركان
    بنفسه فينشئ جلسة تخصه، فلا تتداخل البيانات أبداً بين العمال. */
+let _spawning = false;
 async function spawnExtraPages() {
+  if (_spawning) return;
   const need = Math.max(0, MAX_WORKERS - _workers.length);
   if (!need) return;
-  const results = await Promise.allSettled(Array.from({ length: need }, async () => {
-    const bx = await _browser.newContext();
-    const pg = await bx.newPage();
-    try {
-      if (!(await ensureDetailsFrame(pg))) throw new Error('لا إطار تفاصيل المتدرب');
-      pushWorker(pg);
-    } catch (e) {
-      await bx.close().catch(() => {});
-      throw e;
-    }
-  }));
-  const ok = results.filter(r => r.status === 'fulfilled').length;
-  console.log(`[arkkan] صفحات التوازي جاهزة: ${_workers.length}/${MAX_WORKERS} (فشل ${results.length - ok})`);
+  _spawning = true;
+  try {
+    const results = await Promise.allSettled(Array.from({ length: need }, async () => {
+      const bx = await _browser.newContext();
+      blockHeavyResources(bx);
+      const pg = await bx.newPage();
+      try {
+        if (!(await ensureDetailsFrame(pg))) throw new Error('لا إطار تفاصيل المتدرب');
+        pushWorker(pg, bx);
+      } catch (e) {
+        await bx.close().catch(() => {});
+        throw e;
+      }
+    }));
+    const ok = results.filter(r => r.status === 'fulfilled').length;
+    console.log(`[arkkan] صفحات التوازي جاهزة: ${_workers.length}/${MAX_WORKERS} (فشل ${results.length - ok})`);
+  } finally {
+    _spawning = false;
+  }
 }
 
-/* إضافة عامل (صفحة) لتجمّع التوازي مع طابوره المستقل. */
-function pushWorker(page) {
+/* إضافة عامل (صفحة + سياقها) لتجمّع التوازي مع طابوره المستقل. */
+function pushWorker(page, ctx) {
   if (_workers.some(w => w.page === page)) return;
-  _workers.push({ page, queue: Promise.resolve() });
+  _workers.push({ page, ctx: ctx || _ctx, queue: Promise.resolve(), busy: 0, lastUse: Date.now() });
 }
 
 /* تشغيل مهمة على صفحة عامل محدد — كل عامل طابوره المتسلسل الخاص حتى لا تتعارض
-   نقرات/تنقّلات صفحتين على نفس الصفحة؛ التوازي يتم بين صفحات مختلفة فقط. */
+   نقرات/تنقّلات صفحتين على نفس الصفحة؛ التوازي يتم بين صفحات مختلفة فقط.
+   بند (busy) يتتبّع المهمات قيد التنفيذ حتى لا يغلقها حارس الذاكرة وهي مشغولة. */
 function enqueueOn(page, fn) {
   let w = _workers.find(x => x.page === page);
-  if (!w) { w = { page, queue: Promise.resolve() }; _workers.push(w); }
-  const p = w.queue.then(() => fn(), () => fn());
+  if (!w) { w = { page, ctx: _ctx, queue: Promise.resolve(), busy: 0, lastUse: Date.now() }; _workers.push(w); }
+  w.lastUse = Date.now();
+  const p = w.queue.then(() => {
+    w.busy++;
+    return fn();
+  }, () => {
+    w.busy++;
+    return fn();
+  }).finally(() => {
+    w.busy--;
+    w.lastUse = Date.now();
+  });
   w.queue = p.then(() => {}, () => {});
   return p;
 }
+
+/* تقليص عدد العمال (إغلاق سياقات العمالة الخاملة) عند ضغط الذاكرة؛ لا نلمس
+   العمال المشغولين ولا العامل الأساسي (page0 من _ctx). */
+async function shrinkWorkers(n) {
+  const idle = _workers
+    .filter(w => w.busy === 0 && w.ctx !== _ctx)
+    .sort((a, b) => a.lastUse - b.lastUse);
+  const toClose = idle.slice(0, Math.max(0, _workers.length - n)).filter(w => w.page !== _workers[0]?.page);
+  for (const w of toClose) {
+    await w.ctx.close().catch(() => {});
+    _workers = _workers.filter(x => x.page !== w.page);
+  }
+  if (toClose.length) console.log(`[arkkan] ضغط ذاكرة — تقليص العمالة إلى ${_workers.length}`);
+}
+
+/* حارس الذاكرة: كل 15 ثانية نراقب الذاكرة الفعلية. إذا انخفضت المساحة الحرة
+   عن عتبة نخفض العمالة (بإغلاق السياقات الخاملة فقط)، وإذا تعافت نعيد فتح
+   صفحات التوازي (بحد MAX_WORKERS) — كي لا يتوقف الجلب على 512MB بتاتاً. */
+function memGuard() {
+  if (!_ready || !_browser) return;
+  const free = os.freemem();
+  const total = os.totalmem();
+  const ratio = free / total;
+  if (ratio < 0.12 && _workers.length > 1) {
+    shrinkWorkers(1).catch(() => {});
+  } else if (ratio > 0.25 && _workers.length < MAX_WORKERS) {
+    spawnExtraPages().catch(e => console.error('[arkkan] فشل إعادة فتح التوازي:', e.message));
+  }
+}
+setInterval(memGuard, 15000).unref();
 
 /* تأمين تهيئة واحدة فقط للمتصفح عند أول طلب (متزامنة بين عدة طلبات دفعة واحدة). */
 function ensureInit() {
@@ -488,9 +577,17 @@ function fetchExamScores(payload) {
 
 function getStatus() {
   const p0 = _workers[0] && !_workers[0].page.isClosed() ? _workers[0].page : null;
+  const mu = process.memoryUsage();
   return {
     ready: !!(_ready && _browser && p0),
-    playwrightInstalled: !!playwright
+    playwrightInstalled: !!playwright,
+    workers: _workers.length,
+    maxWorkers: MAX_WORKERS,
+    memory: {
+      nodeRssMB: Math.round(mu.rss / 1024 / 1024),
+      freeMB: Math.round(os.freemem() / 1024 / 1024),
+      totalMB: Math.round(os.totalmem() / 1024 / 1024)
+    }
   };
 }
 
