@@ -72,7 +72,10 @@ const BROWSER_ARGS = [
   '--disable-sync',
   '--disable-default-apps',
   '--disable-features=site-per-process',
-  '--js-flags=--max-old-space-size=256'
+  '--js-flags=--max-old-space-size=256',
+  /* حماية مزدوجة لفكرة "نص فقط": حتى لو طلب خاص تجاوز توجيه blockHeavyResources،
+     لا يتم رسم أي صورة من الأساس داخل المتصفح كله — نقرأ نصوصاً وجداولاً فقط. */
+  '--blink-settings=imagesEnabled=false'
 ];
 
 /* إغلاق المتصفح تلقائياً بعد فترة خمول (حتى لا يظل Chromium مفتوحاً بلا داعٍ
@@ -97,6 +100,24 @@ function blockHeavyResources(bx) {
     if (t === 'image' || t === 'media' || t === 'font' || t === 'stylesheet') return route.abort();
     return route.continue().catch(() => {});
   }).catch(() => {});
+}
+
+/* الريفرش الذكي بعد كل عميل: بدل ما نقفل المتصفح (كان يدمّر التوازي ويبدأ من
+   الصفر) نُفرّغ صفحة العامل من كل الحواريات وإطارات الإيصالات المتراكمة في
+   الـ DOM ثم نعيد فتح صفحة أركان ويطار "تفاصيل متدرب" جاهزاً — فالطلب التالي
+   على نفس العامل يبدأ مباشرة من غير انتظار إعادة تحميل، وذاكرة Chromium تفضل
+   نظيفة مع آلاف العملاء (حماية من الـ OOM على الاستضافة الصغيرة). */
+async function smartRefresh(pg) {
+  try {
+    // قفزة محلية فورية تُخرج المستند الحالي (وبكل إطاره/حوارياته) من الذاكرة
+    await pg.goto('about:blank', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    // نعيد فتح الصفحة الأساسية + تفاصيل المتدرب جاهزاً للطلب التالي
+    return await ensureDetailsFrame(pg);
+  } catch (e) {
+    // فشل الريفرش لا يوقف الجلب — الطلب التالي يعيد البناء بنفسه عبر ensureDetailsFrame
+    console.warn('[arkkan] فشل الريفرش الذكي:', (e.message || '').slice(0, 200));
+    return null;
+  }
 }
 
 /* إخفاء أي نوافذ toasty/تغطيات عالقة من جلسات سابقة تحجب النقرات
@@ -302,6 +323,10 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
     result.bagOwnDate = bagOwnDate || bagBest.bagPurchaseDate;
   }
 
+  // ريفرش ذكي بعد كل عميل: تفريغ الصفحة من تراكمات الحواريات/الإيصالات وإعادة
+  // فتح تفاصيل المتدرب جاهزاً للطلب التالي — لا نقفل المتصفح إطلاقاً
+  await smartRefresh(pg);
+
   return result;
 }
 
@@ -395,6 +420,9 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
   }).catch(() => {});
   await wait(300);
   await clearArkanDialogs(pg); // تنظيف أي تغطيات خلفها النافذة ليبقى الاعتماد في الطلب التالي
+
+  // ريفرش ذكي بعد كل عميل (نفس سياسة جلب البيانات) — يحمي الذاكرة من التراكم
+  await smartRefresh(pg);
 
   return result;
 }
