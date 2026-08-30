@@ -1323,7 +1323,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
         <div>
           <h3 style="margin:0 0 2px;">نتائج الاختبارات (الرسوب والنجاح)</h3>
-          <p class="hint" style="margin:0;">يجلب لكل عميل لديه <b>رقم مرجعي</b> آخر 4 محاولات للاختبار من أركان: آخر اختبار (بتاريخه) + "سجل اعادة الاختبارات" (المحاولات الراسخة). <b>ناجح</b> بالأخضر و<b>راسب</b> بالأحمر.</p>
+          <p class="hint" style="margin:0;">يجلب لكل عميل لديه <b>رقم مرجعي</b> آخر 4 محاولات للاختبار من أركان: آخر اختبار (بتاريخه) + "سجل اعادة الاختبارات" (المحاولات الراسخة). العملاء هنا <b>بلا نتيجة وبلا تاريخ اختبار</b> — بظهور أي نتيجة ينتقلون تلقائياً إلى الصندوق المناسب (نجاح/راسب/يحتاج اختبار).</p>
         </div>
       </div>
 
@@ -1359,6 +1359,48 @@
             </tr>
           </thead>
           <tbody id="arkkan-exams-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" style="border-right:4px solid #e67e22;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:#e67e22;flex:none;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <div>
+          <h3 style="margin:0 0 2px;">يحتاج إلى اختبار</h3>
+          <p class="hint" style="margin:0;">العملاء الذين لديهم <b>تاريخ آخر اختبار</b> لكن كل نتائجهم <b>فاضية</b> (لا نجاح ولا رسوب سابق) — عليهم إعادة الاختبار. صندوق مستقل يجلب لنفسه، وإذا ظهرت نتيجة ينتقل تلقائياً إلى الصندوق المناسب.</p>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <button type="button" class="btn btn-gold" id="btn-arkkan-exams-needing-start">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          جلب نتائج المحتاجين
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-stop" style="display:none;">⏹ إيقاف</button>
+        <span class="spacer"></span>
+        <span id="arkkan-exams-needing-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+      <div id="arkkan-exams-needing-progress-wrap" style="display:none; margin-bottom:12px;">
+        <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
+          <div id="arkkan-exams-needing-progress" style="height:100%; width:0%; background:#e67e22; border-radius:99px; transition:width .3s;"></div>
+        </div>
+      </div>
+      <div class="table-scroll" style="max-height:55vh;">
+        <table>
+          <thead>
+            <tr>
+              <th>الاسم</th>
+              <th>رقم الهوية</th>
+              <th>المحاولة 1</th>
+              <th>المحاولة 2</th>
+              <th>المحاولة 3</th>
+              <th>المحاولة 4</th>
+              <th>تاريخ آخر اختبار</th>
+              <th>جلب</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="arkkan-exams-needing-tbody"></tbody>
         </table>
       </div>
     </div>

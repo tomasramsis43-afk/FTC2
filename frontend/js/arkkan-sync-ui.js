@@ -367,10 +367,18 @@ function arkkanExamFailed(c) {
     .some(a => String((a && a.r) || '').includes('راسب'));
 }
 
-/* صندوق النتائج الرئيسي: بلا نتيجة بعد (لم يُجلب له اختبار مكتمل بعد) */
+/* صندوق النتائج الرئيسي: بلا نتيجة وبلا تاريخ اختبار (لم يُسجّل له أي اختبار بعد) */
 function arkkanExamClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c))
+    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !(c.examLastDate || '').trim())
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* صندوق "يحتاج إلى اختبار": لديه تاريخ آخر اختبار لكن كل النتائج فاضية
+   (لا نجاح ولا رسوب سابق) — يُعيد الاختبار حتى تظهر نتيجة */
+function arkkanExamNeedingClients() {
+  return (clients || [])
+    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !!(c.examLastDate || '').trim())
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -420,14 +428,18 @@ function arkkanExamBadgeHtml(c) {
 
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
+  const nbody = $('#arkkan-exams-needing-tbody');
   const pbody = $('#arkkan-exams-passed-tbody');
   const fbody = $('#arkkan-exams-failed-tbody');
-  const noResult = arkkanExamClients();        // صندوق النتائج: بلا نتيجة بعد
-  const passed = arkkanExamPassedClients();    // صندوق النجاح
-  const failed = arkkanExamFailedClients();    // صندوق الراسبين (مستقل بجلبه)
+  const noResult = arkkanExamClients();          // صندوق النتائج: بلا نتيجة وبلا تاريخ اختبار
+  const needing = arkkanExamNeedingClients();    // يحتاج إلى اختبار: تاريخ اختبار وكل النتائج فاضية
+  const passed = arkkanExamPassedClients();      // صندوق النجاح
+  const failed = arkkanExamFailedClients();      // صندوق الراسبين (مستقل بجلبه)
 
   const counter = $('#arkkan-exams-counter');
-  if (counter) counter.textContent = `العملاء بلا نتيجة بعد (يحتاجون جلباً): ${noResult.length}`;
+  if (counter) counter.textContent = `بلا نتيجة ولا تاريخ اختبار بعد: ${noResult.length}`;
+  const ncounter = $('#arkkan-exams-needing-counter');
+  if (ncounter) ncounter.textContent = `بلا نتيجة (لديهم تاريخ اختبار فقط): ${needing.length}`;
   const pcounter = $('#arkkan-exams-passed-counter');
   if (pcounter) pcounter.textContent = `الناجحون (اكتمل جلب نتائجهم): ${passed.length}`;
   const fcounter = $('#arkkan-exams-failed-counter');
@@ -442,6 +454,18 @@ function renderArkkanExamsTable() {
 
   if (tbody) {
     tbody.innerHTML = noResult.map(c => `
+    <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
+      <td>${escapeHtml(c.name || '—')}</td>
+      <td>${escapeHtml(c.clientId)}</td>
+      ${cells(c)}
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
+      <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
+    </tr>`).join('');
+  }
+
+  if (nbody) {
+    nbody.innerHTML = needing.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
@@ -688,6 +712,19 @@ function arkkanExamsFailedBulk() {
   });
 }
 
+/* جلب جماعي في صندوق "يحتاج إلى اختبار": مستقل — بظهور نتيجة ينتقل للصندوق المناسب */
+function arkkanExamsNeedingBulk() {
+  return arkkanExamBulkRun({
+    name: 'needing',
+    getRows: arkkanExamNeedingClients,
+    startSel: '#btn-arkkan-exams-needing-start',
+    stopSel: '#btn-arkkan-exams-needing-stop',
+    progressSel: '#arkkan-exams-needing-progress',
+    counterSel: '#arkkan-exams-needing-counter',
+    doneMsg: 'اكتمل جلب نتائج المحتاجين للاختبار'
+  });
+}
+
 /* تحديث خلايا صف العميل بالبيانات الحالية (بعد كل جلب ناجح) */
 function arkkanRefreshRowCells(c) {
   const row = document.querySelector(`#arkkan-row-${cssEscapeId(c.clientId)}`);
@@ -722,6 +759,8 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-arkkan-exams-stop')) { examBulkState('exams').stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-failed-start')) { arkkanExamsFailedBulk(); return; }
   if (e.target.closest('#btn-arkkan-exams-failed-stop')) { examBulkState('failed').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-needing-start')) { arkkanExamsNeedingBulk(); return; }
+  if (e.target.closest('#btn-arkkan-exams-needing-stop')) { examBulkState('needing').stop = true; return; }
 });
 
 /* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
