@@ -524,6 +524,12 @@ let _appLoadingOverlayLabel = null;
 function setAppLoadingOverlayText(text){
   try{ if(_appLoadingOverlayLabel) _appLoadingOverlayLabel.textContent = text; }catch(e){}
 }
+function setAppLoadingProgress(pct){
+  try{
+    const fill = document.getElementById('app-loading-progress-fill');
+    if(fill) fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  }catch(e){}
+}
 function showAppLoadingOverlay(){
   try{
     if(_appLoadingOverlay) return;
@@ -536,8 +542,16 @@ function showAppLoadingOverlay(){
     label.style.cssText = 'font-size:15px;opacity:.9;';
     label.textContent = 'جاري تحميل البيانات...';
     _appLoadingOverlayLabel = label;
+    // progress bar
+    const barWrap = document.createElement('div');
+    barWrap.style.cssText = 'width:260px;height:6px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;';
+    const barFill = document.createElement('div');
+    barFill.id = 'app-loading-progress-fill';
+    barFill.style.cssText = 'height:100%;width:0%;background:var(--accent,#d4a017);border-radius:4px;transition:width .3s ease;';
+    barWrap.appendChild(barFill);
     _appLoadingOverlay.appendChild(spinner);
     _appLoadingOverlay.appendChild(label);
+    _appLoadingOverlay.appendChild(barWrap);
     if(!document.getElementById('appSpinKeyframes')){
       const st = document.createElement('style');
       st.id = 'appSpinKeyframes';

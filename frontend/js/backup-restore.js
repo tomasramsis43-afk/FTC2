@@ -159,21 +159,31 @@ async function pushCurrentDataToServer(){
     ['followUpTasks', followUpTasks],
   ];
   const active = collections.filter(([, arr])=> (arr||[]).some(x=> x && x.id));
+  const cl = (clients||[]).filter(c=> c && c.id);
+  const totalSteps = active.length + (cl.length ? 1 : 0) + 1; // +1 للإعدادات
   showAppLoadingOverlay();
+  setAppLoadingProgress(0);
   try{
     let done = 0;
     for(const [name, arr] of active){
-      setAppLoadingOverlayText(`جاري رفع البيانات إلى السيرفر... ${done+1} من ${active.length}`);
+      const pct = Math.round((done / totalSteps) * 100);
+      setAppLoadingOverlayText(`جاري رفع البيانات إلى السيرفر... ${done+1} من ${totalSteps} (${pct}%)`);
+      setAppLoadingProgress(pct);
       await fastUploadCollection(name, arr.filter(x=> x && x.id));
       done++;
     }
-    const cl = (clients||[]).filter(c=> c && c.id);
     if(cl.length){
-      setAppLoadingOverlayText('جاري رفع البيانات إلى السيرفر... العملاء');
+      const pct = Math.round((done / totalSteps) * 100);
+      setAppLoadingOverlayText(`جاري رفع بيانات العملاء... (${pct}%)`);
+      setAppLoadingProgress(pct);
       await fastUploadClients(cl);
+      done++;
     }
-    setAppLoadingOverlayText('جاري حفظ الإعدادات...');
+    const pct = Math.round((done / totalSteps) * 100);
+    setAppLoadingOverlayText(`جاري حفظ الإعدادات... (${pct}%)`);
+    setAppLoadingProgress(pct);
     await Promise.allSettled([saveSettings(), saveUsers(), saveZakatAdjustments()]);
+    setAppLoadingProgress(100);
   }finally{
     hideAppLoadingOverlay();
   }
