@@ -477,6 +477,7 @@ async function arkkanExamSyncOne(clientId, btn) {
     const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
+    _examSession[String(clientId)] = arkkanExamSig(clients[idx] || c);
     const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
     // إعادة الرسم: الناجح ينتقل إلى صندوق النجاح ويختفي من قائمة الجلب
     renderArkkanExamsTable();
@@ -490,6 +491,16 @@ async function arkkanExamSyncOne(clientId, btn) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
   }
+}
+
+/* مذكّرة الجلسة: آخر نتيجة جلب لكل عميل — عند إعادة الجلب لا يُعاد جلب من لم تتغير بياناته */
+const _examSession = {};
+function arkkanExamSig(c) {
+  return JSON.stringify([
+    Array.isArray(c.examAttempts) ? c.examAttempts : [],
+    c.examLastDate || '',
+    c.examResult || ''
+  ]);
 }
 
 /* حالة كل جلب جماعي منفصلة (صندوق النتائج / صندوق الراسبين) */
@@ -516,15 +527,32 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
   if (wrap) wrap.style.display = '';
 
   const rows = getRows();
-  let done = 0, updated = 0, failed = 0;
+  let done = 0, updated = 0, failed = 0, skipped = 0;
 
   showToast(`بدأ الجلب: ${rows.length} عميل`, 'info');
 
   for (const c of rows) {
     if (st.stop) break;
 
-    const statusId = `#arkkan-exam-status-${cssEscapeId(c.clientId)}`;
+    const k = String(c.clientId);
+    const cur = (clients || []).find(x => String(x.clientId) === k) || c;
+    const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
     const stEl = $(statusId);
+
+    /* رُغب جلبه في هذه الجلسة وبياناته لم تتغير → نخطيه بدل إعادته من الأول */
+    if (_examSession[k] && _examSession[k] === arkkanExamSig(cur)) {
+      skipped++;
+      if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
+      done++;
+      if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
+      const counterEl = $(counterSel);
+      if (counterEl) counterEl.textContent = `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
+      if (!st.stop) await new Promise(r => setTimeout(r, 50));
+      continue;
+    }
+    /* بيانات العميل تغيّرت عما جُلب سابقاً → نجلبه من جديد من الجهة */
+    if (_examSession[k]) delete _examSession[k];
+
     if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
 
     try {
@@ -534,6 +562,7 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
       if (idx !== -1) Object.assign(clients[idx], patch);
       if (typeof saveClients === 'function') await saveClients();
       updated++;
+      _examSession[k] = arkkanExamSig(clients[idx] || c);
       arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
       const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
       if (stEl) stEl.innerHTML = passed
@@ -541,13 +570,14 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
         : '<span style="color:var(--success, green);">✅</span>';
     } catch (err) {
       failed++;
+      delete _examSession[k];
       if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌</span>`;
     }
 
     done++;
     if (progress) progress.style.width = `${Math.round(done / Math.max(rows.length, 1) * 100)}%`;
     const counter = $(counterSel);
-    if (counter) counter.textContent = `✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
+    if (counter) counter.textContent = `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rows.length}`;
 
     if (!st.stop) await new Promise(r => setTimeout(r, 700));
   }
@@ -557,7 +587,7 @@ async function arkkanExamBulkRun({ name, getRows, startSel, stopSel, progressSel
   if (stopBtn) stopBtn.style.display = 'none';
   if (wrap) wrap.style.display = 'none';
   renderArkkanExamsTable();
-  showToast(`${doneMsg}: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
+  showToast(`${doneMsg}: ${updated} محدّث، ${failed} فشل، ${skipped} تخطّي (بلا تغيير)`, updated > 0 ? 'success' : 'info');
 }
 
 /* جلب جماعي في صندوق النتائج الرئيسي: بلا نتيجة بعد */
