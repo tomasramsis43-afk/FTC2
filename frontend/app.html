@@ -1278,6 +1278,12 @@
         ⏳ جاري التحقق من حالة العميل المحلي (arkkan-agent)...
       </div>
 
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <label for="set-arkkan-resume-hours" style="font-size:12.5px; color:var(--text-muted);">فترة تخطي الفحص المُعاد (ساعات):</label>
+        <input type="number" id="set-arkkan-resume-hours" min="1" max="720" step="1" style="width:72px;" title="مدة يُحترم فيها شرط «فُحص حديثاً» عند إعادة تشغيل أي جلب — فالإيقاف ثم إعادة التشغيل يكمل من حيث توقف بدل البدء من الصفر">
+        <span style="font-size:11.5px; color:var(--text-muted);">أي إيقاف ثم إعادة تشغيل لأي صندوق (حتى بعد تحديث الصفحة) يكمل من حيث توقف — يتخطى من فُحصوا حديثاً خلال هذه المدة.</span>
+      </div>
+
       <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الاتصال</button>
         <button type="button" class="btn btn-gold" id="btn-arkkan-bulk-start" disabled>

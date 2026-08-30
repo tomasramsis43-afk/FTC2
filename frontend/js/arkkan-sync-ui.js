@@ -275,7 +275,7 @@ async function arkkanBulkSync() {
   /* استئناف: من فُحصوا حديثاً وبياناتهم لسه ناقصة لا نعيد سؤال أركان عنهم — يكمّل من حيث توقف */
   const missing = all.filter(c => {
     const m = c.arkkanDataCheck;
-    return !(m && Date.now() - m < ARKKAN_RESUME_MS);
+    return !(m && Date.now() - m < arkkanResumeMs());
   });
   const total = missing.length;
   const skipped0 = all.length - total;
@@ -617,8 +617,23 @@ function arkkanExamSig(c) {
 /* نافذة الاستئناف: علامة فحص محفوظة على العميل نفسه (arkkanExamCheck / arkkanDataCheck)
    تجعل إعادة تشغيل الجلب/المزامنة تتخطى من فُحصوا حديثاً وبياناتهم ثابتة — حتى بعد
    تحديث الصفحة أو إغلاقها — فيكمل من حيث توقف بدل إعادة الجلب من الصفر.
-   المدة الافتراضية 24 ساعة (عدّلها بـ window.ARKKAN_RESUME_HOURS). */
-const ARKKAN_RESUME_MS = (parseInt(window.ARKKAN_RESUME_HOURS || '24', 10) || 24) * 3600 * 1000;
+   المدة قابلة للضبط من حقل "فترة تخطي الفحص المُعاد (ساعات)" في هذا التبويب
+   وتُحفظ في settings.arkkanResumeHours — أو يدوياً عبر window.ARKKAN_RESUME_HOURS؛
+   الافتراضي 24 ساعة. */
+function arkkanResumeMs() {
+  let h = settings && settings.arkkanResumeHours;
+  if (!(Number(h) > 0)) h = parseInt(window.ARKKAN_RESUME_HOURS || '24', 10) || 24;
+  return Number(h) * 3600 * 1000;
+}
+
+/* مزامنة حقل "فترة تخطي الفحص المُعاد" في التبويب مع الإعداد المحفوظ */
+function arkkanResumeFieldSync() {
+  const el = $('#set-arkkan-resume-hours');
+  if (!el) return;
+  const h = settings && settings.arkkanResumeHours;
+  const v = Number(h) > 0 ? Number(h) : (parseInt(window.ARKKAN_RESUME_HOURS || '24', 10) || 24);
+  if (String(el.value) !== String(v)) el.value = v;
+}
 
 async function arkkanExamSyncCard(clientId, btn) {
   const c = (clients || []).find(x => String(x.clientId) === String(clientId));
@@ -719,7 +734,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
          على العميل نفسه) وبياناتهم لم تتغير — إعادة التشغيل تكمل من حيث توقف بدل البدء من الصفر */
       const sigNow = arkkanExamSig(cur);
       const chk = cur && cur.arkkanExamCheck;
-      const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < ARKKAN_RESUME_MS;
+      const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < arkkanResumeMs();
       if (!compare && (_examSession[k] === sigNow || resumeSkip)) {
         skipped++;
         if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
@@ -934,6 +949,7 @@ function arkkanRefreshRowCells(c) {
 /* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
 document.addEventListener('click', () => {
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
+    arkkanResumeFieldSync();
     renderArkkanSyncTable();
     renderArkkanExamsTable();
   }
@@ -963,6 +979,7 @@ function initArkkanSyncView() {
   const navBtn = document.querySelector('nav.tabs button[data-view="arkkan-sync"]');
   if (navBtn) {
     navBtn.addEventListener('click', () => {
+      arkkanResumeFieldSync();
       renderArkkanSyncTable();
       renderArkkanExamsTable();
       arkkanUpdateStatus();
@@ -971,3 +988,15 @@ function initArkkanSyncView() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initArkkanSyncView);
 else initArkkanSyncView();
+
+/* حفظ فترة التخطي من الحقل عند تغييرها */
+document.addEventListener('change', async e => {
+  if (e.target && e.target.id === 'set-arkkan-resume-hours') {
+    const v = Math.max(1, Math.min(720, parseInt(e.target.value, 10) || 24));
+    if (!settings || typeof DEFAULT_SETTINGS === 'undefined') settings = { arkkanResumeHours: 24 };
+    settings.arkkanResumeHours = v;
+    try { await saveSettings(); } catch {}
+    arkkanResumeFieldSync();
+    showToast(`فترة تخطي الفحص المُعاد = ${v} ساعة — يُطبق من التشغيل القادم`, 'info');
+  }
+});
