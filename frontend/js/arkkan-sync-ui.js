@@ -728,11 +728,28 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const rows = getRows();
+  /* استئناف حقيقي: نستبعد المفحوصين حديثاً *قبل* بدء اللوب (نفس نمط arkkanBulkSync) —
+     فلو وقّفت الصندوق وشغّلته تاني، العدّاد وشريط التقدّم يعكسان المتبقي الفعلي فقط،
+     بدل ما يعيدا عرض/عدّ كل الصفوف من الأول وهو بيتخطاها بسرعة من جوه اللوب. */
+  const rowsAll = getRows();
+  const rows = rowsAll.filter(c => {
+    const k = String(c.clientId);
+    const cur = (clients || []).find(x => String(x.clientId) === k) || c;
+    if (compare) {
+      const cmpChk = cur && cur.arkkanCompareCheck;
+      return !(cmpChk && Date.now() - cmpChk < arkkanCompareResumeMs());
+    }
+    const sigNow = arkkanExamSig(cur);
+    const chk = cur && cur.arkkanExamCheck;
+    const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < arkkanResumeMs();
+    return !(resumeSkip || _examSession[k] === sigNow);
+  });
   const rowsTotal = rows.length;
+  const skipped0 = rowsAll.length - rowsTotal;
   let done = 0, updated = 0, same = 0, failed = 0, skipped = 0;
 
-  showToast(compare ? `بدأت المقارنة مع أركان: ${rowsTotal} عميل` : `بدأ الجلب: ${rowsTotal} عميل`, 'info');
+  showToast((compare ? `بدأت المقارنة مع أركان: ${rowsTotal} عميل` : `بدأ الجلب: ${rowsTotal} عميل`)
+    + (skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''), 'info');
 
   const diffText = (cur, srcResult) => {
     const os = arkkanExamStatusOf(cur);
@@ -766,14 +783,10 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
       const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
       const stEl = $(statusId);
 
-      /* وضع الجلب: نخطي من فُحصوا حديثاً وبياناتهم لم تتغير — فيكمل من حيث توقف.
-         وضع المقارنة: نافذة تخطي مستقلة بحساب ساعات خاص بها (arkkanCompareCheck) —
-         من فُورن نتيجة حديثاً لا يُعاد سؤاله عن أركان ويُتخطى حتى انتهاء النافذة. */
+      /* الفلترة الأساسية (المفحوص حديثاً حسب arkkanExamCheck/arkkanCompareCheck) حدثت
+         *قبل* بدء اللوب أعلاه. هذا الفحص هنا شبكة أمان فقط لحالة نادرة: عميل تغيّر
+         توقيعه (sig) في نفس الجلسة بفعل معالجة صف آخر قبل ما يوصله الدور. */
       const sigNow = arkkanExamSig(cur);
-      const chk = cur && cur.arkkanExamCheck;
-      const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < arkkanResumeMs();
-      const cmpChk = cur && cur.arkkanCompareCheck;
-      const cmpSkip = compare && cmpChk && Date.now() - cmpChk < arkkanCompareResumeMs();
 
       const skipEl =
         compare
@@ -789,8 +802,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
           ? `⏭️ ${skipped} · ⤭ ${same} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`
           : `⤭ ${skipped} · ✅ ${updated} · ❌ ${failed} · ${done}/${rowsTotal}`;
       };
-      if (!compare && (_examSession[k] === sigNow || resumeSkip)) { skipAndContinue(); continue; }
-      if (cmpSkip) { skipAndContinue(); continue; }
+      if (!compare && _examSession[k] === sigNow) { skipAndContinue(); continue; }
       if (!compare && _examSession[k]) delete _examSession[k];
 
       if (stEl) stEl.innerHTML = '<span style="color:var(--gold);">⏳...</span>';
