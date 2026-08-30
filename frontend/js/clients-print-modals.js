@@ -509,7 +509,7 @@ function openModal(id){
   $('#f-date').value = c?.date || todayISO();
   $('#f-courseprice').value = c?.coursePrice ?? '';
   $('#f-bagsource').value = c?.bagSource || 'buy';
-  $('#f-bagowndate').value = c?.bagOwnDate || '';
+  $('#f-bagowndate').value = c?.bagOwnDate || c?.bagPurchaseDate || '';
   // مستخدم الاستقبال ممنوع من شراء/تسليم أي حقيبة: نعطّل خيار "تسليم من المخزون المتوفر"
   // (وهو ما يُعتبر شراء/صرف فوري لحقيبة من المخزون) ونجبر مصدر الحقيبة على "مطلوب الشراء"
   // إن كان محدَّداً على "من المخزون" — يبقى بإمكانه فقط اختيار "مطلوب الشراء" أو "حقيبة العميل الخاصة".
