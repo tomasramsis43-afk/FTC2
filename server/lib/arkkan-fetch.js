@@ -16,6 +16,8 @@
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const path = require('path');
+const fs = require('fs');
+const { execSync } = require('child_process');
 
 /* مفتاح رقمي للمقارنة الزمنية (يدعم YYYY/MM/DD و DD/MM/YYYY) لتحديد الأحدث */
 function dateKey(v) {
@@ -357,6 +359,19 @@ async function initBrowser() {
     throw new Error('مكتبة playwright غير مثبتة في السيرفر — شغّل أولاً: npm install playwright');
   }
   if (_browser) { await _browser.close().catch(() => {}); _browser = null; _ctx = null; _workers = []; _ready = false; }
+
+  // لو متصفح Chromium لم يُنزّل أثناء البناء (فشل postinstall على الاستضافة مثل Render
+  // — ملاحظة: install-browser الآن لا يوقف النشر، فيُعاد التنزيل هنا عند أول جلب)
+  try {
+    const exe = playwright.chromium.executablePath();
+    if (exe && !fs.existsSync(exe)) {
+      console.log('[arkkan] متصفح Chromium غير موجود — بدء التنزيل الآن (يستغرق دقائق)');
+      execSync('npx playwright install chromium', { stdio: 'inherit', env: process.env });
+    }
+  } catch (e) {
+    // لو فشل التنزيل هنا أيضاً، launch التالية تُظهر الخطأ الواضح
+    console.warn('[arkkan] تعذّر التنزيل الفوري لـChromium:', (e.message || '').slice(0, 300));
+  }
 
   _browser = await playwright.chromium.launch({
     headless: HEADLESS,
