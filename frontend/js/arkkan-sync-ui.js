@@ -271,11 +271,24 @@ async function arkkanBulkSync() {
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const missing = arkkanMissingClients();
+  const all = arkkanMissingClients();
+  /* استئناف: من فُحصوا حديثاً وبياناتهم لسه ناقصة لا نعيد سؤال أركان عنهم — يكمّل من حيث توقف */
+  const missing = all.filter(c => {
+    const m = c.arkkanDataCheck;
+    return !(m && Date.now() - m < ARKKAN_RESUME_MS);
+  });
   const total = missing.length;
+  const skipped0 = all.length - total;
   let done = 0, updated = 0, failed = 0;
 
-  showToast(`بدأت المزامنة: ${total} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+  showToast(`بدأت المزامنة: ${total} عميل${skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''} — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+
+  /* إظهار حالة المتخطّين في جدولهم فوراً */
+  for (const c of all) {
+    if (missing.includes(c)) continue;
+    const el = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
+    if (el) el.innerHTML = '<span style="color:var(--text-muted);">⏭️ فُحص حديثاً — تخطٍّ</span>';
+  }
 
   /* حفظ متسلسل دائماً (حتى مع توازي الجلب) حتى لا تتداخل كتابة العملاء
      بين عدة طلبات في نفس اللحظة (خاصة قبل تثبيت الـ baseline). */
@@ -307,12 +320,19 @@ async function arkkanBulkSync() {
 
         if (Object.keys(patch).length > 0) {
           const idx = clients.findIndex(x => x.clientId === c.clientId);
-          if (idx !== -1) Object.assign(clients[idx], patch);
+          if (idx !== -1) {
+            Object.assign(clients[idx], patch);
+            clients[idx].arkkanDataCheck = Date.now();
+          }
           await queueSave();
           updated++;
           arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
           if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
         } else {
+          /* سجّل الفحص على العميل حتى لا يُعاد سؤاله في نفس الفترة
+             (يُحفظ في الحفظة الختامية بعد انتهاء التشغيل) */
+          const idx0 = clients.findIndex(x => x.clientId === c.clientId);
+          if (idx0 !== -1) clients[idx0].arkkanDataCheck = Date.now();
           if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا جديد</span>';
         }
       } catch (err) {
@@ -328,6 +348,7 @@ async function arkkanBulkSync() {
   };
 
   await Promise.all(Array.from({ length: Math.min(POOL, total) }, () => processOne()));
+  await queueSave(); // حفظ علامات الفحص المتبقية (لا جديد)
 
   _arkkanBulkRunning = false;
   if (startBtn) startBtn.style.display = '';
@@ -593,6 +614,12 @@ function arkkanExamSig(c) {
   ]);
 }
 
+/* نافذة الاستئناف: علامة فحص محفوظة على العميل نفسه (arkkanExamCheck / arkkanDataCheck)
+   تجعل إعادة تشغيل الجلب/المزامنة تتخطى من فُحصوا حديثاً وبياناتهم ثابتة — حتى بعد
+   تحديث الصفحة أو إغلاقها — فيكمل من حيث توقف بدل إعادة الجلب من الصفر.
+   المدة الافتراضية 24 ساعة (عدّلها بـ window.ARKKAN_RESUME_HOURS). */
+const ARKKAN_RESUME_MS = (parseInt(window.ARKKAN_RESUME_HOURS || '24', 10) || 24) * 3600 * 1000;
+
 async function arkkanExamSyncCard(clientId, btn) {
   const c = (clients || []).find(x => String(x.clientId) === String(clientId));
   if (!c) return;
@@ -688,8 +715,12 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
       const statusId = `#arkkan-exam-status-${cssEscapeId(k)}`;
       const stEl = $(statusId);
 
-      /* رُغب جلبه في هذه الجلسة وبياناته لم تتغير → نخطيه بدل إعادته من الأول (وضع الجلب فقط) */
-      if (!compare && _examSession[k] && _examSession[k] === arkkanExamSig(cur)) {
+      /* وضع الجلب فقط: نخطي من فُحصوا في هذه الجلسة (ذاكرة) أو حديثاً (علامة محفوظة
+         على العميل نفسه) وبياناتهم لم تتغير — إعادة التشغيل تكمل من حيث توقف بدل البدء من الصفر */
+      const sigNow = arkkanExamSig(cur);
+      const chk = cur && cur.arkkanExamCheck;
+      const resumeSkip = chk && chk.s === sigNow && Date.now() - (chk.t || 0) < ARKKAN_RESUME_MS;
+      if (!compare && (_examSession[k] === sigNow || resumeSkip)) {
         skipped++;
         if (stEl) stEl.innerHTML = '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
         done++;
@@ -729,7 +760,10 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
             : '<span style="color:var(--text-muted);">⏭️ مطابق للمخزَّن</span>';
         } else {
           const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
-          if (idx !== -1) Object.assign(clients[idx], patch);
+          if (idx !== -1) {
+            Object.assign(clients[idx], patch);
+            clients[idx].arkkanExamCheck = { s: arkkanExamSig(clients[idx]), t: Date.now() };
+          }
           await queueSave();
           updated++;
           _examSession[k] = arkkanExamSig(clients[idx] || c);
@@ -753,7 +787,10 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
               : '<span style="color:var(--text-muted);">⏭️ مطابق (من المحاولة الثانية)</span>';
           } else {
             const idx2 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
-            if (idx2 !== -1) Object.assign(clients[idx2], patch2);
+            if (idx2 !== -1) {
+              Object.assign(clients[idx2], patch2);
+              clients[idx2].arkkanExamCheck = { s: arkkanExamSig(clients[idx2]), t: Date.now() };
+            }
             await queueSave();
             _examSession[k] = arkkanExamSig(clients[idx2] || c);
             updated++;
