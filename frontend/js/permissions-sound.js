@@ -780,10 +780,39 @@ async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
 }
 async function saveBagStock(){
-  try{ await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
+  try{
+    // نجلب أرقام النسخ الحالية من السيرفر قبل الكتابة لتفادي تعارضات الـ 409
+    if(!isCurrentlyOffline()){
+      try{
+        const vr = await serverFetch('/api/records/bagStock/versions');
+        if(vr && vr.ok){
+          const vd = await vr.json().catch(()=>null);
+          if(vd && Array.isArray(vd.pairs)){
+            if(!_recordVersions['bagStock']) _recordVersions['bagStock'] = new Map();
+            for(const [id, ver] of vd.pairs) _recordVersions['bagStock'].set(id, ver);
+          }
+        }
+      }catch(e){ /* نكمل حتى لو فشل الجلب */ }
+    }
+    await saveCollectionGeneric('bagStock', bagStock);
+  }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
 }
 async function saveVaultTx(){
-  try{ await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
+  try{
+    if(!isCurrentlyOffline()){
+      try{
+        const vr = await serverFetch('/api/records/vaultTx/versions');
+        if(vr && vr.ok){
+          const vd = await vr.json().catch(()=>null);
+          if(vd && Array.isArray(vd.pairs)){
+            if(!_recordVersions['vaultTx']) _recordVersions['vaultTx'] = new Map();
+            for(const [id, ver] of vd.pairs) _recordVersions['vaultTx'].set(id, ver);
+          }
+        }
+      }catch(e){ /* نكمل */ }
+    }
+    await saveCollectionGeneric('vaultTx', vaultTx);
+  }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
 }
 async function saveDeletedVaultTx(){
   try{ await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
