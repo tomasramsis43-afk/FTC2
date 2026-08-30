@@ -104,13 +104,13 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
 async function fetchClientData({ clientId, referNum = '' }) {
   const result = {
     invoice: '', courseNumber: '', date: '',
-    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', startDate: ''
+    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: ''
   };
 
   const pg = _page;
   if (!pg) throw new Error('المتصفح غير جاهز بعد');
 
-  const { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
+  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
 
   // ── إيصال الدورة: نأخذ فقط سطر الدورة الذي يبدأ رقمه بـ FHD (رقم الدورة
   //    ورقم الفاتورة معاً). لو ما فيش سطر FHD نتبع السلوك القديم: أول سطر. ──
@@ -177,13 +177,18 @@ async function fetchClientData({ clientId, referNum = '' }) {
       return [...document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')]
         .map((r, i) => {
           const inp = [...r.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
-          return inp ? i : null;
+          if (!inp) return null;
+          // خانة "نوع الصرف" = رابع عمود؛ صفوف الحقيبة الخاصة تظهر بنوع يحتوي "خاص/خصوصي"
+          const type = (r.querySelector('td:nth-child(4)')?.innerText || '').trim();
+          return { i, own: /خاص|خصوصي/.test(type) };
         })
-        .filter(i => i !== null);
+        .filter(Boolean);
     });
 
     let bagBest = { invoice: '', bagPurchaseDate: '' };
-    for (const idx of bagRows) {
+    let bagOwnDate = '';
+    for (const br of bagRows) {
+      const idx = br.i;
       const clickedB = await fr.evaluate((i) => {
         const row = document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')[i];
         const inp = row && [...row.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
@@ -209,6 +214,10 @@ async function fetchClientData({ clientId, referNum = '' }) {
       if (dt && dateKey(dt) > dateKey(bagBest.bagPurchaseDate)) {
         bagBest = { invoice: inv, bagPurchaseDate: dt };
       }
+      // تاريخ إيصال الحقيبة الخاصة (صفوف نوعها "خاص/خصوصي") — نأخذ الأحدث منها
+      if (br.own && dt && dateKey(dt) > dateKey(bagOwnDate)) {
+        bagOwnDate = dt;
+      }
 
       await closeDialog(pg);
       // ننتظر اختفاء إطار الإيصال — أسرع من نوم ثابت 1.5 ثانية
@@ -220,6 +229,8 @@ async function fetchClientData({ clientId, referNum = '' }) {
 
     result.bagInvoice = bagBest.invoice;
     result.bagPurchaseDate = bagBest.bagPurchaseDate;
+    // تاريخ الحقيبة الخاصة: من صف نوعه "خاص"، وإلا نستعمل تاريخ أحدث إيصال حقيبة
+    result.bagOwnDate = bagOwnDate || bagBest.bagPurchaseDate;
   }
 
   return result;
