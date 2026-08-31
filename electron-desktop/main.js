@@ -37,7 +37,7 @@ try {
 // مش موجود أصلاً في نسخة Electron). كذلك أُزيل module-zatca.js من هنا لأنه لم يعد
 // مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
-  'app.html', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
+  'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
