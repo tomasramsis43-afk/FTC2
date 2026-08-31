@@ -70,7 +70,7 @@
       <div class="gv-right">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-save-view">💾 حفظ العرض</button>
         <div class="cols-wrap">
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-cols-toggle">▦ الأعمدة</button>
+          <button type="button" class="btn btn-ghost btn-sm icon-btn" id="btn-cols-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="9" y1="4" x2="9" y2="20"></line><line x1="15" y1="4" x2="15" y2="20"></line></svg><span>الأعمدة</span></button>
           <div class="cols-panel" id="cols-panel" role="menu">
             ${CLIENT_COLS.map(c => `
               <label class="cols-item"><input type="checkbox" data-col="${c.idx}" ${hiddenCols.includes(c.idx) ? '' : 'checked'}> ${c.label}</label>

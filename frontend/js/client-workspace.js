@@ -1,26 +1,26 @@
 /* ============================================================
-   ┘╪ذ╪╢ ظ¤ Customer Workspace (┘à┘┘ ╪د┘╪╣┘à┘è┘) ظ¤ Phase 4a
+   نبض — Customer Workspace (ملف العميل) — Phase 4a
    ------------------------------------------------------------
-   ╪»╪▒╪ش ╪ش╪د┘╪ذ┘è ┘è╪╣╪▒╪╢ ┘à┘┘ ╪د┘╪╣┘à┘è┘ ╪د┘┘â╪د┘à┘ (┘ç┘ê┘è╪ر/┘à╪د┘┘è╪ر/╪»┘ê╪▒╪ر/╪ص╪▒┘â╪د╪ز ┘à╪▒╪ز╪ذ╪╖╪ر)
-   ┘┘ê┘é ╪ش╪»┘ê┘ ╪د┘╪╣┘à┘╪د╪ة ╪د┘┘é╪د╪خ┘à ╪»┘ê┘ ╪ث┘è ╪ز╪║┘è┘è╪▒ ┘┘è ┘à╪│╪د╪▒╪د╪ز ╪د┘╪ص┘╪╕ ╪ث┘ê ╪د┘╪ص╪░┘:
-   - ┘â┘ ╪د┘╪ث╪▒┘é╪د┘à ╪ز┘╪ص╪│╪ذ ╪ذ╪»┘ê╪د┘ ┘à┘ê╪ش┘ê╪»╪ر (total/paidTotal/remaining)
-   - ┘â┘ ╪د┘╪ح╪ش╪▒╪د╪ة╪د╪ز ╪ز┘╪ز╪ص ╪د┘┘┘à╪د╪░╪ش ╪د┘╪ص╪د┘┘è╪ر ┘┘╪│┘ç╪د (openModal / ╪ز┘┘ê┘è╪╢
-     data-invoice ╪د┘┘é╪د╪خ┘à / openVaultModal) ظ¤ ┘╪د ┘à┘╪╖┘é ╪ش╪»┘è╪» ┘┘┘â╪ز╪د╪ذ╪ر
-   ╪د┘┘╪ز╪ص: ╪▓╪▒ "┘╪ز╪ص ╪د┘┘à┘┘" ┘à┘ ┘é╪د╪خ┘à╪ر ╪د┘╪╡┘╪î ╪ث┘ê ┘┘é╪▒ ┘à╪▓╪»┘ê╪ش ╪╣┘┘ë ╪د┘╪╡┘.
+   درج جانبي يعرض ملف العميل الكامل (هوية/مالية/دورة/حركات مرتبطة)
+   فوق جدول العملاء القائم دون أي تغيير في مسارات الحفظ أو الحذف:
+   - كل الأرقام تُحسب بدوال موجودة (total/paidTotal/remaining)
+   - كل الإجراءات تفتح النماذج الحالية نفسها (openModal / تفويض
+     data-invoice القائم / openVaultModal) — لا منطق جديد للكتابة
+   الفتح: زر "فتح الملف" من قائمة الصف، أو نقر مزدوج على الصف.
    ============================================================ */
 
 function cwStatusBadges(c){
   const badges = [];
   if(typeof pendingClientIdSet === 'function' && pendingClientIdSet().has(c.id)){
-    badges.push('<span class="cw-badge warn">╪ذ╪د┘╪ز╪╕╪د╪▒ ╪د╪╣╪ز┘à╪د╪»</span>');
+    badges.push('<span class="cw-badge warn">بانتظار اعتماد</span>');
   }
-  if(c.suspended) badges.push('<span class="cw-badge muted">┘à┘ê┘é┘ê┘</span>');
-  if(c.cancelled) badges.push('<span class="cw-badge danger">┘à┘╪║┘è</span>');
+  if(c.suspended) badges.push('<span class="cw-badge muted">موقوف</span>');
+  if(c.cancelled) badges.push('<span class="cw-badge danger">ملغي</span>');
   return badges.join('');
 }
 
-/* ╪ت╪«╪▒ ╪د┘╪ص╪▒┘â╪د╪ز ╪د┘┘à╪د┘┘è╪ر ╪د┘┘à╪▒╪ز╪ذ╪╖╪ر ╪ذ╪د┘╪╣┘à┘è┘ (┘é╪▒╪د╪ة╪ر ┘┘é╪╖):
-   ╪ص╪▒┘â╪د╪ز ╪ز┘┘é╪د╪خ┘è╪ر ┘à╪▒╪ذ┘ê╪╖╪ر ╪ذ╪د┘┘à╪╣╪▒┘ + ╪د┘┘è╪»┘ê┘è╪ر ╪د┘┘à╪│╪ش┘╪ر ╪ذ╪د╪│┘à┘ç */
+/* آخر الحركات المالية المرتبطة بالعميل (قراءة فقط):
+   حركات تلقائية مربوطة بالمعرف + اليدوية المسجلة باسمه */
 function cwRelatedMovements(c){
   return vaultTx
     .filter(t => t.autoClientId === c.id || String(t.clientName || '') === String(c.name || ''))
@@ -28,10 +28,10 @@ function cwRelatedMovements(c){
     .slice(0, 6);
 }
 
-/* ╪│╪ش┘ ┘╪┤╪د╪╖ ┘ç╪░╪د ╪د┘╪╣┘à┘è┘ ╪ز╪ص╪»┘è╪»╪د┘ï (┘é╪▒╪د╪ة╪ر ┘┘é╪╖): ┘┘┘╪ز╪▒ auditLog ╪د┘╪╣╪د┘à ╪ذ┘à╪╖╪د╪ذ┘é╪ر ┘╪╡┘è╪ر
-   ┘╪د╪│┘à┘ç ╪ث┘ê ╪▒┘é┘à ┘ç┘ê┘è╪ز┘ç ╪»╪د╪«┘ ┘ê╪╡┘ ┘â┘ ╪╣┘à┘┘è╪ر ظ¤ ┘┘╪│ ╪ث╪│┘┘ê╪ذ ╪د┘╪▒╪ذ╪╖ ╪د┘┘╪╡┘è ╪د┘┘à╪│╪ز╪«╪»┘à ╪ث╪╡┘╪د┘ï
-   ┘┘ë ╪ث┘à╪د┘â┘ ╪ث╪«╪▒┘ë ╪ذ╪د┘┘à╪┤╪▒┘ê╪╣ (┘à╪س╪د┘: module-companies.js) ┘╪╣╪»┘à ┘ê╪ش┘ê╪» clientId ┘à┘┘ç┘è┘â┘
-   ╪»╪د╪«┘ ╪ذ┘┘è╪ر auditLog ╪د┘╪ص╪د┘┘è╪ر. ╪╡┘╪▒ ╪ذ┘è╪د┘╪د╪ز ┘ê┘ç┘à┘è╪ر ظ¤ ┘â┘ ╪│╪╖╪▒ ┘ç┘╪د ╪╣┘à┘┘è╪ر ╪ص┘é┘è┘é┘è╪ر ┘à╪│╪ش┘ّ┘╪ر. */
+/* سجل نشاط هذا العميل تحديداً (قراءة فقط): نفلتر auditLog العام بمطابقة نصية
+   لاسمه أو رقم هويته داخل وصف كل عملية — نفس أسلوب الربط النصي المستخدم أصلاً
+   فى أماكن أخرى بالمشروع (مثال: module-companies.js) لعدم وجود clientId مُهيكل
+   داخل بنية auditLog الحالية. صفر بيانات وهمية — كل سطر هنا عملية حقيقية مسجّلة. */
 function cwClientActivity(c){
   if(typeof auditLog === 'undefined' || !Array.isArray(auditLog)) return [];
   const needles = [c.name, c.clientId].filter(Boolean).map(String);
@@ -45,62 +45,62 @@ function cwClientActivity(c){
 function cwActivityHtml(c){
   const rows = cwClientActivity(c);
   if(!rows.length){
-    return '<div class="hint">┘╪د ┘è┘ê╪ش╪» ┘╪┤╪د╪╖ ┘à╪│╪ش┘┘ّ┘ ┘┘ç╪░╪د ╪د┘╪╣┘à┘è┘ ╪ذ╪╣╪».</div>';
+    return '<div class="hint">لا يوجد نشاط مسجَّل لهذا العميل بعد.</div>';
   }
   return '<div class="cw-activity">' + rows.map(a => `
     <div class="cw-activity-row ${escapeHtml(a.action||'')}">
       <span class="cw-act-dot"></span>
       <div>
         <div>${a.user ? '<b>'+escapeHtml(a.user)+'</b> ' : ''}${escapeHtml(a.description||a.section||'')}</div>
-        <div class="cw-act-meta">${formatDateDisplay ? (new Date(a.ts)).toLocaleString('ar-SA') : ''}${a.section ? ' ┬╖ '+escapeHtml(a.section) : ''}</div>
+        <div class="cw-act-meta">${formatDateDisplay ? (new Date(a.ts)).toLocaleString('ar-SA') : ''}${a.section ? ' · '+escapeHtml(a.section) : ''}</div>
       </div>
     </div>`).join('') + '</div>';
 }
 
-/* ---- ┘à┘┘ ╪د┘╪╣┘à┘è┘ ╪ث╪╡╪ذ╪ص ╪╡┘╪ص╪ر ┘ê╪د╪ص╪»╪ر ┘à╪ز╪╡┘╪ر ╪ز╪╣╪▒╪╢ ┘â┘ ╪د┘╪ذ┘è╪د┘╪د╪ز ┘à╪╣╪د┘ï (╪ذ╪»┘ ╪ز╪ذ┘ê┘è╪ذ╪د╪ز ┘à┘┘╪╡┘╪ر
-   ┘â╪د┘╪ز ╪ز╪«┘┘è ╪د┘╪ث┘é╪│╪د┘à ╪╣┘ ╪ذ╪╣╪╢┘ç╪د) ظ¤ ╪د┘╪ز╪▒╪ز┘è╪ذ: ╪د┘┘ê╪╢╪╣ ╪د┘┘à╪د┘┘è╪î ╪د┘╪ص╪▒┘â╪د╪ز ╪د┘┘à╪▒╪ز╪ذ╪╖╪ر╪î ╪ذ┘è╪د┘╪د╪ز ╪د┘╪╣┘à┘è┘╪î
-   ╪د┘╪»┘ê╪▒╪ر ┘ê╪د┘╪ص┘é╪د╪خ╪ذ╪î ╪س┘à ╪│╪ش┘ ╪د┘┘╪┤╪د╪╖╪î ┘â┘ ┘é╪│┘à ╪ذ╪╣┘┘ê╪د┘┘ç ╪د┘╪«╪د╪╡ ┘┘ë ╪ز┘à╪▒┘è╪▒ ╪▒╪ث╪│┘è ┘ê╪د╪ص╪». ---- */
+/* ---- ملف العميل أصبح صفحة واحدة متصلة تعرض كل البيانات معاً (بدل تبويبات منفصلة
+   كانت تخفي الأقسام عن بعضها) — الترتيب: الوضع المالي، الحركات المرتبطة، بيانات العميل،
+   الدورة والحقائب، ثم سجل النشاط، كل قسم بعنوانه الخاص فى تمرير رأسي واحد. ---- */
 
-/* ╪ذ╪╖╪د┘é╪د╪ز ╪ذ┘è╪د┘╪د╪ز ╪د┘┘â╪▒╪ز (╪ذ┘è╪د┘╪د╪ز ╪د┘╪╣┘à┘è┘ + ╪د┘╪»┘ê╪▒╪ر ┘ê╪د┘╪ص┘é╪د╪خ╪ذ) ظ¤ ╪»╪د┘╪ر ┘à┘┘╪╡┘╪ر ╪ص╪ز┘ë
-   ┘╪ص╪»┘ّ╪س┘ç╪د ┘┘ê╪▒╪د┘ï ╪ذ╪╣╪» "╪ش┘╪ذ ┘à┘ ╪ث╪▒┘â╪د┘" ┘à┘ ╪║┘è╪▒ ╪ح╪╣╪د╪»╪ر ┘╪ز╪ص ╪د┘┘â┘╪ز */
+/* بطاقات بيانات الكرت (بيانات العميل + الدورة والحقائب) — دالة منفصلة حتى
+   نحدّثها فوراً بعد "جلب من أركان" من غير إعادة فتح الكلت */
 function cwInfoHtml(c){
   const row = (k, v) => v ? `<div class="cw-item"><small>${k}</small><b>${v}</b></div>` : '';
   return `
     <div class="cw-section">
-      <h4>╪ذ┘è╪د┘╪د╪ز ╪د┘╪╣┘à┘è┘</h4>
+      <h4>بيانات العميل</h4>
       <div class="cw-grid">
-        ${row('╪▒┘é┘à ╪د┘┘ç┘ê┘è╪ر', escapeHtml(c.clientId || ''))}
-        ${row('╪د┘╪ش┘ê╪د┘', phoneCellHtml ? phoneCellHtml(c.phone) : escapeHtml(c.phone || ''))}
-        ${row('╪د┘╪ش┘╪│┘è╪ر', escapeHtml(c.nationality || ''))}
-        ${row('╪ز╪د╪▒┘è╪« ╪د┘╪ز╪│╪ش┘è┘', formatDateDisplay(c.date) || '')}
-        ${row('╪د┘╪▒┘é┘à ╪د┘┘à╪▒╪ش╪╣┘è', escapeHtml(c.referNum || ''))}
-        ${row('╪د┘╪┤╪▒┘â╪ر', escapeHtml(c.companyName || ''))}
-        ${row('┘é┘╪د╪ر ╪د┘╪»┘╪╣', typeof paymentChannelsLabel === 'function' ? escapeHtml(paymentChannelsLabel(c)) : '')}
-        ${row('╪د┘╪ذ╪▒┘è╪»', escapeHtml(c.email || ''))}
+        ${row('رقم الهوية', escapeHtml(c.clientId || ''))}
+        ${row('الجوال', phoneCellHtml ? phoneCellHtml(c.phone) : escapeHtml(c.phone || ''))}
+        ${row('الجنسية', escapeHtml(c.nationality || ''))}
+        ${row('تاريخ التسجيل', formatDateDisplay(c.date) || '')}
+        ${row('الرقم المرجعي', escapeHtml(c.referNum || ''))}
+        ${row('الشركة', escapeHtml(c.companyName || ''))}
+        ${row('قناة الدفع', typeof paymentChannelsLabel === 'function' ? escapeHtml(paymentChannelsLabel(c)) : '')}
+        ${row('البريد', escapeHtml(c.email || ''))}
       </div>
     </div>
     <div class="cw-section">
-      <h4>╪د┘╪»┘ê╪▒╪ر ┘ê╪د┘╪ص┘é╪د╪خ╪ذ</h4>
+      <h4>الدورة والحقائب</h4>
       <div class="cw-grid">
-        ${row('╪د┘╪»┘ê╪▒╪ر', escapeHtml(c.courseType || ''))}
-        ${row('╪▒┘é┘à ╪د┘╪»┘ê╪▒╪ر', escapeHtml(c.courseNumber || ''))}
-        ${row('╪▒┘é┘à ╪د┘┘╪د╪ز┘ê╪▒╪ر', escapeHtml(c.invoice || ''))}
-        ${row('┘é┘è┘à╪ر ╪د┘┘╪د╪ز┘ê╪▒╪ر', (c.coursePrice != null && c.coursePrice !== '') ? fmt(num(c.coursePrice)) : '')}
-        ${row('╪ز╪د╪▒┘è╪« ╪د┘╪»┘ê╪▒╪ر', formatDateDisplay(c.startDate) || '')}
-        ${row('╪▒┘é┘à ╪ح┘è╪╡╪د┘ ╪د┘╪ص┘é┘è╪ذ╪ر', escapeHtml(c.bagInvoice || ''))}
-        ${row('╪ز╪د╪▒┘è╪« ╪د┘╪ص┘é┘è╪ذ╪ر', formatDateDisplay(c.bagPurchaseDate) || '')}
-        ${row('╪د┘╪ص┘é┘è╪ذ╪ر', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
-        ${(c.bagPrice != null && c.bagPrice !== '') ? row('╪│╪╣╪▒ ╪د┘╪ص┘é┘è╪ذ╪ر', fmt(num(c.bagPrice))) : ''}
-        ${(c.discount != null && Number(c.discount) !== 0) ? row('╪د┘╪«╪╡┘à', fmt(num(c.discount))) : ''}
+        ${row('الدورة', escapeHtml(c.courseType || ''))}
+        ${row('رقم الدورة', escapeHtml(c.courseNumber || ''))}
+        ${row('رقم الفاتورة', escapeHtml(c.invoice || ''))}
+        ${row('قيمة الفاتورة', (c.coursePrice != null && c.coursePrice !== '') ? fmt(num(c.coursePrice)) : '')}
+        ${row('تاريخ الدورة', formatDateDisplay(c.startDate) || '')}
+        ${row('رقم إيصال الحقيبة', escapeHtml(c.bagInvoice || ''))}
+        ${row('تاريخ الحقيبة', formatDateDisplay(c.bagPurchaseDate) || '')}
+        ${row('الحقيبة', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
+        ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
+        ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
       </div>
     </div>
     <div class="cw-section" id="cw-exam-section">
-      <h4>┘╪ز┘è╪ش╪ر ╪د┘╪د╪«╪ز╪ذ╪د╪▒</h4>
+      <h4>نتيجة الاختبار</h4>
       <div class="cw-exam-content">${typeof arkkanExamCardContent === 'function' ? arkkanExamCardContent(c) : ''}</div>
     </div>`;
 }
 
-let _cwClientId = null; // ╪د┘╪╣┘à┘è┘ ╪د┘┘à┘╪ز┘ê╪ص ╪ص╪د┘┘è╪د┘ï ┘┘è ╪د┘┘â╪▒╪ز (┘╪▓╪▒╪د╪▒ ╪ش┘╪ذ ╪ث╪▒┘â╪د┘)
+let _cwClientId = null; // العميل المفتوح حالياً في الكرت (لزرار جلب أركان)
 
 function openClientWorkspace(id){
   const c = clients.find(x => x.id === id);
@@ -109,63 +109,63 @@ function openClientWorkspace(id){
   const ov = $('#client-workspace-overlay');
   if(!ov) return;
 
-  $('#cw-name').textContent = c.name || '╪ذ╪»┘ê┘ ╪د╪│┘à';
+  $('#cw-name').textContent = c.name || 'بدون اسم';
   $('#cw-badges').innerHTML = cwStatusBadges(c);
 
-  /* ---- ╪د┘┘à┘╪«╪╡ ╪د┘┘à╪د┘┘è (╪ز╪ذ┘ê┘è╪ذ ┘╪╕╪▒╪ر ╪╣╪د┘à╪ر) ---- */
+  /* ---- الملخص المالي (تبويب نظرة عامة) ---- */
   const tt = total(c), pd = paidTotal(c), rem = Math.max(tt - pd, 0);
   const pct = tt > 0 ? Math.min(100, Math.round((pd / tt) * 100)) : (pd > 0 ? 100 : 0);
   const finHtml = `
     <div class="cw-section">
-      <h4>╪د┘┘ê╪╢╪╣ ╪د┘┘à╪د┘┘è</h4>
+      <h4>الوضع المالي</h4>
       <div class="cw-fin-row">
-        <div><small>╪د┘╪ح╪ش┘à╪د┘┘è</small><b>${fmt(tt)}</b></div>
-        <div class="ok"><small>╪د┘┘à╪»┘┘ê╪╣</small><b>${fmt(pd)}</b></div>
-        <div class="${rem > 0 ? 'due' : 'ok'}"><small>╪د┘┘à╪ز╪ذ┘é┘è</small><b>${fmt(rem)}</b></div>
+        <div><small>الإجمالي</small><b>${fmt(tt)}</b></div>
+        <div class="ok"><small>المدفوع</small><b>${fmt(pd)}</b></div>
+        <div class="${rem > 0 ? 'due' : 'ok'}"><small>المتبقي</small><b>${fmt(rem)}</b></div>
       </div>
       <div class="cw-bar"><i style="width:${pct}%"></i></div>
-      <div class="cw-bar-cap">╪│┘╪»╪» ${pct}% ┘à┘ ╪ح╪ش┘à╪د┘┘è ╪د┘┘à╪│╪ز╪ص┘é${c.creditDays ? ` ┬╖ ╪ت╪ش┘ ${escapeHtml(String(c.creditDays))} ┘è┘ê┘à` : ''}${c.clientTaxNumber ? ` ┬╖ ╪د┘╪▒┘é┘à ╪د┘╪╢╪▒┘è╪ذ┘è: ${escapeHtml(c.clientTaxNumber)}` : ''}</div>
+      <div class="cw-bar-cap">سُدد ${pct}% من إجمالي المستحق${c.creditDays ? ` · آجل ${escapeHtml(String(c.creditDays))} يوم` : ''}${c.clientTaxNumber ? ` · الرقم الضريبي: ${escapeHtml(c.clientTaxNumber)}` : ''}</div>
     </div>`;
 
-  /* ---- ╪د┘╪ص╪▒┘â╪د╪ز ╪د┘┘à╪▒╪ز╪ذ╪╖╪ر (┘é╪▒╪د╪ة╪ر ┘┘é╪╖) ظ¤ ╪ز╪ذ┘ê┘è╪ذ ┘╪╕╪▒╪ر ╪╣╪د┘à╪ر ---- */
+  /* ---- الحركات المرتبطة (قراءة فقط) — تبويب نظرة عامة ---- */
   const moves = cwRelatedMovements(c);
   const movesHtml = `
     <div class="cw-section">
-      <h4>╪ت╪«╪▒ ╪د┘╪ص╪▒┘â╪د╪ز ╪د┘┘à╪د┘┘è╪ر ╪د┘┘à╪▒╪ز╪ذ╪╖╪ر</h4>
+      <h4>آخر الحركات المالية المرتبطة</h4>
       ${moves.length ? `<div class="cw-moves">${moves.map(t => `
         <div class="cw-move">
-          <span class="stamp ${t.type === 'in' ? 'paid' : 'owe'}">${t.type === 'in' ? '┘é╪ذ╪╢' : '╪╡╪▒┘'}</span>
+          <span class="stamp ${t.type === 'in' ? 'paid' : 'owe'}">${t.type === 'in' ? 'قبض' : 'صرف'}</span>
           <b>${fmt(num(t.amount))}</b>
-          <span class="cw-move-meta">${formatDateDisplay(t.date) || ''} ${t.notes ? '┬╖ ' + escapeHtml(String(t.notes)).slice(0, 40) : ''}</span>
+          <span class="cw-move-meta">${formatDateDisplay(t.date) || ''} ${t.notes ? '· ' + escapeHtml(String(t.notes)).slice(0, 40) : ''}</span>
         </div>`).join('')}</div>`
-      : '<div class="hint">┘╪د ╪ز┘ê╪ش╪» ╪ص╪▒┘â╪د╪ز ┘à╪د┘┘è╪ر ┘à╪▒╪ز╪ذ╪╖╪ر ╪ذ┘ç╪░╪د ╪د┘╪╣┘à┘è┘ ╪ذ╪╣╪»</div>'}
+      : '<div class="hint">لا توجد حركات مالية مرتبطة بهذا العميل بعد</div>'}
     </div>`;
 
-  /* ---- ╪ذ╪╖╪د┘é╪د╪ز ╪د┘╪ذ┘è╪د┘╪د╪ز (╪ز╪ذ┘ê┘è╪ذ ╪د┘╪ذ┘è╪د┘╪د╪ز) ---- */
+  /* ---- بطاقات البيانات (تبويب البيانات) ---- */
   const infoHtml = cwInfoHtml(c);
 
-  /* ---- ╪│╪ش┘ ╪د┘┘╪┤╪د╪╖ ---- */
-  const activityHtml = `<div class="cw-section"><h4>╪│╪ش┘ ╪د┘┘╪┤╪د╪╖</h4>${cwActivityHtml(c)}</div>`;
+  /* ---- سجل النشاط ---- */
+  const activityHtml = `<div class="cw-section"><h4>سجل النشاط</h4>${cwActivityHtml(c)}</div>`;
 
   $('#cw-body').innerHTML = finHtml + movesHtml + infoHtml + activityHtml;
 
-  /* ---- ╪د┘╪ح╪ش╪▒╪د╪ة╪د╪ز: ┘┘╪│ ┘╪ز╪ص╪د╪ز ╪د┘┘┘à╪د╪░╪ش ╪د┘┘é╪د╪خ┘à╪ر ╪ذ╪د┘╪╢╪ذ╪╖ ---- */
+  /* ---- الإجراءات: نفس فتحات النماذج القائمة بالضبط ---- */
   const foot = $('#cw-foot');
   const acts = [];
   if(typeof canReceptionEditClient !== 'function' || canReceptionEditClient(c)){
-    acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">╪ز╪╣╪»┘è┘ ╪د┘╪ذ┘è╪د┘╪د╪ز</button>`);
-    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="╪ش┘╪ذ ╪د┘╪ذ┘è╪د┘╪د╪ز ╪د┘┘╪د┘é╪╡╪ر ┘à┘ ┘à┘╪╡╪ر ╪ث╪▒┘â╪د┘ ┘ê╪ص┘╪╕┘ç╪د ┘┘è ╪ذ┘è╪د┘╪د╪ز ╪د┘╪╣┘à┘è┘ ╪ز┘┘é╪د╪خ┘è╪د┘ï">ظش ╪ش┘╪ذ ┘à┘ ╪ث╪▒┘â╪د┘</button>`);
-    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-exam-sync" title="╪ش┘╪ذ ┘╪ز┘è╪ش╪ر ╪د┘╪د╪«╪ز╪ذ╪د╪▒ ╪د┘╪ث╪«┘è╪▒╪ر ┘à┘ ╪ث╪▒┘â╪د┘ ┘ê╪ز╪ص╪»┘è╪س ╪┤╪د╪▒╪ر ╪د┘┘╪ز┘è╪ش╪ر ┘┘è ╪┤┘è╪ز ╪د┘╪╣┘à┘╪د╪ة">≡ا¤ ┘à╪▓╪د┘à┘╪ر ╪د┘┘╪ز┘è╪ش╪ر</button>`);
+    acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">تعديل البيانات</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً">⏬ جلب من أركان</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-exam-sync" title="جلب نتيجة الاختبار الأخيرة من أركان وتحديث شارة النتيجة في شيت العملاء">🔄 مزامنة النتيجة</button>`);
   }
-  acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-invoice">╪د┘┘╪د╪ز┘ê╪▒╪ر</button>`);
+  acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-invoice">الفاتورة</button>`);
   if(canAccessView('vault') && typeof openVaultModal === 'function'){
-    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-vault">╪ص╪▒┘â╪ر ┘à╪د┘┘è╪ر</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-vault">حركة مالية</button>`);
   }
   foot.innerHTML = acts.join('');
 
   $('#cw-edit')?.addEventListener('click', () => { closeClientWorkspace(); openModal(c.id); });
   $('#cw-invoice')?.addEventListener('click', () => {
-    // ┘╪╣┘è╪» ╪د╪│╪ز╪«╪»╪د┘à ┘à╪╣╪د┘╪ش ╪د┘┘╪د╪ز┘ê╪▒╪ر ╪د┘┘é╪د╪خ┘à ┘â┘à╪د ┘ç┘ê (╪ز┘┘ê┘è╪╢ document ╪╣┘┘ë data-invoice)
+    // نعيد استخدام معالج الفاتورة القائم كما هو (تفويض document على data-invoice)
     closeClientWorkspace();
     const b = document.createElement('button');
     b.type = 'button';
@@ -184,7 +184,7 @@ function closeClientWorkspace(){
   $('#client-workspace-overlay')?.classList.remove('show');
 }
 
-/* --- ╪د┘╪▒╪ذ╪╖: ╪▓╪▒ ┘é╪د╪خ┘à╪ر ╪د┘╪╡┘ + ┘┘é╪▒ ┘à╪▓╪»┘ê╪ش + ╪ح╪║┘╪د┘é --- */
+/* --- الربط: زر قائمة الصف + نقر مزدوج + إغلاق --- */
 document.addEventListener('click', e => {
   const wid = e.target.dataset ? e.target.dataset.workspace : null;
   if(wid){ openClientWorkspace(wid); return; }
@@ -196,9 +196,9 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && $('#client-workspace-overlay')?.classList.contains('show')) closeClientWorkspace();
 });
-// ┘╪╖╪د┘é ┘╪ز╪ص ╪د┘┘â╪▒╪ز ╪ذ╪د┘┘┘é╪▒ ╪د┘┘à╪▓╪»┘ê╪ش ┘à┘é╪╡┘ê╪▒ ╪╣┘┘ë ╪د╪│┘à ╪د┘╪╣┘à┘è┘ ┘┘é╪╖ (span.client-name-trigger) ظ¤
-// ┘ê┘┘è╪│ ╪ث┘è ┘à┘â╪د┘ ╪ت╪«╪▒ ┘┘è ╪د┘╪╡┘ (┘â╪د┘ ╪ث┘è ╪»╪ذ┘ ┘â┘┘è┘â ┘┘è ╪ث┘è ╪«┘┘è╪ر ╪ذ╪د┘╪╡┘ ┘â┘┘ç ┘è┘╪ز╪ص ╪د┘┘â╪▒╪ز╪î ┘à╪د ┘â╪د┘
-// ┘è╪ز╪╣╪د╪▒╪╢ ╪ث╪ص┘è╪د┘╪د┘ï ┘à╪╣ ╪ز╪ص╪»┘è╪» ┘╪╡ ╪»╪د╪«┘ ╪«┘╪د┘è╪د ╪ث╪«╪▒┘ë ┘à╪س┘ ╪د┘┘ç╪د╪ز┘/╪▒┘é┘à ╪د┘┘ç┘ê┘è╪ر ╪ذ╪د┘┘┘é╪▒ ╪د┘┘à╪▓╪»┘ê╪ش).
+// نطاق فتح الكرت بالنقر المزدوج مقصور على اسم العميل فقط (span.client-name-trigger) —
+// وليس أي مكان آخر في الصف (كان أي دبل كليك في أي خلية بالصف كله يفتح الكرت، ما كان
+// يتعارض أحياناً مع تحديد نص داخل خلايا أخرى مثل الهاتف/رقم الهوية بالنقر المزدوج).
 $('#table-body')?.addEventListener('dblclick', e => {
   const nameEl = e.target.closest('.client-name-trigger');
   if(!nameEl) return;
