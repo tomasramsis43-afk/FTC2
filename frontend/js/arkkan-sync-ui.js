@@ -89,11 +89,11 @@ async function arkkanFetchOne(clientId, referNum = '') {
   return r.json();
 }
 
-/* ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ
+/* ══════════════════════════════════════════════
    1) جلب بيانات العميل من أركان + حفظ تلقائي
    يُستدعى من زرار "جلب من أركان" في كرت العميل (ملف العميل)
    — بلا فتح نموذج التعديل: يجلب الناقص ويحفظه في البيانات فوراً.
-   ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ */
+   ══════════════════════════════════════════════ */
 
 /* تحويل قيمة مالية قادمة من أركان إلى رقم نظيف */
 function arkkanNumPrice(v){ return parseFloat(String(v).replace(/[^\d.,]/g, '').replace(',', '')) || v; }
@@ -202,9 +202,9 @@ async function arkkanSyncOne(clientId, btn) {
   }
 }
 
-/* ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ
+/* ══════════════════════════════════════════════
    2) صفحة المزامنة الكاملة (Bulk Sync)
-   ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ */
+   ══════════════════════════════════════════════ */
 let _arkkanBulkRunning = false;
 let _arkkanBulkStop = false;
 
@@ -225,14 +225,14 @@ function renderArkkanSyncTable() {
   tbody.innerHTML = missing.map(c => `
     <tr id="arkkan-row-${escapeHtml(c.clientId)}">
       <td>${escapeHtml(c.clientId)}</td>
-      <td>${escapeHtml(c.name || 'ظ¤')}</td>
-      <td class="col-invoice">${escapeHtml(c.invoice || 'ظ¤')}</td>
-      <td class="col-coursenum">${escapeHtml(c.courseNumber || 'ظ¤')}</td>
-      <td class="col-date">${escapeHtml(c.date || 'ظ¤')}</td>
-      <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : (c.coursePrice ?? 'ظ¤')))}</td>
-      <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || 'ظ¤')}</td>
-      <td class="col-baginvoice">${escapeHtml(c.bagInvoice || 'ظ¤')}</td>
-      <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || 'ظ¤')}</td>
+      <td>${escapeHtml(c.name || '—')}</td>
+      <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
+      <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-date">${escapeHtml(c.date || '—')}</td>
+      <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : (c.coursePrice ?? '—')))}</td>
+      <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
+      <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
+      <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)">جلب</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
@@ -378,11 +378,11 @@ function cssEscapeId(id) {
   return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-/* ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ
+/* ══════════════════════════════════════════════
    3) نتائج الاختبارات (الرسوب والنجاح)
    صندوق مستقل أسفل صندوق المزامنة — يجلب من أركان آخر 4
    محاولات اختبار لكل عميل (بعدة إعادة) + تاريخ آخر اختبار.
-   ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ */
+   ══════════════════════════════════════════════ */
 
 async function arkkanExamFetchOne(clientId, referNum = '') {
   const r = await fetch(API_BASE + '/api/arkkan/exams', {
@@ -454,7 +454,7 @@ function arkkanExamFailedClients() {
 /* خلية نتيجة: ناجح أخضر / راسب أحمر */
 function arkkanExamCell(v) {
   const s = String(v || '').trim();
-  if (!s) return '<span style="color:var(--text-muted);">ظ¤</span>';
+  if (!s) return '<span style="color:var(--text-muted);">—</span>';
   const color = s.includes('ناجح') ? 'var(--success, green)' : s.includes('راسب') ? 'var(--danger, red)' : 'inherit';
   return `<span style="color:${color}; font-weight:600;">${escapeHtml(s)}</span>`;
 }
@@ -492,10 +492,10 @@ function arkkanExamCardContent(c) {
       ? '<span class="stamp owe">راسب</span>'
       : `<span class="stamp" style="color:var(--text-muted);">${escapeHtml(last || 'لم يُختبَر بعد')}</span>`;
   const d = (s && s.d) || c.examLastDate || '';
-  const dateTxt = d ? (typeof formatDateDisplay === 'function' ? formatDateDisplay(d) : escapeHtml(d)) : 'ظ¤';
+  const dateTxt = d ? (typeof formatDateDisplay === 'function' ? formatDateDisplay(d) : escapeHtml(d)) : '—';
   const attempts = att.length
     ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">` + att.slice(0, 4).map((a, i) => {
-        const r = String((a && a.r) || 'ظ¤').trim();
+        const r = String((a && a.r) || '—').trim();
         const cls = r.includes('ناجح') ? 'paid' : r.includes('راسب') ? 'owe' : '';
         return `<span class="stamp ${cls}" title="محاولة ${i + 1} — ${escapeHtml((a && a.d) || '')}">م${i + 1}: ${escapeHtml(r)}</span>`;
       }).join('') + `</div>`
@@ -528,17 +528,17 @@ function renderArkkanExamsTable() {
   const cells = c => {
     const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
     return [0, 1, 2, 3].map(i =>
-      `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">ظ¤</span>'}</td>`
+      `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>'}</td>`
     ).join('');
   };
 
   if (tbody) {
     tbody.innerHTML = noResult.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
-      <td>${escapeHtml(c.name || 'ظ¤')}</td>
+      <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || 'ظ¤')}</td>
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
@@ -547,10 +547,10 @@ function renderArkkanExamsTable() {
   if (nbody) {
     nbody.innerHTML = needing.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
-      <td>${escapeHtml(c.name || 'ظ¤')}</td>
+      <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || 'ظ¤')}</td>
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
@@ -559,10 +559,10 @@ function renderArkkanExamsTable() {
   if (pbody) {
     pbody.innerHTML = passed.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
-      <td>${escapeHtml(c.name || 'ظ¤')}</td>
+      <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || 'ظ¤')}</td>
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
     </tr>`).join('');
   }
@@ -570,10 +570,10 @@ function renderArkkanExamsTable() {
   if (fbody) {
     fbody.innerHTML = failed.map(c => `
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
-      <td>${escapeHtml(c.name || 'ظ¤')}</td>
+      <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || 'ظ¤')}</td>
+      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
@@ -585,10 +585,10 @@ function arkkanRefreshExamCells(c) {
   if (!row) return;
   const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
   [...row.querySelectorAll('.col-exam-attempt')].forEach((el, i) => {
-    el.innerHTML = att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">ظ¤</span>';
+    el.innerHTML = att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>';
   });
   const de = row.querySelector('.col-examdate');
-  if (de) de.textContent = c.examLastDate || 'ظ¤';
+  if (de) de.textContent = c.examLastDate || '—';
 }
 
 async function arkkanExamSyncOne(clientId, btn) {
@@ -995,7 +995,7 @@ function arkkanExamsFailedCompare() {
 function arkkanRefreshRowCells(c) {
   const row = document.querySelector(`#arkkan-row-${cssEscapeId(c.clientId)}`);
   if (!row) return;
-  const set = (sel, val) => { const el = row.querySelector(sel); if (el) el.textContent = val || 'ظ¤'; };
+  const set = (sel, val) => { const el = row.querySelector(sel); if (el) el.textContent = val || '—'; };
   set('.col-invoice', c.invoice);
   set('.col-coursenum', c.courseNumber);
   set('.col-date', c.date);
@@ -1007,11 +1007,11 @@ function arkkanRefreshRowCells(c) {
   if (missEl) missEl.textContent = arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، ');
 }
 
-/* ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ
+/* ══════════════════════════════════════════════
    7) مقارنة بيانات الاختبارات مع أركان — زرار في كل صندوق
    يراجع كل عميل: يجلب نتيجته من أركان ويقارنها بالمخزَّنة —
    أي اختلاف يُحفَظ تلقائياً ويُوضَّح أمام كل عميل (قبل ← بعد)
-   ظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـظـ */
+   ══════════════════════════════════════════════ */
 
 /* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
 document.addEventListener('click', () => {
