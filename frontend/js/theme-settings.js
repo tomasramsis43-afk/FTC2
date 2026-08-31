@@ -659,6 +659,11 @@ function applyLanguage(lang){
 /* تبديل الوضع الليلي/النهاري لكامل الواجهة، مع حفظ التفضيل ضمن إعدادات المستخدم */
 function applyTheme(isDark){
   document.body.classList.toggle('dark-theme', !!isDark);
+  // ضبط color-scheme على الجذر (html) — هذه هي الطريقة الموثوقة ليتبع «القوائم
+  // <select> الأصلية المندسلة» (قائمة فلاتر/حالات السداد وغيرها) ثيم البرنامج الداكن
+  // بدل الرسم الافتراضي لنظام التشغيل (أبيض على Windows). وضعها على body أو select
+  // وحده لا يكفي على Chromium/Electron لعنصر القائمة المنبثقة الأصلية.
+  document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
   // الزر بقى داخل القائمة المنسدلة ومعاه تسمية نصية ثابتة، فبنستبدل أيقونة الشمس/القمر فقط
   // (داخل .menu-icon) بدل استبدال محتوى الزر بالكامل (كان بيمسح التسمية النصية).
   const btn = $('#theme-toggle-icon');
