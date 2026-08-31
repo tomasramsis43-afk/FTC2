@@ -132,6 +132,11 @@ CREATE INDEX IF NOT EXISTS idx_client_records_client_id ON client_records(client
 -- المعتاد) لمدة 15 يوماً ليعرف سبب/وقت الرفض قبل أن يُحذف نهائياً تلقائياً (راجع cleanRejectedClientRecords
 -- فى server.js). لا يظهر لأي دور آخر غير الأدمن ولا يدخل أي حساب أو تقرير مطلقاً.
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ;
+-- معرّف طلب فريد لكل دفعة مزامنة — يمنع الإدراج المزدوج عند إعادة إرسال نفس الطلب (Network Retry).
+-- عند إدراج سجل بـ request_id موجود مسبقاً، تُتخطَّى العملية (ON CONFLICT DO NOTHING).
+-- العمود اختياري: السجلات القديمة وعمليات القديمة بدون request_id تبقى كما هي.
+ALTER TABLE client_records ADD COLUMN IF NOT EXISTS request_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_records_request_id ON client_records(request_id) WHERE request_id IS NOT NULL;
 
 -- ============================================================
 -- تخزين عام لأي تصنيف بيانات كسجلات مستقلة (سجل واحد = صف واحد)
@@ -169,6 +174,9 @@ CREATE INDEX IF NOT EXISTS idx_collection_records_origin_status ON collection_re
 -- نفس فهرس created_by المضاف لـ client_records أعلاه وبنفس السبب: يسرّع فلترة عزل الاستقبال
 -- (WHERE collection=X AND origin='reception' AND created_by=$2) فى recordsVisibilitySql.
 CREATE INDEX IF NOT EXISTS idx_collection_records_origin_created_by ON collection_records(origin, created_by);
+-- نفس فكرت client_records: request_id يمنع الإدراج المزدوج عند إعادة إرسال نفس طلب المزامنة.
+ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS request_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_records_request_id ON collection_records(request_id) WHERE request_id IS NOT NULL;
 
 -- سجل عمليات تسجيل الدخول الناجحة إلى الخادم (متى، من أي عنوان IP) — يُستخدم
 -- في شاشة الإعدادات لمتابعة نشاط الحسابات (سجل الدخول والجلسات).
@@ -226,6 +234,7 @@ CREATE TABLE IF NOT EXISTS magic_link_tokens (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_username ON magic_link_tokens(username);
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_lookup ON magic_link_tokens(username, token_hash);
 CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
 CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;

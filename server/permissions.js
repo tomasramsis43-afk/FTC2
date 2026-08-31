@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('./db');
 const { requireAuth, requireRole } = require('./auth');
+const roleRepo = require('./repo/role.repo');
 
 /* مشروع تقييد صلاحيات kv_store حسب الدور — تدريجي وليس دفعة واحدة، لأن أغلب
    المفاتيح مُحمَّلة فعلياً من كل الأدوار عبر مسارات كود مشتركة (مثال: ملخص لوحة
@@ -26,21 +26,17 @@ const ROLE_PERMISSIONS_SEED_DEFAULTS = {
   reception: ['clients'],
 };
 async function loadRolePermissionsCache() {
-  const r = await pool.query('SELECT role, views FROM role_permissions');
-  if (r.rows.length === 0) {
+  const rows = await roleRepo.allRows();
+  if (rows.length === 0) {
     // أول تشغيل للسيرفر بعد إضافة الجدول: نزرعه بالافتراضي الحالي حتى لا يفقد أي عميل صلاحياته
     // الفعلية فجأة (لو تُرك فارغاً، roleCanAccessView كانت سترفض كل شيء لغير admin افتراضياً أدناه).
     for (const role of Object.keys(ROLE_PERMISSIONS_SEED_DEFAULTS)) {
-      await pool.query(
-        `INSERT INTO role_permissions (role, views, updated_by) VALUES ($1, $2, 'system-seed')
-         ON CONFLICT (role) DO NOTHING`,
-        [role, JSON.stringify(ROLE_PERMISSIONS_SEED_DEFAULTS[role])]
-      );
+      await roleRepo.seedDefault(role, JSON.stringify(ROLE_PERMISSIONS_SEED_DEFAULTS[role]));
     }
     return loadRolePermissionsCache();
   }
   const cache = { admin: null, staff: [], accountant: [], reception: [] };
-  for (const row of r.rows) cache[row.role] = Array.isArray(row.views) ? row.views : [];
+  for (const row of rows) cache[row.role] = Array.isArray(row.views) ? row.views : [];
   ROLE_PERMISSIONS_CACHE = cache;
 }
 const RESTRICTED_STAFF_VIEWS = ['settings', 'audit', 'accounting', 'ledger', 'budget'];
@@ -83,23 +79,13 @@ router.put('/api/role-permissions', requireAuth, requireRole('admin'), async (re
     // الحفظ في معاملة واحدة: كانت 3 تحديثات منفصلة (لا transaction) — لو فشل الثاني/الثالث
     // تُترك قاعدة البيانات بصلاحيات نصف مطبّقة (دور محدّث ودوران قديمان) مع ذاكرة تخزين مؤقت
     // مُعاد تحميلها من تلك الحالة المختلطة، وأي أدمنين يحفظان معاً قد ينتج حالة نهائية متشابكة.
-    const tx = await pool.connect();
-    try {
-      await tx.query('BEGIN');
-      for (const role of EDITABLE_ROLE_PERMISSION_ROLES) {
-        await tx.query(
-          `INSERT INTO role_permissions (role, views, updated_by, updated_at) VALUES ($1, $2, $3, now())
-           ON CONFLICT (role) DO UPDATE SET views = EXCLUDED.views, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-          [role, JSON.stringify(toSave[role]), req.user.username]
-        );
-      }
-      await tx.query('COMMIT');
-    } catch (e) {
-      await tx.query('ROLLBACK').catch(() => {});
-      throw e;
-    } finally {
-      tx.release();
-    }
+    await roleRepo.upsertMany(
+      EDITABLE_ROLE_PERMISSION_ROLES.map(role => ({
+        role,
+        viewsJson: JSON.stringify(toSave[role]),
+        username: req.user.username,
+      }))
+    );
     await loadRolePermissionsCache();
     res.json({ rolePermissions: toSave });
   } catch (e) {

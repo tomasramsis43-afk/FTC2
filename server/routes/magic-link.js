@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { pool } = require('../db');
+const authRepo = require('../repo/auth.repo');
 const { signToken, verifySecondFactor } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
 const { sendEmail, isConfigured } = require('../services/email');
@@ -24,8 +24,7 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
   try {
     const username = (req.body.username || '').toString().trim();
     if (!username) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
-    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [username]);
-    const user = userResult.rows[0];
+    const user = await authRepo.findByUsername(username);
     if (!user || !user.email || user.is_active === false) return res.json(GENERIC_RESPONSE);
     if (!isConfigured()) {
       console.error('تعذّر إرسال رابط الدخول: لا يوجد RESEND_API_KEY ولا إعدادات SMTP كاملة على السيرفر');
@@ -34,10 +33,7 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    await pool.query(
-      'INSERT INTO magic_link_tokens (username, token_hash, expires_at) VALUES ($1, $2, $3)',
-      [user.username, tokenHash, expiresAt]
-    );
+    await authRepo.insertMagicLink(user.username, tokenHash, expiresAt);
     const link = `${getOrigin(req)}/?magicToken=${rawToken}&u=${encodeURIComponent(user.username)}`;
     await sendEmail({
       to: user.email,
@@ -63,27 +59,13 @@ router.post('/api/auth/magic-link/verify', authLimiter, async (req, res) => {
     const { username, token, totpCode, backupCode } = req.body || {};
     if (!username || !token) return res.status(400).json({ error: 'بيانات ناقصة' });
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const result = await pool.query(
-      `SELECT * FROM magic_link_tokens
-       WHERE username = $1 AND token_hash = $2 AND used_at IS NULL AND expires_at > now()
-       ORDER BY created_at DESC LIMIT 1`,
-      [username, tokenHash]
-    );
-    const record = result.rows[0];
+    const record = await authRepo.findValidMagicLink(username, tokenHash);
     if (!record) return res.status(401).json({ error: 'الرابط غير صالح أو منتهي الصلاحية، اطلب رابطاً جديداً' });
-    // استيلاء ذري على الرابط (لمرة واحدة): الشرط "AND used_at IS NULL" يمنع طلبين متزامنين
-    // من النجاح معاً — من يفوز بالتحديث أولاً يكمل، والثاني يُرفض كرابط مستهلك.
-    const claim = await pool.query(
-      'UPDATE magic_link_tokens SET used_at = now() WHERE id = $1 AND used_at IS NULL',
-      [record.id]
-    );
-    if (claim.rowCount === 0) return res.status(401).json({ error: 'الرابط غير صالح أو منتهي الصلاحية، اطلب رابطاً جديداً' });
-    // لو احتجنا إرجاع الرابط لحياته (طلب الكود الثاني أو خطأ فيه) نحرره بهذه الدالة،
-    // حتى لا يخسر المستخدم رابطه لمجرد أنه لم يدخل الكود بعد.
-    const releaseLink = () => pool.query('UPDATE magic_link_tokens SET used_at = NULL WHERE id = $1', [record.id]).catch(() => {});
+    const claimed = await authRepo.claimMagicLink(record.id);
+    if (!claimed) return res.status(401).json({ error: 'الرابط غير صالح أو منتهي الصلاحية، اطلب رابطاً جديداً' });
+    const releaseLink = () => authRepo.releaseMagicLink(record.id).catch(() => {});
 
-    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [username]);
-    const user = userResult.rows[0];
+    const user = await authRepo.findByUsername(username);
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
     // قفل المحاولات الفاشلة يسري على كل مسارات الدخول بلا استثناء — كان مفقوداً هنا تماماً،
@@ -104,10 +86,10 @@ router.post('/api/auth/magic-link/verify', authLimiter, async (req, res) => {
       if (!second.ok) {
         await releaseLink();
         const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
-        pool.query(
-          'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
-          [user.username, user.role || 'staff', loginIp, (req.headers['user-agent'] || '').toString().slice(0, 300)]
-        ).catch(() => {});
+        authRepo.recordLogin({
+          username: user.username, role: user.role || 'staff', ip: loginIp,
+          device: (req.headers['user-agent'] || '').toString().slice(0, 300), success: false,
+        }).catch(() => {});
         return res.status(401).json({ error: 'كود التحقق غير صحيح' });
       }
     }
@@ -115,12 +97,10 @@ router.post('/api/auth/magic-link/verify', authLimiter, async (req, res) => {
     const jwtToken = signToken(user);
     const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
-    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+    authRepo.resetFailedLogin(user.id)
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
-    pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
-      [user.username, user.role || 'staff', loginIp, loginDevice]
-    ).catch(e => console.error('تعذّر تسجيل عملية الدخول عبر الرابط فى السجل:', e));
+    authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: true })
+      .catch(e => console.error('تعذّر تسجيل عملية الدخول عبر الرابط فى السجل:', e));
 
     res.json({
       token: jwtToken,

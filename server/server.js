@@ -5,6 +5,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const { pool, ensureSchema } = require('./db');
+const recordsRepo = require('./repo/records.repo');
+const authRepo = require('./repo/auth.repo');
+const syncService = require('./services/sync');
 const { centralErrorHandler } = require('./errors');
 const { loadRolePermissionsCache } = require('./permissions');
 const backupsRouter = require('./routes/backups');
@@ -16,7 +19,7 @@ const magicLinkRouter = require('./routes/magic-link');
 const qrLoginRouter = require('./routes/qr-login');
 const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
-const { router: recordsRouter, syncClientsRows } = require('./routes/records');
+const { router: recordsRouter } = require('./routes/records');
 const arkkanRouter = require('./routes/arkkan');
 const arkkanSyncRouter = require('./routes/arkkan-sync');
 
@@ -101,16 +104,6 @@ app.use(emailRouter);
 
 app.use(permissionsRouter);
 
-
-// GET /api/storage/:key  -> { key, value, version }
-// يدعم If-None-Match: لو الجهاز عنده نفس النسخة (version) بالفعل، نرد 304 بدون
-// إعادة إرسال القيمة كاملة (ممكن تكون مئات الكيلوبايتات لمفاتيح زي قوائم العملاء
-// أو حركات الخزنة)، فنوفر نقل البيانات في كل مرة يفتح فيها المستخدم البرنامج
-// ولم يتغيّر شيء منذ آخر زيارة.
-// GET /api/clients?page=&pageSize=&search=&nationality=&courseType=&dateFrom=&dateTo=&sort=&order=
-// ترقيم/بحث/فلترة حقيقية من قاعدة البيانات (بدون تحميل كل العملاء للمتصفح)، تُستخدم فقط من
-// شاشة "جدول العملاء" نفسها للحالات الشائعة (تصفح + بحث بالاسم/الهوية + فلترة بالجنسية/الدورة/التاريخ).
-// فلاتر المبالغ (مدين/مسدد) والفرز بالمبالغ غير مدعومة هنا عمداً لأنها تعتمد على حسابات معقّدة
 app.use(recordsRouter);
 
 
@@ -144,24 +137,13 @@ ensureSchema()
     // (يشمل الحالة القديمة: 0 صف رغم وجود آلاف العملاء — كانت تحدث بصمت لو صف واحد فقط
     // به id مكرر أوقف كل عملية المزامنة بالكامل قبل هذا الإصلاح)، نعيد المزامنة كاملة.
     // الآن آمنة ورخيصة التكلفة (UPSERT) فتُستدعى دائماً عند الإقلاع لضمان تطابق دائم.
-    try {
-      const existing = await pool.query(`SELECT value FROM kv_store WHERE key = 'clients'`);
-      if (existing.rows[0] && existing.rows[0].value) {
-        let expectedCount = 0;
-        try { const parsed = JSON.parse(existing.rows[0].value); if (Array.isArray(parsed)) expectedCount = parsed.filter(c => c && c.id).length; } catch (e) { console.error('[Server] Failed to parse expectedCount from settings:', e); }
-        const cnt = await pool.query('SELECT COUNT(*) FROM clients_rows');
-        if (Number(cnt.rows[0].count) !== expectedCount) {
-          await syncClientsRows(existing.rows[0].value);
-          console.log(`✅ تمت مزامنة/ترحيل بيانات العملاء إلى clients_rows (${expectedCount} عميل متوقع)`);
-        }
-      }
-    } catch (e) { console.error('تعذّر الترحيل الأولي لـ clients_rows:', e.message); }
+    syncService.startupCheckAndSync();
 
     // تنظيف دوري لجدول login_history: نحتفظ بآخر 90 يوماً فقط حتى لا يكبر الجدول للأبد.
     async function cleanLoginHistory() {
       try {
-        const r = await pool.query(`DELETE FROM login_history WHERE logged_in_at < now() - INTERVAL '90 days'`);
-        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} سجل قديم من login_history`);
+        const n = await authRepo.cleanLoginHistory();
+        if (n > 0) console.log(`🧹 حُذف ${n} سجل قديم من login_history`);
       } catch (e) { console.error('تعذّر تنظيف login_history:', e.message); }
     }
     cleanLoginHistory();
@@ -171,8 +153,8 @@ ensureSchema()
     // بعد أسبوع — بدون هذا التنظيف كان الجدول ينمو للأبد (كل رابط مطلوب = صف دائم).
     async function cleanMagicLinkTokens() {
       try {
-        const r = await pool.query(`DELETE FROM magic_link_tokens WHERE created_at < now() - INTERVAL '7 days'`);
-        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} رابط دخول قديم من magic_link_tokens`);
+        const n = await authRepo.cleanMagicLinkTokens();
+        if (n > 0) console.log(`🧹 حُذف ${n} رابط دخول قديم من magic_link_tokens`);
       } catch (e) { console.error('تعذّر تنظيف magic_link_tokens:', e.message); }
     }
     cleanMagicLinkTokens();
@@ -183,14 +165,31 @@ ensureSchema()
     // /api/client-records/:id/reject و clientRecordsVisibilitySql أعلاه فى نفس الملف).
     async function cleanRejectedClientRecords() {
       try {
-        const r = await pool.query(`DELETE FROM client_records WHERE status = 'rejected' AND rejected_at < now() - INTERVAL '15 days'`);
-        if (r.rowCount > 0) console.log(`🧹 حُذف ${r.rowCount} سجل عميل مرفوض تجاوز مهلة الـ15 يوماً`);
+        const n = await recordsRepo.cleanRejectedClientRecords();
+        if (n > 0) console.log(`🧹 حُذف ${n} سجل عميل مرفوض تجاوز مهلة الـ15 يوماً`);
       } catch (e) { console.error('تعذّر تنظيف سجلات العملاء المرفوضة:', e.message); }
     }
     cleanRejectedClientRecords();
     setInterval(cleanRejectedClientRecords, 24 * 60 * 60 * 1000); // كل 24 ساعة
 
-    app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
+    const server = app.listen(PORT, () => console.log(`✅ الخادم يعمل على المنفذ ${PORT}`));
+
+    // إغلاق سلس (Graceful shutdown): عند استقبال إشارة إيقاف من المنصة (SIGTERM يرسله Render
+    // عند re-deploy/قيام، و SIGINT عند Ctrl+C محلياً) نتوقف عن قبول طلبات جديدة ونُنهي الطلبات
+    // الجارية ثم نغلق pool قاعدة البيانات ونخرج — بدل أن يُقتل الخادم فوراً فتقطع استعلامات
+    // قاعدة بيانات كانت قيد التنفيذ (كان يمكن أن يترك بيانات في حالة وسط/ناقصة).
+    function shutdown(signal) {
+      console.log(`⏳ استلام ${signal} — بدء الإغلاق السلس...`);
+      server.close(async () => {
+        try { await pool.end(); } catch (e) { console.error('تعذّر إغلاق pool قاعدة البيانات:', e); }
+        console.log('✅ أُغلقت الاتصالات بنجاح.');
+        process.exit(0);
+      });
+      // شبكة أمان: لو علّقت طلبات جارية، نُجبر الخروج بعد 10 ثوانٍ (بدل البقاء معلّقاً للأبد).
+      setTimeout(() => { console.error('⏰ مهلة الإغلاق انتهت — إيقاف إجباري.'); process.exit(1); }, 10000).unref();
+    }
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   })
   .catch(e => {
     console.error('❌ تعذّر تجهيز قاعدة البيانات:', e);

@@ -35,13 +35,6 @@ const aiLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'طلبات ذكاء اصطناعي كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'طلبات كثيرة جداً، يرجى الانتظار قليلاً' },
-});
 // إرسال الإيميلات (فواتير/تقارير) يستهلك اتصال SMTP فعلي لكل طلب — حد معقول يكفي
 // الاستخدام العادي (إرسال فاتورة بعد كل تسجيل، تقرير بين الحين والآخر) دون فتح الباب
 // لحساب مخترَق يستخدم السيرفر لإرسال بريد جماعي (spam) عبر حساب SMTP الخاص بالمركز.
@@ -52,5 +45,15 @@ const emailLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'طلبات إرسال إيميل كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
+// نقاط أركان (الجلب/التالي من منصة أركان) تشغّل متصفحاً مخفياً ثقيلاً (Playwright) بمهلة تصل
+// إلى 90 ثانية لكل طلب — بدون حد لمعدلها، حساب مخترَق أو مسيء يقدر يستنزف موارد السيرفر
+// (كل طلب يحجز اتصالاً وذاكرة لوقت طويل) ويكرّره كما يشاء. حدّ معتدل يكفي الاستخدام العادي.
+const arkkanLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات أركان كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
+});
 
-module.exports = { authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter, apiLimiter };
+module.exports = { authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter, arkkanLimiter };

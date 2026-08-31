@@ -26,6 +26,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const { pool, ensureSchema } = require('./db');
+const { migrationUpsert } = require('./repo/kv.repo');
 
 async function main() {
   const file = process.argv[2];
@@ -38,12 +39,7 @@ async function main() {
   const keys = Object.keys(data);
   console.log(`سيتم استيراد ${keys.length} مفتاح...`);
   for (const key of keys) {
-    await pool.query(
-      `INSERT INTO kv_store (key, value, version, updated_by)
-       VALUES ($1, $2, 1, 'migration')
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, version = kv_store.version + 1, updated_at = now()`,
-      [key, data[key]]
-    );
+    await migrationUpsert(key, data[key]);
     console.log(`  ✔ ${key}`);
   }
   console.log('✅ اكتمل الترحيل.');

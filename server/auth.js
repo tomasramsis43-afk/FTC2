@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const otplib = require('otplib');
 const crypto = require('crypto');
-const { pool } = require('./db');
+const userRepo = require('./repo/user.repo');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -92,8 +92,7 @@ async function resolveUserFromToken(token) {
     }
     return { sub: 'emergency-admin', username: payload.username, role: 'admin' };
   }
-  const r = await pool.query('SELECT role, token_version, is_active FROM server_users WHERE id = $1', [payload.sub]);
-  const dbUser = r.rows[0];
+  const dbUser = await userRepo.getUserAuth(payload.sub);
   // dbUser غير موجود = تم حذف الحساب. token_version مختلف = تم تسجيل خروج/تغيير كلمة
   // مرور أو صلاحية بعد إصدار هذا التوكن. في الحالتين نرفض التوكن فوراً بدل انتظار انتهائه.
   if (!dbUser || (payload.tv || 0) !== dbUser.token_version) {
@@ -207,23 +206,12 @@ async function verifySecondFactor(user, body) {
     verified = verifyTotpToken(totpCode, user.totp_secret);
   }
   if (!verified && backupCode) {
-    let tx = null;
     try {
-      tx = await pool.connect();
-      await tx.query('BEGIN');
-      const locked = await tx.query('SELECT totp_backup_codes FROM server_users WHERE id = $1 FOR UPDATE', [user.id]);
-      const result = await consumeBackupCode(locked.rows[0].totp_backup_codes, backupCode);
+      const result = await userRepo.consumeBackupCodeAtomic(user.id, (storedJson) => consumeBackupCode(storedJson, backupCode));
       verified = result.ok;
-      if (result.ok) {
-        await tx.query('UPDATE server_users SET totp_backup_codes = $1 WHERE id = $2', [result.remaining, user.id]);
-      }
-      await tx.query('COMMIT');
     } catch (e) {
-      if (tx) await tx.query('ROLLBACK').catch(() => {});
       console.error(e);
       verified = false;
-    } finally {
-      if (tx) tx.release();
     }
   }
   return { ok: verified };

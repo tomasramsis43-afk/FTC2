@@ -8,7 +8,8 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { pool } = require('../db');
+const authRepo = require('../repo/auth.repo');
+const webauthnRepo = require('../repo/webauthn.repo');
 const { requireAuth, signToken, verifySecondFactor } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
 const {
@@ -77,14 +78,14 @@ function getRpIdAndOrigin(req) {
 router.post('/api/auth/webauthn/register-options', requireAuth, async (req, res) => {
   try {
     const { rpID } = getRpIdAndOrigin(req);
-    const existing = await pool.query('SELECT credential_id FROM webauthn_credentials WHERE username = $1', [req.user.username]);
+    const existing = await webauthnRepo.listCredentialIds(req.user.username);
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
       rpID,
       userName: req.user.username,
       userDisplayName: req.user.username,
       attestationType: 'none',
-      excludeCredentials: existing.rows.map(r => ({ id: r.credential_id })),
+      excludeCredentials: existing.map(r => ({ id: r.credential_id })),
       // residentKey: 'required' يجعل البصمة "قابلة للاكتشاف" (discoverable) من المتصفح نفسه —
       // هذا ما يُمكّن لاحقاً من الدخول بالبصمة مباشرة دون كتابة اسم مستخدم إطلاقاً (راجع
       // login-options أسفل)، لأن المتصفح يقدر يعرض للمستخدم بصماته المسجَّلة لهذا الموقع بنفسه.
@@ -114,20 +115,16 @@ router.post('/api/auth/webauthn/register-verify', requireAuth, async (req, res) 
       return res.status(400).json({ error: 'تعذّر التحقق من البصمة' });
     }
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    await pool.query(
-      `INSERT INTO webauthn_credentials (username, credential_id, public_key, counter, device_type, backed_up, transports, nickname)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        req.user.username,
-        credential.id,
-        Buffer.from(credential.publicKey).toString('base64'),
-        credential.counter,
-        credentialDeviceType,
-        credentialBackedUp,
-        JSON.stringify(credential.transports || []),
-        (nickname || '').toString().slice(0, 80) || null,
-      ]
-    );
+    await webauthnRepo.insertCredential({
+      username: req.user.username,
+      credentialId: credential.id,
+      publicKeyB64: Buffer.from(credential.publicKey).toString('base64'),
+      counter: credential.counter,
+      deviceType: credentialDeviceType,
+      backedUp: credentialBackedUp,
+      transportsJson: JSON.stringify(credential.transports || []),
+      nickname: (nickname || '').toString().slice(0, 80) || null,
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error('تعذّر حفظ بصمة الدخول الجديدة:', e);
@@ -139,11 +136,8 @@ router.post('/api/auth/webauthn/register-verify', requireAuth, async (req, res) 
 
 router.get('/api/auth/webauthn/credentials', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, nickname, device_type, created_at, last_used_at FROM webauthn_credentials WHERE username = $1 ORDER BY created_at DESC',
-      [req.user.username]
-    );
-    res.json({ credentials: result.rows });
+    const credentials = await webauthnRepo.listCredentials(req.user.username);
+    res.json({ credentials });
   } catch (e) {
     console.error('تعذّر جلب قائمة البصمات المسجّلة:', e);
     res.status(500).json({ error: 'تعذّر جلب القائمة' });
@@ -152,7 +146,7 @@ router.get('/api/auth/webauthn/credentials', requireAuth, async (req, res) => {
 
 router.delete('/api/auth/webauthn/credentials/:id', requireAuth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM webauthn_credentials WHERE id = $1 AND username = $2', [req.params.id, req.user.username]);
+    await webauthnRepo.deleteCredential(req.params.id, req.user.username);
     res.json({ ok: true });
   } catch (e) {
     console.error('تعذّر حذف البصمة:', e);
@@ -194,9 +188,8 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
     if (!expectedChallenge) return res.status(400).json({ error: 'انتهت صلاحية محاولة الدخول، حاول من جديد' });
 
     // نتعرّف على صاحب الحساب من credential_id نفسه (الاستجابة لا تحمل اسم مستخدم إطلاقاً).
-    const credRow = await pool.query('SELECT id, username, credential_id, public_key, counter, transports FROM webauthn_credentials WHERE credential_id = $1', [response.id]);
-    if (!credRow.rows.length) return res.status(400).json({ error: 'هذه البصمة غير مسجَّلة على هذا الحساب' });
-    const cred = credRow.rows[0];
+    const cred = await webauthnRepo.findByCredentialId(response.id);
+    if (!cred) return res.status(400).json({ error: 'هذه البصمة غير مسجَّلة على هذا الحساب' });
     const username = cred.username;
 
     const verification = await verifyAuthenticationResponse({
@@ -213,13 +206,9 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
     });
     if (!verification.verified) return res.status(401).json({ error: 'تعذّر التحقق من البصمة' });
 
-    await pool.query(
-      'UPDATE webauthn_credentials SET counter = $1, last_used_at = now() WHERE id = $2',
-      [verification.authenticationInfo.newCounter, cred.id]
-    );
+    await webauthnRepo.updateCounter(cred.id, verification.authenticationInfo.newCounter);
 
-    const userResult = await pool.query('SELECT id, username, password_hash, role, display_name, token_version, is_active, failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes FROM server_users WHERE username = $1', [username]);
-    const user = userResult.rows[0];
+    const user = await authRepo.findByUsername(username);
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
     const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
@@ -240,21 +229,17 @@ router.post('/api/auth/webauthn/login-verify', authLimiter, async (req, res) => 
         return res.json({ requires2FA: true, username: user.username, pendingId });
       }
       if (!second.ok) {
-        pool.query(
-          'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
-          [user.username, user.role || 'staff', loginIp, loginDevice]
-        ).catch(() => {});
+        authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: false })
+          .catch(() => {});
         return res.status(401).json({ error: 'كود التحقق غير صحيح' });
       }
     }
 
     const token = signToken(user);
-    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+    authRepo.resetFailedLogin(user.id)
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
-    pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
-      [user.username, user.role || 'staff', loginIp, loginDevice]
-    ).catch(e => console.error('تعذّر تسجيل عملية الدخول بالبصمة فى السجل:', e));
+    authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: true })
+      .catch(e => console.error('تعذّر تسجيل عملية الدخول بالبصمة فى السجل:', e));
 
     res.json({
       token,
@@ -286,8 +271,7 @@ router.post('/api/auth/webauthn/login-2fa', authLimiter, async (req, res) => {
     // استهلاك فوري قبل أي تحقق: محاولة واحدة لكل مسح بصمة.
     pendingSecondFactor.delete(pendingId);
 
-    const userResult = await pool.query('SELECT id, username, password_hash, role, display_name, token_version, is_active, failed_login_count, locked_until, totp_enabled, totp_secret, totp_backup_codes FROM server_users WHERE username = $1', [entry.username]);
-    const user = userResult.rows[0];
+    const user = await authRepo.findByUsername(entry.username);
     if (!user) return res.status(401).json({ error: 'الحساب غير موجود' });
     if (user.is_active === false) return res.status(401).json({ error: 'هذا الحساب معطّل حالياً، تواصل مع المدير' });
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
@@ -299,20 +283,16 @@ router.post('/api/auth/webauthn/login-2fa', authLimiter, async (req, res) => {
     const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
     const loginDevice = (req.headers['user-agent'] || '').toString().slice(0, 300);
     if (!second.ok) {
-      pool.query(
-        'INSERT INTO login_history (username, role, ip_address, device_info, success) VALUES ($1, $2, $3, $4, false)',
-        [user.username, user.role || 'staff', loginIp, loginDevice]
-      ).catch(() => {});
+      authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: false })
+        .catch(() => {});
       return res.status(401).json({ error: 'كود التحقق غير صحيح' });
     }
 
     const token = signToken(user);
-    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+    authRepo.resetFailedLogin(user.id)
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
-    pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
-      [user.username, user.role || 'staff', loginIp, 'دخول بالبصمة + كود مصادقة ثنائي']
-    ).catch(e => console.error('تعذّر تسجيل عملية الدخول فى السجل:', e));
+    authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: 'دخول بالبصمة + كود مصادقة ثنائي', success: true })
+      .catch(e => console.error('تعذّر تسجيل عملية الدخول فى السجل:', e));
 
     res.json({
       token,

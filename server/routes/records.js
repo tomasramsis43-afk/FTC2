@@ -1,16 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { pool } = require('../db');
 const { requireAuth, requireRole } = require('../auth');
 const { storageLimiter } = require('../rate-limiters');
 const { restrictKeyToAdmin, roleCanAccessView, RESTRICTED_STORAGE_KEYS } = require('../permissions');
+const kvRepo = require('../repo/kv.repo');
+const clientsRowsRepo = require('../repo/clientsRows.repo');
+const recordsRepo = require('../repo/records.repo');
 const { broadcastRecordChanged } = require('../sse');
 const { alertAdmins } = require('../services/email');
+const syncService = require('../services/sync');
 
 // إشعار إيميل تلقائي — best-effort، لا يؤثر على نجاح العملية
 function notifyChange(subject, html) {
   alertAdmins(subject, html).catch(() => {});
+}
+
+// معرّف طلب حتمي (deterministic) يُستنتج من محتوى دفعة الرفع نفسها + المستخدم.
+// نفس الدفعة المرسلة ثانيةً (بسبب Retry من الشبكة/العميل) تنتج نفس المعرف، فيمنع
+// الإدراج المزدوج عبر request_id (راجع schema.sql و bulkMigrate). أي تغيير حقيقي
+// في المحتوى يُنتج معرفاً مختلفاً فيُكتب كالمعتاد — بلا أي فقدان للمزامنات الصحيحة.
+function deriveRequestId(records, username) {
+  const payload = JSON.stringify(records.map(r => ({ id: String(r.id), enc: String(r.enc), version: Number.isInteger(r.version) ? r.version : 0 })));
+  return crypto.createHash('sha256').update(`${username}|${payload}`).digest('hex');
 }
 
 // (خصومات، دفعات جزئية...) موجودة فقط بمنطق الواجهة الأمامية — تلك الحالات تستمر تُحسب من
@@ -60,29 +72,20 @@ router.get('/api/clients', requireAuth, async (req, res) => {
         i+=2;
       }catch{ cursorSql=''; cursorParams=[]; }
     }
-    const totalR = await pool.query(`SELECT COUNT(*) FROM clients_rows ${whereSql}`, params);
-    let rowsR;
-    if(cursorSql){
-      rowsR = await pool.query(
-        `SELECT data, ${sortCol} as sc, id FROM clients_rows ${whereSql}${cursorSql} ORDER BY ${sortCol} ${order} NULLS LAST, id ASC LIMIT $${i}`,
-        [...params, ...cursorParams, pageSize]
-      );
-    } else {
-      rowsR = await pool.query(
-        `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
-        [...params, pageSize, (page - 1) * pageSize]
-      );
-    }
+    const { rows, total } = await clientsRowsRepo.queryPage({
+      whereSql, params, sortCol, order, cursorSql, cursorParams, pageSize,
+      offset: (page - 1) * pageSize, i,
+    });
     // nextCursor للـ keyset pagination
     let nextCursor = null;
-    if(rowsR.rows.length === pageSize){
-      const last = rowsR.rows[rowsR.rows.length-1];
+    if(rows.length === pageSize){
+      const last = rows[rows.length-1];
       const val = last.sc !== undefined ? last.sc : (last.data ? last.data[sortCol] : null);
       nextCursor = Buffer.from(JSON.stringify({val, id: last.id || last.data?.id || ''})).toString('base64url');
     }
     res.json({
-      rows: rowsR.rows.map(r => r.data),
-      total: Number(totalR.rows[0].count),
+      rows: rows.map(r => r.data),
+      total,
       page, pageSize, nextCursor
     });
   } catch (e) {
@@ -97,12 +100,12 @@ router.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res
     // لمفتاح 'clients' القديم الذي قد يكون عدة ميجابايت لعملاء كثيرين تمت مزامنتهم بالفعل عبر
     // نظام client_records الأحدث، ولا داعي إطلاقاً لتنزيله فقط لمعرفة رقم نسخته الحالي.
     if (req.query.meta === '1') {
-      const rMeta = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
-      return res.json({ key: req.params.key, version: rMeta.rows[0] ? rMeta.rows[0].version : 0 });
+      const v = await kvRepo.getVersion(req.params.key);
+      return res.json({ key: req.params.key, version: v });
     }
-    const r = await pool.query('SELECT value, version FROM kv_store WHERE key = $1', [req.params.key]);
-    if (!r.rows[0]) return res.json({ key: req.params.key, value: null, version: 0 });
-    const { value, version } = r.rows[0];
+    const row = await kvRepo.get(req.params.key);
+    if (!row) return res.json({ key: req.params.key, value: null, version: 0 });
+    const { value, version } = row;
     const ifNoneMatch = req.headers['if-none-match'];
     if (ifNoneMatch && Number(ifNoneMatch) === version) {
       return res.status(304).end();
@@ -141,83 +144,12 @@ router.get('/api/storage/:key', requireAuth, restrictKeyToAdmin, async (req, res
 // الصفوف)، فيهبط عدد الرحلات لقاعدة البيانات من N إلى ~N/300 فقط، مع الحفاظ تماماً على
 // نفس صلابة السلوك القديم (تجاوز أي صف سيّئ بدل إلغاء العملية كلها): لو فشلت دفعة كاملة
 // (نادر جداً)، نعيد محاولتها صفاً صفاً لتلك الدفعة فقط بدل فقدها بالكامل.
-const CLIENTS_ROWS_CHUNK_SIZE = 300;
-async function upsertClientsRowsChunk(chunk) {
-  const values = [];
-  const placeholders = chunk.map((c, idx) => {
-    const base = idx * 10;
-    values.push(c.id, JSON.stringify(c), c.name || '', c.clientId || '', c.referNum || '',
-      c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', c.date || '');
-    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`;
-  }).join(',');
-  await pool.query(
-    `INSERT INTO clients_rows (id, data, name, client_id, refer_num, nationality, course_type, course_number, invoice_no, reg_date)
-     VALUES ${placeholders}
-     ON CONFLICT (id) DO UPDATE SET
-       data = EXCLUDED.data, name = EXCLUDED.name, client_id = EXCLUDED.client_id,
-       refer_num = EXCLUDED.refer_num, nationality = EXCLUDED.nationality,
-       course_type = EXCLUDED.course_type, course_number = EXCLUDED.course_number,
-       invoice_no = EXCLUDED.invoice_no, reg_date = EXCLUDED.reg_date, updated_at = now()`,
-    values
-  );
-}
-async function syncClientsRows(value) {
-  let arr;
-  try { arr = JSON.parse(value || '[]'); } catch (e) { return; }
-  if (!Array.isArray(arr)) return;
-  const valid = arr.filter(c => c && c.id);
-  // كل المعرّفات الموجودة فعلاً في المصفوفة الجديدة — يستخدمها الـ DELETE النهائي لمعرفة
-  // الصفوف التي "أُزيلت فعلاً" من القائمة. استخدام المعرّفات الناجحة فقط (كما كان) كان
-  // يحذف صفوف عملاء ما زالوا موجودين في المصفوفة لو فشل رفعهم مؤقتاً (انقطاع شبكة لحظي
-  // مثلاً) — أي فقدان بيانات مفهرسة مؤقت بحجة مزامنة ناجحة جزئياً.
-  const allIds = valid.map(c => c.id);
-  let failedRows = 0;
-  for (let start = 0; start < valid.length; start += CLIENTS_ROWS_CHUNK_SIZE) {
-    const chunk = valid.slice(start, start + CLIENTS_ROWS_CHUNK_SIZE);
-    try {
-      await upsertClientsRowsChunk(chunk);
-    } catch (e) {
-      // فشلت الدفعة كاملة (مثلاً id مكرر داخلها) — نعيد المحاولة صفاً صفاً لهذه الدفعة
-      // فقط، حتى نتجاوز الصف السيّئ تحديداً دون فقد باقي الدفعة.
-      for (const c of chunk) {
-        try {
-          await upsertClientsRowsChunk([c]);
-        } catch (e2) {
-          failedRows++;
-          console.error(`تعذّرت مزامنة صف عميل واحد (id=${c.id}):`, e2.message);
-        }
-      }
-    }
-  }
-  if (failedRows) console.error(`مزامنة clients_rows: تم تجاوز ${failedRows} صف بسبب خطأ (غالباً id مكرر)، وتمت مزامنة الباقي بنجاح`);
-  try {
-    if (allIds.length) {
-      // يُحذف فقط ما ليس في المصفوفة الجديدة إطلاقاً — الصفوف التي فشلت للتو تبقى لأن
-      // معرّفها ضمن allIds (على الأرجح موجودة أصلاصاً من مزامنة سابقة، والأفضل إبقاؤها
-      // من حذفها وفقدان ظهورها مؤقتاً في شيت العملاء).
-      await pool.query(`DELETE FROM clients_rows WHERE id != ALL($1)`, [allIds]);
-    } else if (arr.length === 0) {
-      // المصفوفة فارغة فعلاً (لا يوجد أي عميل) — نفرّغ الجدول المفهرس ليطابق ذلك.
-      await pool.query('DELETE FROM clients_rows');
-    }
-    // لو arr غير فارغة لكن كل الصفوف فشلت (allIds فارغ فقط لو لا صف صالح أصلاً) لا نحذف
-    // شيئاً تحسباً لخطأ عابر (مثل انقطاع اتصال) حتى لا نفقد البيانات المفهرسة السابقة بلا داعٍ.
-  } catch (e) {
-    console.error('تعذّر حذف الصفوف القديمة من clients_rows:', e.message);
-  }
-}
-
 // طابور يمنع تداخل عمليتي مزامنة متزامنتين (Race Condition):
 // لو حفظ مستخدمان بيانات clients في نفس اللحظة، بدون طابور تبدأ عمليتا
 // مزامنة بالتوازي — العملية الأولى قد تحذف صفوفاً أضافتها الثانية عبر
 // DELETE...WHERE id != ALL($1)، فيختفي جزء من بيانات العملاء الفهرسة.
 // الطابور يضمن أن كل عملية تنتهي قبل أن تبدأ التالية.
-let _syncQueue = Promise.resolve();
-function queueSyncClientsRows(value) {
-  _syncQueue = _syncQueue
-    .then(() => syncClientsRows(value))
-    .catch(e => console.error('تعذّرت مزامنة clients_rows في الطابور:', e.message));
-}
+// الآن في services/sync.js — queueSync()
 
 // حماية من "انحدار التشفير" (encryption downgrade): لو كانت القيمة الحالية المخزَّنة لهذا
 // المفتاح مشفّرة فعلاً (تبدأ بـ 'ENC1:' أو 'ENC2:') والقيمة الجديدة المُرسَلة من هذا الحفظ غير مشفّرة،
@@ -231,8 +163,7 @@ async function wouldDowngradeEncryption(key, newValue) {
   if (typeof newValue !== 'string' || newValue.startsWith('ENC1:') || newValue.startsWith('ENC2:')) return false;
   // نجلب أول 5 حروف فقط (بادئة التشفير) بدل جلب كامل القيمة التي قد تكون عدة ميجابايت —
   // هذا يُقلّل الحمل على قاعدة البيانات بشكل كبير في كل عملية حفظ.
-  const cur = await pool.query('SELECT LEFT(value, 5) AS prefix FROM kv_store WHERE key = $1', [key]);
-  const prefix = cur.rows[0] && cur.rows[0].prefix;
+  const prefix = await kvRepo.getPrefix(key);
   return (prefix === 'ENC1:' || prefix === 'ENC2:');
 }
 
@@ -254,37 +185,25 @@ router.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin,
         error: 'تم رفض هذا الحفظ وقائياً: البيانات الحالية على السيرفر مشفّرة، لكن جهازك حاول حفظ بيانات غير مشفّرة — على الأرجح لأن مفتاح التشفير غير جاهز على هذا المتصفح/الجهاز (تأكد أنك تفتح البرنامج عبر رابط HTTPS صحيح). أعد تحميل الصفحة وسجّل الدخول من جديد قبل إعادة المحاولة، حتى لا تُفقد بيانات باقي المستخدمين.',
       });
     }
-    const upsert = await pool.query(
-      `INSERT INTO kv_store (key, value, version, updated_by)
-       VALUES ($1, $2, 1, $3)
-       ON CONFLICT (key) DO UPDATE SET
-         value = EXCLUDED.value,
-         version = kv_store.version + 1,
-         updated_at = now(),
-         updated_by = EXCLUDED.updated_by
-       WHERE kv_store.version = $4
-       RETURNING version`,
-      [req.params.key, value, req.user.username, knownVersion]
-    );
-    if (upsert.rows[0]) {
+    const upsert = await kvRepo.upsert(req.params.key, value, knownVersion, req.user.username);
+    if (upsert.updated) {
       // نستخدم "value" (نفس القيمة اللي بعتها الواجهة للتو، موجودة أصلاً فى الذاكرة) بدل طلب
       // "RETURNING value" من قاعدة البيانات — لا داعي لأي رحلة إضافية لنقل نفس البيانات الضخمة
       // (قد تصل لعدة ميجابايت مع آلاف العملاء) من قاعدة البيانات ثم تخزينها فى المتغيّر مرة أخرى.
-      if (req.params.key === 'clients') queueSyncClientsRows(value);
+      if (req.params.key === 'clients') syncService.queueSync(value);
       broadcastRecordChanged({ collection: 'kv:' + req.params.key, actorUsername: req.user.username });
       // لا نُعيد "value" فى الرد: المتصفح أصلاً يملك نفس البيانات التي أرسلها للتو ولا يستخدم
       // القيمة الراجعة من هذا الرد إطلاقاً (انظر window.storage.set فى storage-sync.js) — فإعادة
       // إرسالها كانت تضاعف حجم البيانات المنقولة فى كل عملية حفظ (رفع + تنزيل لنفس البيانات)، وهو ما
       // كان يُشعر المستخدم ببطء واضح فى وقت انتظار الرد بعد كل تسجيل/حذف كل ما تكبر البيانات.
-      return res.json({ key: req.params.key, version: upsert.rows[0].version });
+      return res.json({ key: req.params.key, version: upsert.version });
     }
     // لم يتحدّث أي صف: إما أن المفتاح موجود بنسخة مختلفة عن knownVersion (تعارض حقيقي)،
     // أو حالة نادرة (سباق بين عملية INSERT أولى من جهازين معاً على نفس المفتاح الجديد).
     // في الحالتين نرجع للمستخدم الحالة الحقيقية الحالية بدل افتراض تعارض دائماً.
-    const current = await pool.query('SELECT version FROM kv_store WHERE key = $1', [req.params.key]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
-      currentVersion: current.rows[0] ? current.rows[0].version : 0,
+      currentVersion: upsert.version,
     });
   } catch (e) {
     console.error(e);
@@ -297,8 +216,8 @@ router.put('/api/storage/:key', requireAuth, storageLimiter, restrictKeyToAdmin,
 // لعملهم اليومي: تسجيل عملاء، دفعات، إلخ).
 router.delete('/api/storage/:key', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM kv_store WHERE key = $1', [req.params.key]);
-    if (req.params.key === 'clients') await pool.query('DELETE FROM clients_rows').catch(()=>{});
+    await kvRepo.del(req.params.key);
+    if (req.params.key === 'clients') await clientsRowsRepo.deleteAll().catch(()=>{});
     res.json({ key: req.params.key, deleted: true });
   } catch (e) {
     console.error(e);
@@ -309,8 +228,8 @@ router.delete('/api/storage/:key', requireAuth, requireRole('admin'), async (req
 router.get('/api/storage', requireAuth, async (req, res) => {
   const prefix = String(req.query.prefix || '').replace(/[%_\\]/g, '\\$&');
   try {
-    const r = await pool.query('SELECT key FROM kv_store WHERE key LIKE $1 ESCAPE \'\\\'', [prefix + '%']);
-    res.json({ keys: r.rows.map(x => x.key) });
+    const keys = await kvRepo.list(prefix);
+    res.json({ keys });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب القائمة' });
@@ -338,35 +257,19 @@ router.get('/api/client-records', requireAuth, async (req, res) => {
     // الافتراضي (بدون page) يعيد كل السجلات كما كان، لتبقى مزامنة الواجهة بدون اتصال تعمل.
     const page = parseInt(req.query.page, 10);
     const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
-    let sql = `SELECT id, enc, version, origin, status FROM client_records ${where}`;
-    const sqlParams = [...params];
-    // هل يوجد شرط WHERE بالفعل؟ (فارغ فقط عندما role==='admin' — لا قيود على رؤيته). أي شرط
-    // إضافي لاحق (ids=) يجب أن يبدأ بـ WHERE لو لم يوجد شرط سابق، أو AND لو وُجد — وإلا نحصل على
-    // "... FROM client_records  AND id = ANY(...)" بلا WHERE قبلها، وهو خطأ syntax فى بوستجرس
-    // كان يفشل دائماً تحديداً لحالة الأدمن (الدور الوحيد الذي يُرجع where فارغاً)، فيمنعه هذا
-    // الخطأ من مزامنة أي سجل عميل جديد/معدَّل تزايدياً عبر _fetchDeltaClientRecords فى الواجهة —
-    // العميل الجديد كان يظل غير مرئي للأدمن حتى لو نجحت كل خطوات المزامنة الأخرى.
-    let hasWhere = /\bwhere\b/i.test(where);
     // جلب الفروق فقط (delta): نفس فكرة GET /api/records/:collection?ids= بالضبط — لو المُستدعي
     // أرسل ids= (قائمة ids مفصولة بفواصل) نرجع هذه السجلات فقط بدل جدول العملاء كامل. هذا هو
     // الأساس الذي بنيت عليه _fetchDeltaClientRecords فى الواجهة لتفادي إعادة تنزيل كل عميل فى
     // النظام (وقد يكونوا آلاف) بمجرد تعديل عميل واحد من أي جهاز — كان السبب الرئيسي لاستهلاك
     // ضخم غير ضروري من حصة نقل بيانات قاعدة البيانات الشهرية.
+    let ids;
     const idsParam = req.query.ids;
     if (typeof idsParam === 'string' && idsParam.length) {
       const idList = idsParam.split(',').map(s => s && s.trim()).filter(Boolean);
-      if (idList.length) {
-        sql += ` ${hasWhere ? 'AND' : 'WHERE'} id = ANY($${sqlParams.length + 1}::text[])`;
-        sqlParams.push(idList);
-        hasWhere = true;
-      }
+      if (idList.length) ids = idList;
     }
-    if (Number.isInteger(page) && page >= 1) {
-      sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
-      sqlParams.push(pageSize, (page - 1) * pageSize);
-    }
-    const r = await pool.query(sql, sqlParams);
-    res.json({ records: r.rows });
+    const rows = await recordsRepo.clientRecords({ where, params, page, pageSize, ids });
+    res.json({ records: rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب سجلات العملاء' });
@@ -380,8 +283,8 @@ router.get('/api/client-records', requireAuth, async (req, res) => {
 router.get('/api/client-records/versions', requireAuth, async (req, res) => {
   try {
     const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
-    const r = await pool.query(`SELECT id, version FROM client_records ${where}`, params);
-    res.json({ pairs: r.rows.map(row => [row.id, Number(row.version)]) });
+    const pairs = await recordsRepo.clientVersionPairs({ where, params });
+    res.json({ pairs });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب أرقام إصدارات العملاء' });
@@ -395,8 +298,8 @@ router.get('/api/client-records/versions', requireAuth, async (req, res) => {
 router.get('/api/client-records/version', requireAuth, async (req, res) => {
   try {
     const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
-    const r = await pool.query(`SELECT COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM client_records ${where}`, params);
-    res.json({ version: Number(r.rows[0].v), count: r.rows[0].c });
+    const agg = await recordsRepo.clientAggVersion({ where, params });
+    res.json({ version: agg.version, count: agg.count });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب رقم إصدار العملاء' });
@@ -416,8 +319,8 @@ router.get('/api/client-records/ids', requireAuth, async (req, res) => {
     // فلترة حسب الدور: الاستقبال يرى فقط سجلاته، والباقي يرى المعتمدة فقط — يمنع تسريب أرقام الهوية
     // بين مستخدمي الاستقبال المعزولين وبين الأدوار الأخرى
     const { where, params } = clientRecordsVisibilitySql(req.user.role, req.user.username);
-    const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> '' ${where}`, params);
-    res.json({ ids: r.rows.map(row => ({ id: row.id, clientIdHash: crypto.createHash('sha256').update(row.client_id).digest('hex') })) });
+    const rows = await recordsRepo.clientIdPairs({ where, params });
+    res.json({ ids: rows.map(row => ({ id: row.id, clientIdHash: crypto.createHash('sha256').update(row.client_id).digest('hex') })) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب قائمة أرقام الهوية' });
@@ -440,43 +343,41 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
     // فى clientRecordsVisibilitySql — فلا يمكنه عبر طلب مباشر لمس مسودات/سجلات استقبال معلّقة
     // لا يملك رؤيتها أصلاً (إصلاح ثغرة تجاوز العزل بالمعرّف).
     if (req.user.role === 'reception') {
-      const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
+      if (existing && (existing.origin !== 'reception' || existing.created_by !== req.user.username)) {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
       }
     } else if (req.user.role !== 'admin') {
-      const existing = await pool.query('SELECT status FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
+      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
+      if (existing && existing.status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
       }
     }
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
-    const upsert = await pool.query(
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
-       VALUES ($1, $2, 1, $3, $5, $6, $3, $7)
-       ON CONFLICT (id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
-       WHERE client_records.version = $4
-       RETURNING version, origin, status`,
-      [req.params.id, enc, req.user.username, knownVersion, newOrigin, newStatus, plainClientId]
-    );
-    if (upsert.rows[0]) {
+    const upsert = await recordsRepo.clientUpsert({
+      id: req.params.id, enc, knownVersion, username: req.user.username,
+      origin: newOrigin, status: newStatus, clientId: plainClientId,
+    });
+    if (upsert.updated) {
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-      if (upsert.rows[0].version === 1) {
+      if (upsert.version === 1) {
         notifyChange(
           `إضافة عميل جديد${plainClientId ? ' — ' + plainClientId : ''}`,
           `<p>قام المستخدم <b>${req.user.username}</b> بإضافة عميل جديد (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
+      } else {
+        notifyChange(
+          `تعديل بيانات عميل${plainClientId ? ' — ' + plainClientId : ''}`,
+          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل بيانات عميل (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الحالة: ${upsert.status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        );
       }
-      return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+      return res.json({ id: req.params.id, version: upsert.version, origin: upsert.origin, status: upsert.status });
     }
-    const current = await pool.query('SELECT version, enc FROM client_records WHERE id = $1', [req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل بيانات هذا العميل من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
-      currentVersion: current.rows[0] ? current.rows[0].version : 0,
-      currentEnc: current.rows[0] ? current.rows[0].enc : null,
+      currentVersion: upsert.currentVersion,
+      currentEnc: upsert.currentEnc,
     });
   } catch (e) {
     console.error(e);
@@ -490,15 +391,10 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
 // عميل عادي، مع بقاء origin='reception' كسجل تاريخي فقط لمن سجّله أصلاً.
 router.post('/api/client-records/:id/approve', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const r = await pool.query(
-      `UPDATE client_records SET status = 'confirmed', version = version + 1, updated_at = now()
-       WHERE id = $1 AND origin = 'reception' AND status = 'pending'
-       RETURNING id, version`,
-      [req.params.id]
-    );
-    if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    const r = await recordsRepo.clientApprove(req.params.id);
+    if (!r) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-    res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'confirmed' });
+    res.json({ id: r.id, version: r.version, status: 'confirmed' });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر اعتماد بيانات العميل' });
@@ -512,15 +408,10 @@ router.post('/api/client-records/:id/approve', requireAuth, requireRole('admin')
 // كان pending تماماً — فقط status يتغيّر، enc يبقى كما هو (السيرفر لا يعرف محتواه أصلاً).
 router.post('/api/client-records/:id/reject', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const r = await pool.query(
-      `UPDATE client_records SET status = 'rejected', rejected_at = now(), version = version + 1, updated_at = now()
-       WHERE id = $1 AND origin = 'reception' AND status = 'pending'
-       RETURNING id, version`,
-      [req.params.id]
-    );
-    if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    const r = await recordsRepo.clientReject(req.params.id);
+    if (!r) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-    res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'rejected' });
+    res.json({ id: r.id, version: r.version, status: 'rejected' });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر رفض بيانات العميل' });
@@ -535,11 +426,11 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
     if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
       const wantVersion = Number(wantVersionRaw);
       if (Number.isFinite(wantVersion)){
-        const cur = await pool.query('SELECT version FROM client_records WHERE id = $1', [req.params.id]);
-        if (cur.rows[0] && cur.rows[0].version !== wantVersion){
+        const cur = await recordsRepo.clientRecordMetaFor(req.params.id);
+        if (cur && cur.version !== wantVersion){
           return res.status(409).json({
             error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
-            currentVersion: cur.rows[0].version,
+            currentVersion: cur.version,
           });
         }
       }
@@ -548,17 +439,17 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
     // أي دور آخر (staff/accountant) يحذف فقط السجلات المعتمدة status='confirmed' (نفس شرط الرؤية)،
     // فلا يمس عبر طلب مباشر مسودات/سجلات الاستقبال المعلّقة التي لا يملك رؤيتها أصلاً.
     if (req.user.role === 'reception') {
-      const existing = await pool.query('SELECT origin, created_by FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
+      if (existing && (existing.origin !== 'reception' || existing.created_by !== req.user.username)) {
         return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
       }
     } else if (req.user.role !== 'admin') {
-      const existing = await pool.query('SELECT status FROM client_records WHERE id = $1', [req.params.id]);
-      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
+      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
+      if (existing && existing.status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
       }
     }
-    await pool.query('DELETE FROM client_records WHERE id = $1', [req.params.id]);
+    await recordsRepo.clientDelete(req.params.id, null, []);
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     notifyChange(
       `حذف بيانات عميل — ${req.params.id}`,
@@ -577,18 +468,14 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [];
   if (!ids.length || ids.length > 1000) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   try {
+    // نفس عزل مستخدم الاستقبال/الأدمن/الأدوار الأخرى فى مسار الحذف الفردي — يُنفَّذ بحارس SQL بدل
+    // ثلاث استعلامات منفصلة: الاستقبال يلمس سجلاته فقط، الأدمن بلا قيود، والباقي المعتمد فقط.
     if (req.user.role === 'reception') {
-      // نفس عزل مستخدم الاستقبال فى مسار الحذف الفردي: يحذف فقط سجلاته هو شخصياً.
-      await pool.query(
-        `DELETE FROM client_records WHERE id = ANY($1::text[]) AND origin = 'reception' AND created_by = $2`,
-        [ids, req.user.username]
-      );
+      await recordsRepo.clientBulkDelete(ids, 'AND origin = $2 AND created_by = $3', [req.user.role, req.user.username]);
     } else if (req.user.role === 'admin') {
-      await pool.query('DELETE FROM client_records WHERE id = ANY($1::text[])', [ids]);
+      await recordsRepo.clientBulkDelete(ids, '', []);
     } else {
-      // staff/accountant: نفس شرط الرؤية الفردي — يحذف فقط السجلات المعتمدة، ولا يمس
-      // مسودات/سجلات استقبال معلّقة لا يملك رؤيتها أصلاً (إصلاح ثغرة تجاوز العزل دفعةً واحدة).
-      await pool.query(`DELETE FROM client_records WHERE id = ANY($1::text[]) AND status = 'confirmed'`, [ids]);
+      await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed'", []);
     }
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     notifyChange(
@@ -605,7 +492,7 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
 // حذف كل سجلات العملاء دفعة واحدة — يُستخدم فقط فى "إعادة ضبط المصنع" (حذف كل بيانات البرنامج)، أدمن فقط.
 router.delete('/api/client-records', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM client_records');
+    await recordsRepo.clientDeleteAll();
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ deleted: true });
   } catch (e) {
@@ -636,98 +523,42 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
       return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
     }
   }
-  let client = null;
+  const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
+  const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
+  // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
+  // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود.
+  // إصلاح أمني: استخدم معاملات مُقيّدة (parameterized) بدل تضمين نصي مع esc() لتجنب حقن SQL.
+  let guardSql;
+  let guardParams = [];
+  if (req.user.role === 'reception') {
+    guardSql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
+    guardParams = [req.user.role, req.user.username];
+  } else if (req.user.role === 'admin') {
+    guardSql = `($1::text = 'admin')`;
+    guardParams = [req.user.role];
+  } else {
+    guardSql = `cr.status = 'confirmed'`;
+    guardParams = [];
+  }
   try {
-    client = await pool.connect();
-    const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
-    const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
-    // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
-    // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
-    // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
-    // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
-    // حماية العزل حسب الدور (نفس شروط الرؤية فى clientRecordsVisibilitySql): الاستقبال يلمس
-    // سجلاته الشخصية فقط، staff/accountant يلمسون السجلات المعتمدة فقط، والأدمن بلا قيود.
-    // إصلاح أمني: استخدم معاملات مُقيّدة (parameterized) بدل تضمين نصي مع esc() لتجنب حقن SQL.
-    let guardSql;
-    let guardParams = [];
-    if (req.user.role === 'reception') {
-      guardSql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
-      guardParams = [req.user.role, req.user.username];
-    } else if (req.user.role === 'admin') {
-      guardSql = `($1::text = 'admin')`;
-      guardParams = [req.user.role];
-    } else {
-      guardSql = `cr.status = 'confirmed'`;
-      guardParams = [];
-    }
-    const payload = JSON.stringify(records.map(r => ({
-      id: String(r.id),
-      enc: String(r.enc),
-      version: Number.isInteger(r.version) ? r.version : 0,
-      clientId: (typeof r.clientId === 'string' && r.clientId.trim()) ? r.clientId.trim() : null
-    })));
-    await client.query('BEGIN');
-    const step = async (label, sql, params) => {
-      try { return await client.query(sql, params); }
-      catch (e) { e.message = `[${label}] ` + e.message; throw e; }
-    };
-    await step('inc',
-      `CREATE TEMP TABLE _inc ON COMMIT DROP AS
-       SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version,
-              (t->>'clientId')::text AS client_id
-       FROM jsonb_array_elements($1::jsonb) AS t`,
-      [payload]
-    );
-    // التعارضات = صفوف موجودة فعلاً تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
-    await step('conf',
-      `CREATE TEMP TABLE _conf ON COMMIT DROP AS
-       SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
-       FROM _inc i
-       JOIN client_records cr ON cr.id = i.id
-       WHERE cr.version <> i.known_version OR NOT (${guardSql})`,
-      guardParams
-    );
-    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
-    // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق
-    // التحديث المتزامن: طلبان متزامنان لنفس العميل قد يمرّان معاً من فحص _conf (كلاهما يرى النسخة
-    // القديمة قبل أن يُثبّت الآخر تحديثه) — بدون الحارس الثاني كان يكتب فوق الأول صامتاً. الآن
-    // الثاني يفشل شرط WHERE فلا يُحدَّث ويُحتسب ضمن conflicts بدل الكتابة فوق.
-    const upsertRes = await step('upsert',
-      `INSERT INTO client_records (id, enc, version, updated_by, origin, status, created_by, client_id)
-       SELECT i.id, i.enc, 1, $1, $2, $3, $1, i.client_id
-       FROM _inc i
-       WHERE NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
-       ORDER BY i.id
-       ON CONFLICT (id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = client_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by, client_id = EXCLUDED.client_id
-       WHERE client_records.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
-       RETURNING id`,
-      [req.user.username, newOrigin, newStatus]
-    );
-    // التعارضات النهائية = كل معرّفات الدفعة التي لم تُدرج/تُحدَّث فعلياً (رفضها _conf أو فشل
-    // حارس النسخة أثناء السباق) — نحسبها من RETURNING بدل الاعتماد على _conf فقط، ونقرأ نسختها
-    // الحالية الحقيقية بعد الحفظ ليردّها السيرفر للواجهة.
-    const succeededIds = new Set(upsertRes.rows.map(r => r.id));
-    const allIds = (await step('ids', 'SELECT id FROM _inc')).rows.map(r => r.id);
-    const conflictedIds = allIds.filter(id => !succeededIds.has(id));
-    let conflictRows = [];
-    if (conflictedIds.length) {
-      const cr = await step('conf-final', 'SELECT id, version, enc FROM client_records WHERE id = ANY($1::text[])', [conflictedIds]);
-      conflictRows = cr.rows.map(r => ({ id: r.id, current_version: r.version, current_enc: r.enc }));
-    }
-    const migrated = records.length - conflictRows.length;
-    await client.query('COMMIT');
-    if (migrated > 0) {
+    // مسار الرفع الجماعي — المعاملة كاملة (BEGIN/COMMIT/ROLLBACK + الجداول المؤقتة) مُجمَّعة الآن
+    // في repo/records.repo.js، بنفس منطق SQL السابق حرفياً للعملاء.
+    const result = await recordsRepo.bulkMigrate({
+      tableConfig: recordsRepo.CLIENTS_TABLE_CONFIG,
+      records, username: req.user.username, origin: newOrigin, status: newStatus,
+      guardSql, guardParams, requestId: deriveRequestId(records, req.user.username),
+    });
+    if (result.migrated > 0) {
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
+      notifyChange(
+        `ترحيل/استيراد جماعي لبيانات عملاء — ${result.migrated} سجل`,
+        `<p>قام المستخدم <b>${req.user.username}</b> بترحيل جماعي لـ <b>${result.migrated}</b> سجل عميل${result.conflicts.length ? ` — تعارض: ${result.conflicts.length}` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      );
     }
-    res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
+    res.json(result);
   } catch (e) {
-    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
-  } finally {
-    if (client) client.release();
   }
 });
 
@@ -739,9 +570,9 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
 // عبر GET /api/storage/:key كالمعتاد — بدل تحميل كل البيانات من جديد في كل مرة.
 router.get('/api/storage-versions', requireAuth, async (req, res) => {
   try {
-    const r = await pool.query('SELECT key, version FROM kv_store');
+    const rows = await kvRepo.allVersions();
     const versions = {};
-    r.rows.forEach(row => {
+    rows.forEach(row => {
       if (row.key in RESTRICTED_STORAGE_KEYS) {
         const view = RESTRICTED_STORAGE_KEYS[row.key];
         const allowed = view === null ? req.user.role === 'admin' : roleCanAccessView(req.user.role, view);
@@ -780,13 +611,8 @@ router.get('/api/records/pending', requireAuth, async (req, res) => {
   // ولا يفك تشفيراً أبداً) ويعرضه المتصفح.
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير متاح لهذا الدور' });
   try {
-    const r = await pool.query(
-      `SELECT collection, id, enc, version, origin, status, created_by, updated_by, updated_at
-       FROM collection_records
-       WHERE origin = 'reception' AND status = 'pending'
-       ORDER BY updated_at DESC`
-    );
-    res.json({ records: r.rows });
+    const rows = await recordsRepo.pendingRecordsAll();
+    res.json({ records: rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب العمليات المعلّقة' });
@@ -802,25 +628,17 @@ router.get('/api/records/:collection', requireAuth, requireValidCollection, asyn
     // (بدون page) يعيد كل السجلات كما كان.
     const page = parseInt(req.query.page, 10);
     const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 200));
-    let sql = `SELECT id, enc, version, origin, status FROM collection_records WHERE collection = $1 ${vis.where}`;
-    const sqlParams = [req.params.collection, ...vis.params];
-    if (Number.isInteger(page) && page >= 1) {
-      sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
-      sqlParams.push(pageSize, (page - 1) * pageSize);
-    }
     // جلب الفروق فقط (delta): لو المُستدعي أرسل ids= (قائمة ids مفصولة بفواصل) نرجع هذه السجلات
     // فقط بدل الجدول كامل — تستخدمه المزامنة لجلب السجلات المتغيّرة/الجديدة. معاملة `id = ANY`
     // تحترم فلترة الرؤية أعلاه (أي id لا يحق للمستخدم رؤيته يُستبعد تلقائياً).
+    let ids;
     const idsParam = req.query.ids;
     if (typeof idsParam === 'string' && idsParam.length) {
       const idList = idsParam.split(',').map(s => s && s.trim()).filter(Boolean);
-      if (idList.length) {
-        sql += ` AND id = ANY($${sqlParams.length + 1}::text[])`;
-        sqlParams.push(idList);
-      }
+      if (idList.length) ids = idList;
     }
-    const r = await pool.query(sql, sqlParams);
-    res.json({ records: r.rows });
+    const rows = await recordsRepo.recordsByCollection({ collection: req.params.collection, where: vis.where, params: vis.params, page, pageSize, ids });
+    res.json({ records: rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب البيانات' });
@@ -833,10 +651,8 @@ router.get('/api/records/:collection', requireAuth, requireValidCollection, asyn
 router.get('/api/records/:collection/versions', requireAuth, requireValidCollection, async (req, res) => {
   try {
     const vis = recordsVisibilitySql(req.user.role, req.user.username);
-    const sql = `SELECT id, version FROM collection_records WHERE collection = $1 ${vis.where}`;
-    const params = [req.params.collection, ...vis.params];
-    const r = await pool.query(sql, params);
-    res.json({ pairs: r.rows.map(row => [row.id, Number(row.version)]) });
+    const pairs = await recordsRepo.recordVersionPairs(req.params.collection, vis.where, vis.params);
+    res.json({ pairs });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب أرقام الإصدارات' });
@@ -850,19 +666,18 @@ router.get('/api/records-versions', requireAuth, async (req, res) => {
     // نفس فلترة الرؤية الخاصة بـ GET /api/records/:collection بالضبط (راجع recordsVisibilitySql)،
     // وإلا يظهر للمستخدم إشعار "يوجد تحديث" عن سجلات لا يحق له رؤيتها أصلاً، وتدخل المزامنة
     // الدورية في حلقة إعادة جلب لا نهائية (عدد/مجموع السيرفر لا يطابقان ما يراه هذا المستخدم).
-    let sql = 'SELECT collection, COALESCE(SUM(version),0)::bigint AS v, COUNT(*)::int AS c FROM collection_records';
+    let whereClause = '';
     const params = [];
     if (req.user.role === 'reception') {
-      sql += ' WHERE origin = $1 AND created_by = $2';
+      whereClause = 'origin = $1 AND created_by = $2';
       params.push('reception', req.user.username);
     } else if (req.user.role !== 'admin') {
-      sql += ' WHERE status = $1';
+      whereClause = 'status = $1';
       params.push('confirmed');
     }
-    sql += ' GROUP BY collection';
-    const r = await pool.query(sql, params);
+    const rows = await recordsRepo.recordsVersions(whereClause, params);
     const out = {};
-    r.rows.forEach(row => {
+    rows.forEach(row => {
       if (!collectionRoleAllowed(req.user.role, row.collection)) return;
       out[row.collection] = { version: Number(row.v), count: row.c };
     });
@@ -884,19 +699,13 @@ router.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
     // status='confirmed' فقط — فلا يمكن عبر طلب مباشر بمعرّف معروف لمس مسودات/سجلات استقبال
     // معلّقة لا يملك رؤيتها أصلاً. الأدمن بلا قيود كما كان دائماً.
     if (req.user.role === 'reception') {
-      const existing = await pool.query(
-        'SELECT origin, created_by FROM collection_records WHERE collection = $1 AND id = $2',
-        [req.params.collection, req.params.id]
-      );
-      if (existing.rows[0] && (existing.rows[0].origin !== 'reception' || existing.rows[0].created_by !== req.user.username)) {
+      const existing = await recordsRepo.recordMetaFor(req.params.collection, req.params.id);
+      if (existing && (existing.origin !== 'reception' || existing.created_by !== req.user.username)) {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل هذه البيانات' });
       }
     } else if (req.user.role !== 'admin') {
-      const existing = await pool.query(
-        'SELECT status FROM collection_records WHERE collection = $1 AND id = $2',
-        [req.params.collection, req.params.id]
-      );
-      if (existing.rows[0] && existing.rows[0].status !== 'confirmed') {
+      const existing = await recordsRepo.recordMetaFor(req.params.collection, req.params.id);
+      if (existing && existing.status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل هذه البيانات' });
       }
     }
@@ -907,31 +716,24 @@ router.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
     const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
-    const upsert = await pool.query(
-      `INSERT INTO collection_records (collection, id, enc, version, updated_by, origin, status, created_by)
-       VALUES ($1, $2, $3, 1, $4, $5, $6, $4)
-       ON CONFLICT (collection, id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = collection_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by
-       WHERE collection_records.version = $7
-       RETURNING version, origin, status`,
-      [req.params.collection, req.params.id, enc, req.user.username, newOrigin, newStatus, knownVersion]
-    );
-    if (upsert.rows[0]) {
+    const upsert = await recordsRepo.recordUpsert({
+      collection: req.params.collection, id: req.params.id, enc, knownVersion,
+      username: req.user.username, origin: newOrigin, status: newStatus,
+    });
+    if (upsert.updated) {
       broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
       if (req.params.collection === 'vaultTx') {
         notifyChange(
           `تعديل حركة مالية — ${req.params.id}`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل حركة مالية (معرّف: ${req.params.id}) — الحالة: ${upsert.rows[0].status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل حركة مالية (معرّف: ${req.params.id}) — الحالة: ${upsert.status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       }
-      return res.json({ id: req.params.id, version: upsert.rows[0].version, origin: upsert.rows[0].origin, status: upsert.rows[0].status });
+      return res.json({ id: req.params.id, version: upsert.version, origin: upsert.origin, status: upsert.status });
     }
-    const current = await pool.query('SELECT version, enc FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
     return res.status(409).json({
       error: 'تعارض: تم تعديل هذه البيانات من جهاز آخر بعد آخر تحديث لديك. يرجى تحديث الصفحة وإعادة تنفيذ العملية.',
-      currentVersion: current.rows[0] ? current.rows[0].version : 0,
-      currentEnc: current.rows[0] ? current.rows[0].enc : null,
+      currentVersion: upsert.currentVersion,
+      currentEnc: upsert.currentEnc,
     });
   } catch (e) {
     console.error(e);
@@ -948,14 +750,11 @@ router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requi
     if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
       const wantVersion = Number(wantVersionRaw);
       if (Number.isFinite(wantVersion)){
-        const cur = await pool.query(
-          'SELECT version FROM collection_records WHERE collection = $1 AND id = $2',
-          [req.params.collection, req.params.id]
-        );
-        if (cur.rows[0] && cur.rows[0].version !== wantVersion){
+        const cur = await recordsRepo.recordMetaFor(req.params.collection, req.params.id);
+        if (cur && cur.version !== wantVersion){
           return res.status(409).json({
             error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
-            currentVersion: cur.rows[0].version,
+            currentVersion: cur.version,
           });
         }
       }
@@ -964,17 +763,11 @@ router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requi
     // يحذف أي سجل يعرف معرّفه): الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون
     // المعتمد فقط، والأدمن بلا قيود.
     if (req.user.role === 'reception') {
-      await pool.query(
-        'DELETE FROM collection_records WHERE collection = $1 AND id = $2 AND origin = $3 AND created_by = $4',
-        [req.params.collection, req.params.id, 'reception', req.user.username]
-      );
+      await recordsRepo.recordDelete(req.params.collection, req.params.id, 'AND origin = $3 AND created_by = $4', ['reception', req.user.username]);
     } else if (req.user.role === 'admin') {
-      await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = $2', [req.params.collection, req.params.id]);
+      await recordsRepo.recordDelete(req.params.collection, req.params.id, '', []);
     } else {
-      await pool.query(
-        'DELETE FROM collection_records WHERE collection = $1 AND id = $2 AND status = $3',
-        [req.params.collection, req.params.id, 'confirmed']
-      );
+      await recordsRepo.recordDelete(req.params.collection, req.params.id, "AND status = 'confirmed'", []);
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     if (req.params.collection === 'vaultTx') {
@@ -996,15 +789,10 @@ router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requi
 // origin='reception' كسجل تاريخي فقط لمن سجّله أصلاً.
 router.post('/api/records/:collection/:id/approve', requireAuth, requireRole('admin'), requireValidCollection, async (req, res) => {
   try {
-    const r = await pool.query(
-      `UPDATE collection_records SET status = 'confirmed', version = version + 1, updated_at = now()
-       WHERE collection = $1 AND id = $2 AND origin = 'reception' AND status = 'pending'
-       RETURNING id, version`,
-      [req.params.collection, req.params.id]
-    );
-    if (!r.rows[0]) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
+    const r = await recordsRepo.recordApprove(req.params.collection, req.params.id);
+    if (!r) return res.status(404).json({ error: 'لا يوجد سجل معلّق بهذا المعرّف بانتظار الاعتماد' });
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
-    res.json({ id: r.rows[0].id, version: r.rows[0].version, status: 'confirmed' });
+    res.json({ id: r.id, version: r.version, status: 'confirmed' });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر اعتماد السجل' });
@@ -1029,103 +817,42 @@ router.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter
       return res.status(400).json({ error: 'بيانات مرفوعة تالفة (id مفقود) — أُوقفت العملية قبل حفظ أي شيء' });
     }
   }
-  let client = null;
+  const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
+  const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
+  const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
+  let guardSql;
+  let guardParams = [];
+  if (req.user.role === 'reception') {
+    guardSql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
+    guardParams = [req.user.role, req.user.username];
+  } else if (req.user.role === 'admin') {
+    guardSql = `($1::text = 'admin')`;
+    guardParams = [req.user.role];
+  } else {
+    guardSql = `cr.status = 'confirmed'`;
+    guardParams = [];
+  }
   try {
-    client = await pool.connect();
-    // الرفع الجماعي يتم الآن ببيان SQL واحد لكل الدفعة كاملة بدل حلقة استعلامات متتالية لكل سجل
-    // (كان ~100ms للسجل الواحد على معالج الاستضافة المجانية، فدفعة 4000 سجل تتجاوز مهلة 60
-    // ثانية لدى الواجهة فيفشل رفع النسخ الاحتياطية الكبيرة دائماً في المنتصف). جدولان مؤقتان
-    // (المدخلات + التعارضات) ثم INSERT..SELECT واحد يعالج كل الدفعة ببضعة استعلامات إجمالاً.
-    // السجلات المرفوعة من الاستقبال في التصنيفات التشغيلية تبدأ معلّقة (نفس منطق PUT الفردي)،
-    // مع حماية العزل حسب الدور في التعارضات (نفس guard الخاص بـ client-records/bulk-migrate):
-    // الاستقبال يلمس سجلاته الشخصية فقط، staff/accountant يلمسون المعتمد فقط، والأدمن بلا قيود.
-    // إصلاح أمني: معاملات مُقيّدة بدل تضمين نصي.
-    const gated = APPROVAL_GATED_COLLECTIONS.includes(req.params.collection);
-    const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
-    const newStatus = (req.user.role === 'reception' && gated) ? 'pending' : 'confirmed';
-    let guard2Sql;
-    let guard2Params = [];
-    if (req.user.role === 'reception') {
-      guard2Sql = `($1::text = 'reception' AND cr.origin = 'reception' AND cr.created_by = $2::text)`;
-      guard2Params = [req.user.role, req.user.username];
-    } else if (req.user.role === 'admin') {
-      guard2Sql = `($1::text = 'admin')`;
-      guard2Params = [req.user.role];
-    } else {
-      guard2Sql = `cr.status = 'confirmed'`;
-      guard2Params = [];
-    }
-    const payload = JSON.stringify(records.map(r => ({ id: String(r.id), enc: String(r.enc), version: Number.isInteger(r.version) ? r.version : 0 })));
-    await client.query('BEGIN');
-    await client.query(
-      `CREATE TEMP TABLE _inc ON COMMIT DROP AS
-       SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version
-       FROM jsonb_array_elements($1::jsonb) AS t`,
-      [payload]
-    );
-    // التعارضات = الصفوف الموجودة فعلاً التي تختلف نسختها عن المعروفة، أو يرفضها حارس العزل حسب الدور
-    // guard مُقيَّد بمعاملات لتجنب حقن SQL
-    const confParams = [req.params.collection, ...guard2Params];
-    // نحتاج إزاحة أرقام المعاملات في guard لأن $1 محجوز لـ collection — نستخدم placeholder لتجنب التصادم
-    const guard2Shifted = guard2Sql.replace(/\$2/g, '__TMP_DOLLAR2__').replace(/\$1/g, '$2').replace(/__TMP_DOLLAR2__/g, '$3');
-    await client.query(
-      `CREATE TEMP TABLE _conf ON COMMIT DROP AS
-       SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
-       FROM _inc i
-       JOIN collection_records cr ON cr.collection = $1 AND cr.id = i.id
-       WHERE cr.version <> i.known_version OR NOT (${guard2Shifted})`,
-      confParams
-    );
-    // إدراج/تحديث كل غير المتعارضين في بيان واحد — جديد: version 1، موجود ونسخته مطابقة: version+1.
-    // حارس النسخة داخل DO UPDATE (مقارنة النسخة الحالية بـ known_version عبر _inc) يُغلق سباق
-    // التحديث المتزامن: طلبان متزامنان لنفس السجل قد يمرّان معاً من فحص _conf (كلاهما يرى النسخة
-    // القديمة قبل أن يُثبّت الآخر تحديثه) — بدون الحارس الثاني كان يكتب فوق الأول صامتاً. الآن
-    // الثاني يفشل شرط WHERE فلا يُحدَّث ويُحتسب ضمن conflicts بدل الكتابة فوق.
-    const upsertRes = await client.query(
-      `INSERT INTO collection_records (collection, id, enc, version, updated_by, origin, status, created_by)
-       SELECT $1, i.id, i.enc, 1, $2, $3, $4, $2
-       FROM _inc i
-       WHERE NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
-       ORDER BY i.id
-       ON CONFLICT (collection, id) DO UPDATE SET
-         enc = EXCLUDED.enc, version = collection_records.version + 1,
-         updated_at = now(), updated_by = EXCLUDED.updated_by
-       WHERE collection_records.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
-       RETURNING id`,
-      [req.params.collection, req.user.username, newOrigin, newStatus]
-    );
-    // التعارضات النهائية = كل معرّفات الدفعة التي لم تُدرج/تُحدَّث فعلياً (رفضها _conf أو فشل
-    // حارس النسخة أثناء السباق) — نحسبها من RETURNING بدل الاعتماد على _conf فقط، ونقرأ نسختها
-    // الحالية الحقيقية بعد الحفظ ليردّها السيرفر للواجهة.
-    const succeededIds = new Set(upsertRes.rows.map(r => r.id));
-    const allIds = (await client.query('SELECT id FROM _inc')).rows.map(r => r.id);
-    const conflictedIds = allIds.filter(id => !succeededIds.has(id));
-    let conflictRows = [];
-    if (conflictedIds.length) {
-      const cr = await client.query(
-        'SELECT id, version, enc FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])',
-        [req.params.collection, conflictedIds]
-      );
-      conflictRows = cr.rows.map(r => ({ id: r.id, current_version: r.version, current_enc: r.enc }));
-    }
-    const migrated = records.length - conflictRows.length;
-    await client.query('COMMIT');
-    if (migrated > 0) {
+    // مسار الرفع الجماعي — المعاملة كاملة (BEGIN/COMMIT/ROLLBACK + الجداول المؤقتة) مُجمَّعة الآن
+    // في repo/records.repo.js، بنفس منطق SQL السابق حرفياً للتصنيفات (مع إزاحة guard كما كان).
+    const result = await recordsRepo.bulkMigrate({
+      tableConfig: recordsRepo.RECORDS_TABLE_CONFIG(req.params.collection),
+      records, username: req.user.username, origin: newOrigin, status: newStatus,
+      guardSql, guardParams, requestId: deriveRequestId(records, req.user.username),
+    });
+    if (result.migrated > 0) {
       broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
       if (req.params.collection === 'vaultTx') {
         notifyChange(
-          `تحديث جماعي لحركات مالية — ${migrated} سجل`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بتحديث جماعي لـ <b>${migrated}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+          `تحديث جماعي لحركات مالية — ${result.migrated} سجل`,
+          `<p>قام المستخدم <b>${req.user.username}</b> بتحديث جماعي لـ <b>${result.migrated}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       }
     }
-    res.json({ migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) });
+    res.json(result);
   } catch (e) {
-    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error(e);
     res.status(500).json({ error: 'تعذّر ترحيل السجلات' });
-  } finally {
-    if (client) client.release();
   }
 });
 
@@ -1139,17 +866,11 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
     // نفس حماية عزل الاستقبال في الحذف الفردي (كان الحذف المجمّع بلا أي فحص ملكية إطلاقاً):
     // الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون المعتمد فقط، والأدمن بلا قيود.
     if (req.user.role === 'reception') {
-      await pool.query(
-        'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[]) AND origin = $3 AND created_by = $4',
-        [req.params.collection, ids, 'reception', req.user.username]
-      );
+      await recordsRepo.recordBulkDelete(req.params.collection, ids, 'AND origin = $3 AND created_by = $4', ['reception', req.user.username]);
     } else if (req.user.role === 'admin') {
-      await pool.query('DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])', [req.params.collection, ids]);
+      await recordsRepo.recordBulkDelete(req.params.collection, ids, '', []);
     } else {
-      await pool.query(
-        'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[]) AND status = $3',
-        [req.params.collection, ids, 'confirmed']
-      );
+      await recordsRepo.recordBulkDelete(req.params.collection, ids, "AND status = 'confirmed'", []);
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     if (req.params.collection === 'vaultTx') {
@@ -1168,7 +889,7 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
 // حذف كل سجلات تصنيف معيّن دفعة واحدة — يُستخدم فقط فى "إعادة ضبط المصنع" (حذف كل بيانات البرنامج)، أدمن فقط.
 router.delete('/api/records/:collection', requireAuth, requireRole('admin'), requireValidCollection, async (req, res) => {
   try {
-    await pool.query('DELETE FROM collection_records WHERE collection = $1', [req.params.collection]);
+    await recordsRepo.recordDeleteAll(req.params.collection);
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     res.json({ deleted: true });
   } catch (e) {
@@ -1192,11 +913,8 @@ router.post('/api/records/:collection/prune', requireAuth, storageLimiter, requi
     return res.status(400).json({ error: 'الحد الأدنى للاحتفاظ بالسجلات 90 يوماً على الأقل' });
   }
   try {
-    const r = await pool.query(
-      `DELETE FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval RETURNING id`,
-      [collection, olderThanDays]
-    );
-    res.json({ deleted: r.rowCount, collection, olderThanDays });
+    const deleted = await recordsRepo.recordPrune(collection, olderThanDays);
+    res.json({ deleted, collection, olderThanDays });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر تنظيف السجلات' });
@@ -1214,12 +932,8 @@ router.get('/api/records/:collection/prune-preview', requireAuth, requireRole('a
     return res.status(400).json({ error: 'الحد الأدنى للاحتفاظ بالسجلات 90 يوماً على الأقل' });
   }
   try {
-    const r = await pool.query(
-      `SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval`,
-      [collection, olderThanDays]
-    );
-    const total = await pool.query('SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1', [collection]);
-    res.json({ wouldDelete: r.rows[0].c, total: total.rows[0].c, collection, olderThanDays });
+    const { wouldDelete, total } = await recordsRepo.recordPrunePreview(collection, olderThanDays);
+    res.json({ wouldDelete, total, collection, olderThanDays });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حساب المعاينة' });
@@ -1228,6 +942,4 @@ router.get('/api/records/:collection/prune-preview', requireAuth, requireRole('a
 
 module.exports = {
   router,
-  syncClientsRows,
-  queueSyncClientsRows,
 };

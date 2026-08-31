@@ -8,7 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { pool } = require('../db');
+const authRepo = require('../repo/auth.repo');
 const { requireAuth, signToken } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
 
@@ -55,8 +55,7 @@ router.post('/api/auth/qr-login/approve/:id', requireAuth, async (req, res) => {
     if (!session || session.expiresAt < Date.now() || session.status !== 'pending') {
       return res.status(404).json({ error: 'انتهت صلاحية الكود أو تم استخدامه بالفعل' });
     }
-    const userResult = await pool.query('SELECT * FROM server_users WHERE username = $1', [req.user.username]);
-    const user = userResult.rows[0];
+    const user = await authRepo.findByUsername(req.user.username);
     if (!user) return res.status(404).json({ error: 'الحساب غير موجود' });
     const token = signToken(user);
     session.status = 'approved';
@@ -66,12 +65,10 @@ router.post('/api/auth/qr-login/approve/:id', requireAuth, async (req, res) => {
     session.user = { username: user.username, displayName: user.display_name, role: user.role || 'staff' };
 
     const loginIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
-    pool.query('UPDATE server_users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id])
+    authRepo.resetFailedLogin(user.id)
       .catch(e => console.error('تعذّر تصفير عداد المحاولات الفاشلة:', e));
-    pool.query(
-      'INSERT INTO login_history (username, role, ip_address, device_info) VALUES ($1, $2, $3, $4)',
-      [user.username, user.role || 'staff', loginIp, 'دخول بمسح الكود (QR) — تمت الموافقة من جهاز آخر']
-    ).catch(e => console.error('تعذّر تسجيل عملية الدخول بالكود فى السجل:', e));
+    authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: 'دخول بمسح الكود (QR) — تمت الموافقة من جهاز آخر', success: true })
+      .catch(e => console.error('تعذّر تسجيل عملية الدخول بالكود فى السجل:', e));
 
     res.json({ ok: true });
   } catch (e) {

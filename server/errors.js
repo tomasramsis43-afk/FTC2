@@ -1,19 +1,18 @@
 // server/errors.js
-// أخطاء قياسية للـ API + wrapper للـ async routes + middleware مركزي واحد.
+// أخطاء قياسية للـ API + middleware مركزي واحد.
 // الهدف: أي خطأ غير متوقع يوصل هنا ويُسجَّل بوضوح بدل ما يتبلع فى catch محلي ناقص
 // (زي مشكلة auto-settlement اللي حصلت لما تصحيح صامت اتنفذ من غير أي تسجيل).
 //
 // الاستخدام فى route جديد أو مُهاجَر:
-//   const { asyncHandler, ValidationError, ForbiddenError } = require('./errors');
-//   app.post('/api/x', requireAuth, asyncHandler(async (req, res) => {
+//   const { ValidationError, ForbiddenError } = require('./errors');
+//   app.post('/api/x', requireAuth, async (req, res) => {
 //     if (!req.body.name) throw new ValidationError('الاسم مطلوب', { field: 'name' });
 //     res.json(await doThing());
-//   }));
+//   });
 //
 // ملاحظة: هذا الملف إضافي بالكامل ولا يغيّر سلوك أي route موجود حالياً — الـ routes
 // القديمة كلها عندها try/catch خاص بيها وبترجع response بنفسها، فمفيش تعارض.
-// الـ middleware المركزي هنا هو شبكة أمان لأي حاجة تفلت (throw من غير catch، أو
-// routes جديدة/مُهاجَرة تستخدم asyncHandler).
+// الـ middleware المركزي هنا هو شبكة أمان لأي حاجة تفلت (throw من غير catch).
 
 class AppError extends Error {
   constructor(message, statusCode, code, details) {
@@ -62,20 +61,6 @@ class DatabaseError extends AppError {
   }
 }
 
-const asyncHandler = fn => (req, res, next) =>
-  Promise.resolve(fn(req, res, next)).catch(next);
-
-// يحوّل أخطاء pg الخام لـ AppError مفهومة — استخدمها فى catch حوالين استعلامات حساسة
-// بدل ما ترمي خطأ pg الخام زي ما هو.
-function mapPgError(err) {
-  if (err.code === '23505') return new ValidationError('سجل مكرر بالفعل', { constraint: err.constraint });
-  if (err.code === '23503') return new ValidationError('مرجع غير موجود فى البيانات المرتبطة', { constraint: err.constraint });
-  if (err.code === '40001' || err.code === '57P01' || err.code === 'ECONNRESET') {
-    return new DatabaseError('انقطع الاتصال بقاعدة البيانات، يرجى إعادة المحاولة', err);
-  }
-  return new DatabaseError('خطأ غير متوقع فى قاعدة البيانات', err);
-}
-
 // middleware مركزي — يُسجَّل مرة واحدة، آخر حاجة قبل app.listen، وبعد كل الـ routes.
 function centralErrorHandler(err, req, res, next) {
   const isAppError = err instanceof AppError;
@@ -108,5 +93,5 @@ function centralErrorHandler(err, req, res, next) {
 
 module.exports = {
   AppError, ValidationError, AuthError, ForbiddenError, NotFoundError, ConflictError, DatabaseError,
-  asyncHandler, mapPgError, centralErrorHandler,
+  centralErrorHandler,
 };
