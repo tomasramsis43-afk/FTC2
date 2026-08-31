@@ -338,7 +338,10 @@ async function restoreFullBackup(file){
   // وإعادة الرفع أو بعده) يجعل الفتح التالي يكمل الرفع تلقائياً عبر resyncRestoredDataWithServer،
   // بدل أن يبقى السيرفر فارغاً بلا أي علامة تدل على استعادة ناقصة. لا تُزال إلا بعد التحقق من
   // اكتمال رفع كل البيانات المستعادة (راجع الفرع المتصل أدناه).
-  try{ localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1'); }catch(e){ console.error(e); }
+  try{
+    localStorage.setItem(RESTORE_RESYNC_FLAG_KEY, '1');
+    localStorage.setItem(RESTORE_RESYNC_FLAG_KEY + '_ts', String(Date.now()));
+  }catch(e){ console.error(e); }
 
   // مسح فعلي لبيانات السيرفر وتصفير تتبّع المزامنة يحدث الآن فقط لو متصلين فعلاً؛ لو غير متصلين
   // نؤجّله بالكامل حتى عودة الاتصال (راجع resyncRestoredDataWithServer وcheckPendingRestoreResync
@@ -615,7 +618,19 @@ async function restoreBagStockOnly(file){
 // على السيرفر إن وُجدت، ثم يمسح أي بقايا قديمة على السيرفر ويرفع البيانات المستعادة الحالية من جديد
 // بلا أي تعارض ممكن (بنفس منطق الاستعادة وقت الاتصال بالضبط).
 async function resyncRestoredDataWithServer(){
-  // هذه الدالة كانت السبب الجذري لفقدان البيانات المتكرر: كانت تمسح كل بيانات السيرفر
+  // تحقق من عمر الـ flag — لو عدى أكتر من ساعتين يُمسح بدون عمل أي حاجة
+  // عشان نمنع أي flag قديم من رفع بيانات ناقصة/قديمة فوق السيرفر
+  try{
+    const flagTs = localStorage.getItem(RESTORE_RESYNC_FLAG_KEY + '_ts');
+    if(flagTs && (Date.now() - parseInt(flagTs)) > 2 * 60 * 60 * 1000){
+      localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY);
+      localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY + '_ts');
+      localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY);
+      console.log('resyncRestoredDataWithServer: flag انتهت صلاحيته — تم مسحه بدون رفع');
+      return;
+    }
+  }catch(e){}
+
   // (wipeServerDataForFreshRestore) ثم ترفع ذاكرة الجهاز الحالي فوقها. أي جهاز بعلامة
   // RESTORE_RESYNC_FLAG_KEY عالقة (بقيت بعد استعادة سابقة) — حتى بكاش قديم/ناقص — كان يمسح
   // بيانات كل الأجهزة ثم يرفع نسخته، ويفعل الجهاز الآخر العكس، فيتلاشى كل شيء من السيرفر.
@@ -650,6 +665,7 @@ async function resyncRestoredDataWithServer(){
     // المزامنة الجزئية الآمنة أعلاه تتعامل مع كل الاختلافات بلا مخاطرة، فأي علامة عالقة قديمة
     // على أي جهاز تتوقف عن إلحاق الضرر فوراً لأنها لم تعد تمسح شيئاً بعد الآن.
     try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY); }catch(e){}
+    try{ localStorage.removeItem(RESTORE_RESYNC_FLAG_KEY + '_ts'); }catch(e){}
     try{ localStorage.removeItem(RESTORE_RESYNC_ATTEMPTS_KEY); }catch(e){}
     showToast('تمت مزامنة الاستعادة المحلية مع السيرفر ✅');
   }catch(e){
