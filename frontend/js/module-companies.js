@@ -1412,8 +1412,10 @@ async function unlinkClientFromCompanyTransferIfOrphaned(clientId, excludeTransf
   }
   client.companyTransferAllocated = false;
   client.coursePrice = 0; client.bagPrice = 0; client.paid = 0;
-  client.bagSource = 'own'; client.bagStatus = 'n/a';
-  delete client.bagPurchaseDate;
+  // لا نمس bagSource — نتركه كما هو (stock/own/buy) حتى لا تتحول حقائب المخزون لخاصة عند الفصل
+  if(client.bagSource === 'buy') client.bagStatus = 'pending';
+  else if(client.bagSource === 'own') client.bagStatus = 'n/a';
+  // stock يبقى كما هو مع bagStatus الحالي
   return true;
 }
 function createClientForUnlinkedTrainee(t, tr){
