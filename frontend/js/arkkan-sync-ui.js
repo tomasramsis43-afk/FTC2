@@ -247,6 +247,15 @@ async function arkkanUpdateStatus() {
   el.className = 'hint hint-info';
   el.innerHTML = '⏳ جاري التحقق من الجاهزية...';
 
+  // نوجه السيرفر لتفعيل المتصفح مسبقاً (warm) حتى يكون جاهزاً قبل أول جلب
+  try {
+    await fetch(API_BASE + '/api/arkkan/warm', {
+      method: 'POST',
+      headers: arkkanAuthHeaders(),
+      signal: AbortSignal.timeout(65000)
+    }).catch(() => {});
+  } catch {}
+
   const st = await arkkanCheckReady();
   if (st.ready) {
     el.className = 'hint hint-success';
@@ -614,7 +623,7 @@ async function arkkanExamSyncOne(clientId, btn) {
       : '<span style="color:var(--success, green);">✅ تم</span>';
   } catch (err) {
     const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
-    if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">ظإî ${escapeHtml(err.message.slice(0, 60))}</span>`;
+    if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ ${escapeHtml(err.message.slice(0, 60))}</span>`;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
   }
@@ -853,7 +862,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
           const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
           if (stEl) stEl.innerHTML = passed
             ? '<span style="color:var(--success, green);">✅ ناجح</span>'
-            : '<span style="color:var(--success, green);">ظ£à</span>';
+            : '<span style="color:var(--success, green);">✅ تم</span>';
         }
       } catch (err) {
         /* فشل عابر (بطء شبكة/تحميل) — محاولة واحدة تلقائية قبل اعتبار العميل فاشلاً */
@@ -887,7 +896,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
         if (!ok) {
           failed++;
           delete _examSession[k];
-          if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">ظإî</span>`;
+          if (stEl) stEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
         }
       }
 

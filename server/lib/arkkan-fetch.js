@@ -180,7 +180,10 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
   // تنظيف أي تغطيات عالقة من طلبات سابقة تحجب أزرار أركان قبل أي تفاعل
   await clearArkanDialogs(pg);
   let fr = await ensureDetailsFrame(pg);
-  if (!fr) throw new Error('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
+  if (!fr) {
+    console.error(`[arkkan] فشل: لا يوجد إطار تفاصيل المتدرب بعد ensureDetailsFrame — clientId=${clientId}`);
+    throw new Error('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
+  }
 
   await fr.fill('#ctl00_Student_id_fltr_txtIdentityNo', String(clientId));
   if (referNum) await fr.fill('#ctl00_Student_id_fltr_Txt_ref', String(referNum)).catch(() => {});
@@ -216,6 +219,7 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
 
   const nC = (last && last.rowsC.length) || 0;
   const nB = (last && last.rowsB.length) || 0;
+  console.log(`[arkkan] clientId=${clientId} — دورات: ${nC} | حقائب: ${nB} (استقرار في ${Date.now() - t0}ms)`);
   return { fr, nC, nB };
 }
 
@@ -455,7 +459,9 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
   return result;
 }
 
-/* تهيئة/إعادة تهيئة المتصفح وصفحة أركان (وعوامل التوازي في الخلفية). */
+/* تهيئة/إعادة تهيئة المتصفح وصفحة أركان (وعوامل التوازي في الخلفية).
+   تستخدم ensureDetailsFrame المتكيّفة بدلاً من انتظارات ثابتة، وتعيد المحاولة
+   حتى 3 مرات لو فشلت المرة الأولى (شائعة على الاستضافة البطيئة). */
 async function initBrowser() {
   if (!playwright) {
     throw new Error('مكتبة playwright غير مثبتة في السيرفر — شغّل أولاً: npm install playwright');
@@ -475,32 +481,38 @@ async function initBrowser() {
     console.warn('[arkkan] تعذّر التنزيل الفوري لـChromium:', (e.message || '').slice(0, 300));
   }
 
-  _browser = await playwright.chromium.launch({
-    headless: HEADLESS,
-    args: BROWSER_ARGS
-  });
-  _ctx = await _browser.newContext();
-  blockHeavyResources(_ctx);
-  const page0 = await _ctx.newPage();
-  pushWorker(page0, _ctx);
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      _browser = await playwright.chromium.launch({
+        headless: HEADLESS,
+        args: BROWSER_ARGS
+      });
+      _ctx = await _browser.newContext();
+      blockHeavyResources(_ctx);
+      const page0 = await _ctx.newPage();
+      pushWorker(page0, _ctx);
 
-  await page0.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' });
-  await wait(2500);
-  await page0.evaluate(() => {
-    const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
-    if (a) a.click();
-  });
-  await page0.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-  await wait(3500);
+      // ensureDetailsFrame المتكيّفة: تنتظر ظهور الرابط ثم الإطار بانتظار ديناميكي
+      // بدل نوم ثابت 6 ثواني فقط
+      const fr = await ensureDetailsFrame(page0);
+      if (!fr) throw new Error('تعذّر الوصول لصفحة تفاصيل المتدرب');
 
-  const fr = page0.frames().find(f => f.url().includes('Arkan/frm8157'));
-  if (!fr) throw new Error('تعذّر الوصول لصفحة تفاصيل المتدرب — تحقق من الإنترنت والوصول لموقع أركان');
-
-  _ready = true;
-  console.log('✅ جاهزية أركان داخل السيرفر — متصفح مخفي مفتوح');
-
-  // لا نفتح أي صفحة إضافية هنا إطلاقاً — التوازي يتوسع فقط عند الحاجة الفعلية
-  // (جلب جماعي متوازٍ) عبر maybeGrow، وليس مع كل فتح للمتصفح (راجع fetchOne).
+      _ready = true;
+      console.log(`[arkkan] ✅ جاهزية أركان داخل السيرفر (محاولة ${attempt}/${MAX_ATTEMPTS}) — متصفح مخفي مفتوح`);
+      return; // نجح — نخرج فوراً
+    } catch (e) {
+      console.warn(`[arkkan] محاولة ${attempt}/${MAX_ATTEMPTS} فشلت:`, (e.message || '').slice(0, 300));
+      // نغلق أي متصفح فُتح في هذه المحاولة قبل المحاولة التالية
+      await _browser?.close().catch(() => {});
+      _browser = null; _ctx = null; _workers = []; _ready = false;
+      if (attempt < MAX_ATTEMPTS) {
+        console.log(`[arkkan] إعادة المحاولة بعد 3 ثوانٍ...`);
+        await wait(3000);
+      }
+    }
+  }
+  throw new Error('تعذّر تهيئة أركان بعد 3 محاولات — تحقق من الإنترنت والوصول لموقع أركان');
 }
 
 /* بناء صفحات التوازي الإضافية — كل عامل في سياق (كوكيز/جلسة) مستقل تماماً:
@@ -623,12 +635,21 @@ function maybeGrow() {
 }
 
 function fetchOne(payload) {
-  return ensureInit().then(() => {
+  return ensureInit().then(async () => {
     const pg = pickPage();
     if (!pg) throw new Error('المتصفح غير جاهز بعد');
     maybeGrow();
     _lastUsed = Date.now();
-    return enqueueOn(pg, () => fetchClientData(pg, payload));
+    try {
+      return await enqueueOn(pg, () => fetchClientData(pg, payload));
+    } catch (e) {
+      // لو الخطأ يتعلق بالإطار المفقود — نحاول مرة أخرى مع إعادة بناء الإطار
+      if (/فقدان إطار|تعذّر فتح|تعذّر الوصول/.test(e.message) && !pg.isClosed()) {
+        console.warn(`[arkkan] retry بعد فشل الإطار: ${e.message.slice(0, 100)}`);
+        return await enqueueOn(pg, () => fetchClientData(pg, payload));
+      }
+      throw e;
+    }
   });
 }
 

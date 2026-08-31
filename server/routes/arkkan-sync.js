@@ -28,6 +28,17 @@ router.get('/api/arkkan/status', requireAuth, async (req, res) => {
   res.json(arkkan.getStatus());
 });
 
+/* POST /api/arkkan/warm — تجهيز المتصفح مسبقاً قبل بدء المزامنة.
+   يستدعى عند فتح تبويب مزامنة أركان لتسريع أول جلب. */
+router.post('/api/arkkan/warm', requireAuth, async (req, res) => {
+  try {
+    await withTimeout(arkkan.warm(), 60000);
+    res.json(arkkan.getStatus());
+  } catch (e) {
+    res.status(503).json({ error: e.message, ...arkkan.getStatus() });
+  }
+});
+
 /* POST /api/arkkan/fetch — جلب بيانات عميل من أركان.
    body: { clientId, referNum? } */
 router.post('/api/arkkan/fetch', requireAuth, async (req, res) => {
