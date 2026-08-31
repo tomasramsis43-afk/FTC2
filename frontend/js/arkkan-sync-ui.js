@@ -109,11 +109,12 @@ function arkkanPatchFromData(c, data){
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
   if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
-  if ((c.coursePrice === undefined || c.coursePrice === '' || c.coursePrice === 0) && data.coursePrice) {
+  // قيمة الفاتورة تُحدَّث دائماً من القيمة الفعلية بالإيصال (data.coursePrice)
+  // عند كل جلب/مزامنة — نُحدّث شيت العملاء (coursePrice) وشيت فواتير الدورات
+  // (receiptActualValue) معاً للقيمة الفعلية الأخيرة، بلا شرط "فاضية".
+  if (data.coursePrice) {
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
-    // نرحّل القيمة كمان لشيت فواتير الدورات (receiptActualValue) لو فاضية
-    if (c.receiptActualValue === undefined || c.receiptActualValue === null || c.receiptActualValue === '')
-      patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
+    patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
   }
   // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
   if (!c.startDate) { const cd = arkkanCourseDate(c); if (cd) patch.startDate = cd; }
