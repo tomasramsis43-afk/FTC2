@@ -1,0 +1,69 @@
+name: Build Electron Desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'electron-desktop/**'
+      - 'frontend/**'
+      - '.github/workflows/build-electron.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync frontend to app-assets
+        shell: pwsh
+        run: |
+          if (Test-Path "electron-desktop/app-assets") {
+            Remove-Item -Recurse -Force "electron-desktop/app-assets"
+          }
+          Copy-Item -Recurse "frontend" "electron-desktop/app-assets"
+          Write-Host "app-assets synced from frontend"
+
+      - name: Install dependencies
+        working-directory: electron-desktop
+        run: npm install
+
+      - name: Build Windows installer
+        working-directory: electron-desktop
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content electron-desktop/package.json | ConvertFrom-Json).version
+          echo "VERSION=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FTC2-Setup-v${{ steps.version.outputs.VERSION }}
+          path: electron-desktop/dist/*.exe
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: FTC2 v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## نسخة سطح المكتب FTC2 v${{ steps.version.outputs.VERSION }}
+            
+            ### التثبيت
+            حمّل ملف `FTC2-Setup.exe` وشغّله على جهازك.
+          files: electron-desktop/dist/*.exe
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
