@@ -779,56 +779,42 @@ async function saveClients(allowDrop){
 async function saveSettings(){
   try{ await window.storage.set('settings', JSON.stringify(settings), false); }catch(e){ showToast('تعذر حفظ الإعدادات'); }
 }
-async function saveBagStock(){
+/* مساعد مشترك: يجلب أرقام نسخ collection من السيرفر قبل الكتابة لتفادي تعارضات 409 */
+async function _syncVersionsBeforeSave(collection){
+  if(isCurrentlyOffline()) return;
   try{
-    // نجلب أرقام النسخ الحالية من السيرفر قبل الكتابة لتفادي تعارضات الـ 409
-    if(!isCurrentlyOffline()){
-      try{
-        const vr = await serverFetch('/api/records/bagStock/versions');
-        if(vr && vr.ok){
-          const vd = await vr.json().catch(()=>null);
-          if(vd && Array.isArray(vd.pairs)){
-            if(!_recordVersions['bagStock']) _recordVersions['bagStock'] = new Map();
-            for(const [id, ver] of vd.pairs) _recordVersions['bagStock'].set(id, ver);
-          }
-        }
-      }catch(e){ /* نكمل حتى لو فشل الجلب */ }
+    const vr = await serverFetch(`/api/records/${encodeURIComponent(collection)}/versions`);
+    if(vr && vr.ok){
+      const vd = await vr.json().catch(()=>null);
+      if(vd && Array.isArray(vd.pairs)){
+        if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
+        for(const [id, ver] of vd.pairs) _recordVersions[collection].set(id, ver);
+      }
     }
-    await saveCollectionGeneric('bagStock', bagStock);
-  }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
+  }catch(e){ /* نكمل حتى لو فشل الجلب */ }
+}
+
+async function saveBagStock(){
+  try{ await _syncVersionsBeforeSave('bagStock'); await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
 }
 async function saveVaultTx(){
-  try{
-    if(!isCurrentlyOffline()){
-      try{
-        const vr = await serverFetch('/api/records/vaultTx/versions');
-        if(vr && vr.ok){
-          const vd = await vr.json().catch(()=>null);
-          if(vd && Array.isArray(vd.pairs)){
-            if(!_recordVersions['vaultTx']) _recordVersions['vaultTx'] = new Map();
-            for(const [id, ver] of vd.pairs) _recordVersions['vaultTx'].set(id, ver);
-          }
-        }
-      }catch(e){ /* نكمل */ }
-    }
-    await saveCollectionGeneric('vaultTx', vaultTx);
-  }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
+  try{ await _syncVersionsBeforeSave('vaultTx'); await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
 }
 async function saveDeletedVaultTx(){
-  try{ await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
+  try{ await _syncVersionsBeforeSave('deletedVaultTx'); await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
 }
 async function saveVaultDenomTx(){
-  try{ await saveCollectionGeneric('vaultDenomTx', vaultDenomTx); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
+  try{ await _syncVersionsBeforeSave('vaultDenomTx'); await saveCollectionGeneric('vaultDenomTx', vaultDenomTx); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
 }
 async function saveBankStatementRows(){
-  try{ await saveCollectionGeneric('bankStatementRows', bankStatementRows); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
+  try{ await _syncVersionsBeforeSave('bankStatementRows'); await saveCollectionGeneric('bankStatementRows', bankStatementRows); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
 }
 async function saveScheduledVaultTx(){
-  try{ await saveCollectionGeneric('scheduledVaultTx', scheduledVaultTx); }catch(e){ showToast('تعذر حفظ قوالب الحركات المجدولة'); }
+  try{ await _syncVersionsBeforeSave('scheduledVaultTx'); await saveCollectionGeneric('scheduledVaultTx', scheduledVaultTx); }catch(e){ showToast('تعذر حفظ قوالب الحركات المجدولة'); }
 }
 async function saveFollowUpTasks(){
-  try{ await saveCollectionGeneric('followUpTasks', followUpTasks); }catch(e){ showToast('تعذر حفظ التذكيرات'); }
+  try{ await _syncVersionsBeforeSave('followUpTasks'); await saveCollectionGeneric('followUpTasks', followUpTasks); }catch(e){ showToast('تعذر حفظ التذكيرات'); }
 }
 async function saveDeletedInvoices(){
-  try{ await saveCollectionGeneric('deletedInvoices', deletedInvoices); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
+  try{ await _syncVersionsBeforeSave('deletedInvoices'); await saveCollectionGeneric('deletedInvoices', deletedInvoices); }catch(e){ showToast('تعذر حفظ سجل الفواتير المحذوفة'); }
 }

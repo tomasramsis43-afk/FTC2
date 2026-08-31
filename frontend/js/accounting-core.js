@@ -88,13 +88,13 @@ function pushVaultTxHistory(tx, beforeSnapshot, afterSnapshot){
   });
 }
 async function saveCourseSessions(){
-  try{ await saveCollectionGeneric('courseSessions', courseSessions); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
+  try{ await _syncVersionsBeforeSave('courseSessions'); await saveCollectionGeneric('courseSessions', courseSessions); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
 }
 async function saveCompanies(){
-  try{ await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
+  try{ await _syncVersionsBeforeSave('companies'); await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
 }
 async function saveCompanyTransfers(){
-  try{ await saveCollectionGeneric('companyTransfers', companyTransfers); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
+  try{ await _syncVersionsBeforeSave('companyTransfers'); await saveCollectionGeneric('companyTransfers', companyTransfers); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
 }
 /* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
    سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).
@@ -222,19 +222,19 @@ function repairOrphanedCourseInvoiceAccountRefs(){
   return fixedCount;
 }
 async function saveJournalEntries(){
-  try{ await saveCollectionGeneric('journalEntries', journalEntries); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
+  try{ await _syncVersionsBeforeSave('journalEntries'); await saveCollectionGeneric('journalEntries', journalEntries); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }
 }
 async function saveChartOfAccounts(){
-  try{ await saveCollectionGeneric('chartOfAccounts', chartOfAccounts); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
+  try{ await _syncVersionsBeforeSave('chartOfAccounts'); await saveCollectionGeneric('chartOfAccounts', chartOfAccounts); }catch(e){ showToast('تعذر حفظ دليل الحسابات'); }
 }
 async function saveJournalDE(){
-  try{ await saveCollectionGeneric('journalDE', journalDE); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
+  try{ await _syncVersionsBeforeSave('journalDE'); await saveCollectionGeneric('journalDE', journalDE); }catch(e){ showToast('تعذر حفظ القيود اليومية'); }
 }
 async function saveBudgetEntries(){
-  try{ await saveCollectionGeneric('budgetEntries', budgetEntries); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
+  try{ await _syncVersionsBeforeSave('budgetEntries'); await saveCollectionGeneric('budgetEntries', budgetEntries); }catch(e){ showToast('تعذر حفظ بيانات الموازنة'); }
 }
 async function saveSuppliers(){
-  try{ await saveCollectionGeneric('suppliers', suppliers); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
+  try{ await _syncVersionsBeforeSave('suppliers'); await saveCollectionGeneric('suppliers', suppliers); }catch(e){ showToast('تعذر حفظ بيانات الموردين'); }
 }
 /* ---------------- ترحيل مرفقات فواتير المشتريات القديمة (مرة واحدة) ----------------
    قبل هذا التحديث كان مرفق كل فاتورة (dataUrl الصورة كاملة) مخزَّناً داخل نفس عنصر الفاتورة
@@ -257,10 +257,10 @@ async function migratePurchaseAttachmentsOut(){
   await savePurchases();
 }
 async function savePurchases(){
-  try{ await saveCollectionGeneric('purchases', purchases); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
+  try{ await _syncVersionsBeforeSave('purchases'); await saveCollectionGeneric('purchases', purchases); }catch(e){ showToast('تعذر حفظ بيانات المشتريات'); }
 }
 async function saveManualSalesInvoices(){
-  try{ await saveCollectionGeneric('manualSalesInvoices', manualSalesInvoices); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
+  try{ await _syncVersionsBeforeSave('manualSalesInvoices'); await saveCollectionGeneric('manualSalesInvoices', manualSalesInvoices); }catch(e){ showToast('تعذر حفظ فواتير المبيعات اليدوية'); }
 }
 async function saveZakatAdjustments(){
   try{ await window.storage.set('zakatAdjustments', JSON.stringify(zakatAdjustments), false); }catch(e){ showToast('تعذر حفظ تعديلات وعاء الزكاة'); }
