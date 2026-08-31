@@ -193,9 +193,7 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
      وقراءة شبكة الحقائب فوراً بلا انتظار خالص): أركان (ASP.NET) يحمّل الدورات
      والحقائب في Update Panels منفصلة قد تكتمل بتوقيتات مختلفة — القراءة الفورية
      للحقائب كانت أحياناً تلتقط بيانات حقيبة *العميل السابق* على نفس الصفحة
-     قبل ما الـPanel بتاعها يكمل تحديثه. الاستقرار (نفس المحتوى في قراءتين
-     متتاليتين) أدق من مقارنة "قبل/بعد" أيضاً لأنه لا ينخدع بعميلين مسجَّلين
-     في نفس رقم الدورة (شائع بمركز تدريب) فيظنّ الصفحة لم تتغيّر. */
+     قبل ما الـPanel بتاعها يكمل تحديثه. */
   const readSig = () => fr.evaluate(() => {
     const txt = (sel) => [...document.querySelectorAll(sel)].map(r => r.innerText.trim());
     return {
@@ -204,22 +202,51 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
     };
   }).catch(() => ({ rowsC: [], rowsB: [] }));
 
-  let last = null, stable = 0;
-  const t0 = Date.now();
-  while (Date.now() - t0 < 9000) {
-    const sig = await readSig();
-    const same = last &&
-      JSON.stringify(sig.rowsC) === JSON.stringify(last.rowsC) &&
-      JSON.stringify(sig.rowsB) === JSON.stringify(last.rowsB);
-    stable = same ? stable + 1 : 0;
-    last = sig;
-    if (stable >= 2) break; // تكرّر نفس محتوى الشبكتين مرتين متتاليتين → اكتمل التحديث
-    await wait(250);
+  // بناء الجدولين معاً — والاستقرار المطلوب للخروج يجب أن يكون على محتوى
+  // غير فارغ في أحد الجدولين على الأقل. في البيئة البطيئة يبدأ الـ postback
+  // بجدولين فارغين، فلو اعتمدنا "قراءتان متطابقتان" نخرج مبكراً بـ 0/0 قبل
+  // امتلاء البيانات → يرجع السيرفر كائناً فارغاً → الواجهة تقول "لا توجد
+  // بيانات جديدة رغم أن العميل ناقص فعلاً". لذلك:
+  //   • لا نعُدّ "فارغ" استقراراً، نكمل الانتظار (في انتظار امتلاء الجدولين).
+  //   • نكسر فقط عند استقرار محتوى فيه صف واحد على الأقل، أو عند بلوغ سقف
+  //     الوقت المنصوص عليه — ولو وصلنا له بجدولين فارغين نعيد المحاولة مرة
+  //     واحدة قبل اعتبار "لا توجد بيانات" (يتدارك بطء تحميل postback).
+  const hasData = (sig) => sig.rowsC.length > 0 || sig.rowsB.length > 0;
+
+  const waitStable = (timeoutMs) => {
+    return new Promise(resolve => {
+      let last = null, stable = 0;
+      const t0 = Date.now();
+      const tick = async () => {
+        const sig = await readSig();
+        const same = last && hasData(sig) &&
+          JSON.stringify(sig.rowsC) === JSON.stringify(last.rowsC) &&
+          JSON.stringify(sig.rowsB) === JSON.stringify(last.rowsB);
+        stable = same ? stable + 1 : 0;
+        last = sig;
+        // نكسر عند استقرار محتوى فيه بيانات، أو عند انتهاء المهلة
+        if ((stable >= 2 && hasData(last)) || Date.now() - t0 >= timeoutMs) {
+          resolve(last);
+          return;
+        }
+        setTimeout(tick, 250);
+      };
+      tick();
+    });
+  };
+
+  // محاولة أولى حتى 9 ثوانٍ؛ لو انتهت بجدولين فارغين نعيد المحاولة مرة واحدة
+  // بدل التسليم المبكر ببيانات فارغة (بطء تحميل الاستعلام على الاستضافة).
+  let sigStable = await waitStable(9000);
+  if (!hasData(sigStable)) {
+    console.log(`[arkkan] clientId=${clientId} — استعلام رجع فارغاً، إعادة محاولة مرة واحدة...`);
+    await wait(700);
+    sigStable = await waitStable(9000);
   }
 
-  const nC = (last && last.rowsC.length) || 0;
-  const nB = (last && last.rowsB.length) || 0;
-  console.log(`[arkkan] clientId=${clientId} — دورات: ${nC} | حقائب: ${nB} (استقرار في ${Date.now() - t0}ms)`);
+  const nC = (sigStable && sigStable.rowsC.length) || 0;
+  const nB = (sigStable && sigStable.rowsB.length) || 0;
+  console.log(`[arkkan] clientId=${clientId} — دورات: ${nC} | حقائب: ${nB}`);
   return { fr, nC, nB };
 }
 
@@ -261,20 +288,27 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
         if (t) { t.click(); return true; }
         return false;
       }, cr.i);
-      if (!clicked) break;
+      if (!clicked) {
+        throw new Error(`تعذّر النقر على زر الإيصال للدورة (${cr.cn}) — تأكد من ظهور زر الإيصال في أركان`);
+      }
 
       const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recF = null;
-      for (let t = 0; t < 160 && !recF; t++) {
+      for (let t = 0; t < 300 && !recF; t++) {
         await wait(120);
         recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
-      if (!recF) break;
+      if (!recF) {
+        // وجدنا دورة لكن الإيصال لم يُفتح خلال 36 ثانية — فشل حقيقي بنخبر به
+        // بدل تسليم بيانات فارغة صامتة تجعل الواجهة تقول "لا توجد بيانات جديدة".
+        throw new Error(`تعذّر فتح إيصال الدورة (${cr.cn}) بعد الانتظار — أعد المحاولة`);
+      }
 
       const txt = await recF.evaluate(() => document.body.innerText);
       result.invoice     = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
       result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
       result.date        = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+
       await closeDialog(pg);
       // ننتظر اختفاء إطار الإيصال — أسرع من نوم ثابت 1.5 ثانية
       const t1 = Date.now();
@@ -290,6 +324,13 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
       }
       break;
     }
+  }
+
+  // وجدنا دورات لهذا العميل لكن لم نستخرج رقم/قيمة الفاتورة من أي إيصال —
+  // فشل حقيقي (لا "لا توجد بيانات"): نُبلغ به بدل تسليم بيانات فارغة صامتة
+  // تجعل الواجهة تقول "لا توجد بيانات جديدة" رغم أن العميل ناقص فعلاً.
+  if (nC > 0 && !result.invoice && !result.coursePrice) {
+    throw new Error('تم العثور على دورات لهذا العميل لكن تعذّرت قراءة بيانات فاتورة الدورة من أركان — أعد المحاولة');
   }
 
   // ── إيصالات الحقيبة: قد يكون هناك أكثر من إيصال (حقيبتان مثلاً) —
