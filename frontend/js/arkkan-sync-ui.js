@@ -116,8 +116,16 @@ function arkkanPatchFromData(c, data){
     patch.coursePrice = arkkanNumPrice(data.coursePrice);
     patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
   }
-  // تاريخ الدورة يُجلب من تبويب الدورات (محلياً) لا من أركان
-  if (!c.startDate) { const cd = arkkanCourseDate(c); if (cd) patch.startDate = cd; }
+  // تاريخ إصدار الفاتورة (data.date = Invoice Date من أركان) — ضروري حتى
+  // يرحّل القيد المزدوج تلقائياً (autoPostCourseInvoice يشترط receiptIssueDate).
+  // يُملأ فقط لو كان غير موجود حتى لا نمس تاريخاً مسجّلاً يدوياً من قبل.
+  if (!c.receiptIssueDate && data.date) patch.receiptIssueDate = data.date;
+  // تاريخ الدورة: نستعمل تاريخ بداية الدورة من أركان (data.startDate) أولاً؛
+  // ولو غير متاح نرجّع للتاريخ المحلي (جدول الدورات / expectedCourseDate).
+  if (!c.startDate) {
+    const sd = data.startDate || arkkanCourseDate(c);
+    if (sd) patch.startDate = sd;
+  }
   return patch;
 }
 
@@ -187,6 +195,10 @@ async function arkkanSyncOne(clientId, btn) {
     if (Object.keys(patch).length > 0) {
       Object.assign(c, patch); // c هو نفس الكائن داخل clients
       if (typeof saveClients === 'function') await saveClients();
+      // ترحيل فاتورة الدورة للقيد المزدوج تلقائياً (يستدعي الحفظ لحفظ القيد أيضاً)
+      if (typeof autoPostCourseInvoice === 'function' && autoPostCourseInvoice(c) && typeof saveJournalDE === 'function') {
+        try { await saveJournalDE(); } catch {}
+      }
       arkkanRefreshRowCells(c);
       if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
       showToast(`✅ تم جلب وحفظ ${Object.keys(patch).length} حقل من أركان`, 'success');
@@ -348,8 +360,13 @@ async function arkkanBulkSync() {
           if (idx !== -1) {
             Object.assign(clients[idx], patch);
             clients[idx].arkkanDataCheck = Date.now();
+            // ترحيل فاتورة الدورة للقيد المزدوج تلقائياً بعد اكتمال بيانات الإيصال
+            if (typeof autoPostCourseInvoice === 'function') {
+              try { autoPostCourseInvoice(clients[idx]); } catch {}
+            }
           }
           await queueSave();
+          if (typeof saveJournalDE === 'function') { try { await saveJournalDE(); } catch {} }
           updated++;
           arkkanRefreshRowCells(clients[clients.findIndex(x => x.clientId === c.clientId)] || c);
           if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
