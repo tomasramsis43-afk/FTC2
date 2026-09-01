@@ -42,7 +42,7 @@ function arkkanCourseDate(c){
 
 function arkkanFieldMissing(c, f) {
   if (f === 'startDate') return !(c.startDate || arkkanCourseDate(c));
-  if (f === 'date') return !(c.receiptIssueDate || c.date); // تاريخ الفاتورة من صندوق فواتير الدورات (receiptIssueDate) ثم شيت العملاء
+  if (f === 'date') return !c.receiptIssueDate; // تاريخ الفاتورة يأتي حصراً من شيت فواتير الدورات (receiptIssueDate) لا من شيت العملاء
   const v = c[f];
   if (v === undefined || v === null || v === '') return true;
   if (f === 'coursePrice') return (Number(v) || 0) === 0; // قيمة صفر = لم تُسجَّل
@@ -123,13 +123,11 @@ function arkkanPatchFromData(c, data){
     patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
   }
   // تاريخ إصدار الفاتورة (data.date = Invoice Date من أركان) — يُعبّي "تاريخ الفاتورة"
-  // في صندوق فواتير الدورات (receiptIssueDate) تحديداً (مصدر الحقيقة لعمود المزامنة).
-  // يُملأ فقط لو كان غير موجود حتى لا نمس تاريخاً مسجّلاً يدوياً من قبل.
+  // في شيت فواتير الدورات (receiptIssueDate) تحديداً، وهو مصدر عمود المزامنة الوحيد
+  // (لا نقرأ من شيت العملاء c.date). يُملأ فقط لو كان غير موجود حتى لا نمس تاريخاً
+  // مسجّلاً يدوياً مسبقاً، وc.date (تاريخ التسجيل/الاستيراد) يبقى كما هو دون تغيير.
   if (!c.receiptIssueDate && data.date) {
     patch.receiptIssueDate = data.date;
-    // لا نمس c.date (شيت العملاء — قد يحمل تاريخاً آخر كتسجيل/استيراد) إلا لو كان
-    // فارغاً تماماً فنملأه من نفس قيمة الفاتورة لنبقى متسقين.
-    if (!c.date) patch.date = data.date;
   }
   // تاريخ الدورة: نستعمل تاريخ بداية الدورة من أركان (data.startDate) أولاً؛
   // ولو غير متاح نرجّع للتاريخ المحلي (جدول الدورات / expectedCourseDate).
@@ -272,7 +270,7 @@ function renderArkkanSyncTable() {
       <td>${escapeHtml(c.name || '—')}</td>
       <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
       <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
-      <td class="col-date">${escapeHtml(c.receiptIssueDate || c.date || '—')}</td>
+      <td class="col-date">${escapeHtml(c.receiptIssueDate || '—')}</td>
       <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : (c.coursePrice ?? '—')))}</td>
       <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
@@ -1117,7 +1115,7 @@ function arkkanRefreshRowCells(c) {
   const set = (sel, val) => { const el = row.querySelector(sel); if (el) el.textContent = val || '—'; };
   set('.col-invoice', c.invoice);
   set('.col-coursenum', c.courseNumber);
-  set('.col-date', c.receiptIssueDate || c.date);
+  set('.col-date', c.receiptIssueDate);
   set('.col-courseprice', c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : c.coursePrice);
   set('.col-startdate', c.startDate || arkkanCourseDate(c));
   set('.col-baginvoice', c.bagInvoice);
