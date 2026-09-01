@@ -21,7 +21,6 @@ const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter } = require('./routes/records');
 const arkkanRouter = require('./routes/arkkan');
-const arkkanSyncRouter = require('./routes/arkkan-sync');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -111,7 +110,9 @@ app.use(aiRouter);
 app.use(backupsRouter);
 app.use(healthRouter);
 app.use(arkkanRouter);
-app.use(arkkanSyncRouter);
+// arkkanSyncRouter (جلب أركان عبر Playwright جوّه السيرفر) اتشال نهائياً —
+// الجلب بقى بيتم عبر arkkan-agent.js محلياً على جهاز المستخدم (localhost:9955)
+// عشان نمنع استهلاك RAM Chromium على استضافة Render.
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {

@@ -1,10 +1,12 @@
 /* ============================================================
    arkkan-sync-ui.js — واجهة مزامنة بيانات أركان داخل البرنامج
    ------------------------------------------------------------
-   يتواصل مع مسارات الخادم نفسها (/api/arkkan/status و /api/arkkan/fetch)
-   التي تجلب البيانات من أركان عبر متصفح مخفي داخل الخادم —
-   بلا أي برنامج منفصل، وبضغطة زرار واحدة داخل البرنامج.
+   يتواصل مع arkkan-agent.js الشغال محلياً على جهاز المستخدم
+   (http://localhost:9955) — مش مع سيرفر Render، عشان منشغّلش
+   Chromium/Playwright جوه الاستضافة المحدودة الذاكرة. لازم يكون
+   الـ agent شغال على الجهاز وقت استخدام تبويب مزامنة أركان.
    ============================================================ */
+const ARKKAN_API_BASE = 'http://localhost:9955';
 
 /* ── الحقول التي نجلبها من أركان (حقول "كارت العميل") ──
    نعرض في مزامنة أركان فقط العملاء الناقص فيهم أي حقل من هذه السبعة. */
@@ -65,7 +67,7 @@ function arkkanToInputDate(v) {
 
 async function arkkanCheckReady() {
   try {
-    const r = await fetch(API_BASE + '/api/arkkan/status', {
+    const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/status', {
       headers: arkkanAuthHeaders(),
       signal: AbortSignal.timeout(5000)
     });
@@ -75,7 +77,7 @@ async function arkkanCheckReady() {
 }
 
 async function arkkanFetchOne(clientId, referNum = '') {
-  const r = await fetch(API_BASE + '/api/arkkan/fetch', {
+  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
     body: JSON.stringify({ clientId, referNum }),
@@ -261,7 +263,7 @@ async function arkkanUpdateStatus() {
 
   // نوجه السيرفر لتفعيل المتصفح مسبقاً (warm) حتى يكون جاهزاً قبل أول جلب
   try {
-    await fetch(API_BASE + '/api/arkkan/warm', {
+    await fetch(ARKKAN_API_BASE + '/api/arkkan/warm', {
       method: 'POST',
       headers: arkkanAuthHeaders(),
       signal: AbortSignal.timeout(65000)
@@ -412,7 +414,7 @@ function cssEscapeId(id) {
    ══════════════════════════════════════════════ */
 
 async function arkkanExamFetchOne(clientId, referNum = '') {
-  const r = await fetch(API_BASE + '/api/arkkan/exams', {
+  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/exams', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
     body: JSON.stringify({ clientId, referNum }),
