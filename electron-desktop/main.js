@@ -364,12 +364,29 @@ function startLocalServer() {
       });
     }
 
+    function arkkanChromiumInstalled() {
+      try {
+        const pw = require(path.join(arkkanEnvDir(), 'node_modules', 'playwright'));
+        const exe = pw.chromium.executablePath();
+        return !!(exe && fs.existsSync(exe));
+      } catch (e) {
+        return false;
+      }
+    }
+
     async function arkkanInstallDeps() {
       const envDir = arkkanEnvDir();
       fs.mkdirSync(envDir, { recursive: true });
-      if (arkkanPlaywrightInstalled(envDir)) return;
-      console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة…');
-      await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', 'playwright@^1.62.1']);
+      const pkgFile = path.join(envDir, 'package.json');
+      if (!fs.existsSync(pkgFile)) fs.writeFileSync(pkgFile, '{}');
+      if (!arkkanPlaywrightInstalled(envDir)) {
+        console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة…');
+        await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', 'playwright@^1.62.1']);
+      }
+      if (!arkkanChromiumInstalled()) {
+        console.log('[Arkkan Agent] تنزيل متصفح Chromium لأول مرة… (قد يستغرق بضع دقائق)');
+        await arkkanRunNpm(['exec', '--yes', 'playwright', 'install', 'chromium']);
+      }
     }
 
     function arkkanSpawnAgent(agentPath) {
