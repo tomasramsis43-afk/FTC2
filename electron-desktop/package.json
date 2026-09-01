@@ -23,6 +23,16 @@
                                 "main.js",
                                 "app-assets/**/*"
                             ],
+                  "extraResources":  [
+                                         {
+                                             "from":  "../arkkan-agent.js",
+                                             "to":  "arkkan-agent.js"
+                                         },
+                                         {
+                                             "from":  "../start-arkkan-agent.bat",
+                                             "to":  "start-arkkan-agent.bat"
+                                         }
+                                     ],
                   "win":  {
                               "target":  [
                                              "nsis"

@@ -1270,12 +1270,19 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg>
         <div>
           <h3 style="margin:0 0 2px;">مزامنة بيانات أركان</h3>
-          <p class="hint" style="margin:0;">يجلب تلقائياً البيانات الناقصة للعملاء من منصة أركان — مباشرةً من داخل هذا الخادم (متصفح مخفي عبر Playwright)، بلا أي برنامج منفصل. يُعرض هنا فقط العملاء الذين لديهم <b>رقم مرجعي</b> وناقص منهم أي حقل من الحقول السبعة — بمجرد إضافة الرقم المرجعي للعميل يظهر تلقائياً.</p>
+          <p class="hint" style="margin:0;">يجلب تلقائياً البيانات الناقصة للعملاء من منصة أركان عبر <b>"وكيل محلي"</b> يعمل على جهازك (متصفح مخفي عبر Playwright على <span class="mono">localhost:9955</span>) — منفصل تماماً عن سيرفر Render الذي ظل خفيفاً. يُعرض هنا فقط العملاء الذين لديهم <b>رقم مرجعي</b> وناقص منهم أي حقل من الحقول السبعة — بمجرد إضافة الرقم المرجعي للعميل يظهر تلقائياً.</p>
         </div>
       </div>
 
       <div class="hint hint-info" id="arkkan-agent-status" style="margin-bottom:12px;">
         ⏳ جاري التحقق من حالة العميل المحلي (arkkan-agent)...
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-start-agent">▶ تشغيل الوكيل المحلي</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-autostart">🪟 تشغيل تلقائي مع ويندوز</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الاتصال</button>
+        <span style="font-size:11.5px; color:var(--text-muted);">"تشغيل تلقائي مع ويندوز" يضيف الوكيل لبدء التشغيل — يعمل في الخلفية محمّلاً تلقائياً عند كل فتح لهذا التبويب.</span>
       </div>
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
@@ -1310,6 +1317,7 @@
         <table>
           <thead>
             <tr>
+              <th style="width:44px; text-align:center;" title="فعّل مربع التحديد لاستبعاد العميل من الجلب — تتجاهله المزامنة الكاملة وجلب الصف الواحد حتى تُلغى إشارته">إيقاف</th>
               <th>رقم الهوية</th>
               <th>الاسم</th>
               <th>رقم الفاتورة</th>
@@ -2076,62 +2084,6 @@
         <span class="mono" id="audit-page-current" style="font-size:12.5px; padding:0 6px;">صفحة 1 / 6</span>
         <button class="btn btn-ghost btn-sm" id="audit-page-next">التالية ›</button>
         <button class="btn btn-ghost btn-sm" id="audit-page-last">الأخيرة »</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ARKKAN SYNC -->
-  <section class="view" id="view-arkkan-sync">
-    <div class="panel">
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg>
-        <div>
-          <h3 style="margin:0 0 2px;">مزامنة بيانات أركان</h3>
-          <p class="hint" style="margin:0;">يجلب تلقائياً البيانات الناقصة للعملاء من منصة أركان — مباشرةً من داخل هذا الخادم (متصفح مخفي عبر Playwright)، بلا أي برنامج منفصل. يُعرض هنا فقط العملاء الذين لديهم <b>رقم مرجعي</b> وناقص منهم أي حقل من الحقول السبعة — بمجرد إضافة الرقم المرجعي للعميل يظهر تلقائياً.</p>
-        </div>
-      </div>
-
-      <div class="hint hint-info" id="arkkan-agent-status" style="margin-bottom:12px;">
-        ⏳ جاري التحقق من جاهزية الخادم...
-      </div>
-
-      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الجاهزية</button>
-        <button type="button" class="btn btn-gold" id="btn-arkkan-bulk-start" disabled>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          بدء المزامنة الكاملة
-        </button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-bulk-stop" style="display:none;">⏹ إيقاف</button>
-        <span class="spacer"></span>
-        <span id="arkkan-bulk-counter" style="font-size:13px; color:var(--text-muted);"></span>
-      </div>
-
-      <div id="arkkan-progress-bar-wrap" style="display:none; margin-bottom:12px;">
-        <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
-          <div id="arkkan-progress-bar" style="height:100%; width:0%; background:var(--gold); border-radius:99px; transition:width .3s;"></div>
-        </div>
-      </div>
-
-      <div class="table-scroll" style="max-height:60vh;">
-        <table>
-          <thead>
-            <tr>
-              <th>رقم الهوية</th>
-              <th>الاسم</th>
-              <th>رقم الفاتورة</th>
-              <th>رقم الدورة</th>
-              <th>تاريخ الفاتورة</th>
-              <th>قيمة الفاتورة</th>
-              <th>تاريخ الدورة</th>
-              <th>رقم إيصال الحقيبة</th>
-              <th>تاريخ الحقيبة</th>
-              <th>الناقص</th>
-              <th>جلب</th>
-              <th>الحالة</th>
-            </tr>
-          </thead>
-          <tbody id="arkkan-sync-tbody"></tbody>
-        </table>
       </div>
     </div>
   </section>

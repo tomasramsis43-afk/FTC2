@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const https = require('https');
+const { spawn } = require('child_process');
 const express = require('express');
 
 const PORT = 17532;
@@ -314,6 +316,156 @@ function startLocalServer() {
       });
     });
 
+    // ── إدارة وكيل أركان المحلي (arkkan-agent.js على localhost:9955) ──
+    // الاندماج الكامل: البرنامج (بدل البات) يثبّت الاعتماديات لأول مرة، يشغّل
+    // الوكيل، ويراقبه ويعيد تشغيله تلقائياً عند أي انهيار. كل شيء يعمل في وضع
+    // التطوير (من مجلد المشروع) وفي النسخة المثبتة (من resources) على حد سواء.
+    const ARKKAN_AGENT_PORT = 9955;
+    let arkkanChild = null;
+    let arkkanStopRequested = false;
+
+    function arkkanEnvDir() {
+      return path.join(app.getPath('userData'), 'arkkan-agent-env');
+    }
+
+    function arkkanAgentPath() {
+      const candidates = [
+        path.join(__dirname, '..', 'arkkan-agent.js'),     // وضع التطوير (جذر المشروع)
+        path.join(process.cwd(), 'arkkan-agent.js'),
+        path.join(process.resourcesPath, 'arkkan-agent.js') // النسخة المثبتة (resources)
+      ];
+      for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (e) {} }
+      return null;
+    }
+
+    function arkkanPing(timeoutMs = 1500) {
+      return new Promise(resolve => {
+        const req = http.get({ host: '127.0.0.1', port: ARKKAN_AGENT_PORT, path: '/ping', timeout: timeoutMs }, res => {
+          res.on('data', () => {});
+          res.on('end', () => resolve(true));
+        });
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => { try { req.destroy(); } catch (e) {} resolve(false); });
+      });
+    }
+
+    function arkkanPlaywrightInstalled(envDir) {
+      return fs.existsSync(path.join(envDir, 'node_modules', 'playwright', 'package.json'));
+    }
+
+    function arkkanRunNpm(args) {
+      return new Promise((resolve, reject) => {
+        const shell = process.env.ComSpec || 'cmd.exe';
+        const cmd = 'npm ' + args.join(' ');
+        const p = spawn(shell, ['/d', '/s', '/c', cmd], { cwd: arkkanEnvDir(), windowsHide: true, stdio: 'ignore' });
+        let done = false;
+        p.on('error', e => { if (!done) { done = true; reject(new Error(e.message)); } });
+        p.on('exit', code => { if (!done) { done = true; code === 0 ? resolve() : reject(new Error('تنفيذ npm انتهى بكود ' + code)); } });
+      });
+    }
+
+    async function arkkanInstallDeps() {
+      const envDir = arkkanEnvDir();
+      fs.mkdirSync(envDir, { recursive: true });
+      if (arkkanPlaywrightInstalled(envDir)) return;
+      console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة…');
+      await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', 'playwright@^1.62.1']);
+    }
+
+    function arkkanSpawnAgent(agentPath) {
+      try {
+        const envDir = arkkanEnvDir();
+        const logFile = path.join(app.getPath('userData'), 'arkkan-agent.log');
+        const log = fs.createWriteStream(logFile, { flags: 'a' });
+        const child = spawn('node', [agentPath], {
+          cwd: envDir,
+          env: Object.assign({}, process.env, {
+            NODE_PATH: path.join(envDir, 'node_modules'),
+            ARKKAN_BROWSERS_PATH: path.join(envDir, 'browsers')
+          }),
+          detached: true,
+          stdio: ['ignore', log, log],
+          windowsHide: true
+        });
+        child.unref();
+        arkkanChild = child;
+        arkkanStopRequested = false;
+        const born = Date.now();
+        child.on('exit', () => {
+          arkkanChild = null;
+          if (arkkanStopRequested) return;
+          const wait = Date.now() - born < 8000 ? 5000 : 1500;
+          console.log('[Arkkan Agent] توقف — إعادة تشغيل بعد ' + Math.round(wait / 1000) + ' ث');
+          setTimeout(() => {
+            arkkanStartAgent().then(r => { if (r.error) console.log('[Arkkan Agent] ' + r.error); }).catch(() => {});
+          }, wait);
+        });
+        child.on('error', e => { arkkanChild = null; console.log('[Arkkan Agent] تعذّر الإقلاع: ' + e.message); });
+        return { message: 'تم تشغيل الوكيل المحلي — يُهيّئ المتصفح الآن' };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
+    async function arkkanStartAgent() {
+      const running = await arkkanPing();
+      if (running) return { message: 'الوكيل يعمل بالفعل على localhost:9955', alreadyRunning: true };
+      const agentPath = arkkanAgentPath();
+      if (!agentPath) {
+        return { error: 'arkkan-agent.js غير موجود مع البرنامج — أعد تثبيت البرنامج أو شغّل start-arkkan-agent.bat من مجلد المشروع' };
+      }
+      try {
+        await arkkanInstallDeps();
+      } catch (e) {
+        return { error: 'فشل تثبيت الاعتماديات لأول مرة: ' + e.message + ' — تأكد من اتصال الإنترنت' };
+      }
+      return arkkanSpawnAgent(agentPath);
+    }
+
+    async function arkkanAutostartWanted() {
+      await arkkanStartAgent();
+      const agentPath = arkkanAgentPath();
+      if (!agentPath) return { error: 'arkkan-agent.js غير موجود — لا يمكن إضافة التشغيل التلقائي' };
+      const startupDir = process.env.APPDATA
+        ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+        : null;
+      if (!startupDir) return { error: 'مجلد التشغيل التلقائي غير متاح على هذا النظام' };
+      try {
+        fs.mkdirSync(startupDir, { recursive: true });
+        const envDir = arkkanEnvDir();
+        const launcher = path.join(startupDir, 'FTC2-ArkanAgent.cmd');
+        let content = '@echo off\r\n';
+        content += 'cd /d "' + envDir + '"\r\n';
+        content += 'if not exist "node_modules\\playwright" (npm install --no-save --no-audit --no-fund playwright@^1.62.1)\r\n';
+        content += 'set "NODE_PATH=' + path.join(envDir, 'node_modules') + '"\r\n';
+        content += 'set "ARKKAN_BROWSERS_PATH=' + path.join(envDir, 'browsers') + '"\r\n';
+        content += 'start /min "" /d "' + envDir + '" node "' + agentPath + '"\r\n';
+        fs.writeFileSync(launcher, content, 'utf8');
+        console.log('[Arkkan Agent] launcher: ' + launcher);
+        return { message: 'أُضيف الوكيل إلى بدء تشغيل ويندوز — سيبدأ تلقائياً مع كل تشغيل للجهاز' };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
+    srv.post('/arkkan-agent/start', async (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      const result = await arkkanStartAgent();
+      res.status(result.error ? 500 : 200).json(result);
+    });
+
+    srv.post('/arkkan-agent/autostart', async (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      const result = await arkkanAutostartWanted();
+      res.status(result.error ? 500 : 200).json(result);
+    });
+
+    srv.get('/arkkan-agent/status', async (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      const running = await arkkanPing();
+      res.json({ running, agentPath: arkkanAgentPath() ? path.basename(arkkanAgentPath()) : null });
+    });
+
     // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت
     // تعتمد على الكاش المتصفحي القياسي (HTTP disk cache) للردود القادمة من هذا
     // الخادم المحلي — ولأن express.static افتراضياً لا يرسل Cache-Control (فقط
@@ -413,6 +565,14 @@ if (!gotTheLock) {
     await prepareAssets();
     await startLocalServer();
     createWindow();
+
+    // تشغيل وكيل أركان المحلي تلقائياً مع فتح التطبيق (إن لم يكن يعمل على
+    // localhost:9955) — فيكون تبويب "مزامنة أركان" جاهزاً فوراً دون أي تدخل يدوي.
+    setTimeout(() => {
+      arkkanStartAgent().then(r => {
+        console.log(r.error ? '[Arkkan Agent] ' + r.error : '[Arkkan Agent] ' + r.message);
+      }).catch(() => {});
+    }, 800);
 
     // فحص التحديث بيتنفّذ بعد ما النافذة اتفتحت (مش قبلها) عشان الفتح يفضل فوري
     // ومايستناش على شبكة الإنترنت. لو اتلاقى تغيير حقيقي في أي ملف، نعمل reload

@@ -1,11 +1,15 @@
 /* ============================================================
    arkkan-sync-ui.js — واجهة مزامنة بيانات أركان داخل البرنامج
    ------------------------------------------------------------
-   يتواصل مع arkkan-agent.js الشغال محلياً على جهاز المستخدم
-   (http://localhost:9955) — مش مع سيرفر Render، عشان منشغّلش
-   Chromium/Playwright جوه الاستضافة المحدودة الذاكرة. لازم يكون
-   الـ agent شغال على الجهاز وقت استخدام تبويب مزامنة أركان.
+   يتواصل مع "وكيل أركان المحلي" (arkkan-agent.js) الذي يعمل على
+   جهاز المستخدم في http://localhost:9955 عبر Playwright —
+   منفصل تماماً عن سيرفر Render (الذي لم يعد يشغّل متصفحاً مخفياً
+   أصلاً، حفاظاً على ذاكرة الخادم). من هنا يُتحكم في تشغيل الوكيل
+   وإضافته لبدء التشغيل مع ويندوز.
    ============================================================ */
+
+/* عنوان الوكيل المحلي لمزامنة أركان — لا تغيّره إلا لو شغّلت الوكيل
+   على منفذ مختلف عبر متغيّر ARKKAN_AGENT_PORT. */
 const ARKKAN_API_BASE = 'http://localhost:9955';
 
 /* ── الحقول التي نجلبها من أركان (حقول "كارت العميل") ──
@@ -20,6 +24,10 @@ const ARKKAN_FIELD_LABELS = {
   bagPurchaseDate: 'تاريخ الحقيبة',
   startDate:    'تاريخ الدورة'
 };
+
+/* هل نعمل داخل تطبيق سطح المكتب (Electron يخدم الواجهة من 127.0.0.1)؟
+   نستخدمه لتقرير إمكانية تشغيل الوكيل من داخل البرنامج مباشرة. */
+const ARKKAN_IS_DESKTOP = /^127\.0\.0\.1$/.test(location.hostname) || /^localhost$/.test(location.hostname);
 
 /* تاريخ الدورة من تبويب الدورات: تاريخ الجلسة المسجّلة بنفس رقم الدورة،
    أو تاريخ الدورة المتوقعة المسجّل على العميل — حتى لا يظهر العميل
@@ -52,10 +60,6 @@ function clientEligibleForArkkan(c) {
   return !!(c.clientId && String(c.referNum || '').trim());
 }
 
-function arkkanAuthHeaders() {
-  return SERVER_AUTH_TOKEN ? { 'Authorization': 'Bearer ' + SERVER_AUTH_TOKEN } : {};
-}
-
 /* تاريخ أركان (2026/07/21) → صيغة input type=date (2026-07-21) */
 function arkkanToInputDate(v) {
   if (!v) return '';
@@ -68,7 +72,6 @@ function arkkanToInputDate(v) {
 async function arkkanCheckReady() {
   try {
     const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/status', {
-      headers: arkkanAuthHeaders(),
       signal: AbortSignal.timeout(5000)
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -79,12 +82,12 @@ async function arkkanCheckReady() {
 async function arkkanFetchOne(clientId, referNum = '') {
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ clientId, referNum }),
     signal: AbortSignal.timeout(95000)
   });
   if (!r.ok) {
-    let msg = 'فشل السيرفر (' + r.status + ')';
+    let msg = 'فشل الوكيل المحلي (' + r.status + ')';
     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
     throw new Error(msg);
   }
@@ -183,6 +186,7 @@ async function arkkanFetchCardButton(id, btn) {
 async function arkkanSyncOne(clientId, btn) {
   const c = clients.find(x => x.clientId === clientId);
   if (!c) return;
+  if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
 
   const statusEl = $(`#arkkan-status-${cssEscapeId(clientId)}`);
@@ -230,15 +234,34 @@ function arkkanMissingClients() {
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
+/* ── استبعاد عميل من الجلب (مربع التحديد) ──
+   العميل المُفعّل لا يُسأل أركان عنه لا في المزامنة الكاملة ولا في جلب صف
+   واحد — حتى يُلغى تفشيكه. مناسب لاستبعاد عملاء يتعطل عندهم الجلب باستمرار.
+   العلامة تُحفظ على العميل نفسه فتبقى بعد تحديث الصفحة وإعادة تشغيل البرنامج. */
+function arkkanIsSkipped(c) { return !!(c && c.arkkanSkipFetch); }
+
+function arkkanToggleSkip(clientId) {
+  const c = (clients || []).find(x => String(x.clientId) === String(clientId));
+  if (!c) return false;
+  c.arkkanSkipFetch = !c.arkkanSkipFetch;
+  if (typeof saveClients === 'function') saveClients().catch(() => {});
+  renderArkkanSyncTable();
+  return c.arkkanSkipFetch;
+}
+
 function renderArkkanSyncTable() {
   const tbody = $('#arkkan-sync-tbody');
   if (!tbody) return;
   const missing = arkkanMissingClients();
+  const skipped = missing.filter(arkkanIsSkipped);
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
 
   tbody.innerHTML = missing.map(c => `
-    <tr id="arkkan-row-${escapeHtml(c.clientId)}">
+    <tr id="arkkan-row-${escapeHtml(c.clientId)}"${arkkanIsSkipped(c) ? ' style="opacity:.5;"' : ''}>
+      <td style="text-align:center;" title="استبعاد من الجلب — المزامنة الكاملة وجلب الصف الواحد يتجاهلانه">
+        <input type="checkbox" class="arkkan-skip-chk" data-arkkan-skip="${escapeHtml(c.clientId)}"${arkkanIsSkipped(c) ? ' checked' : ''}>
+      </td>
       <td>${escapeHtml(c.clientId)}</td>
       <td>${escapeHtml(c.name || '—')}</td>
       <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
@@ -249,8 +272,8 @@ function renderArkkanSyncTable() {
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
-      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)">جلب</button></td>
-      <td id="arkkan-status-${escapeHtml(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد من الجلب (ألغِ تفشيكه من عمود «إيقاف»)' : 'جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>جلب</button></td>
+      <td id="arkkan-status-${escapeHtml(c.clientId)}">${arkkanIsSkipped(c) ? '<span style="color:var(--text-muted);">⛔ مستبعد</span>' : '<span style="color:var(--text-muted);">في الانتظار</span>'}</td>
     </tr>`).join('');
 }
 
@@ -259,13 +282,12 @@ async function arkkanUpdateStatus() {
   const btn = $('#btn-arkkan-bulk-start');
   if (!el) return;
   el.className = 'hint hint-info';
-  el.innerHTML = '⏳ جاري التحقق من الجاهزية...';
+  el.innerHTML = '⏳ جاري التحقق من الوكيل المحلي...';
 
-  // نوجه السيرفر لتفعيل المتصفح مسبقاً (warm) حتى يكون جاهزاً قبل أول جلب
+  // نوجّه الوكيل المحلي لتفعيل المتصفح مسبقاً (warm) حتى يكون جاهزاً قبل أول جلب
   try {
     await fetch(ARKKAN_API_BASE + '/api/arkkan/warm', {
       method: 'POST',
-      headers: arkkanAuthHeaders(),
       signal: AbortSignal.timeout(65000)
     }).catch(() => {});
   } catch {}
@@ -278,20 +300,74 @@ async function arkkanUpdateStatus() {
     if (mem) {
       const freePct = mem.totalMB ? Math.round((mem.freeMB / mem.totalMB) * 100) : 0;
       const low = freePct < 12;
-      const workersTxt = st.workers && st.maxWorkers ? ` · عوامل التوازي: ${st.workers}/${st.maxWorkers}` : '';
-      memTxt = ` · ذاكرة السيرفر: ${mem.freeMB}MB حر من ${mem.totalMB}MB (${freePct}%)${low ? ' <span style="color:#e84118;">— منخفضة، الجلب سيعمل بعامل واحد حفاظاً على الاستقرار</span>' : ''}${workersTxt}`;
+      memTxt = ` · ذاكرة الجهاز: ${mem.freeMB}MB حر من ${mem.totalMB}MB (${freePct}%)${low ? ' <span style="color:#e84118;">— منخفضة، أغلق البرامج الثقيلة للحصول على أفضل أداء</span>' : ''}`;
     }
-    el.innerHTML = '✅ الخادم جاهز — المتصفح المخفي يعمل وسيجلب البيانات مباشرة.' + memTxt;
+    el.innerHTML = `✅ الوكيل المحلي جاهز — يجلب البيانات من أركان مباشرة عبر ${escapeHtml(ARKKAN_API_BASE)}.` + memTxt;
     if (btn) btn.disabled = false;
   } else if (st.playwrightInstalled === false) {
     el.className = 'hint hint-error';
-    el.innerHTML = `❌ مكتبة playwright غير مثبتة في السيرفر. شغّل في مجلد الخادم:<br>
-      <code style="font-size:11px; user-select:all;">npm install playwright && npx playwright install chromium</code>`;
+    el.innerHTML = '❌ وكيل أركان يعمل لكن مكتبة playwright غير مثبتة. شغّل في مجلد المشروع:<br>' +
+      '<code style="font-size:11px; user-select:all;">npm install && npx playwright install chromium</code>' +
+      ' ثم أعد تشغيل الوكيل (ابدأه من الزر أدناه أو من start-arkkan-agent.bat).';
     if (btn) btn.disabled = true;
   } else {
     el.className = 'hint hint-info';
-    el.innerHTML = '⏳ المتصفح المخفي قيد التجهيز (يستغرق ثوانٍ عادة) — أعد المحاولة بعد لحظات، أو اضغط "بدء المزامنة".';
-    if (btn) btn.disabled = false; // fetch يجهّز تلقائياً
+    el.innerHTML = '⏳ الوكيل المحلي غير متصل. اضغط <b>"▶ تشغيل الوكيل المحلي"</b> أدناه' +
+      (ARKKAN_IS_DESKTOP ? '' : ' (أو انقر نقراً مزدوجاً على <code style="font-size:11px; user-select:all;">start-arkkan-agent.bat</code> في مجلد المشروع)') +
+      ' — يفتح مزمن المتصفح للجلب. إن كان يعمل لكنه قيد التهيئة فانتظر لحظات ثم اضغط "فحص الاتصال".';
+    if (btn) btn.disabled = false; // الجلب يهيّئ تلقائياً
+  }
+}
+
+/* ══════════════════════════════════════════════
+   إدارة الوكيل المحلي من داخل تبويب المزامنة
+   ══════════════════════════════════════════════ */
+
+/* تشغيل الوكيل المحلي — من داخل تطبيق سطح المكتب يتم إطلاقه مباشرة عبر
+   خادم سطح المكتب المحلي (/arkkan-agent/start)؛ ومن المتصفح العادي نوجد
+   تعليمات التشغيل اليدوي عبر start-arkkan-agent.bat. */
+async function arkkanStartAgent() {
+  const btn = $('#btn-arkkan-start-agent');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري التشغيل...'; }
+  try {
+    if (ARKKAN_IS_DESKTOP) {
+      const r = await fetch('/arkkan-agent/start', { method: 'POST', signal: AbortSignal.timeout(15000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+      showToast('✅ تم تشغيل الوكيل المحلي — يُهيّئ المتصفح الآن (ثوانٍ)', 'success');
+    } else {
+      showToast('لا يمكن تشغيل الوكيل من المتصفح — انقر نقراً مزدوجاً على start-arkkan-agent.bat في مجلد المشروع', 'info');
+    }
+    setTimeout(arkkanUpdateStatus, 2500);
+  } catch (err) {
+    if (err && /victor|redirect|load|ended|Failed|NetworkError/i.test(String(err.message || err))) {
+      // خطأ شبكة عابر أثناء الاتصال بخادم سطح المكتب — نعيد الفحص ببساطة
+      setTimeout(arkkanUpdateStatus, 2000);
+    } else {
+      showToast('تعذّر تشغيل الوكيل: ' + String((err && err.message) || err).slice(0, 90), 'error');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '▶ تشغيل الوكيل المحلي'; }
+  }
+}
+
+/* إضافة الوكيل إلى بدء التشغيل مع ويندوز — عبر خادم سطح المكتب المحلي */
+async function arkkanAddAutostart() {
+  const btn = $('#btn-arkkan-autostart');
+  if (!ARKKAN_IS_DESKTOP) {
+    showToast('هذه الميزة متاحة من تطبيق سطح المكتب فقط — أو ضع اختصاراً لـ start-arkkan-agent.bat في مجلد التشغيل التلقائي (Win+R ثم shell:startup)', 'info');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+  try {
+    const r = await fetch('/arkkan-agent/autostart', { method: 'POST', signal: AbortSignal.timeout(15000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+    showToast('✅ ' + (j.message || 'أُضيف الوكيل إلى بدء تشغيل ويندوز — يعمل تلقائياً مع كل تشغيل'), 'success');
+  } catch (err) {
+    showToast('تعذّرت الإضافة لبدء التشغيل: ' + String((err && err.message) || err).slice(0, 90), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🪟 تشغيل تلقائي مع ويندوز'; }
   }
 }
 
@@ -310,7 +386,10 @@ async function arkkanBulkSync() {
   if (stopBtn) stopBtn.style.display = '';
   if (wrap) wrap.style.display = '';
 
-  const all = arkkanMissingClients();
+const allEligible = arkkanMissingClients();
+  /* المستبعدون (مربع «إيقاف») لا يُسأل أركان عنهم إطلاقاً — يُعرضون بس كتلميح */
+  const userSkipped = allEligible.filter(arkkanIsSkipped);
+  const all = allEligible.filter(c => !arkkanIsSkipped(c));
   /* استئناف: من فُحصوا حديثاً وبياناتهم لسه ناقصة لا نعيد سؤال أركان عنهم — يكمّل من حيث توقف */
   const missing = all.filter(c => {
     const m = c.arkkanDataCheck;
@@ -320,13 +399,18 @@ async function arkkanBulkSync() {
   const skipped0 = all.length - total;
   let done = 0, updated = 0, failed = 0;
 
-  showToast(`بدأت المزامنة: ${total} عميل${skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''} — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+  showToast(`بدأت المزامنة: ${total} عميل${skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''}${userSkipped.length ? ` — ${userSkipped.length} مستبعد ✓` : ''} — سيستغرق وقتاً حسب عدد العملاء`, 'info');
 
-  /* إظهار حالة المتخطّين في جدولهم فوراً */
-  for (const c of all) {
+  /* إظهار حالة المستبعدين والمتخطّين في جدولهم فوراً */
+  for (const c of allEligible) {
+    if (arkkanIsSkipped(c)) {
+      const el = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
+      if (el) el.innerHTML = '<span style="color:var(--text-muted);">⛔ مستبعد</span>';
+      continue;
+    }
     if (missing.includes(c)) continue;
     const el = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
-    if (el) el.innerHTML = '<span style="color:var(--text-muted);">⏭️ فُحص حديثاً — تخطٍّ</span>';
+    if (el) el.innerHTML = '<span style="color:var(--text-muted);">⏭️ فُفحص حديثاً — تخطٍّ</span>';
   }
 
   /* حفظ متسلسل دائماً (حتى مع توازي الجلب) حتى لا تتداخل كتابة العملاء
@@ -338,9 +422,9 @@ async function arkkanBulkSync() {
     return p;
   };
 
-  /* طلبات متوازية — تستفيد من صفحات أركان المتعددة على السيرفر (ARKKAN_CONCURRENCY)؛
-     عدّلها: window.ARKKAN_BULK_CONCURRENCY = 1. */
-  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '2', 10) || 2));
+  /* الوكل المحلي صفحة متصفح واحدة — أي توازي بين طلبين يتعارض على نفس الصفحة
+     ويسبب أخطاء/إعادة، فالطلبات تجري واحداً وراء واحد دائماً. */
+  const POOL = 1;
   let workerIdx = 0;
 
   const processOne = async () => {
@@ -416,12 +500,12 @@ function cssEscapeId(id) {
 async function arkkanExamFetchOne(clientId, referNum = '') {
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/exams', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...arkkanAuthHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ clientId, referNum }),
     signal: AbortSignal.timeout(95000)
   });
   if (!r.ok) {
-    let msg = 'فشل السيرفر (' + r.status + ')';
+    let msg = 'فشل الوكيل المحلي (' + r.status + ')';
     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
     throw new Error(msg);
   }
@@ -796,9 +880,9 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
     return p;
   };
 
-  /* طلبات متوازية — تستفيد من صفحات أركان المتعددة على السيرفر (ARKKAN_CONCURRENCY)؛
-     عدّلها من أداة المطوّر برقم مختلف: window.ARKKAN_BULK_CONCURRENCY = 1. */
-  const POOL = Math.max(1, Math.min(4, parseInt(window.ARKKAN_BULK_CONCURRENCY || '2', 10) || 2));
+  /* الوكيل المحلي صفحة متصفح واحدة — الجلب واحد وراء واحد (أي توازي يتعارض على نفس
+     الصفحة ويسبب أخطاء). */
+  const POOL = 1;
   let workerIdx = 0;
 
   const processOne = async () => {
@@ -1052,10 +1136,18 @@ document.addEventListener('click', () => {
   }
 });
 
+/* تفشيك/إلغاء «إيقاف» لعميل — يحفظ العلامة ويُعيد رسم الجدول */
+document.addEventListener('change', e => {
+  const chk = e.target.closest('.arkkan-skip-chk');
+  if (chk) { arkkanToggleSkip(chk.dataset.arkkanSkip); }
+});
+
 document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
+  if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
+  if (e.target.closest('#btn-arkkan-autostart')) { arkkanAddAutostart(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }

@@ -81,14 +81,14 @@ async function ensureDetailsFrame(pg) {
       if (a) { a.click(); return true; }
       return false;
     }).catch(() => false);
-    if (!clicked) await wait(150);
+    if (!clicked) await wait(120);
   }
 
   const tB = Date.now();
   while (Date.now() - tB < 8000) {
     const f = pg.frames().find(x => x.url().includes('Arkan/frm8157'));
     if (f) return f;
-    await wait(150);
+    await wait(120);
   }
   return pg.frames().find(x => x.url().includes('Arkan/frm8157')) || null;
 }
@@ -123,7 +123,7 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
       stable = same ? stable + 1 : 0;
       last = sig;
       if ((stable >= 2 && hasData(last)) || Date.now() - t0 >= timeoutMs) { resolve(last); return; }
-      setTimeout(tick, 250);
+      setTimeout(tick, 180);
     };
     tick();
   });
@@ -148,6 +148,9 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
 
   let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
 
+  // ── إيصال الدورة: قاعدة FHD الصارمة — لا نأخذ أي بيانات من دورة إلا إذا كان
+    //    رقم الدورة نفسه يبدأ بـ FHD وكان رقم الفاتورة (الإيصال) أيضاً يبدأ بـ FHD.
+    //    أي دورة لا تنطبق عليها القاعدة تُترك الأعمدة فارغة (لا جلب ولا رجوع لأول سطر). ──
   if (nC > 0) {
     const courseRows = await fr.evaluate(() => {
       return [...document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')].map((r, i) => ({
@@ -157,13 +160,10 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
       }));
     });
 
+    // الدورات المطابقة فقط للشرط الأول: رقم الدورة يبدأ بـ FHD
     const fhdRows = courseRows.filter(r => /^FHD/i.test(r.cn));
-    const rowsToUse = fhdRows.length ? fhdRows : courseRows;
 
-    for (const cr of rowsToUse) {
-      result.courseNumber = cr.cn;
-      result.startDate = cr.start;
-
+    for (const cr of fhdRows) {
       const clicked = await fr.evaluate((i) => {
         const el = document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')[i];
         if (!el) return false;
@@ -173,38 +173,45 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
         if (t) { t.click(); return true; }
         return false;
       }, cr.i);
-      if (!clicked) throw new Error(`تعذّر النقر على زر الإيصال للدورة (${cr.cn})`);
+      if (!clicked) throw new Error(`تعذّر النقر على زر الإيصال للدورة (${cr.cn}) — تأكد من ظهور زر الإيصال في أركان`);
 
       const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recF = null;
       for (let t = 0; t < 300 && !recF; t++) {
-        await wait(120);
+        await wait(90);
         recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
       if (!recF) throw new Error(`تعذّر فتح إيصال الدورة (${cr.cn}) بعد الانتظار — أعد المحاولة`);
 
       const txt = await recF.evaluate(() => document.body.innerText);
-      result.invoice     = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
-      result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
-      result.date        = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
 
       await closeDialog(pg);
       const t1 = Date.now();
-      while (Date.now() - t1 < 5000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
-        await wait(150);
+      while (Date.now() - t1 < 4000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
+        await wait(120);
       }
       fr = pg.frames().find(f => f.url().includes('Arkan/frm8157')) || await ensureDetailsFrame(pg);
 
-      if (fhdRows.length && !/^FHD/i.test(result.invoice)) {
-        result.invoice = ''; result.coursePrice = ''; result.date = '';
+      // الشرط الثاني عند الصرف: رقم الفاتورة يجب أن يبدأ بـ FHD — لو اختلف
+      // نترك الأعمدة فارغة لهذه الدورة ونجرب الدورة FHD التالية فقط (لا ننزل لغير FHD).
+      if (!/^FHD/i.test(inv)) {
+        console.log(`[arkkan-agent] clientId=${clientId} — دورة ${cr.cn} إيصالها غير FHD (${inv}) — تُترك الأعمدة فارغة`);
         continue;
       }
+
+      result.courseNumber = cr.cn;
+      result.startDate = cr.start;
+      result.invoice = inv;
+      result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
+      result.date = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
       break;
     }
   }
 
-  if (nC > 0 && !result.invoice && !result.coursePrice) {
-    throw new Error('تم العثور على دورات لهذا العميل لكن تعذّرت قراءة بيانات فاتورة الدورة من أركان — أعد المحاولة');
+  // مع قاعدة FHD الصارمة لا فشل "حقيقي" عند عدم التطابق — الأعمدة تبقى فارغة عن قصد
+  if (nC > 0 && !result.courseNumber && !result.invoice) {
+    console.log(`[arkkan-agent] clientId=${clientId} — لا دورة مطابقة لقاعدة FHD — تُترك أعمدة الدورة/الإيصال فارغة`);
   }
 
   if (fr && nB > 0) {
@@ -234,7 +241,7 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
       const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
       let recFb = null;
       for (let t = 0; t < 160 && !recFb; t++) {
-        await wait(120);
+        await wait(90);
         recFb = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
       }
       if (!recFb) continue;
@@ -252,8 +259,8 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
 
       await closeDialog(pg);
       const t1 = Date.now();
-      while (Date.now() - t1 < 5000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
-        await wait(150);
+      while (Date.now() - t1 < 4000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
+        await wait(120);
       }
     }
 
@@ -280,14 +287,14 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
       if (btn) { btn.click(); return true; }
       return false;
     }) : Promise.resolve(false)).catch(() => false);
-    if (!clicked) await wait(150);
+    if (!clicked) await wait(120);
   }
   if (!clicked) throw new Error('لا توجد صفحة اختبارات لهذا العميل في أركان — تأكد من صحة الرقم المرجعي أو من تسجيل دورة له في أركان');
 
   const framesNow = pg.frames().filter(f => f.url().includes('frm8159'));
   let frT = null;
   for (let t = 0; t < 200 && !frT; t++) {
-    await wait(120);
+    await wait(90);
     frT = pg.frames().find(f => f.url().includes('frm8159') && !framesNow.includes(f));
   }
   if (!frT) frT = pg.frames().find(f => f.url().includes('frm8159'));
@@ -317,7 +324,7 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
     } else if (parsed.ready) {
       break;
     }
-    await wait(200);
+    await wait(150);
   }
   if (!parsed) parsed = { exam: [], retake: [], ready: false };
 
