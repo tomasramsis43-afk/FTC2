@@ -489,6 +489,16 @@ function startLocalServer() {
     srv.use(express.static(userAssetsDir, { etag: false, lastModified: false, cacheControl: false }));
     srv.use(express.static(path.join(__dirname, 'app-assets'), { etag: false, lastModified: false, cacheControl: false }));
     const listener = srv.listen(PORT, '127.0.0.1', () => resolve());
+
+    // تشغيل وكيل أركان المحلي تلقائياً فور فتح التطبيق (إن لم يكن يعمل على
+    // localhost:9955) — فيكون تبويب "مزامنة أركان" جاهزاً دون أي تدخل يدوي.
+    // يُجدول هنا جوّه scope الدالة حتى تكون arkkanStartAgent مرئية — الاستدعاء
+    // القديم كان في app.whenReady على المستوى العام فيرمي ReferenceError.
+    setTimeout(() => {
+      arkkanStartAgent().then(r => {
+        console.log(r.error ? '[Arkkan Agent] ' + r.error : '[Arkkan Agent] ' + r.message);
+      }).catch(() => {});
+    }, 800);
     listener.on('error', (err) => {
       const { dialog } = require('electron');
       dialog.showErrorBox(
@@ -565,14 +575,6 @@ if (!gotTheLock) {
     await prepareAssets();
     await startLocalServer();
     createWindow();
-
-    // تشغيل وكيل أركان المحلي تلقائياً مع فتح التطبيق (إن لم يكن يعمل على
-    // localhost:9955) — فيكون تبويب "مزامنة أركان" جاهزاً فوراً دون أي تدخل يدوي.
-    setTimeout(() => {
-      arkkanStartAgent().then(r => {
-        console.log(r.error ? '[Arkkan Agent] ' + r.error : '[Arkkan Agent] ' + r.message);
-      }).catch(() => {});
-    }, 800);
 
     // فحص التحديث بيتنفّذ بعد ما النافذة اتفتحت (مش قبلها) عشان الفتح يفضل فوري
     // ومايستناش على شبكة الإنترنت. لو اتلاقى تغيير حقيقي في أي ملف، نعمل reload
