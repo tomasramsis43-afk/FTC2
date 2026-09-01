@@ -20,8 +20,8 @@ const { chromium } = require('playwright');
 const FTC2_URL      = 'https://ftc2-z4av.onrender.com';
 const FTC2_USER     = 'Tomas';
 const FTC2_PASS     = '753956To';
-const ARKKAN_PORTAL = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
-const ARKKAN_DOCBASE= 'https://arkkanapp.net/Documents/';
+const ARKKAN_PORTAL = 'https://arkkanapp2.net/Bases/MainPage.aspx?url=98A7B2';
+const ARKKAN_DOCBASE= 'https://arkkanapp2.net/Documents/';
 const HEADLESS      = true;   // false لو عايز تشوف المتصفح
 const DELAY_BETWEEN = 3000;   // ms بين كل عميل وتاني
 // ═══════════════════════════════════════════════

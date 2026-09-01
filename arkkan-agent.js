@@ -16,7 +16,7 @@ const http       = require('http');
 const { chromium } = require('playwright');
 
 const PORT        = 9955;
-const ARKKAN_URL  = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
+const ARKKAN_URL  = 'https://arkkanapp2.net/Bases/MainPage.aspx?url=98A7B2';
 const HEADLESS    = true;
 
 const wait = ms => new Promise(r => setTimeout(r, ms));

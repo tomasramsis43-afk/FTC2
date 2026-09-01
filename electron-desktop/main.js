@@ -197,7 +197,7 @@ function startLocalServer() {
             webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
           });
 
-          const targetUrl = 'https://arkkanapp.net/Municipal/Disbursed-bags.aspx';
+          const targetUrl = 'https://arkkanapp2.net/Municipal/Disbursed-bags.aspx';
           await hiddenWin.loadURL(targetUrl);
           await new Promise(r => setTimeout(r, 2000));
 
@@ -280,7 +280,7 @@ function startLocalServer() {
       if (!isAllowedArkkanPath(targetPath) || /\.\.|%2e%2e|@|%00/i.test(targetPath)) {
         return res.status(403).json({ error: 'مسار غير مسموح به' });
       }
-      const targetUrl = 'https://arkkanapp.net' + targetPath;
+      const targetUrl = 'https://arkkanapp2.net' + targetPath;
       const chunks = [];
       req.on('data', c => chunks.push(c));
       req.on('end', () => {
@@ -288,7 +288,7 @@ function startLocalServer() {
         const headers = Object.assign({}, req.headers);
         delete headers.host;
         delete headers.connection;
-        headers['host'] = 'arkkanapp.net';
+        headers['host'] = 'arkkanapp2.net';
         if (body.length) headers['content-length'] = String(body.length);
         const u = new URL(targetUrl);
         const proxyHeaders = Object.assign({}, headers);

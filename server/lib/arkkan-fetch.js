@@ -39,7 +39,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH =
 let playwright = null;
 try { playwright = require('playwright'); } catch (e) { playwright = null; }
 
-const ARKKAN_URL = 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2';
+const ARKKAN_URL = 'https://arkkanapp2.net/Bases/MainPage.aspx?url=98A7B2';
 const HEADLESS = true;
 
 /* درجة التوازي: كل عامل صفحة متصفح مستقلة في جلسة/كوكيز مستقلة — رقم أكبر = جلب
