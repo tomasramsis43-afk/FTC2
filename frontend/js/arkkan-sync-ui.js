@@ -1133,7 +1133,10 @@ function arkkanRefreshRowCells(c) {
    ══════════════════════════════════════════════ */
 
 /* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
-document.addEventListener('click', () => {
+document.addEventListener('click', e => {
+  // لا نعيد الرسم عند التعامل مع مربع «إيقاف» (وإلا يُدمَّر الـ checkbox قبل أن
+  // يتسجّل التغيير، فيبدو الزرار غير شغال) — يتولّى معالجه الخاص الرسم.
+  if (e.target.closest?.('.arkkan-skip-chk')) return;
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
     arkkanResumeFieldSync();
     arkkanCompareResumeFieldSync();
@@ -1142,10 +1145,14 @@ document.addEventListener('click', () => {
   }
 });
 
-/* تفشيك/إلغاء «إيقاف» لعميل — يحفظ العلامة ويُعيد رسم الجدول */
-document.addEventListener('change', e => {
+/* تفشيك/إلغاء «إيقاف» لعميل — يحفظ العلامة ويُعيد رسم الجدول.
+   نستمع لحدث click (بدل change) لأن handler عام في نطاق التبويب كان يعيد رسم
+   الجدول فيأتي قبل change فيدمر الـ checkbox قبل تسجيل التغيير — فكان يبدو الزرار
+   غير شغال. معالج الرسم العام الآن يتجاهل مربعات «إيقاف» ويتركها لهذا المعالج. */
+document.addEventListener('click', e => {
   const chk = e.target.closest('.arkkan-skip-chk');
-  if (chk) { arkkanToggleSkip(chk.dataset.arkkanSkip); }
+  if (!chk) return;
+  arkkanToggleSkip(chk.dataset.arkkanSkip);
 });
 
 document.addEventListener('click', e => {
