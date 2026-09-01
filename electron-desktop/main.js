@@ -21,6 +21,9 @@ try {
     }
   }
 } catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
+// عنوان الوكيل الحيّ في الريبو — من هنا يتحدّث arkkan-agent.js تلقائياً عند كل
+// تشغيل (طالما فيه إنترنت)، فيصل لأي إصلاح أو تحسين جديد بدون إعادة بناء/تثبيت.
+const AGENT_REMOTE_RAW = 'https://raw.githubusercontent.com/tomasramsis43-afk/FTC2/main/arkkan-agent.js';
 // نفس ملفات الواجهة اللي تتحدّث فعلياً (بلا الأيقونات والـ manifest الثابتة اللي
 // نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده نت، ونكتبها فوق
 // النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد التثبيت نفسه، عشان الكتابة
@@ -40,6 +43,7 @@ try {
 // مُدرجاً في app.html (تبويب ZATCA اتشال من الواجهة).
 const SYNCED_FILES = [
   'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
+  'js/arkkan-sync-ui.js',
   'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
@@ -328,14 +332,36 @@ function startLocalServer() {
       return path.join(app.getPath('userData'), 'arkkan-agent-env');
     }
 
-    function arkkanAgentPath() {
+    async function arkkanAgentPath() {
       const candidates = [
+        path.join(app.getPath('userData'), 'arkkan-agent.js'), // النسخة المُحدَّثة من الريبو
         path.join(__dirname, '..', 'arkkan-agent.js'),     // وضع التطوير (جذر المشروع)
         path.join(process.cwd(), 'arkkan-agent.js'),
         path.join(process.resourcesPath, 'arkkan-agent.js') // النسخة المثبتة (resources)
       ];
       for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (e) {} }
       return null;
+    }
+
+    // ينزّل أحدث نسخة من الوكيل من الريبو إلى مجلد بيانات المستخدم، ويعيد مساره.
+    // لو مفيش إنترنت يرجع لأي نسخة محلية متاحة (المرفقة مع الـ setup أو من المشروع).
+    async function arkkanSyncedAgentPath() {
+      const userAgent = path.join(app.getPath('userData'), 'arkkan-agent.js');
+      try {
+        const remote = await fetchText(AGENT_REMOTE_RAW);
+        // نتأكد إن المحتوى فعلاً وكيل أركان (منفذ 9955 + playwright) قبل الكتابة فوق
+        // أي نسخة محلية سليمة — حماية من صفحة خطأ أو استجابة فارغة.
+        if (remote && remote.length > 500 && remote.includes('9955') && remote.includes('playwright')) {
+          const existing = fs.existsSync(userAgent) ? fs.readFileSync(userAgent, 'utf8') : null;
+          if (existing !== remote) {
+            fs.mkdirSync(path.dirname(userAgent), { recursive: true });
+            fs.writeFileSync(userAgent, remote, 'utf8');
+            console.log('[Arkkan Agent] تم تحديث الوكيل تلقائياً من الريبو');
+          }
+          return userAgent;
+        }
+      } catch (e) { /* دون نت — نستخدم النسخة المحلية */ }
+      return arkkanAgentPath();
     }
 
     function arkkanPing(timeoutMs = 1500) {
@@ -427,7 +453,7 @@ function startLocalServer() {
     async function arkkanStartAgent() {
       const running = await arkkanPing();
       if (running) return { message: 'الوكيل يعمل بالفعل على localhost:9955', alreadyRunning: true };
-      const agentPath = arkkanAgentPath();
+      const agentPath = await arkkanSyncedAgentPath();
       if (!agentPath) {
         return { error: 'arkkan-agent.js غير موجود مع البرنامج — أعد تثبيت البرنامج أو شغّل start-arkkan-agent.bat من مجلد المشروع' };
       }
@@ -441,7 +467,7 @@ function startLocalServer() {
 
     async function arkkanAutostartWanted() {
       await arkkanStartAgent();
-      const agentPath = arkkanAgentPath();
+      const agentPath = await arkkanSyncedAgentPath();
       if (!agentPath) return { error: 'arkkan-agent.js غير موجود — لا يمكن إضافة التشغيل التلقائي' };
       const startupDir = process.env.APPDATA
         ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
@@ -453,7 +479,9 @@ function startLocalServer() {
         const launcher = path.join(startupDir, 'FTC2-ArkanAgent.cmd');
         let content = '@echo off\r\n';
         content += 'cd /d "' + envDir + '"\r\n';
+        content += 'if not exist "package.json" (echo {}> package.json)\r\n';
         content += 'if not exist "node_modules\\playwright" (npm install --no-save --no-audit --no-fund playwright@^1.62.1)\r\n';
+        content += 'if not exist "%LOCALAPPDATA%\\ms-playwright" (npm exec --yes playwright install chromium)\r\n';
         content += 'set "NODE_PATH=' + path.join(envDir, 'node_modules') + '"\r\n';
         content += 'set "ARKKAN_BROWSERS_PATH=' + path.join(envDir, 'browsers') + '"\r\n';
         content += 'start /min "" /d "' + envDir + '" node "' + agentPath + '"\r\n';
