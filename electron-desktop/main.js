@@ -189,21 +189,20 @@ function startLocalServer() {
     });
 
     // ---- بروكسي شيتات جوجل (جلب CSV سيرفر-لسيرفر) ----
-    // الواجهة (gsheet-workflow.js) كانت تجلب CSV مباشرة من docs.google.com من أصل
-    // http://127.0.0.1 — فتصطدم بسياسة CORS لأن جوجل لا يرسل Access-Control-Allow-Origin
-    // لنفس أسباب بروكسي /api أعلاه. هذا البروكسي المحلي يتصل بجوجل نيابة عن المتصفح
-    // (اتصال سيرفر-لسيرفر لا يخضع لـ CORS) ويرجّع الـ CSV لنفس أصل الصفحة.
-    // أمان: نقبل فقط روابط من نطاقات جوجل المعروفة (docs.google.com / drive.google.com)
-    // لمنع أي SSRF عبر أي رابط عشوائي.
+    // جوجل يعيد توجيه /pub?...&output=csv إلى قرص تخزين CDN خاص بـ
+    // (*.googleusercontent.com). لذلك نسمح بالمتابعة إلى نطاقات جوجل المعروفة فقط
+    // (docs.google.com / drive.google.com) وكذلك googleusercontent.com (CDN) لمنع أي
+    // SSRF إلى نطاقات عشوائية مع إتمام الجلب فعلياً.
+    const GSHEET_ALLOW = /^https:\/\/([a-z0-9-]+\.)?(docs\.google\.com|drive\.google\.com|googleusercontent\.com)/i;
     srv.get('/gsheet-csv', (req, res) => {
       const target0 = String(req.query.url || '');
-      if (!/^https:\/\/docs\.google\.com\/spreadsheets\//i.test(target0)) {
+      if (!/^https:\/\/docs\.google\.com\/(spreadsheets|file|document)/i.test(target0)) {
         res.status(400).json({ error: 'رابط غير صالح — يجب أن يكون رابط جوجل شيت' });
         return;
       }
       let hops = 0;
       function fetchCsv(target) {
-        if (!/^https:\/\/docs\.google\.com\//i.test(target)) {
+        if (!GSHEET_ALLOW.test(target)) {
           if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ error: 'اعادة توجيه لنطاق غير مسموح' }));
           return;
