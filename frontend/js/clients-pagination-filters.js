@@ -65,6 +65,13 @@ function clientsQueryIsSimple(){
   if(selectedFilterValues($('#filter-course')).length > 1) return false;
   if(selectedFilterValues($('#filter-course')).includes('__unknown__')) return false;
   if(selectedFilterValues($('#filter-nat')).length > 1) return false;
+  // المسار السريع (GET /api/clients على السيرفر) يبحث فقط فى name/clientId/referNum/invoiceNo —
+  // جدول clients_rows المفهرَس ليس به عمود phone أصلاً، فأي بحث برقم هاتف يرجّع دائماً صفر نتائج
+  // من السيرفر حتى لو الرقم موجود فعلياً ومرتبط بعدة متدربين. لذا نجبر المسار المحلي الكامل
+  // (filteredClients()) الذي يطبّع رقم الهاتف ويقارنه صح، فى أي بحث يبدو رقمياً (هاتف/هوية جزئية).
+  const searchVal = ($('#search')?.value||'').trim();
+  const searchDigits = searchVal.replace(/[^0-9]/g,'');
+  if(searchDigits && searchDigits.length >= 4) return false;
   return true;
 }
 async function renderTable(){
@@ -106,7 +113,10 @@ async function renderTable(){
       const localMatches = clients.filter(c=>{
         if(q){
           const hay = [c.name, c.clientId, c.referNum, c.invoice].map(v=>String(v||'').toLowerCase());
-          if(!hay.some(v=>v.includes(q.toLowerCase()))) return false;
+          const qDigitsCheck = q.replace(/[^0-9]/g,'');
+          const phoneDigitsCheck = String(c.phone||'').replace(/[^0-9]/g,'');
+          const phoneMatch = qDigitsCheck && phoneDigitsCheck.includes(qDigitsCheck);
+          if(!phoneMatch && !hay.some(v=>v.includes(q.toLowerCase()))) return false;
         }
         if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
         else if(fc && c.courseType!==fc) return false;
