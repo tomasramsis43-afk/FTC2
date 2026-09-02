@@ -143,6 +143,17 @@
       var u = new URL(url);
       if(u.hostname !== 'docs.google.com') return null;
     } catch(e){ return null; }
+    // روابط "نشر على الويب" (File > Share > Publish to web) لها صيغة مختلفة تماماً:
+    // /spreadsheets/d/e/{pubId}/pub?... — لازم تُفحص هذه الصيغة أولاً وتُستثنى من
+    // القاعدة العامة تحتها، لأن تلك القاعدة كانت (غلطاً) تلتقط الحرف "e" وحده كمعرّف
+    // (لأنه أول جزء بعد "/d/" وقبل "/") بدل معرّف النشر الحقيقي الطويل بعده، فتبني
+    // رابط export?format=csv بمعرّف "e" غير موجود أصلاً فيفشل الجلب بصمت أو يرجّع صفراً.
+    // نفس السبب يفرض استخدام مسار /pub?output=csv هنا وليس /export?format=csv، لأن
+    // export لا يعمل على مستندات "منشورة" بهذا الشكل.
+    var pubMatch = url.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9_-]+)/);
+    if(pubMatch){
+      return 'https://docs.google.com/spreadsheets/d/e/'+pubMatch[1]+'/pub?output=csv'+(gid?('&gid='+gid+'&single=true'):'');
+    }
     // يجب أن يحتوي على معرّف spreadsheet
     var m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
     if(!m) return null;
