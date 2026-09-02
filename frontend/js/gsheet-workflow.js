@@ -184,19 +184,15 @@
   async function fetchSheetCsv(url){
     var csvUrl = toCsvUrl(url);
     if(!csvUrl) throw new Error('رابط غير صالح: يجب أن يكون رابط Google Docs Spreadsheet');
-    var isDesktop = /^http:\/\/127\.0\.0\.1/.test(location.origin) || /^http:\/\/localhost/.test(location.origin);
-    if(isDesktop){
-      var res = await fetch('/gsheet-csv?url=' + encodeURIComponent(csvUrl), { cache:'no-store' });
-      if(!res.ok){
-        var body = '';
-        try { body = await res.text(); } catch(e){}
-        throw new Error('فشل جلب الشيت — HTTP '+res.status+(body ? ' — '+body : ''));
-      }
-      return await res.text();
+    // نمرر الطلب عبر بروكسي على نفس الأصل (يعمل من السيرفر/المتصفح وElectron)
+    // لأن الجلب المباشر إلى docs.google.com يُحجب بـ CORS من المتصفح.
+    var res = await fetch('/gsheet-csv?url=' + encodeURIComponent(csvUrl), { cache:'no-store' });
+    if(!res.ok){
+      var body = '';
+      try { body = await res.text(); } catch(e){}
+      throw new Error('فشل جلب الشيت — HTTP '+res.status+(body ? ' — '+body : ''));
     }
-    var res2 = await fetch(csvUrl, { cache:'no-store' });
-    if(!res2.ok) throw new Error('فشل جلب الشيت — HTTP '+res2.status);
-    return await res2.text();
+    return await res.text();
   }
 
   /* ===================== Row Parsing ===================== */

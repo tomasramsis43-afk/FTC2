@@ -109,6 +109,90 @@ app.use(recordsRouter);
 app.use(aiRouter);
 app.use(backupsRouter);
 app.use(healthRouter);
+
+/* ---------------- بروكسي Google Sheets CSV (للعمل من المتصفح/السيرفر) ----------------
+   الجلب المباشر من المتصفح إلى docs.google.com يُحجب بـ CORS، فنجلب server-to-server
+   ونعيد النتيجة. نفس معايير الأمان (SSRF + allowlist) الموجودة في electron main.js. */
+const GSHEET_ALLOWED_HOSTS = [
+  'docs.google.com',
+  'drive.google.com',
+  'googleusercontent.com',
+  'google.com'
+];
+function isGsheetAllowedHost(hostname) {
+  hostname = String(hostname || '').toLowerCase();
+  if (hostname === 'docs.googleusercontent.com') return true;
+  return GSHEET_ALLOWED_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h));
+}
+function isPrivateOrReservedIp(hostname) {
+  if (hostname === 'localhost') return true;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    const parts = hostname.split('.').map(Number);
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 0 || parts[0] === 100) return true;
+    if (parts[0] >= 224) return true;
+  }
+  return false;
+}
+function isGsheetUrlSafe(rawUrl) {
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch (e) { return { ok: false, reason: 'رابط غير صالح' }; }
+  if (parsed.protocol !== 'https:') return { ok: false, reason: 'يجب أن يكون الرابط HTTPS' };
+  if (!isGsheetAllowedHost(parsed.hostname)) return { ok: false, reason: 'النطاق غير مسموح' };
+  if (isPrivateOrReservedIp(parsed.hostname)) return { ok: false, reason: 'لا يُسمح بالوصول إلى عناوين خاصة' };
+  return { ok: true, reason: '', url: parsed.toString() };
+}
+app.get('/gsheet-csv', (req, res) => {
+  const target0 = String(req.query.url || '');
+  const urlCheck = isGsheetUrlSafe(target0);
+  if (!urlCheck.ok) return res.status(400).json({ error: 'رابط غير صالح — ' + urlCheck.reason });
+  if (!/^\/(spreadsheets|file)\//.test(new URL(target0).pathname)) {
+    return res.status(400).json({ error: 'رابط غير صالح — يجب أن يكون رابط Google Docs Spreadsheet' });
+  }
+  let hops = 0;
+  function fetchCsv(target) {
+    const safeCheck = isGsheetUrlSafe(target);
+    if (!safeCheck.ok) {
+      if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'اعادة توجيه لنطاق غير مسموح — ' + safeCheck.reason }));
+    }
+    const req2 = https.get(target, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 25000 }, remoteRes => {
+      if (remoteRes.statusCode >= 300 && remoteRes.statusCode < 400 && remoteRes.headers.location && hops < 5) {
+        hops++;
+        let next;
+        try { next = new URL(remoteRes.headers.location, target).toString(); }
+        catch (e) {
+          if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'رابط redirect غير صالح' }));
+        }
+        return fetchCsv(next);
+      }
+      try {
+        const finalUrl = new URL(target);
+        if (!isGsheetAllowedHost(finalUrl.hostname)) {
+          if (!res.headersSent) res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'النطاق النهائي غير مسموح به' }));
+        }
+      } catch (e) {}
+      res.writeHead(remoteRes.statusCode || 200, {
+        'Content-Type': remoteRes.headers['content-type'] || 'text/csv; charset=utf-8',
+        'Cache-Control': 'no-store'
+      });
+      remoteRes.pipe(res);
+    });
+    req2.on('error', err => {
+      if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'تعذّر جلب شيت جوجل: ' + err.message }));
+    });
+    req2.on('timeout', function () { this.destroy(new Error('timeout')); });
+  }
+  fetchCsv(target0);
+});
+
 app.use(arkkanRouter);
 // arkkanSyncRouter (جلب أركان عبر Playwright جوّه السيرفر) اتشال نهائياً —
 // الجلب بقى بيتم عبر arkkan-agent.js محلياً على جهاز المستخدم (localhost:9955)
