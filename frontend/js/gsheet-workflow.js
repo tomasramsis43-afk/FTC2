@@ -75,6 +75,14 @@
   }
 
   async function fetchSheetCsv(url){
+    // في نسخة سطح المكتب (Electron) نمر عبر البروكسي المحلي /gsheet-csv لتفادي CORS
+    // (جوجل لا يرسل Access-Control-Allow-Origin). في المتصفح نستخدم جوجل مباشرة.
+    const isDesktop = /^http:\/\/127\.0\.0\.1/.test(location.origin) || /^http:\/\/localhost/.test(location.origin);
+    if(isDesktop){
+      const res = await fetch('/gsheet-csv?url=' + encodeURIComponent(toCsvUrl(url)), { cache:'no-store' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      return await res.text();
+    }
     const res = await fetch(toCsvUrl(url), { cache:'no-store' });
     if(!res.ok) throw new Error('HTTP '+res.status);
     return await res.text();

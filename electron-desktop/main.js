@@ -188,6 +188,49 @@ function startLocalServer() {
       });
     });
 
+    // ---- بروكسي شيتات جوجل (جلب CSV سيرفر-لسيرفر) ----
+    // الواجهة (gsheet-workflow.js) كانت تجلب CSV مباشرة من docs.google.com من أصل
+    // http://127.0.0.1 — فتصطدم بسياسة CORS لأن جوجل لا يرسل Access-Control-Allow-Origin
+    // لنفس أسباب بروكسي /api أعلاه. هذا البروكسي المحلي يتصل بجوجل نيابة عن المتصفح
+    // (اتصال سيرفر-لسيرفر لا يخضع لـ CORS) ويرجّع الـ CSV لنفس أصل الصفحة.
+    // أمان: نقبل فقط روابط من نطاقات جوجل المعروفة (docs.google.com / drive.google.com)
+    // لمنع أي SSRF عبر أي رابط عشوائي.
+    srv.get('/gsheet-csv', (req, res) => {
+      const target0 = String(req.query.url || '');
+      if (!/^https:\/\/docs\.google\.com\/spreadsheets\//i.test(target0)) {
+        res.status(400).json({ error: 'رابط غير صالح — يجب أن يكون رابط جوجل شيت' });
+        return;
+      }
+      let hops = 0;
+      function fetchCsv(target) {
+        if (!/^https:\/\/docs\.google\.com\//i.test(target)) {
+          if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'اعادة توجيه لنطاق غير مسموح' }));
+          return;
+        }
+        const req2 = https.get(target, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 25000 }, remoteRes => {
+          if (remoteRes.statusCode >= 300 && remoteRes.statusCode < 400 && remoteRes.headers.location && hops < 5) {
+            hops++;
+            const next = new URL(remoteRes.headers.location, target).toString();
+            fetchCsv(next);
+            return;
+          }
+          res.writeHead(remoteRes.statusCode || 200, {
+            'Content-Type': remoteRes.headers['content-type'] || 'text/csv; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-store'
+          });
+          remoteRes.pipe(res);
+        });
+        req2.on('error', err => {
+          if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'تعذّر جلب شيت جوجل: ' + err.message }));
+        });
+        req2.on('timeout', function () { this.destroy(new Error('timeout')); });
+      }
+      fetchCsv(target0);
+    });
+
     // ---- استيراد أركان عبر نافذة مخفية (يتغلب على تحميل JavaScript) ----
     srv.post('/arkkan-scrape', (req, res) => {
       let rawBody = '';
