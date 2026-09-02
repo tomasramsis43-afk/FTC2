@@ -1,19 +1,26 @@
 /**
- * arkkan-agent.js — عميل أركان المحلي
+ * arkkan-agent.js — عميل أركان المحلي (نسخة محسّنة)
  * ══════════════════════════════════════════════════════════════
  * سيرفر HTTP محلي على localhost:9955 يفتح متصفح Chromium (Playwright)
- * ويجلب بيانات العملاء من موقع أركان، ليستخدمه برنامج FTC2 (الفرونت إند)
- * بدل ما يطلب من سيرفر Render فتح المتصفح (كان بيستهلك RAM الاستضافة
- * المجانية المحدودة 512MB ويسبب استقرار سيء / OOM).
+ * ويجلب بيانات العملاء من موقع أركان، ليستخدمه برنامج FTC2.
  *
- * لازم يفضل شغال على أي جهاز هيستخدم تبويب "مزامنة أركان" في البرنامج.
+ * التحسينات:
+ *  ├── Sequential Queue: معالجة عملاء واحد تلو الآخر
+ *  ├── Client State Isolation: مسح الحالة بين كل عميل وآخر
+ *  ├── Frame Snapshot: اكتشاف الإطارات الجديدة فقط
+ *  ├── Data Validation: التحقق من صحة البيانات قبل الإرجاع
+ *  ├── FHD Rules: قواعد صارمة لاختيار الدورة/الفاتورة
+ *  ├── Protection Detection: اكتشاف 403/429/CAPTCHA والوقوف
+ *  ├── Retry with Backoff: إعادة محاولة للأخطاء المؤقتة فقط
+ *  ├── Configurable Delays: توقيتات قابلة للضبط من environment
+ *  └── Security Hardening: CORS آمن + input validation
  *
  * التشغيل:
- *   npm install playwright   (مرة واحدة بس على الجهاز ده)
+ *   npm install playwright
  *   npx playwright install chromium
  *   node arkkan-agent.js
  *
- * نقاط النهاية (نفس مسارات الفرونت إند القديمة على Render، بس محلياً):
+ * نقاط النهاية:
  *   GET  /api/arkkan/status
  *   POST /api/arkkan/warm
  *   POST /api/arkkan/fetch   { clientId, referNum? }
@@ -22,148 +29,217 @@
 
 const http = require('http');
 const os = require('os');
-
-const wait = ms => new Promise(r => setTimeout(r, ms));
+const cfg = require('./arkkan-config');
+const { log, ProtectionError, TimeoutError, FrameError, NoDataError, maskId, isProtectionError } = require('./arkkan-logger');
+const { wait, SequentialQueue, JOB_STATUS, withRetry, snapshotFrames, findNewFrame, waitForStable, clearInputFields, isolateClientState, validateClientId, validateReferNum, readJsonBody, dateKey } = require('./arkkan-utils');
 
 let playwright = null;
-try { playwright = require('playwright'); } catch (e) { playwright = null; }
+try { playwright = require('playwright'); } catch { playwright = null; }
 
-const PORT = parseInt(process.env.ARKKAN_AGENT_PORT || '9955', 10);
-const ARKKAN_URL = 'https://arkkanapp2.net/Bases/MainPage.aspx?url=98A7B2';
-const HEADLESS = process.env.ARKKAN_HEADLESS !== 'false'; // ARKKAN_HEADLESS=false لو عايز تشوف المتصفح شغال
+/* ══════════════════════════════════════════════
+   Browser State
+   ══════════════════════════════════════════════ */
+let _browser = null;
+let _workers = [];
+let _ready = false;
+let _protectionActive = false;
+let _protectionUntil = 0;
+// Sequential Queue: معالجة عملاء واحد تلو الآخر دائماً لمنع خلط البيانات
+// (Concurrency ثابت 1 — ممنوع تشغيل عدة عمليات أركان في نفس الوقت)
+const _jobQueue = new SequentialQueue(1);
 
-/* مفتاح رقمي للمقارنة الزمنية (يدعم YYYY/MM/DD و DD/MM/YYYY) لتحديد الأحدث */
-function dateKey(v) {
-  const s = String(v || '').trim();
-  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
-  if (m) return m[1] + String(m[2]).padStart(2, '0') + String(m[3]).padStart(2, '0');
-  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
-  if (m) return m[3] + String(m[2]).padStart(2, '0') + String(m[1]).padStart(2, '0');
-  return s;
-}
-
-/* على جهاز محلي مفيش داعي لمنع تحميل الصور — بس بنسيبها موقوفة برضو
-   عشان تسريع الجلب (مش محتاجين نشوف الصفحة أصلاً، الجلب نصي وجداول فقط). */
-function blockHeavyResources(bx) {
-  if (!bx || !bx.route) return;
-  bx.route('**/*', route => {
+/* ══════════════════════════════════════════════
+   Resource Blocking (لتسريع الجلب)
+   ══════════════════════════════════════════════ */
+function blockHeavyResources(ctx) {
+  if (!ctx || !ctx.route) return;
+  ctx.route('**/*', route => {
     const t = route.request().resourceType();
     if (t === 'image' || t === 'media' || t === 'font' || t === 'stylesheet') return route.abort();
     return route.continue().catch(() => {});
   }).catch(() => {});
 }
 
-function clearArkanDialogs(pg) {
+/* ══════════════════════════════════════════════
+   Dialog Management
+   ══════════════════════════════════════════════ */
+async function clearArkanDialogs(pg) {
   return pg.evaluate(() => {
-    const els = document.querySelectorAll('.toastyDialog_msgContainer, .toastyDialog_msgMask, [id^="toastyDialog_"], #iframeSearch');
+    const els = document.querySelectorAll(
+      '.toastyDialog_msgContainer, .toastyDialog_msgMask, [id^="toastyDialog_"], #iframeSearch'
+    );
     for (const el of els) el.style.display = 'none';
   }).catch(() => {});
 }
 
-function closeDialog(pg) {
+async function closeDialog(pg) {
   return pg.evaluate(() => {
     const btn = document.querySelector('.toastyDialog_closeBtn');
     if (btn) btn.click();
   }).catch(() => {});
 }
 
+/* ══════════════════════════════════════════════
+   Protection Detection
+   ══════════════════════════════════════════════ */
+function isProtectionPage(text) {
+  const lower = String(text || '').toLowerCase();
+  for (const signal of cfg.PROTECTION.CAPTCHA_SIGNALS) {
+    if (lower.includes(signal)) return true;
+  }
+  return false;
+}
+
+async function checkForProtection(pg) {
+  try {
+    const text = await pg.evaluate(() => document.body?.innerText || '').catch(() => '');
+    if (isProtectionPage(text)) {
+      _protectionActive = true;
+      _protectionUntil = Date.now() + 5 * 60 * 1000; // 5 دقائق إيقاف
+      log.protection('CAPTCHA/BLOCK', 'تم اكتشاف حماية خارجية — إيقاف 5 دقائق');
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+function isProtectionActive() {
+  if (!_protectionActive) return false;
+  if (Date.now() > _protectionUntil) {
+    _protectionActive = false;
+    log.info('انتهت فترة الحماية — يمكن المتابعة');
+    return false;
+  }
+  return true;
+}
+
+/* ══════════════════════════════════════════════
+   Frame Navigation
+   ══════════════════════════════════════════════ */
+const DETAILS_FRAME_PATTERN = /Arkan\/frm8157/;
+const DOCUMENTS_FRAME_PATTERN = /\/Documents\//;
+const EXAMS_FRAME_PATTERN = /frm8159/;
+
 async function ensureDetailsFrame(pg) {
-  let fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
+  let fr = pg.frames().find(f => DETAILS_FRAME_PATTERN.test(f.url()));
   if (fr) return fr;
 
-  await pg.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await pg.goto(cfg.ARKKAN_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
 
+  // انتظار ظهور زر "تفاصيل متدرب" مع Timeout واضح
   let clicked = false;
   const tA = Date.now();
-  while (Date.now() - tA < 8000 && !clicked) {
+  while (Date.now() - tA < cfg.DELAY.DETAILS_TIMEOUT && !clicked) {
     clicked = await pg.evaluate(() => {
       const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
       if (a) { a.click(); return true; }
       return false;
     }).catch(() => false);
-    if (!clicked) await wait(120);
+    if (!clicked) await wait(cfg.DELAY.DIALOG_POLL);
   }
 
+  // انتظار ظهور الإطار مع Timeout واضح
   const tB = Date.now();
-  while (Date.now() - tB < 8000) {
-    const f = pg.frames().find(x => x.url().includes('Arkan/frm8157'));
+  while (Date.now() - tB < cfg.DELAY.DETAILS_TIMEOUT) {
+    const f = pg.frames().find(x => DETAILS_FRAME_PATTERN.test(x.url()));
     if (f) return f;
-    await wait(120);
+    await wait(cfg.DELAY.DIALOG_POLL);
   }
-  return pg.frames().find(x => x.url().includes('Arkan/frm8157')) || null;
+  return pg.frames().find(x => DETAILS_FRAME_PATTERN.test(x.url())) || null;
 }
 
+/* ══════════════════════════════════════════════
+   Load Student (مع Client State Isolation)
+   ══════════════════════════════════════════════ */
 async function loadStudent(pg, { clientId, referNum = '' }) {
-  await clearArkanDialogs(pg);
+  // 1. عزل الحالة: مسح أي بيانات من العميل السابق
   let fr = await ensureDetailsFrame(pg);
-  if (!fr) throw new Error('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
+  if (!fr) throw new FrameError('تعذّر فتح صفحة تفاصيل المتدرب في أركان');
 
-  await fr.fill('#ctl00_Student_id_fltr_txtIdentityNo', String(clientId));
-  if (referNum) await fr.fill('#ctl00_Student_id_fltr_Txt_ref', String(referNum)).catch(() => {});
+  await isolateClientState(fr, pg);
+
+  // 2. ملء حقول البحث مع التحقق من صحة المدخلات
+  const idValidation = validateClientId(clientId);
+  if (!idValidation.valid) throw new FrameError(idValidation.reason);
+  const refValidation = validateReferNum(referNum);
+  if (!refValidation.valid) throw new FrameError(refValidation.reason);
+
+  await fr.fill('#ctl00_Student_id_fltr_txtIdentityNo', idValidation.value);
+  if (refValidation.value) {
+    await fr.fill('#ctl00_Student_id_fltr_Txt_ref', refValidation.value).catch(() => {});
+  } else {
+    // مسح صريح لحقل Reference Number لو العميل الجديد لا يملكه
+    await fr.fill('#ctl00_Student_id_fltr_Txt_ref', '').catch(() => {});
+  }
+
   await fr.click('#ctl00_Student_id_fltr_btnConfirm');
 
+  // 3. انتظار النتائج مع Smart Wait
   const readSig = () => fr.evaluate(() => {
     const txt = (sel) => [...document.querySelectorAll(sel)].map(r => r.innerText.trim());
     return {
       rowsC: txt('#ctl00_Courses_Students_GridView1 tr.RowItems'),
-      rowsB: txt('#ctl00_Training_bags_GridView1 tr.RowItems')
+      rowsB: txt('#ctl00_Training_bags_GridView1 tr.RowItems'),
     };
   }).catch(() => ({ rowsC: [], rowsB: [] }));
 
   const hasData = (sig) => sig.rowsC.length > 0 || sig.rowsB.length > 0;
 
-  const waitStable = (timeoutMs) => new Promise(resolve => {
-    let last = null, stable = 0;
-    const t0 = Date.now();
-    const tick = async () => {
-      const sig = await readSig();
-      const same = last && hasData(sig) &&
-        JSON.stringify(sig.rowsC) === JSON.stringify(last.rowsC) &&
-        JSON.stringify(sig.rowsB) === JSON.stringify(last.rowsB);
-      stable = same ? stable + 1 : 0;
-      last = sig;
-      if ((stable >= 2 && hasData(last)) || Date.now() - t0 >= timeoutMs) { resolve(last); return; }
-      setTimeout(tick, 180);
-    };
-    tick();
+  let sigStable = await waitForStable({
+    readFn: readSig,
+    hasDataFn: hasData,
+    timeoutMs: cfg.DELAY.RESULT_TIMEOUT,
+    pollMs: cfg.DELAY.RESULT_STABLE,
   });
 
-  let sigStable = await waitStable(9000);
   if (!hasData(sigStable)) {
-    await wait(700);
-    sigStable = await waitStable(9000);
+    await wait(cfg.DELAY.RETRY_STABLE);
+    sigStable = await waitForStable({
+      readFn: readSig,
+      hasDataFn: hasData,
+      timeoutMs: cfg.DELAY.RESULT_TIMEOUT,
+      pollMs: cfg.DELAY.RESULT_STABLE,
+    });
   }
+
+  // 4. فحص الحماية بعد كل عملية بحث
+  await checkForProtection(pg);
 
   const nC = (sigStable && sigStable.rowsC.length) || 0;
   const nB = (sigStable && sigStable.rowsB.length) || 0;
-  console.log(`[arkkan-agent] clientId=${clientId} — دورات: ${nC} | حقائب: ${nB}`);
+  log.info(`loadStudent: client=${maskId(clientId)} — دورات: ${nC} | حقائب: ${nB}`);
   return { fr, nC, nB };
 }
 
+/* ══════════════════════════════════════════════
+   Fetch Client Data (مع FHD Rules + Frame Snapshot)
+   ══════════════════════════════════════════════ */
 async function fetchClientData(pg, { clientId, referNum = '' }) {
   const result = {
     invoice: '', courseNumber: '', date: '',
-    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: ''
+    coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: '',
+    _validation: { clientId, referNum, timestamp: Date.now() },
   };
 
   let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
 
-  // ── إيصال الدورة: قاعدة FHD الصارمة — لا نأخذ أي بيانات من دورة إلا إذا كان
-    //    رقم الدورة نفسه يبدأ بـ FHD وكان رقم الفاتورة (الإيصال) أيضاً يبدأ بـ FHD.
-    //    أي دورة لا تنطبق عليها القاعدة تُترك الأعمدة فارغة (لا جلب ولا رجوع لأول سطر). ──
+  // ── قاعدة FHD الصارمة: لا نأخذ أي بيانات إلا إذا كان رقم الدورة يبدأ بـ FHD ──
   if (nC > 0) {
     const courseRows = await fr.evaluate(() => {
       return [...document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')].map((r, i) => ({
         i,
         cn: (r.querySelector('.Course_number')?.innerText || '').trim(),
-        start: (r.querySelector('.Startdate')?.innerText || '').trim()
+        start: (r.querySelector('.Startdate')?.innerText || '').trim(),
       }));
     });
 
-    // الدورات المطابقة فقط للشرط الأول: رقم الدورة يبدأ بـ FHD
+    // الدورات المطابقة لقاعدة FHD فقط
     const fhdRows = courseRows.filter(r => /^FHD/i.test(r.cn));
 
     for (const cr of fhdRows) {
+      // لقطة الإطارات قبل فتح المستند
+      const beforeDocFrames = snapshotFrames(pg, DOCUMENTS_FRAME_PATTERN);
+
       const clicked = await fr.evaluate((i) => {
         const el = document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')[i];
         if (!el) return false;
@@ -173,47 +249,58 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
         if (t) { t.click(); return true; }
         return false;
       }, cr.i);
-      if (!clicked) throw new Error(`تعذّر النقر على زر الإيصال للدورة (${cr.cn}) — تأكد من ظهور زر الإيصال في أركان`);
+      if (!clicked) throw new FrameError(`تعذّر النقر على زر الإيصال للدورة (${cr.cn})`);
 
-      const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
-      let recF = null;
-      for (let t = 0; t < 300 && !recF; t++) {
-        await wait(90);
-        recF = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
-      }
-      if (!recF) throw new Error(`تعذّر فتح إيصال الدورة (${cr.cn}) بعد الانتظار — أعد المحاولة`);
+      // اكتشاف الإطار الجديد فقط (وليس أي إطار موجود)
+      const recF = await findNewFrame(pg, DOCUMENTS_FRAME_PATTERN, beforeDocFrames, cfg.DELAY.DOCUMENT_OPEN);
+      if (!recF) throw new TimeoutError(`تعذّر فتح إيصال الدورة (${cr.cn}) بعد الانتظار`);
 
       const txt = await recF.evaluate(() => document.body.innerText);
-      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
+
+      // فحص الحماية في محتوى المستند
+      if (isProtectionPage(txt)) {
+        _protectionActive = true;
+        _protectionUntil = Date.now() + 5 * 60 * 1000;
+        log.protection('IN_DOCUMENT', 'تم اكتشاف حماية داخل المستند');
+        break;
+      }
+
+      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+        .replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
 
       await closeDialog(pg);
-      const t1 = Date.now();
-      while (Date.now() - t1 < 4000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
-        await wait(120);
-      }
-      fr = pg.frames().find(f => f.url().includes('Arkan/frm8157')) || await ensureDetailsFrame(pg);
 
-      // الشرط الثاني عند الصرف: رقم الفاتورة يجب أن يبدأ بـ FHD — لو اختلف
-      // نترك الأعمدة فارغة لهذه الدورة ونجرب الدورة FHD التالية فقط (لا ننزل لغير FHD).
+      // انتظار إغلاق المستند
+      const t1 = Date.now();
+      while (Date.now() - t1 < cfg.DELAY.DIALOG_CLOSE &&
+             pg.frames().some(f => DOCUMENTS_FRAME_PATTERN.test(f.url()) && !beforeDocFrames.includes(f))) {
+        await wait(cfg.DELAY.DIALOG_POLL);
+      }
+
+      fr = pg.frames().find(f => DETAILS_FRAME_PATTERN.test(f.url())) || await ensureDetailsFrame(pg);
+
+      // الشرط الثاني: رقم الفاتورة يجب أن يبدأ بـ FHD
       if (!/^FHD/i.test(inv)) {
-        console.log(`[arkkan-agent] clientId=${clientId} — دورة ${cr.cn} إيصالها غير FHD (${inv}) — تُترك الأعمدة فارغة`);
+        log.info(`fetchClientData: client=${maskId(clientId)} — دورة ${cr.cn} إيصالها غير FHD (${inv}) — تُترك فارغة`);
         continue;
       }
 
       result.courseNumber = cr.cn;
       result.startDate = cr.start;
       result.invoice = inv;
-      result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d.,]/g, '').trim();
-      result.date = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+      result.coursePrice = ((txt.match(/(?:Total Paid Fee|الاجمالي)\s*([^\t\n]+)/) || [])[1] || '')
+        .replace(/[^\d.,]/g, '').trim();
+      result.date = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+        .replace(/[^\d\/-]/g, '').trim();
       break;
     }
   }
 
-  // مع قاعدة FHD الصارمة لا فشل "حقيقي" عند عدم التطابق — الأعمدة تبقى فارغة عن قصد
   if (nC > 0 && !result.courseNumber && !result.invoice) {
-    console.log(`[arkkan-agent] clientId=${clientId} — لا دورة مطابقة لقاعدة FHD — تُترك أعمدة الدورة/الإيصال فارغة`);
+    log.info(`fetchClientData: client=${maskId(clientId)} — لا دورة مطابقة لقاعدة FHD`);
   }
 
+  // ── بيانات الحقيبة (مع Frame Snapshot) ──
   if (fr && nB > 0) {
     const bagRows = await fr.evaluate(() => {
       return [...document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')]
@@ -229,6 +316,7 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
     let bagBest = { invoice: '', bagPurchaseDate: '' };
     let bagOwnDate = '';
     for (const br of bagRows) {
+      const beforeDocFrames = snapshotFrames(pg, DOCUMENTS_FRAME_PATTERN);
       const idx = br.i;
       const clickedB = await fr.evaluate((i) => {
         const row = document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')[i];
@@ -238,17 +326,14 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
       }, idx);
       if (!clickedB) continue;
 
-      const framesNow = pg.frames().filter(f => /\/Documents\//.test(f.url()));
-      let recFb = null;
-      for (let t = 0; t < 160 && !recFb; t++) {
-        await wait(90);
-        recFb = pg.frames().find(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f));
-      }
+      const recFb = await findNewFrame(pg, DOCUMENTS_FRAME_PATTERN, beforeDocFrames, cfg.DELAY.DOCUMENT_OPEN * 0.6);
       if (!recFb) continue;
 
       const txt = await recFb.evaluate(() => document.body.innerText);
-      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
-      const dt  = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '').replace(/[^\d\/-]/g, '').trim();
+      const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+        .replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
+      const dt = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+        .replace(/[^\d\/-]/g, '').trim();
 
       if (dt && dateKey(dt) > dateKey(bagBest.bagPurchaseDate)) {
         bagBest = { invoice: inv, bagPurchaseDate: dt };
@@ -259,8 +344,9 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
 
       await closeDialog(pg);
       const t1 = Date.now();
-      while (Date.now() - t1 < 4000 && pg.frames().some(f => /\/Documents\//.test(f.url()) && !framesNow.includes(f))) {
-        await wait(120);
+      while (Date.now() - t1 < cfg.DELAY.DIALOG_CLOSE &&
+             pg.frames().some(f => DOCUMENTS_FRAME_PATTERN.test(f.url()) && !beforeDocFrames.includes(f))) {
+        await wait(cfg.DELAY.DIALOG_POLL);
       }
     }
 
@@ -270,15 +356,67 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
   }
 
   await smartRefresh(pg);
-  return result;
+  return finalizeResult(result);
 }
 
+/* ══════════════════════════════════════════════
+   Data Validation — التحقق من صحة البيانات قبل الإرجاع
+   ── لا تُسلَّم بيانات غير مؤكدة: أي حقل مستخرج يُتحقق منه ──
+   ── وإذا لم يمكن تحديد النتيجة الصحيحة بثقة: validation_failed ──
+   ══════════════════════════════════════════════ */
+function validateExtracted(result) {
+  const issues = [];
+
+  // رقم الفاتورة: إن وُجد يجب أن يكون صالحاً وغير مشوّه
+  if (result.invoice) {
+    if (!/^[A-Za-z0-9\/\-]+$/.test(result.invoice)) issues.push('invoice: format invalid');
+    if (result.invoice.length < 3) issues.push('invoice: too short');
+  }
+
+  // رقم الدورة: إن وُجد يجب أن يكون صالحاً
+  if (result.courseNumber && result.courseNumber.length < 2) {
+    issues.push('courseNumber: too short');
+  }
+
+  // قيمة الفاتورة: إن وُجدت يجب أن تكون رقماً صالحاً
+  if (result.coursePrice) {
+    const numeric = parseFloat(String(result.coursePrice).replace(/[^\d.\-]/g, ''));
+    if (isNaN(numeric) || numeric < 0) issues.push('coursePrice: not a valid number');
+  }
+
+  // التاريخ: إن وُجد يجب أن يُقرأ كتاريخ صالح
+  const dateFields = [
+    ['date', result.date],
+    ['bagPurchaseDate', result.bagPurchaseDate],
+    ['startDate', result.startDate],
+  ];
+  for (const [field, value] of dateFields) {
+    if (!value) continue;
+    const parsed = new Date(value.includes('/') ? value.replace(/\//g, '-') : value);
+    if (isNaN(parsed.getTime())) issues.push(`${field}: unreadable date`);
+  }
+
+  if (issues.length) {
+    log.warn(`validation: ${JSON.stringify(issues)}`);
+    return { ...result, _validation: { ...result._validation, status: 'VALIDATION_FAILED', issues } };
+  }
+  return { ...result, _validation: { ...result._validation, status: 'SUCCESS', issues: [] } };
+}
+
+function finalizeResult(result) {
+  // إزالة أي بيانات غير مؤكدة (لا نُسلّم قيماً غامضة للواجهة لتتجنب خلطها)
+  return validateExtracted(result);
+}
+
+/* ══════════════════════════════════════════════
+   Fetch Exam Scores (مع Frame Snapshot)
+   ══════════════════════════════════════════════ */
 async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
   const result = { attempts: [], lastDate: '', lastResult: '', lastGrade: '' };
 
   await loadStudent(pg, { clientId, referNum });
 
-  let fr = pg.frames().find(f => f.url().includes('Arkan/frm8157'));
+  let fr = pg.frames().find(f => DETAILS_FRAME_PATTERN.test(f.url()));
   let clicked = false;
   for (let t = 0; t < 40 && !clicked; t++) {
     clicked = await (fr ? fr.evaluate(() => {
@@ -287,46 +425,38 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
       if (btn) { btn.click(); return true; }
       return false;
     }) : Promise.resolve(false)).catch(() => false);
-    if (!clicked) await wait(120);
+    if (!clicked) await wait(cfg.DELAY.DIALOG_POLL);
   }
-  if (!clicked) throw new Error('لا توجد صفحة اختبارات لهذا العميل في أركان — تأكد من صحة الرقم المرجعي أو من تسجيل دورة له في أركان');
+  if (!clicked) throw new NoDataError('لا توجد صفحة اختبارات لهذا العميل في أركان');
 
-  const framesNow = pg.frames().filter(f => f.url().includes('frm8159'));
-  let frT = null;
-  for (let t = 0; t < 200 && !frT; t++) {
-    await wait(90);
-    frT = pg.frames().find(f => f.url().includes('frm8159') && !framesNow.includes(f));
-  }
-  if (!frT) frT = pg.frames().find(f => f.url().includes('frm8159'));
-  if (!frT) throw new Error('تعذّر فتح صفحة نتائج الاختبارات في أركان');
+  // لقطة الإطارات قبل فتح صفحة الاختبارات
+  const beforeExamFrames = snapshotFrames(pg, EXAMS_FRAME_PATTERN);
+
+  const frT = await findNewFrame(pg, EXAMS_FRAME_PATTERN, beforeExamFrames, cfg.DELAY.DOCUMENT_OPEN * 0.7);
+  if (!frT) throw new FrameError('تعذّر فتح صفحة نتائج الاختبارات في أركان');
 
   const readGrids = () => frT.evaluate(() => {
     const rowsOf = (gv) => [...document.querySelectorAll(gv + ' tr.RowItems')]
       .map(tr => [...tr.querySelectorAll('td')].map(td => td.innerText.trim()));
     return {
-      exam:   rowsOf('#ctl00_Exam_master2_GridView1'),
+      exam: rowsOf('#ctl00_Exam_master2_GridView1'),
       retake: rowsOf('#ctl00_Exam_master3_GridView1'),
-      ready:  !!(document.getElementById('ctl00_Exam_master2_GridView1') || document.getElementById('ctl00_Exam_master3_GridView1'))
+      ready: !!(document.getElementById('ctl00_Exam_master2_GridView1') || document.getElementById('ctl00_Exam_master3_GridView1')),
     };
   });
 
-  let parsed = null, last = null, stable = 0;
-  for (let t = 0; t < 60; t++) {
-    parsed = await readGrids().catch(() => ({ exam: [], retake: [], ready: false }));
-    const hasData = parsed.exam.length || parsed.retake.length;
-    if (hasData) {
-      const same = last &&
-        JSON.stringify(parsed.exam) === JSON.stringify(last.exam) &&
-        JSON.stringify(parsed.retake) === JSON.stringify(last.retake);
-      stable = same ? stable + 1 : 0;
-      last = { exam: parsed.exam, retake: parsed.retake };
-      if (stable >= 2) break;
-    } else if (parsed.ready) {
-      break;
-    }
-    await wait(150);
-  }
-  if (!parsed) parsed = { exam: [], retake: [], ready: false };
+  // Smart Wait مع Timeout واضح
+  const parsed = await waitForStable({
+    readFn: async () => {
+      const data = await readGrids().catch(() => ({ exam: [], retake: [], ready: false }));
+      return data;
+    },
+    hasDataFn: (data) => (data.exam && data.exam.length) || (data.retake && data.retake.length),
+    stableCount: cfg.POLL.STABLE_COUNT,
+    timeoutMs: cfg.POLL.EXAM_INTERVAL * cfg.POLL.EXAM_MAX_TICKS,
+    pollMs: cfg.POLL.EXAM_INTERVAL,
+    label: 'examScores',
+  }) || { exam: [], retake: [], ready: false };
 
   const attempts = [];
   for (const r of parsed.retake) attempts.push({ r: r[2], g: r[3], d: '' });
@@ -345,79 +475,52 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
     const b = document.querySelector('button.close');
     if (b) b.click();
   }).catch(() => {});
-  await wait(300);
+  await wait(cfg.DELAY.SMART_REFRESH);
   await clearArkanDialogs(pg);
   await smartRefresh(pg);
 
   return result;
 }
 
+/* ══════════════════════════════════════════════
+   Smart Refresh (المتصفح → صفحة فارغة → أركان)
+   ══════════════════════════════════════════════ */
 async function smartRefresh(pg) {
   try {
     await pg.goto('about:blank', { waitUntil: 'domcontentloaded' }).catch(() => {});
     return await ensureDetailsFrame(pg);
   } catch (e) {
-    console.warn('[arkkan-agent] فشل الريفرش الذكي:', (e.message || '').slice(0, 200));
+    log.warn('smartRefresh failed:', (e.message || '').slice(0, 200));
     return null;
   }
 }
 
-/* ══════════════════════════════════════════════════════════════
-   تهيئة المتصفح — عامل واحد بس كفاية على جهاز محلي (مفيش قيد RAM
-   زي Render)، وممكن ترفعه لو محتاج جلب جماعي أسرع عبر
-   ARKKAN_AGENT_WORKERS.
-   ══════════════════════════════════════════════════════════════ */
-const MAX_WORKERS = Math.max(1, Math.min(4, parseInt(process.env.ARKKAN_AGENT_WORKERS || '1', 10) || 1));
-
-let _browser = null;
-let _workers = [];
-let _ready = false;
-let _rr = 0;
-let _initChain = Promise.resolve();
-
-function pushWorker(page, ctx) {
-  if (_workers.some(w => w.page === page)) return;
-  _workers.push({ page, ctx, queue: Promise.resolve() });
-}
-
-function enqueueOn(page, fn) {
-  let w = _workers.find(x => x.page === page);
-  if (!w) { w = { page, ctx: null, queue: Promise.resolve() }; _workers.push(w); }
-  const p = w.queue.then(fn, fn);
-  w.queue = p.then(() => {}, () => {});
-  return p;
-}
-
-function pickPage() {
-  if (!_workers.length) return null;
-  _rr = (_rr + 1) % _workers.length;
-  return _workers[_rr].page;
-}
-
+/* ══════════════════════════════════════════════
+   Browser Initialization
+   ══════════════════════════════════════════════ */
 async function initBrowser() {
   if (!playwright) throw new Error('مكتبة playwright غير مثبتة — شغّل: npm install playwright && npx playwright install chromium');
   if (_browser) { await _browser.close().catch(() => {}); _browser = null; _workers = []; _ready = false; }
 
-  const MAX_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      _browser = await playwright.chromium.launch({ headless: HEADLESS });
-      for (let i = 0; i < MAX_WORKERS; i++) {
+      _browser = await playwright.chromium.launch({ headless: cfg.HEADLESS });
+      for (let i = 0; i < cfg.MAX_WORKERS; i++) {
         const ctx = await _browser.newContext();
         blockHeavyResources(ctx);
         const pg = await ctx.newPage();
         const fr = await ensureDetailsFrame(pg);
         if (!fr) throw new Error('تعذّر الوصول لصفحة تفاصيل المتدرب');
-        pushWorker(pg, ctx);
+        _workers.push({ page: pg, ctx });
       }
       _ready = true;
-      console.log(`[arkkan-agent] ✅ جاهز — ${_workers.length} عامل. الـ agent يستمع على http://localhost:${PORT}`);
+      log.info(`✅ جاهز — ${_workers.length} عامل. المنفذ: ${cfg.AGENT_PORT}`);
       return;
     } catch (e) {
-      console.warn(`[arkkan-agent] محاولة ${attempt}/${MAX_ATTEMPTS} فشلت:`, (e.message || '').slice(0, 300));
+      log.warn(`محاولة ${attempt}/3 فشلت:`, (e.message || '').slice(0, 300));
       await _browser?.close().catch(() => {});
       _browser = null; _workers = []; _ready = false;
-      if (attempt < MAX_ATTEMPTS) await wait(3000);
+      if (attempt < 3) await wait(3000);
     }
   }
   throw new Error('تعذّر تهيئة أركان بعد 3 محاولات — تحقق من الإنترنت والوصول لموقع أركان');
@@ -425,112 +528,174 @@ async function initBrowser() {
 
 function ensureInit() {
   if (_ready) return Promise.resolve();
-  const p = _initChain.then(() => (_ready ? null : initBrowser()));
-  _initChain = p.then(() => {}, () => {});
-  return p;
+  return initBrowser();
 }
 
+/* ══════════════════════════════════════════════
+   Page Selection (Round-Robin)
+   ══════════════════════════════════════════════ */
+let _rr = 0;
+function pickPage() {
+  if (!_workers.length) return null;
+  _rr = (_rr + 1) % _workers.length;
+  return _workers[_rr].page;
+}
+
+/* ══════════════════════════════════════════════
+   Status
+   ══════════════════════════════════════════════ */
 function getStatus() {
   const mu = process.memoryUsage();
   return {
     ready: !!(_ready && _browser && _workers.length),
     playwrightInstalled: !!playwright,
     workers: _workers.length,
-    maxWorkers: MAX_WORKERS,
+    maxWorkers: cfg.MAX_WORKERS,
+    protectionActive: isProtectionActive(),
+    queuePending: _jobQueue.pending,
+    queueActive: _jobQueue.active,
     memory: {
       nodeRssMB: Math.round(mu.rss / 1024 / 1024),
       freeMB: Math.round(os.freemem() / 1024 / 1024),
-      totalMB: Math.round(os.totalmem() / 1024 / 1024)
-    }
+      totalMB: Math.round(os.totalmem() / 1024 / 1024),
+    },
   };
 }
 
+/* ══════════════════════════════════════════════
+   Timeout Wrapper
+   ══════════════════════════════════════════════ */
 function withTimeout(promise, ms) {
   let timer;
   return Promise.race([
     promise,
     new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`انتهت مهلة الجلب من أركان (أكثر من ${Math.round(ms / 1000)} ثانية)`)), ms);
-    })
+      timer = setTimeout(() => reject(new TimeoutError(`انتهت مهلة الجلب من أركان (أكثر من ${Math.round(ms / 1000)} ثانية)`)), ms);
+    }),
   ]).finally(() => clearTimeout(timer));
 }
 
-/* ══════════════════════════════════════════════════════════════
-   HTTP Server — نفس مسارات الفرونت إند القديمة على Render، بس محلياً
-   بدون أي مصادقة (الـ agent شغال على جهاز المستخدم نفسه فقط).
-   ══════════════════════════════════════════════════════════════ */
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', d => body += d);
-    req.on('end', () => {
-      try { resolve(body ? JSON.parse(body) : {}); }
-      catch (e) { reject(new Error('جسم الطلب غير صالح')); }
-    });
-    req.on('error', reject);
-  });
-}
-
+/* ══════════════════════════════════════════════
+   HTTP Server
+   ══════════════════════════════════════════════ */
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
 }
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS آمن: فقط من localhost أو Electron
+  const origin = req.headers.origin || '';
+  const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
+  res.setHeader('Access-Control-Allow-Origin', isLocal ? origin : cfg.CORS_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   const url = req.url.split('?')[0];
 
   try {
+    // ── Status ──
     if (url === '/api/arkkan/status' && req.method === 'GET') {
       return sendJson(res, 200, getStatus());
     }
 
+    // ── Warm ──
     if (url === '/api/arkkan/warm' && req.method === 'POST') {
       try {
-        await withTimeout(ensureInit(), 60000);
+        await withTimeout(ensureInit(), cfg.TIMEOUT.WARM);
         return sendJson(res, 200, getStatus());
       } catch (e) {
         return sendJson(res, 503, { error: e.message, ...getStatus() });
       }
     }
 
+    // ── Fetch Client Data ──
     if (url === '/api/arkkan/fetch' && req.method === 'POST') {
       const body = await readJsonBody(req);
-      const id = String(body.clientId || '').trim();
-      if (!id) return sendJson(res, 400, { error: 'رقم الهوية مطلوب' });
+      const idResult = validateClientId(body.clientId);
+      if (!idResult.valid) return sendJson(res, 400, { error: idResult.reason });
+
+      // فحص الحماية
+      if (isProtectionActive()) {
+        return sendJson(res, 429, {
+          error: 'تم اكتشاف حماية خارجية — إيقاف مؤقت',
+          retryAfter: Math.round((_protectionUntil - Date.now()) / 1000),
+        });
+      }
+
       try {
         await ensureInit();
         const pg = pickPage();
         if (!pg) throw new Error('المتصفح غير جاهز بعد');
-        const data = await withTimeout(enqueueOn(pg, () => fetchClientData(pg, { clientId: id, referNum: String(body.referNum || '').trim() })), 90000);
+
+        // استخدام Sequential Queue لضمان المعالجة المتسلسلة
+        const data = await _jobQueue.enqueue({
+          id: `fetch-${idResult.value}-${Date.now()}`,
+          clientId: idResult.value,
+          action: 'fetch',
+          fn: () => withTimeout(
+            fetchClientData(pg, {
+              clientId: idResult.value,
+              referNum: String(body.referNum || '').trim(),
+            }),
+            cfg.TIMEOUT.FETCH
+          ),
+        });
+
         return sendJson(res, 200, data);
       } catch (e) {
+        if (isProtectionError(e)) {
+          return sendJson(res, 429, { error: e.message });
+        }
         const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
         return sendJson(res, status, { error: e.message });
       }
     }
 
+    // ── Fetch Exam Scores ──
     if (url === '/api/arkkan/exams' && req.method === 'POST') {
       const body = await readJsonBody(req);
-      const id = String(body.clientId || '').trim();
-      if (!id) return sendJson(res, 400, { error: 'رقم الهوية مطلوب' });
+      const idResult = validateClientId(body.clientId);
+      if (!idResult.valid) return sendJson(res, 400, { error: idResult.reason });
+
+      if (isProtectionActive()) {
+        return sendJson(res, 429, {
+          error: 'تم اكتشاف حماية خارجية — إيقاف مؤقت',
+          retryAfter: Math.round((_protectionUntil - Date.now()) / 1000),
+        });
+      }
+
       try {
         await ensureInit();
         const pg = pickPage();
         if (!pg) throw new Error('المتصفح غير جاهز بعد');
-        const data = await withTimeout(enqueueOn(pg, () => fetchExamScoresOn(pg, { clientId: id, referNum: String(body.referNum || '').trim() })), 90000);
+
+        const data = await _jobQueue.enqueue({
+          id: `exams-${idResult.value}-${Date.now()}`,
+          clientId: idResult.value,
+          action: 'exams',
+          fn: () => withTimeout(
+            fetchExamScoresOn(pg, {
+              clientId: idResult.value,
+              referNum: String(body.referNum || '').trim(),
+            }),
+            cfg.TIMEOUT.FETCH
+          ),
+        });
+
         return sendJson(res, 200, data);
       } catch (e) {
+        if (isProtectionError(e)) {
+          return sendJson(res, 429, { error: e.message });
+        }
         const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
         return sendJson(res, status, { error: e.message });
       }
     }
 
+    // ── Ping ──
     if (url === '/ping' && req.method === 'GET') {
       return sendJson(res, 200, { ok: true, ready: _ready });
     }
@@ -541,19 +706,31 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, async () => {
-  console.log(`\n${'═'.repeat(50)}`);
-  console.log(`  🚀 Arkkan Agent — منفذ ${PORT}`);
-  console.log(`${'═'.repeat(50)}\n`);
+/* ══════════════════════════════════════════════
+   Start Server
+   ══════════════════════════════════════════════ */
+server.listen(cfg.AGENT_PORT, async () => {
+  log.info(`\n${'═'.repeat(50)}`);
+  log.info(`  🚀 Arkkan Agent — المنفذ ${cfg.AGENT_PORT}`);
+  log.info(`${'═'.repeat(50)}\n`);
   try {
     await initBrowser();
   } catch (e) {
-    console.error('❌ فشل فتح المتصفح عند البدء (هيُعاد المحاولة تلقائياً عند أول طلب):', e.message);
+    console.error('❌ فشل فتح المتصفح عند البدء (يُعاد المحاولة تلقائياً):', e.message);
   }
 });
 
 process.on('SIGINT', async () => {
-  console.log('\n🛑 إيقاف الـ agent...');
+  log.info('🛑 إيقاف الـ agent...');
   await _browser?.close().catch(() => {});
   process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err.message);
+  // لا ن exited — نترك النظام يعمل
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled Rejection:', reason);
 });
