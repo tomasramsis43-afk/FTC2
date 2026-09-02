@@ -230,47 +230,194 @@ async function _fetchGoogleSheetCsv(url){
   if(!res.ok) throw new Error(`تعذّر الجلب (HTTP ${res.status})`);
   return await res.text();
 }
+// يحلل نص CSV ويعيد {colMap, dataRows} أو {error}
+function _parseGSheetCsvText(csv){
+  const lines = String(csv||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim()!=='');
+  if(lines.length < 2) return {error:'الشيت فارغ أو لا يحتوي بيانات'};
+  const header = _parseCsvLine(lines[0]).map(_normHeader);
+  const colMap = {name:-1,id:-1,phone:-1,nationality:-1,paid:-1,channel:-1,courseType:-1,courseNum:-1};
+  header.forEach((h,i)=>{ if(colMap[h]!==undefined && colMap[h]===-1) colMap[h]=i; });
+  const dataRows = lines.slice(1).map(_parseCsvLine).filter(r=>r.some(c=>c!==''));
+  if(!dataRows.length) return {error:'لا توجد صفوف بيانات'};
+  return {colMap, dataRows};
+}
+function _sheetValue(r, colMap, key){ const i = colMap[key]; return (i>=0 && i<r.length) ? r[i] : ''; }
+// يحوّل صفاً من الشيت إلى كائن عميل جاهز للإضافة — نفس بناء كائن الإضافة المتعددة
+function _buildClientFromSheetRow(r, colMap){
+  return {
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
+    clientId: _sheetValue(r,colMap,'id'),
+    name: _sheetValue(r,colMap,'name'),
+    phone: _sheetValue(r,colMap,'phone'),
+    nationality: _sheetValue(r,colMap,'nationality'),
+    clientType: 'center',
+    companyName: '', creditDays: '',
+    clientTaxNumber: '',
+    courseType: _sheetValue(r,colMap,'courseType'),
+    courseNumber: _sheetValue(r,colMap,'courseNum'),
+    referNum: '', invoice: '', bagInvoice: '',
+    date: todayISO(),
+    coursePrice: num(settings.coursePrice),
+    bagSource: 'buy', bagPrice: num(settings.bagPrice),
+    bagStatus: 'pending',
+    discount: 0,
+    paid: num(_sheetValue(r,colMap,'paid')),
+    channel: _sheetValue(r,colMap,'channel'),
+    networkInvoice: '', paid2: 0, channel2: '', networkInvoice2: '',
+    stage: 'جديد', cancelled: false,
+    notes: ''
+  };
+}
+// يملأ جدول الإضافة المتعددة بصفوف الشيت (للاستخدام اليدوي داخل النافذة)
+function _fillBulkAddTable(colMap, dataRows, mode){
+  const tbody = $('#bulk-add-table-body');
+  if(mode==='fill') tbody.innerHTML = '';
+  dataRows.forEach(r=>{
+    if(mode!=='fill' && !r.some(v=>v.trim?.())) return;
+    tbody.insertAdjacentHTML('beforeend', bulkAddRowHtml(++bulkAddRowSeq));
+    const row = tbody.lastElementChild;
+    row.querySelector('.ba-id').value = _sheetValue(r,colMap,'id');
+    row.querySelector('.ba-name').value = _sheetValue(r,colMap,'name');
+    row.querySelector('.ba-phone').value = _sheetValue(r,colMap,'phone');
+    setBulkSelectFuzzy(row.querySelector('.ba-nat'), _sheetValue(r,colMap,'nationality'));
+    setBulkSelectFuzzy(row.querySelector('.ba-course'), _sheetValue(r,colMap,'courseType'));
+    row.querySelector('.ba-coursenum').value = _sheetValue(r,colMap,'courseNum');
+    const paid = num(_sheetValue(r,colMap,'paid'));
+    if(paid>0) row.querySelector('.ba-paid').value = paid;
+    setBulkSelectFuzzy(row.querySelector('.ba-channel'), _sheetValue(r,colMap,'channel'));
+  });
+}
+// يضيف فعلياً العملاء الجدد (الذين رقم هويتهم غير موجود أصلافياً) عبر نفس مسار حفظ الإضافة المتعددة.
+// يرجع {added, skipped}.
+async function _importSheetClients(colMap, dataRows){
+  const added = [], skipped = [];
+  const seen = new Set();
+  for(const r of dataRows){
+    const clientId = _sheetValue(r,colMap,'id').trim();
+    const name = _sheetValue(r,colMap,'name').trim();
+    if(!/^\d{10}$/.test(clientId) || !name) continue;
+    if(clients.some(c=>c.clientId===clientId) || seen.has(clientId)){ skipped.push(clientId); continue; }
+    seen.add(clientId);
+    added.push(_buildClientFromSheetRow(r, colMap));
+  }
+  if(!added.length) return {added, skipped};
+  const allIds = await fetchAllClientIds(8000).catch(()=>null);
+  if(allIds){
+    const hashes = await Promise.all(added.map(c=>sha256Hex(c.clientId).catch(()=>null)));
+    const newly = added.filter((c,i)=>!(hashes[i] && allIds.has(hashes[i])));
+    const dupIds = added.filter((c,i)=>hashes[i] && allIds.has(hashes[i])).map(c=>c.clientId);
+    dupIds.forEach(id=>skipped.push(id));
+    added.splice(0, added.length); added.push(...newly);
+  }
+  if(!added.length) return {added, skipped};
+  snapshotState(`إضافة ${added.length} عميل من جوجل شيت تلقائياً`);
+  added.forEach(c=>{ clients.push(c); syncClientLedgerEntry(c); });
+  if(!_clientsSyncBaseline){
+    try{
+      const conflictIds = await bulkUploadClientRecords(added);
+      const conflictSet = new Set(conflictIds);
+      if(!_clientsSyncBaseline) _clientsSyncBaseline = new Map();
+      for(const c of added){ if(!conflictSet.has(c.id)) _clientsSyncBaseline.set(c.id, JSON.stringify(c)); }
+    }catch(e){}
+    if(typeof _scheduleClientsSnapPersist==='function') _scheduleClientsSnapPersist();
+  }else{
+    await saveClients();
+  }
+  return {added, skipped};
+}
 $('#btn-gsheet-fetch').addEventListener('click', async ()=>{
   const urlInput = $('#gsheet-csv-url');
   const url = (urlInput.value||'').trim();
   if(!url){ showToast('أدخل رابط جوجل شيت منشور كـ CSV أولاً'); return; }
-  const mode = $('#gsheet-csv-mode').value;
+  const mode = 'fill';
   const btn = $('#btn-gsheet-fetch');
   const orig = btn.textContent; btn.disabled = true; btn.textContent = 'جارٍ الجلب...';
   try{
     const csv = await _fetchGoogleSheetCsv(url);
-    const rows = csv.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim()!=='');
-    if(rows.length < 2){ showToast('الشيت فارغ أو لا يحتوي بيانات'); return; }
-    const header = _parseCsvLine(rows[0]).map(_normHeader);
-    // خريطة أعمدة بنوع الشيت الحالي (الاسم، ر.هوية، هاتف، جنسية، المدفوع، طريقة الدفع)
-    const colMap = {name:-1,id:-1,phone:-1,nationality:-1,paid:-1,channel:-1,courseType:-1,courseNum:-1};
-    header.forEach((h,i)=>{ if(colMap[h]!==undefined && colMap[h]===-1) colMap[h]=i; });
-    const dataRows = rows.slice(1).map(_parseCsvLine).filter(r=>r.some(c=>c!==''));
-    if(!dataRows.length){ showToast('لا توجد صفوف بيانات'); return; }
-    const tbody = $('#bulk-add-table-body');
-    if(mode==='fill') tbody.innerHTML = '';
-    dataRows.forEach(r=>{
-      const rowId = ++bulkAddRowSeq;
-      tbody.insertAdjacentHTML('beforeend', bulkAddRowHtml(rowId));
-      const row = tbody.lastElementChild;
-      const v = idx => idx>=0 && idx<r.length ? r[idx] : '';
-      row.querySelector('.ba-id').value = v(colMap.id);
-      row.querySelector('.ba-name').value = v(colMap.name);
-      row.querySelector('.ba-phone').value = v(colMap.phone);
-      setBulkSelectFuzzy(row.querySelector('.ba-nat'), v(colMap.nationality));
-      setBulkSelectFuzzy(row.querySelector('.ba-course'), v(colMap.courseType));
-      row.querySelector('.ba-coursenum').value = v(colMap.courseNum);
-      const paid = num(v(colMap.paid));
-      if(paid>0) row.querySelector('.ba-paid').value = paid;
-      setBulkSelectFuzzy(row.querySelector('.ba-channel'), v(colMap.channel));
-    });
-    showToast(`تم جلب ${dataRows.length} عميل من جوجل شيت`);
+    const parsed = _parseGSheetCsvText(csv);
+    if(parsed.error){ showToast(parsed.error); return; }
+    _fillBulkAddTable(parsed.colMap, parsed.dataRows, mode);
+    showToast(`تم جلب ${parsed.dataRows.length} عميل من جوجل شيت (جاهزون للحفظ)`);
   }catch(err){
     showToast('فشل جلب الشيت: ' + (err.message || err));
   }finally{
     btn.disabled = false; btn.textContent = orig;
   }
 });
+
+/* ---------------- الجلب التلقائي الدوري للعملاء من جوجل شيت ----------------
+   عند تفعيل الإعداد (settings.gsheetSync) يجلب البرنامج الشيت كل بضع دقائق ويضيف
+   تلقائياً أي عملاء جدد (حسب رقم الهوية) دون تدخل — ويحفظهم فوراً عبر نفس مسار
+   الإضافة المتعددة. لا يمسّ العملاء الموجودين ولا يعدّل بياناتهم. */
+let _gsheetAutoInterval = null;
+function _loadGSheetSyncCfg(){
+  const s = (settings && settings.gsheetSync) || {};
+  return { enabled: !!s.enabled, url: String(s.url||'').trim(), intervalMin: Math.max(1, Number(s.intervalMin)||2) };
+}
+async function _runGSheetAutoSyncOnce(){
+  const cfg = _loadGSheetSyncCfg();
+  if(!cfg.enabled || !cfg.url) return;
+  if(typeof clients === 'undefined' || !Array.isArray(clients) || !clients.length) return;
+  try{
+    const csv = await _fetchGoogleSheetCsv(cfg.url);
+    const parsed = _parseGSheetCsvText(csv);
+    if(parsed.error) return;
+    const { added } = await _importSheetClients(parsed.colMap, parsed.dataRows);
+    if(added.length){
+      renderTable && renderTable(); renderDashboard && renderDashboard();
+      refreshFilterOptions && refreshFilterOptions(); renderCourses && renderCourses();
+      showToast(`تمت إضافة ${added.length} عميل جديد تلقائياً من جوجل شيت`);
+    }
+  }catch(e){
+    // إخفاء أخطاء الجلب الدوري — سنعيد المحاولة في الدورة القادمة
+  }
+}
+function _startGSheetAutoSync(){
+  if(_gsheetAutoInterval) clearInterval(_gsheetAutoInterval);
+  _gsheetAutoInterval = setInterval(_runGSheetAutoSyncOnce, 60000 * _loadGSheetSyncCfg().intervalMin);
+  _runGSheetAutoSyncOnce();
+}
+// بدء الجلب التلقائي عند اكتمال تحميل بيانات العملاء
+const _startGsAuto = ()=>_startGSheetAutoSync();
+window.__startGSheetAutoSync = _startGSheetAutoSync;
+// نستمع لبدء محاولة المزامنة الأولى الحقيقية (يُطلقها نظام التحميل) — إن لم يتوفر نبدأ بأمان لاحقاً
+setTimeout(()=>{ try{ _startGsAuto(); }catch(e){} }, 3000);
+
+/* ---------------- إدارة إعدادات الجلب التلقائي (حفظ/تحميل/عرض الحالة) ---------------- */
+function _refreshGSheetStatus(){
+  const el = $('#gsheet-status');
+  if(!el) return;
+  const cfg = _loadGSheetSyncCfg();
+  el.textContent = cfg.enabled && cfg.url
+    ? `التلقائي مفعّل (كل ${cfg.intervalMin} دقيقة)`
+    : 'التلقائي غير مفعّل';
+}
+function _loadGSheetCfgIntoUI(){
+  const cfg = _loadGSheetSyncCfg();
+  const urlEl = $('#gsheet-csv-url');
+  if(urlEl && cfg.url) urlEl.value = cfg.url;
+  const en = $('#gsheet-auto-enabled'); if(en) en.checked = !!cfg.enabled;
+  const iv = $('#gsheet-auto-interval'); if(iv) iv.value = cfg.intervalMin;
+  _refreshGSheetStatus();
+}
+$('#btn-gsheet-save-cfg').addEventListener('click', async ()=>{
+  const cfg = _loadGSheetSyncCfg();
+  cfg.url = ($('#gsheet-csv-url').value||'').trim();
+  if(!cfg.url){ showToast('أدخل رابط جوجل شيت منشور كـ CSV أولاً'); return; }
+  cfg.enabled = !!$('#gsheet-auto-enabled').checked;
+  cfg.intervalMin = Math.max(1, Number($('#gsheet-auto-interval').value)||2);
+  settings.gsheetSync = cfg;
+  await saveSettings();
+  _startGSheetAutoSync();
+  _refreshGSheetStatus();
+  showToast(cfg.enabled ? `تم تفعيل الجلب التلقائي كل ${cfg.intervalMin} دقيقة` : 'تم تعطيل الجلب التلقائي');
+});
+// تزويد واجهة الإعدادات بالقيم الحالية عند فتح نافذة الإضافة المتعددة
+const _origOpenBulkAdd = openBulkAddModal;
+openBulkAddModal = function(){
+  _origOpenBulkAdd.apply(this, arguments);
+  _loadGSheetCfgIntoUI();
+};
 
 /* ---------------- تحديث/استيراد بيانات العملاء دفعة واحدة (جدول داخل البرنامج) ----------------
    يحل محل الاستيراد القديم عبر ملفات Excel (البيانات الرئيسية + الخصم + نوع الدورة + الأسماء).

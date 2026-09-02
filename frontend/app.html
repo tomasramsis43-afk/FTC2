@@ -2513,11 +2513,14 @@
     <div class="hint hint-info" style="margin:0 0 10px;">أدخل بيانات كل عميل في صف مستقل ثم اضغط "حفظ الكل". الحقول المميزة بـ * إلزامية (رقم الهوية 10 خانات بالضبط، ويجب ألا يكون مكرراً). يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. كما يمكنك إدخال رابط جوجل شيت منشوراً كـ CSV وسيُجلَب تلقائياً إلى الجدول. العملاء المُضافون هنا يُسجَّلون كـ"عميل مركز" افتراضياً بإعدادات الحقيبة الافتراضية — لأي بيانات إضافية (شركات، حقيبة خاصة، دفعة مقسّمة...) استخدم "تعديل" على العميل بعد الحفظ.</div>
     <div id="gsheet-import-bar" style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
       <input type="text" id="gsheet-csv-url" placeholder="رابط جوجل شيت منشور كـ CSV: .../export?format=csv" style="flex:1; min-width:280px; padding:8px 10px; border:1px solid var(--border,#ccc); border-radius:6px; font-size:13px;">
-      <select id="gsheet-csv-mode" style="padding:8px 10px; border:1px solid var(--border,#ccc); border-radius:6px; font-size:13px;">
-        <option value="fill">ملء الجدول (استبدال الصفوف)</option>
-        <option value="append">إضافة صفوف</option>
-      </select>
-      <button type="button" class="btn btn-primary" id="btn-gsheet-fetch">جلب من جوجل شيت</button>
+      <button type="button" class="btn btn-primary" id="btn-gsheet-fetch">جلب الآن</button>
+      <label style="display:flex; align-items:center; gap:5px; font-size:13px; white-space:nowrap;">
+        <input type="checkbox" id="gsheet-auto-enabled" style="width:16px;height:16px;"> جلب تلقائي كل
+      </label>
+      <input type="number" id="gsheet-auto-interval" min="1" value="2" style="width:60px; padding:8px 6px; border:1px solid var(--border,#ccc); border-radius:6px; font-size:13px;">
+      <span style="font-size:13px;">دقيقة</span>
+      <button type="button" class="btn btn-ghost" id="btn-gsheet-save-cfg">حفظ إعدادات التلقائي</button>
+      <span id="gsheet-status" style="font-size:12px; opacity:.7;"></span>
     </div>
     <div class="table-scroll" style="max-height:52vh;">
       <table>
