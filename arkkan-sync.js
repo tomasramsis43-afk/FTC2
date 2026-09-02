@@ -28,6 +28,17 @@ const DELAY_BETWEEN = 3000;   // ms بين كل عميل وتاني
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
+// ── تاريخ أركان (2026/07/21 أو 21/07/2026) → YYYY-MM-DD القياسية التي يتطلبها
+//    input type=date في شيت فواتير الدورات (وإلا يظهر الحقل فارغاً رغم وجود قيمة) ──
+function toIsoDate(v) {
+  const s = String(v || '').trim();
+  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  return s;
+}
+
 // ── حقول الـ client اللي نعتبرها "ناقصة" لو فاضية ──
 function isMissing(c) {
   return !c.invoice          ||
@@ -232,11 +243,11 @@ async function fetchFromArkkan(pg, ctx, item) {
         const patch = {};
         if (!c.invoice          && fetched.invoice)        patch.invoice          = fetched.invoice;
         if (!c.courseNumber     && fetched.courseNumber)   patch.courseNumber     = fetched.courseNumber;
-        if (!c.receiptIssueDate && fetched.date)           patch.receiptIssueDate = fetched.date; // تاريخ إصدار الفاتورة من أركان → شيت فواتير الدورات
+        if (!c.receiptIssueDate && fetched.date)           patch.receiptIssueDate = toIsoDate(fetched.date); // تاريخ إصدار الفاتورة من أركان → شيت فواتير الدورات
         if (!c.coursePrice      && fetched.coursePrice)    patch.coursePrice      = parseFloat(fetched.coursePrice) || fetched.coursePrice;
         if (!c.bagInvoice       && fetched.bagInvoice)     patch.bagInvoice       = fetched.bagInvoice;
-        if (!c.bagPurchaseDate  && fetched.bagPurchaseDate)patch.bagPurchaseDate  = fetched.bagPurchaseDate;
-        if (!c.startDate        && fetched.startDate)      patch.startDate        = fetched.startDate;
+        if (!c.bagPurchaseDate  && fetched.bagPurchaseDate)patch.bagPurchaseDate  = toIsoDate(fetched.bagPurchaseDate);
+        if (!c.startDate        && fetched.startDate)      patch.startDate        = toIsoDate(fetched.startDate);
 
         if (Object.keys(patch).length === 0) {
           console.log(`   ⚠️  لم تُجلب أي بيانات من Arkkan`);

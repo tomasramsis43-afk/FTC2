@@ -61,13 +61,17 @@ function clientEligibleForArkkan(c) {
   return !!(c.clientId && String(c.referNum || '').trim());
 }
 
-/* تاريخ أركان (2026/07/21) → صيغة input type=date (2026-07-21) */
+/* تاريخ أركان (2026/07/21 أو 21/07/2026) → صيغة input type=date (2026-07-21).
+   يحوّل أي صيغة واردة من أركان إلى YYYY-MM-DD القياسية — وبدونها يظهر حقل
+   "تاريخ صدور الفاتورة" (input type=date) فارغاً رغم وجود قيمة. */
 function arkkanToInputDate(v) {
   if (!v) return '';
-  const m = String(v).trim().match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
-  if (!m) return v;
-  const [, y, mo, d] = m;
-  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
+  return s;
 }
 
 async function arkkanCheckReady() {
@@ -114,7 +118,7 @@ function arkkanPatchFromData(c, data){
   if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
-  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
+  if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = arkkanToInputDate(data.bagPurchaseDate);
   // قيمة الفاتورة: receiptActualValue (شيت فواتير الدورات) يُحدَّث دائماً من القيمة الفعلية
   // بالإيصال، لأن هذا هو الغرض منه أصلاً — مقارنته بـ centerIncome (coursePrice - discount)
   // لاكتشاف أي فرق بين المسجَّل بالنظام والمكتوب فعلياً بالإيصال (راجع فلتر "مطابق/مختلف" فى
@@ -132,14 +136,16 @@ function arkkanPatchFromData(c, data){
   // في شيت فواتير الدورات (receiptIssueDate) تحديداً، وهو مصدر عمود المزامنة الوحيد
   // (لا نقرأ من شيت العملاء c.date). يُملأ فقط لو كان غير موجود حتى لا نمس تاريخاً
   // مسجّلاً يدوياً مسبقاً، وc.date (تاريخ التسجيل/الاستيراد) يبقى كما هو دون تغيير.
+  // يُطبيع بصيغة YYYY-MM-DD (arkkanToInputDate) وإلا يُخزَّن بصيغة أركان
+  // (2026/07/21) فيظهر حقل التاريخ فارغاً في شيت فواتير الدورات (input type=date).
   if (!c.receiptIssueDate && data.date) {
-    patch.receiptIssueDate = data.date;
+    patch.receiptIssueDate = arkkanToInputDate(data.date);
   }
   // تاريخ الدورة: نستعمل تاريخ بداية الدورة من أركان (data.startDate) أولاً؛
   // ولو غير متاح نرجّع للتاريخ المحلي (جدول الدورات / expectedCourseDate).
   if (!c.startDate) {
     const sd = data.startDate || arkkanCourseDate(c);
-    if (sd) patch.startDate = sd;
+    if (sd) patch.startDate = arkkanToInputDate(sd);
   }
   return patch;
 }
