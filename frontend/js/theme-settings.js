@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS = {
   autoBackupIntervalDays: 7,
   lastAutoBackupAt: null,
   gsheetSync: { enabled: false, url: '', intervalMin: 2 },
+  gsheetWorkflow: { sheets: [], pending: [], rejected: [] },
   lowBalanceThreshold: 5000,
   bagOverdueDays: 14,
   monthlyReportWhatsapp: '',

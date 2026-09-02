@@ -247,6 +247,7 @@
           <button class="btn btn-ghost btn-sm" id="btn-refnum-bulk" data-i18n="refNumBulkImport">📋 استيراد الرقم المرجعي (جدول)</button>
           <button class="btn btn-ghost btn-sm" id="btn-compworkers-bulk" data-i18n="compWorkersBulkImport">📋 استيراد عمال الشركات (جدول)</button>
           <button class="btn btn-ghost btn-sm" id="btn-bulk-add" data-i18n="bulkAddClients">+ إضافة عدة عملاء</button>
+          <button class="btn btn-ghost btn-sm" id="btn-gsheet-config-menu">🌐 شيتات جوجل (الاعتماد / الرفض)</button>
           <button class="btn btn-ghost btn-sm icon-btn" id="btn-refresh-clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M20 11A8 8 0 1 0 18.5 16"></path><path d="M20 5v6h-6"></path></svg><span data-i18n="refreshSheet">تحديث الشيت</span></button>
           <hr>
           <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table" data-i18n="bulkDeleteTable">🗑 حذف عملاء (جدول)</button>
@@ -328,6 +329,50 @@
         <span class="mono" id="table-page-current" style="font-size:12.5px; padding:0 6px;">صفحة 1 / 8</span>
         <button class="btn btn-ghost btn-sm" id="table-page-next" data-i18n="nextPage">التالية ›</button>
         <button class="btn btn-ghost btn-sm" id="table-page-last" data-i18n="lastPage">الأخيرة »</button>
+      </div>
+    </div>
+
+    <!-- اعتماد / رفض شيتات جوجل (تحت صندوق العملاء) -->
+    <div class="panel" id="gsheet-workflow-panels" style="margin-top:14px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:15px;">🌐 شيتات جوجل — إدارة الاعتماد والرفض</h3>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-gsheet-config">⚙️ إدارة الشيتات</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-gsheet-fetch-all">⬇️ جلب الآن</button>
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:10px; border-bottom:1px solid var(--border,#ddd);">
+        <button type="button" class="btn btn-ghost btn-sm gsheet-tab-btn active" data-gsheet-tab="pending" id="gsheet-tab-pending">📥 بانتظار الاعتماد <span class="mono" id="gsheet-pending-count" style="background:var(--badge-bg,#eee);border-radius:20px;padding:0 8px;"></span></button>
+        <button type="button" class="btn btn-ghost btn-sm gsheet-tab-btn" data-gsheet-tab="rejected" id="gsheet-tab-rejected">🗄️ مرفوض الشيتات <span class="mono" id="gsheet-rejected-count" style="background:var(--badge-bg,#eee);border-radius:20px;padding:0 8px;"></span></button>
+      </div>
+      <div class="gsheet-tab-pane" data-gsheet-pane="pending">
+        <div class="hint hint-info" style="margin-bottom:10px;">الصفوف الجديدة المُجلَبة من شيتات جوجل تظهر هنا. اضغط «اعتماد» لنقل العميل تلقائياً إلى شيت العملاء مع ترحيل المدفوع إلى شيت الحركات المالية، أو «رفض» لتحريكه إلى تبويب المرفوض (لا يُحذف من الشيت ولا يعود تلقائياً). يمكنك تعديل بيانات أي صف قبل الاعتماد.</div>
+        <div class="table-scroll" style="max-height:48vh;">
+          <table>
+            <thead><tr>
+              <th>اسم الشيت</th><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>الدورة</th><th>المدفوع</th><th>طريقة الدفع</th><th>التاريخ</th><th></th>
+            </tr></thead>
+            <tbody id="gsheet-pending-body"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="gsheet-pending-empty" style="display:none;">
+          <div class="big">📥</div>
+          <span>لا توجد صفوف بانتظار الاعتماد من الشيتات حالياً.</span>
+        </div>
+      </div>
+      <div class="gsheet-tab-pane" data-gsheet-pane="rejected" style="display:none;">
+        <div class="hint hint-info" style="margin-bottom:10px;">الصفوف المرفوضة من الشيتات. يمكنك «استرجاع» أي صف لإعادته لتبويب الاعتماد (وتعديله ثم اعتماده) أو «اعتماد» مباشرة.</div>
+        <div class="table-scroll" style="max-height:48vh;">
+          <table>
+            <thead><tr>
+              <th>اسم الشيت</th><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الجنسية</th><th>الدورة</th><th>المدفوع</th><th>طريقة الدفع</th><th>التاريخ</th><th></th>
+            </tr></thead>
+            <tbody id="gsheet-rejected-body"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="gsheet-rejected-empty" style="display:none;">
+          <div class="big">🗄️</div>
+          <span>لا توجد صفوف مرفوضة حالياً.</span>
+        </div>
       </div>
     </div>
   </section>
@@ -2510,18 +2555,7 @@
 <div class="overlay drawer-overlay" id="bulk-add-overlay">
   <div class="modal" style="max-width:1400px;">
     <h2>إضافة عدة عملاء دفعة واحدة</h2>
-    <div class="hint hint-info" style="margin:0 0 10px;">أدخل بيانات كل عميل في صف مستقل ثم اضغط "حفظ الكل". الحقول المميزة بـ * إلزامية (رقم الهوية 10 خانات بالضبط، ويجب ألا يكون مكرراً). يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. كما يمكنك إدخال رابط جوجل شيت منشوراً كـ CSV وسيُجلَب تلقائياً إلى الجدول. العملاء المُضافون هنا يُسجَّلون كـ"عميل مركز" افتراضياً بإعدادات الحقيبة الافتراضية — لأي بيانات إضافية (شركات، حقيبة خاصة، دفعة مقسّمة...) استخدم "تعديل" على العميل بعد الحفظ.</div>
-    <div id="gsheet-import-bar" style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-      <input type="text" id="gsheet-csv-url" placeholder="رابط جوجل شيت منشور كـ CSV: .../export?format=csv" style="flex:1; min-width:280px; padding:8px 10px; border:1px solid var(--border,#ccc); border-radius:6px; font-size:13px;">
-      <button type="button" class="btn btn-primary" id="btn-gsheet-fetch">جلب الآن</button>
-      <label style="display:flex; align-items:center; gap:5px; font-size:13px; white-space:nowrap;">
-        <input type="checkbox" id="gsheet-auto-enabled" style="width:16px;height:16px;"> جلب تلقائي كل
-      </label>
-      <input type="number" id="gsheet-auto-interval" min="1" value="2" style="width:60px; padding:8px 6px; border:1px solid var(--border,#ccc); border-radius:6px; font-size:13px;">
-      <span style="font-size:13px;">دقيقة</span>
-      <button type="button" class="btn btn-ghost" id="btn-gsheet-save-cfg">حفظ إعدادات التلقائي</button>
-      <span id="gsheet-status" style="font-size:12px; opacity:.7;"></span>
-    </div>
+    <div class="hint hint-info" style="margin:0 0 10px;">أدخل بيانات كل عميل في صف مستقل ثم اضغط "حفظ الكل". الحقول المميزة بـ * إلزامية (رقم الهوية 10 خانات بالضبط، ويجب ألا يكون مكرراً). يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. العملاء المُضافون هنا يُسجَّلون كـ"عميل مركز" افتراضياً بإعدادات الحقيبة الافتراضية — لأي بيانات إضافية (شركات، حقيبة خاصة، دفعة مقسّمة...) استخدم "تعديل" على العميل بعد الحفظ.</div>
     <div class="table-scroll" style="max-height:52vh;">
       <table>
         <thead>
@@ -2550,6 +2584,34 @@
         <button type="button" class="btn btn-ghost" id="btn-bulk-add-cancel">إلغاء</button>
         <button type="button" class="btn btn-primary" id="btn-bulk-add-save">حفظ الكل</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- إدارة شيتات جوجل -->
+<div class="overlay drawer-overlay" id="gsheet-config-overlay">
+  <div class="modal" style="max-width:920px;">
+    <h2>إدارة شيتات جوجل</h2>
+    <div class="hint hint-info" style="margin:0 0 10px;">أضف روابط شيتات جوجل المنشورة كـ CSV. كل شيت يُجلَب دورياً (إن كان مفعّلاً) وتظهر صفوفه الجديدة في تبويب «بانتظار الاعتماد» أسفل صندوق العملاء مع اسم شيّته. الصفوف التي فيها رقم هوية فقط تُعامل كمرشّحين للاعتماد.</div>
+    <div data-gsheet-config-rows></div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-gsheet-add-row">+ إضافة شيت</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn btn-ghost" id="btn-gsheet-config-cancel">إغلاق</button>
+        <button type="button" class="btn btn-primary" id="btn-gsheet-config-save">حفظ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- تعديل بيانات مرشّح قبل الاعتماد -->
+<div class="overlay drawer-overlay" id="gsheet-edit-overlay">
+  <div class="modal" style="max-width:640px;">
+    <h2>تعديل العميل قبل الاعتماد</h2>
+    <div id="gsheet-edit-fields"></div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost" id="btn-gsheet-edit-cancel">إلغاء</button>
+      <button type="button" class="btn btn-primary" id="btn-gsheet-edit-save">حفظ</button>
     </div>
   </div>
 </div>
@@ -3251,6 +3313,7 @@
 <script defer src="js/module-invoices.js"></script>
 <script defer src="js/module-bags.js"></script>
 <script defer src="js/module-finance.js"></script>
+<script defer src="js/gsheet-workflow.js"></script>
 <script defer src="js/module-reports.js"></script>
 <script defer src="js/module-accounting.js"></script>
 <script defer src="js/module-courses.js"></script>
