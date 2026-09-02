@@ -4,6 +4,7 @@ const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
+const https = require('https'); // مطلوب لراوت /gsheet-csv (بروكسي جلب شيتات جوجل) — كان ناقصاً فيسبب ReferenceError عند كل محاولة جلب
 const { pool, ensureSchema } = require('./db');
 const recordsRepo = require('./repo/records.repo');
 const authRepo = require('./repo/auth.repo');
