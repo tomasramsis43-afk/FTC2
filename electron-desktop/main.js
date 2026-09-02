@@ -193,27 +193,95 @@ function startLocalServer() {
     // (*.googleusercontent.com). لذلك نسمح بالمتابعة إلى نطاقات جوجل المعروفة فقط
     // (docs.google.com / drive.google.com) وكذلك googleusercontent.com (CDN) لمنع أي
     // SSRF إلى نطاقات عشوائية مع إتمام الجلب فعلياً.
-    const GSHEET_ALLOW = /^https:\/\/([a-z0-9-]+\.)?(docs\.google\.com|drive\.google\.com|googleusercontent\.com)/i;
+    //
+    // قائمة النطاقات المسموحة (بشكل صارم — لا يُسمح بأي نطاق آخر)
+    const GSHEET_ALLOWED_HOSTS = [
+      'docs.google.com',
+      'drive.google.com',
+      'googleusercontent.com',
+      'lh3.googleusercontent.com',
+      'lh4.googleusercontent.com',
+      'lh5.googleusercontent.com',
+      'lh6.googleusercontent.com',
+    ];
+    function isGsheetAllowedHost(hostname) {
+      const h = String(hostname || '').toLowerCase();
+      for (const allowed of GSHEET_ALLOWED_HOSTS) {
+        if (h === allowed || h.endsWith('.' + allowed)) return true;
+      }
+      return false;
+    }
+    // فحص URLs الخاصة بالشبكات الخاصة / internal / metadata endpoints
+    function isPrivateOrReservedIp(hostname) {
+      const h = String(hostname || '').toLowerCase();
+      if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]') return true;
+      if (h === '0.0.0.0') return true;
+      // RFC 1918 ranges
+      if (/^10\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^192\.168\./.test(h)) return true;
+      // AWS metadata, GCP metadata, Azure metadata
+      if (h === '169.254.169.254') return true;
+      // Link-local
+      if (h.startsWith('169.254.') || h.startsWith('fe80:')) return true;
+      return false;
+    }
+    // التحقق من صحة URL باستخدام new URL() وليس Regex
+    function isGsheetUrlSafe(urlStr) {
+      try {
+        const u = new URL(urlStr);
+        if (u.protocol !== 'https:') return { ok: false, reason: 'البروتوكول يجب أن يكون https' };
+        if (!u.hostname) return { ok: false, reason: 'Hostname غير صالح' };
+        if (isPrivateOrReservedIp(u.hostname)) return { ok: false, reason: 'نطاق محظور (شبكة خاصة)' };
+        if (!isGsheetAllowedHost(u.hostname)) return { ok: false, reason: 'نطاق غير مسموح به: ' + u.hostname };
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, reason: 'رابط غير صالح: ' + e.message };
+      }
+    }
     srv.get('/gsheet-csv', (req, res) => {
       const target0 = String(req.query.url || '');
-      if (!/^https:\/\/docs\.google\.com\/(spreadsheets|file|document)/i.test(target0)) {
-        res.status(400).json({ error: 'رابط غير صالح — يجب أن يكون رابط جوجل شيت' });
+      const urlCheck = isGsheetUrlSafe(target0);
+      if (!urlCheck.ok) {
+        res.status(400).json({ error: 'رابط غير صالح — ' + urlCheck.reason });
+        return;
+      }
+      // التحقق من أن المسار يبدأ بـ spreadsheets
+      const parsedUrl = new URL(target0);
+      if (!parsedUrl.pathname.startsWith('/spreadsheets/') && !parsedUrl.pathname.startsWith('/file/')) {
+        res.status(400).json({ error: 'رابط غير صالح — يجب أن يكون رابط Google Docs Spreadsheet' });
         return;
       }
       let hops = 0;
       function fetchCsv(target) {
-        if (!GSHEET_ALLOW.test(target)) {
+        // فحص URL لكل redirect
+        const safeCheck = isGsheetUrlSafe(target);
+        if (!safeCheck.ok) {
           if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ error: 'اعادة توجيه لنطاق غير مسموح' }));
+          res.end(JSON.stringify({ error: 'اعادة توجيه لنطاق غير مسموح — ' + safeCheck.reason }));
           return;
         }
         const req2 = https.get(target, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 25000 }, remoteRes => {
           if (remoteRes.statusCode >= 300 && remoteRes.statusCode < 400 && remoteRes.headers.location && hops < 5) {
             hops++;
-            const next = new URL(remoteRes.headers.location, target).toString();
+            let next;
+            try {
+              next = new URL(remoteRes.headers.location, target).toString();
+            } catch (e) {
+              if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ error: 'رابط redirect غير صالح' }));
+              return;
+            }
             fetchCsv(next);
             return;
           }
+          // فحص hostname النهائي للرد (منع redirect صامت لنطاق غير موثوق)
+          try {
+            const finalUrl = new URL(target);
+            if (!isGsheetAllowedHost(finalUrl.hostname)) {
+              if (!res.headersSent) res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ error: 'النطاق النهائي غير مسموح به' }));
+              return;
+            }
+          } catch (e) {}
           res.writeHead(remoteRes.statusCode || 200, {
             'Content-Type': remoteRes.headers['content-type'] || 'text/csv; charset=utf-8',
             'Access-Control-Allow-Origin': '*',
