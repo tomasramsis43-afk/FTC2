@@ -115,12 +115,18 @@ function arkkanPatchFromData(c, data){
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
   if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = data.bagPurchaseDate;
-  // قيمة الفاتورة تُحدَّث دائماً من القيمة الفعلية بالإيصال (data.coursePrice)
-  // عند كل جلب/مزامنة — نُحدّث شيت العملاء (coursePrice) وشيت فواتير الدورات
-  // (receiptActualValue) معاً للقيمة الفعلية الأخيرة، بلا شرط "فاضية".
+  // قيمة الفاتورة: receiptActualValue (شيت فواتير الدورات) يُحدَّث دائماً من القيمة الفعلية
+  // بالإيصال، لأن هذا هو الغرض منه أصلاً — مقارنته بـ centerIncome (coursePrice - discount)
+  // لاكتشاف أي فرق بين المسجَّل بالنظام والمكتوب فعلياً بالإيصال (راجع فلتر "مطابق/مختلف" فى
+  // شيت فواتير الدورات، module-invoices.js). لكن coursePrice نفسه (سعر الدورة فى شيت العملاء،
+  // الذي يُحسب عليه مباشرة "الإجمالي" و"المتبقي" لكل عميل) لا يجوز أن يُفرَض بنفس القيمة تلقائياً
+  // فى كل مزامنة — هذا كان يُغيّر إجمالي/متبقي العميل صامتاً بدون أي تعديل حقيقي منه، ويُسقط
+  // مقارنة "مطابق/مختلف" تماماً (يصبح الاثنان متطابقين قسراً دائماً فتختفي أي فروقات حقيقية).
+  // نملأ coursePrice فقط لو كان فارغاً/صفراً أصلاً (عميل بلا سعر مسجَّل، مثل من أُضيف تلقائياً
+  // بالحد الأدنى من البيانات عبر استيراد رقم الدورة) — تماماً كباقي الحقول أعلاه.
   if (data.coursePrice) {
-    patch.coursePrice = arkkanNumPrice(data.coursePrice);
     patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
+    if (!(Number(c.coursePrice) > 0)) patch.coursePrice = arkkanNumPrice(data.coursePrice);
   }
   // تاريخ إصدار الفاتورة (data.date = Invoice Date من أركان) — يُعبّي "تاريخ الفاتورة"
   // في شيت فواتير الدورات (receiptIssueDate) تحديداً، وهو مصدر عمود المزامنة الوحيد
