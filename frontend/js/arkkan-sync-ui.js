@@ -150,7 +150,11 @@ async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
 
   if (Object.keys(patch).length > 0) {
     Object.assign(clients[idx], patch);
+    // دورة تلقائية: لو رقم الدورة القادم من أركان جديد (مفيش دورة بنفس الرقم فى شيت الدورات)،
+    // تُفتح دورة حقيقية محفوظة فوراً بنفس الاسم/التاريخ من هذا العميل تحديداً.
+    const sessionCreated = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(clients[idx]);
     if (typeof saveClients === 'function') await saveClients();
+    if (sessionCreated && typeof saveCourseSessions === 'function') await saveCourseSessions();
     // لو رحّلنا receiptActualValue من أركان → نطلق القيد المزدوج تلقائياً
     if (patch.receiptActualValue !== undefined && typeof autoPostCourseInvoice === 'function')
       autoPostCourseInvoice(clients[idx]);
@@ -204,7 +208,10 @@ async function arkkanSyncOne(clientId, btn) {
     const patch = arkkanPatchFromData(c, data);
     if (Object.keys(patch).length > 0) {
       Object.assign(c, patch); // c هو نفس الكائن داخل clients
+      // دورة تلقائية: لو رقم الدورة القادم من أركان جديد، تُفتح دورة حقيقية محفوظة فوراً.
+      const sessionCreated = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(c);
       if (typeof saveClients === 'function') await saveClients();
+      if (sessionCreated && typeof saveCourseSessions === 'function') await saveCourseSessions();
       // ترحيل فاتورة الدورة للقيد المزدوج تلقائياً (يستدعي الحفظ لحفظ القيد أيضاً)
       if (typeof autoPostCourseInvoice === 'function' && autoPostCourseInvoice(c) && typeof saveJournalDE === 'function') {
         try { await saveJournalDE(); } catch {}
@@ -430,6 +437,7 @@ const allEligible = arkkanMissingClients();
      ويسبب أخطاء/إعادة، فالطلبات تجري واحداً وراء واحد دائماً. */
   const POOL = 1;
   let workerIdx = 0;
+  let anySessionCreated = false; // دورة تلقائية: نحفظ courseSessions مرة واحدة فقط فى نهاية الدفعة كاملة
 
   const processOne = async () => {
     while (!_arkkanBulkStop) {
@@ -450,6 +458,10 @@ const allEligible = arkkanMissingClients();
           if (idx !== -1) {
             Object.assign(clients[idx], patch);
             clients[idx].arkkanDataCheck = Date.now();
+            // دورة تلقائية: لو رقم الدورة القادم من أركان جديد، تُفتح دورة حقيقية محفوظة.
+            if (typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(clients[idx])) {
+              anySessionCreated = true;
+            }
             // ترحيل فاتورة الدورة للقيد المزدوج تلقائياً بعد اكتمال بيانات الإيصال
             if (typeof autoPostCourseInvoice === 'function') {
               try { autoPostCourseInvoice(clients[idx]); } catch {}
@@ -481,6 +493,7 @@ const allEligible = arkkanMissingClients();
 
   await Promise.all(Array.from({ length: Math.min(POOL, total) }, () => processOne()));
   await queueSave(); // حفظ علامات الفحص المتبقية (لا جديد)
+  if (anySessionCreated && typeof saveCourseSessions === 'function') await saveCourseSessions();
 
   _arkkanBulkRunning = false;
   if (startBtn) startBtn.style.display = '';

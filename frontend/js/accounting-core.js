@@ -90,6 +90,28 @@ function pushVaultTxHistory(tx, beforeSnapshot, afterSnapshot){
 async function saveCourseSessions(){
   try{ await _syncVersionsBeforeSave('courseSessions'); await saveCollectionGeneric('courseSessions', courseSessions); }catch(e){ showToast('تعذر حفظ بيانات الدورات'); }
 }
+/* دورة تلقائية: بمجرد ظهور رقم دورة (courseNumber) على عميل — سواء من التسجيل اليدوي أو من
+   مزامنة أركان أو من الاستيراد الجماعي — ولا توجد له دورة معرّفة بعد بنفس الرقم فى شيت الدورات
+   (courseSessions)، تُنشأ له دورة حقيقية محفوظة فعلاً (وليست جلسة وهمية مؤقتة تُحسب فقط وقت
+   العرض كما كانت الحالة سابقاً فى getEffectiveSessions). أي عميل آخر لاحق بنفس رقم الدورة
+   ينضم تلقائياً تحت نفس الدورة عبر التجميع الموجود أصلاً (groupClientsByCourseNumber) —
+   المطابقة هنا دائماً برقم الدورة فقط، وليست باسم الدورة (courseType)، حتى لا تختلط دورتان
+   مختلفتان فعلياً (بتواريخ مختلفة) لمجرد تطابق اسميهما.
+   لا تُعدّل دورة موجودة بالفعل بنفس الرقم (حفاظاً على أي تعديل يدوي سابق: لغة/سعة/ملاحظات...).
+   ترجع true لو أنشأت دورة جديدة فعلاً — على المستدعي عندها استدعاء saveCourseSessions(). */
+function ensureCourseSessionForClient(c, preferredDate){
+  const courseNumber = String(c && c.courseNumber || '').trim();
+  if(!courseNumber) return false;
+  if(courseSessions.some(s=>s.courseNumber===courseNumber)) return false; // موجودة بالفعل — لا نلمسها
+  const date = preferredDate || c.startDate || c.expectedCourseDate || '';
+  courseSessions.push({
+    id: uid(), createdAt: Date.now(), createdBy: currentUser,
+    courseNumber, courseType: c.courseType || '', date,
+    language: '', capacity: null,
+    notes: 'أُنشئت تلقائياً عند ظهور رقم هذه الدورة لأول مرة على أحد العملاء'
+  });
+  return true;
+}
 async function saveCompanies(){
   try{ await _syncVersionsBeforeSave('companies'); await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
 }

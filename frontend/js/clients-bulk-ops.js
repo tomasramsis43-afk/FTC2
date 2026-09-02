@@ -470,7 +470,14 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
       }
     }
   });
+  // دورة تلقائية: أي رقم دورة جديد ضمن هذه الدفعة (مفيش دورة بنفس الرقم بعد) يفتح دورة حقيقية محفوظة.
+  let _sessionCreatedInBulk = false;
+  patches.forEach(p=>{
+    const c = p.mode==='update' ? clients[p.idx] : p.data;
+    if(typeof ensureCourseSessionForClient==='function' && ensureCourseSessionForClient(c)) _sessionCreatedInBulk = true;
+  });
   await saveClients();
+  if(_sessionCreatedInBulk && typeof saveCourseSessions==='function') await saveCourseSessions();
   clients.forEach(c=> syncClientLedgerEntry(c));
   await saveVaultTx();
   await saveSettings();

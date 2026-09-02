@@ -12,17 +12,21 @@ function getEffectiveSessions(){
     const found = arr.find(c=>c[field]);
     return found ? found[field] : '';
   };
+  // تاريخ الدورة الاحتياطي: نفضّل expectedCourseDate (تاريخ متوقع مسجَّل يدوياً من شيت الدورات)،
+  // فلو غير متاح نرجع لـ startDate (تاريخ بداية الدورة القادم من مزامنة أركان) — قبل هذا التعديل
+  // كان startDate يُتجاهل تماماً هنا فيختفي تاريخ الدورة من هذا الشيت رغم وصوله فعلياً من أركان.
+  const fallbackDate = cn => findFromClients(cn, 'expectedCourseDate') || findFromClients(cn, 'startDate');
   const list = courseSessions.map(s=>({
     ...s,
     courseType: s.courseType || findFromClients(s.courseNumber, 'courseType'),
-    date: s.date || findFromClients(s.courseNumber, 'expectedCourseDate'),
+    date: s.date || fallbackDate(s.courseNumber),
     isDefined:true
   }));
   const definedNums = new Set(courseSessions.map(s=>s.courseNumber));
   const extraNums = new Set();
   clients.forEach(c=>{ if(c.courseNumber && !c.suspended && !definedNums.has(c.courseNumber)) extraNums.add(c.courseNumber); });
   extraNums.forEach(cn=>{
-    list.push({id:'auto-'+cn, courseNumber:cn, courseType:findFromClients(cn,'courseType'), date:findFromClients(cn,'expectedCourseDate'), language:'', capacity:null, notes:'', isDefined:false});
+    list.push({id:'auto-'+cn, courseNumber:cn, courseType:findFromClients(cn,'courseType'), date:fallbackDate(cn), language:'', capacity:null, notes:'', isDefined:false});
   });
   return list;
 }

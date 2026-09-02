@@ -944,8 +944,12 @@ $('#client-form').addEventListener('submit', async e=>{
   // شاشة الاستقبال نفسه اللي أضافه لثوانٍ طويلة لو السيرفر بطيء/نائم (استضافة مجانية). كل خطوات
   // الحفظ تحتها فعلاً محمية بطابور "معلّقات" (pendingRecords) تلقائي لو فشل الاتصال، فتأجيلها للخلفية
   // لا يضيف أي خطر فقدان بيانات جديد.
+  // دورة تلقائية: لو رقم الدورة جديد (مفيش دورة بنفس الرقم بعد فى شيت الدورات)، تُفتح دورة
+  // حقيقية محفوظة فوراً باسم وتاريخ هذا العميل — بدل الاكتفاء بجلسة وهمية مؤقتة وقت العرض فقط.
+  const _sessionCreatedOnSave = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(savedClient);
   closeModal(); renderTable(); renderDashboard(); refreshFilterOptions(); renderCourses(); renderBags();
   (async ()=>{
+    if(_sessionCreatedOnSave && typeof saveCourseSessions==='function') await saveCourseSessions();
     if(!wasEdit && !_clientsSyncBaseline){
       // مزامنة العملاء الحقيقية الأولى لسه ماكملتش هذه الجلسة (سيرفر بطيء/نائم لتوّه) — بدل
       // استدعاء saveClients() العام (الذي كان سيرفع -فى غياب baseline مؤكد- كل قائمة العملاء
