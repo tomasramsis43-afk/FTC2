@@ -811,7 +811,9 @@ function filteredClients(opts){
     // مستخدمي الاستقبال معاً، وليست فردية لكل مستخدم كباقي الأدوار المقيَّدة). راجع
     // clientRecordsVisibilitySql فى server.js وتعليق canSeeAllData فى ui-framework.js.
     if(currentUserRole!=='reception' && !isOwnRecord(c)) return false; // عزل البيانات: عرض فقط — لا يمس المصفوفة الأصلية أبداً
-    if(!matchYear(c.date)) return false; // فلتر السنة العلوي (خط دفاع مباشر — بجانب مزامنته لحقلي من/إلى أدناه)
+    // عند وجود نص بحث (q) نُعلّق فلتر السنة/التاريخ — فالبحث في جدول العملاء مقصود به
+    // إيجاد الشخص المطلوب أينما كان تاريخه، فلا يختفي نتيجة كونه خارج سنة ما.
+    if(!q && !matchYear(c.date)) return false; // فلتر السنة العلوي (خط دفاع مباشر — بجانب مزامنته لحقلي من/إلى أدناه)
     if(frecepVals.length && !frecepVals.includes(c.createdBy)) return false;
     if(showSuspendedOnly && !c.suspended) return false;
     if(showUnpurchasedBagsOnly && !(c.bagSource==='buy' && c.bagStatus!=='purchased' && !c.suspended)) return false;
@@ -846,13 +848,31 @@ function filteredClients(opts){
     // فلتر الحقيبة (شيت العملاء): فلتر واحد مدمج بقيم مصدر الحقيبة الثلاث — من المخزون (stock)،
     // حقيبة خاصة (own)، أو بدون حقيبة (buy — شراء عادي وليس من المخزون ولا حقيبة خاصة)
     if(fbagVals.length && !fbagVals.includes(c.bagSource)) return false;
-    if(dfrom && (!c.date || c.date<dfrom)) return false;
-    if(dto && (!c.date || c.date>dto)) return false;
+    // فلاتر التاريخ من/إلى تُعلّق أثناء البحث مثل فلتر السنة أعلاه (نفس المنطق)
+    if(!q && dfrom && (!c.date || c.date<dfrom)) return false;
+    if(!q && dto && (!c.date || c.date>dto)) return false;
     if(paidMin!==null && paidTotal(c)<paidMin) return false;
     if(paidMax!==null && paidTotal(c)>paidMax) return false;
     if(q){
-      const hay = [c.name,c.phone,c.clientId,c.invoice,c.referNum,c.courseNumber].join(' ').toLowerCase();
-      if(!hay.includes(q)) return false;
+      // تطبيع البحث الرقمي: مقارنة أرقام الهاتف بأرقامها فقط (بدون رموز دولة/+/مسافات/أقواس)
+      // وبصيغتين (مع أو بدون صفر البادئ، مع/بدون 966) حتى يطابق البحث مهما كانت صيغة
+      // التخزين (05X.. / +9665X.. / 9665X..). باقي الحقول بحث حرفي.
+      const qDigits = q.replace(/[^0-9]/g,'');
+      if(qDigits && qDigits.length <= 15){
+        const phoneDigits = String(c.phone||'').replace(/[^0-9]/g,'');
+        const phoneLocal = phoneDigits.startsWith('966') ? phoneDigits.slice(3) : phoneDigits; // بلا رمز الدولة
+        const qLocal = qDigits.startsWith('966') ? qDigits.slice(3) : qDigits;               // بلا رمز الدولة
+        const qNoZero = qLocal.startsWith('0') ? qLocal.slice(1) : qLocal;                    // بلا الصفر البادئ
+        const qVariants = qDigits && (phoneDigits.includes(qDigits) || phoneLocal.includes(qLocal) || phoneLocal.includes(qNoZero));
+        if(qVariants) { /* مطابقة بالرقم */ }
+        else{
+          const hay = [c.name,c.clientId,c.invoice,c.referNum,c.courseNumber].join(' ').toLowerCase();
+          if(!hay.includes(q)) return false;
+        }
+      } else {
+        const hay = [c.name,c.clientId,c.invoice,c.referNum,c.courseNumber].join(' ').toLowerCase();
+        if(!hay.includes(q)) return false;
+      }
     }
     return true;
   }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
