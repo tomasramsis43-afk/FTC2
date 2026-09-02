@@ -673,6 +673,7 @@ function renderArkkanExamsTable() {
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
+      <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
@@ -685,6 +686,7 @@ function renderArkkanExamsTable() {
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
+      <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
@@ -697,6 +699,7 @@ function renderArkkanExamsTable() {
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
+      <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
@@ -708,6 +711,7 @@ function renderArkkanExamsTable() {
     <tr id="arkkan-exam-row-${cssEscapeId(c.clientId)}">
       <td>${escapeHtml(c.name || '—')}</td>
       <td>${escapeHtml(c.clientId)}</td>
+      <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>

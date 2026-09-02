@@ -30,12 +30,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
 // ── حقول الـ client اللي نعتبرها "ناقصة" لو فاضية ──
 function isMissing(c) {
-  return !c.invoice       ||
-         !c.courseNumber  ||
-         !c.date          ||
-         !c.coursePrice   ||
-         !c.bagInvoice    ||
-         !c.bagPurchaseDate ||
+  return !c.invoice          ||
+         !c.courseNumber     ||
+         !c.receiptIssueDate ||   // تاريخ الفاتورة يأتي حصراً من شيت فواتير الدورات (receiptIssueDate) لا من شيت العملاء
+         !c.coursePrice      ||
+         !c.bagInvoice       ||
+         !c.bagPurchaseDate  ||
          !c.startDate;
 }
 
@@ -230,13 +230,13 @@ async function fetchFromArkkan(pg, ctx, item) {
 
         // نبني object يحتوي فقط الحقول الناقصة
         const patch = {};
-        if (!c.invoice        && fetched.invoice)        patch.invoice        = fetched.invoice;
-        if (!c.courseNumber   && fetched.courseNumber)   patch.courseNumber   = fetched.courseNumber;
-        if (!c.date           && fetched.date)           patch.date           = fetched.date;
-        if (!c.coursePrice    && fetched.coursePrice)    patch.coursePrice    = parseFloat(fetched.coursePrice) || fetched.coursePrice;
-        if (!c.bagInvoice     && fetched.bagInvoice)     patch.bagInvoice     = fetched.bagInvoice;
-        if (!c.bagPurchaseDate&& fetched.bagPurchaseDate)patch.bagPurchaseDate= fetched.bagPurchaseDate;
-        if (!c.startDate      && fetched.startDate)      patch.startDate      = fetched.startDate;
+        if (!c.invoice          && fetched.invoice)        patch.invoice          = fetched.invoice;
+        if (!c.courseNumber     && fetched.courseNumber)   patch.courseNumber     = fetched.courseNumber;
+        if (!c.receiptIssueDate && fetched.date)           patch.receiptIssueDate = fetched.date; // تاريخ إصدار الفاتورة من أركان → شيت فواتير الدورات
+        if (!c.coursePrice      && fetched.coursePrice)    patch.coursePrice      = parseFloat(fetched.coursePrice) || fetched.coursePrice;
+        if (!c.bagInvoice       && fetched.bagInvoice)     patch.bagInvoice       = fetched.bagInvoice;
+        if (!c.bagPurchaseDate  && fetched.bagPurchaseDate)patch.bagPurchaseDate  = fetched.bagPurchaseDate;
+        if (!c.startDate        && fetched.startDate)      patch.startDate        = fetched.startDate;
 
         if (Object.keys(patch).length === 0) {
           console.log(`   ⚠️  لم تُجلب أي بيانات من Arkkan`);
