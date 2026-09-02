@@ -135,14 +135,20 @@
   function toCsvUrl(url){
     url = String(url||'').trim();
     if(!/^https?:\/\//i.test(url)) return null;
+    // استخراج gid من الـ hash أو query قبل إزالة الـ fragment
+    var gidMatch = /[?&]gid=(\d+)/.exec(url) || /#gid=(\d+)/.exec(url);
+    var gid = gidMatch ? gidMatch[1] : null;
+    url = url.split('#')[0]; // نزيل الـ fragment حتى لا يكسر الـ URL
     try {
       var u = new URL(url);
       if(u.hostname !== 'docs.google.com') return null;
     } catch(e){ return null; }
-    var gid = /[?&]gid=(\d+)/.exec(url);
-    var ed = url.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)\/edit$/);
-    if(ed) return 'https://docs.google.com/spreadsheets/d/'+ed[1]+'/export?format=csv'+(gid?('&gid='+gid[1]):'');
-    return url;
+    // يجب أن يحتوي على معرّف spreadsheet
+    var m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if(!m) return null;
+    var docId = m[1];
+    // دائماً نبني رابط export?format=csv من الـ docId (يعمل مهما كان نمط الرابط الأصلي)
+    return 'https://docs.google.com/spreadsheets/d/'+docId+'/export?format=csv'+(gid?('&gid='+gid):'');
   }
 
   function cleanPrice(v){
