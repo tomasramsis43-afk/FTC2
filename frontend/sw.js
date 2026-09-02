@@ -3,8 +3,8 @@
  * Handles caching, offline support, and background synchronization
  */
 
-const CACHE_VERSION = 'ftc-cache-v13';
-const RUNTIME_CACHE = 'ftc-runtime-v12';
+const CACHE_VERSION = 'ftc-cache-v14';
+const RUNTIME_CACHE = 'ftc-runtime-v13';
 // ملحوظة معمارية (تحديث): كانت ملفات JS/CSS/HTML تُستثنى من الكاش الفوري عمداً (راجع الشرح
 // القديم أسفل هذا السطر) لضمان وصول التحديثات فوراً. لكن هذا كان يفرض round-trip كامل للسيرفر
 // لكل ملف (22+ ملف JS) في كل فتحة للبرنامج حتى لو لم يتغيّر أي شيء فعلياً — بطيء خصوصاً على
