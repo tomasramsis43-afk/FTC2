@@ -284,12 +284,12 @@
     const courseOpts = '<option value=""></option>' + (settings.courses||[]).map(c=>`<option value="${escapeHtml(c.name)}"${c.name===(p.courseType||'')?' selected':''}>${escapeHtml(c.name)}</option>`).join('');
     const chanOpts = '<option value=""></option>' + (settings.channels||[]).map(c=>`<option value="${escapeHtml(c.name)}"${c.name===(p.channel||'')?' selected':''}>${escapeHtml(c.name)}</option>`).join('');
     const f = (label,idv,html)=>`<div style="margin-bottom:12px;"><label style="display:block;font-size:13px;margin-bottom:4px;">${label}</label>${html}</div>`;
-    const inp = v=>`<input type="text" class="gse-${idv}" value="${escapeHtml(v)}" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">`;
+    const inp = (idv,v)=>`<input type="text" class="gse-${idv}" value="${escapeHtml(v)}" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">`;
     const inp2 = (type,val)=>`<input type="${type}" value="${escapeHtml(String(val))}" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">`;
     $('#gsheet-edit-fields').innerHTML =
-      f('رقم الهوية *','id',inp(p.clientId))+
-      f('الاسم *','name',inp(p.name))+
-      f('الجوال','phone',inp(p.phone))+
+      f('رقم الهوية *','id',inp('id',p.clientId))+
+      f('الاسم *','name',inp('name',p.name))+
+      f('الجوال','phone',inp('phone',p.phone))+
       f('الجنسية','nat',`<select class="gse-nat" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">${natOpts}</select>`)+
       f('نوع الدورة','course',`<select class="gse-course" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">${courseOpts}</select>`)+
       f('طريقة الدفع','channel',`<select class="gse-channel" style="width:100%;padding:9px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">${chanOpts}</select>`)+
