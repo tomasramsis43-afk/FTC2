@@ -55,7 +55,7 @@ async function cascadeLinkedPendingRecords(clientRecordId, isApprove){
   let ok = 0, fail = 0;
   for(const item of linked){
     const res = isApprove ? await approveRecordGeneric(item.collection, item.id) : await deleteOneRecordGeneric(item.collection, item.id);
-    if(isApprove ? res : res!==false) ok++; else fail++;
+    if(isApprove ? res : res===true) ok++; else fail++;
   }
   return { count: linked.length, ok, fail };
 }
@@ -184,27 +184,32 @@ function renderPendingApprovalsPanel(){
     </div>
   </div>`;
 }
+let _paBusy = false;
 $('#pending-approvals-panel')?.addEventListener('click', async e=>{
   const approveBtn = e.target.closest('[data-pa-approve]');
   const rejectBtn = e.target.closest('[data-pa-reject]');
   const approveAllBtn = e.target.closest('#btn-pa-approve-all');
   const rejectAllBtn = e.target.closest('#btn-pa-reject-all');
   if(!approveBtn && !rejectBtn && !approveAllBtn && !rejectAllBtn) return;
+  if(_paBusy) return;
+  _paBusy = true;
+  try{
 
   // === اعتماد / رفض جماعي لكل العمليات المعلّقة دفعة واحدة ===
   if(approveAllBtn || rejectAllBtn){
     const isApprove = !!approveAllBtn;
-    const count = visiblePendingApprovals.length;
+    const snapshot = [...visiblePendingApprovals];
+    const count = snapshot.length;
     if(!count) return;
     if(!await customConfirm(isApprove
       ? `اعتماد كل العمليات المعلّقة (${count}) دفعة واحدة؟ ستدخل فوراً في الحسابات والتقارير كباقي البيانات.`
       : `رفض وحذف كل العمليات المعلّقة (${count}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
     let ok = 0, fail = 0;
     const bulkLabel = isApprove ? 'اعتماد جماعي' : 'رفض جماعي';
-    for(const item of visiblePendingApprovals){
+    for(const item of snapshot){
       const desc = item.obj ? pendingRecordSummary(item) : item.id;
       const res = isApprove ? await approveRecordGeneric(item.collection, item.id) : await deleteOneRecordGeneric(item.collection, item.id);
-      if(isApprove ? res : res!==false){
+      if(isApprove ? res : res===true){
         ok++;
         addApprovalNotice(item.createdBy, isApprove ? 'approved' : 'rejected', item.collection, desc);
       }else{ fail++; }
@@ -215,7 +220,6 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
     if(fail===0) showToast(`تم ${isApprove ? 'اعتماد' : 'رفض'} كل العمليات (${ok})`);
     else showToast(`تم ${isApprove ? 'اعتماد' : 'رفض'} ${ok} عملية — فشل ${fail} عملية (تحقق من الاتصال)`);
     refreshEverything();
-    refreshPendingApprovals();
     return;
   }
 
@@ -237,7 +241,7 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
   }else{
     if(!await customConfirm(`رفض وحذف هذه العملية (${desc}) نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
     const ok = await deleteOneRecordGeneric(collection, id);
-    if(ok!==false){
+    if(ok===true){
       await logAudit('delete', pendingCollectionLabel(collection), `تم رفض وحذف عملية الاستقبال المعلّقة: ${desc}`);
       addApprovalNotice(item && item.createdBy, 'rejected', collection, desc);
       refreshEverything();
@@ -246,7 +250,8 @@ $('#pending-approvals-panel')?.addEventListener('click', async e=>{
       showToast('تعذّر الحذف — تحقق من الاتصال وحاول مجدداً');
     }
   }
-  refreshPendingApprovals();
+
+  }finally{ _paBusy = false; }
 });
 
 /* ============ التنبيهات الذكية (Smart Alerts) ============ */
