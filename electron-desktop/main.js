@@ -50,6 +50,7 @@ const SYNCED_FILES = [
   'js/backup-restore.js', 'js/undo-redo.js', 'js/clients-alerts-overview.js',
   'js/clients-cfo-dashboard.js', 'js/clients-pagination-filters.js', 'js/clients-print-modals.js',
   'js/clients-bulk-ops.js', 'js/module-invoices.js', 'js/module-bags.js',
+  'js/gsheet-workflow.js',
   'js/module-finance.js', 'js/module-reports.js', 'js/module-accounting.js',
   'js/module-courses.js', 'js/module-companies.js', 'js/module-purchases.js',
   'js/cockpit-pulse.js', 'js/notification-center.js', 'js/module-followups.js',
