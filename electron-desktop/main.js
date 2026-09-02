@@ -623,7 +623,12 @@ function createWindow() {
     show: false,
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    // فتح النافذة ممتلئة الشاشة تلقائياً على أي جهاز/شاشة (يفضّل: معظم مستخدمي
+    // سطح المكتب يريدون الاستفادة من كامل مساحة الشاشة). يظل قابلاً للتحجيم اليدوي بعدها.
+    if (process.env.FTC2_NO_MAXIMIZE !== '1') mainWindow.maximize();
+    mainWindow.show();
+  });
   mainWindow.loadURL(`http://127.0.0.1:${PORT}/app.html`);
   // أدوات المطوّر تُفتح فقط عند التشغيل بمتغيّر البيئة FTC2_DEBUG=1 (لتشخيص مشكلة
   // لاحقاً)، مش تلقائياً مع كل تشغيل عادي للمستخدم النهائي.
