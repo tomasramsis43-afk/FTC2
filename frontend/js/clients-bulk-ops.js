@@ -174,6 +174,104 @@ $('#btn-bulk-add-save').addEventListener('click', async ()=>{
 });
 
 
+/* ---------------- جلب العملاء الجدد من جوجل شيت (CSV منشور) ----------------
+   المستخدم ينشر جوجل شيت كـ CSV (File > Share > Publish to web > CSV) ثم يلصق الرابط.
+   صفوف الشيت المتوقعة (بأي ترتيب، تُطابَق حسب الترويسة إن وُجدت): الاسم، رقم الهوية،
+   الجوال/الهاتف، الجنسية، المدفوع/قيمة المدفوع، طريقة الدفع. */
+function _normHeader(h){
+  h = h.trim().toLowerCase();
+  if(/^\ufeff/.test(h)) h = h.replace(/^\ufeff/, '');
+  // تجميع المرادفات الشائعة لكل عمود
+  if(/اسم/.test(h)) return 'name';
+  if(/هوية/.test(h) || /رقم.*بطاقة/.test(h) || /بطاقة/.test(h)) return 'id';
+  if(/جوال/.test(h) || /هاتف/.test(h) || /موبايل/.test(h) || /phone/.test(h) || /mobile/.test(h)) return 'phone';
+  if(/جنسية/.test(h) || /national/.test(h)) return 'nationality';
+  if(/مدفوع/.test(h) || /دفع.*قيمة/.test(h) || /paid/.test(h) ||/amount/.test(h)) return 'paid';
+  if(/طريقة/.test(h) || /طريقة الدفع/.test(h) || /channel/.test(h) || /method/.test(h)) return 'channel';
+  if(/دورة/.test(h) && !/رقم/.test(h)) return 'courseType';
+  if(/رقم الدورة/.test(h)) return 'courseNum';
+  return h;
+}
+function _parseCsvLine(line){
+  const out = []; let cur = '', inQ = false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(inQ){
+      if(ch==='"' && line[i+1]==='"'){ cur += '"'; i++; }
+      else if(ch==='"') inQ = false;
+      else cur += ch;
+    }else{
+      if(ch==='"') inQ = true;
+      else if(ch===','){ out.push(cur); cur=''; }
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map(v=>v.trim());
+}
+function _gsheetNormalizeDate(v){
+  v = String(v||'').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const m = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if(m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  return null;
+}
+async function _fetchGoogleSheetCsv(url){
+  // يقبل صيغ متعددة لرابط الشيت وينتجه كرابط تصدير CSV إن لم يكن كذلك أصلاً
+  let finalUrl = url.trim();
+  if(!/^https?:\/\//i.test(finalUrl)) return {error:'رابط غير صالح'};
+  const exportMatch = finalUrl.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)\/export\?format=csv/);
+  const gidMatch = /[?&]gid=(\d+)/.exec(finalUrl);
+  const editMatch = finalUrl.match(/^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)\/edit/);
+  if(!exportMatch && editMatch){
+    finalUrl = `https://docs.google.com/spreadsheets/d/${editMatch[1]}/export?format=csv${gidMatch?('&gid='+gidMatch[1]):''}`;
+  }
+  const res = await fetch(finalUrl, {cache:'no-store'});
+  if(!res.ok) throw new Error(`تعذّر الجلب (HTTP ${res.status})`);
+  return await res.text();
+}
+$('#btn-gsheet-fetch').addEventListener('click', async ()=>{
+  const urlInput = $('#gsheet-csv-url');
+  const url = (urlInput.value||'').trim();
+  if(!url){ showToast('أدخل رابط جوجل شيت منشور كـ CSV أولاً'); return; }
+  const mode = $('#gsheet-csv-mode').value;
+  const btn = $('#btn-gsheet-fetch');
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = 'جارٍ الجلب...';
+  try{
+    const csv = await _fetchGoogleSheetCsv(url);
+    const rows = csv.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim()!=='');
+    if(rows.length < 2){ showToast('الشيت فارغ أو لا يحتوي بيانات'); return; }
+    const header = _parseCsvLine(rows[0]).map(_normHeader);
+    // خريطة أعمدة بنوع الشيت الحالي (الاسم، ر.هوية، هاتف، جنسية، المدفوع، طريقة الدفع)
+    const colMap = {name:-1,id:-1,phone:-1,nationality:-1,paid:-1,channel:-1,courseType:-1,courseNum:-1};
+    header.forEach((h,i)=>{ if(colMap[h]!==undefined && colMap[h]===-1) colMap[h]=i; });
+    const dataRows = rows.slice(1).map(_parseCsvLine).filter(r=>r.some(c=>c!==''));
+    if(!dataRows.length){ showToast('لا توجد صفوف بيانات'); return; }
+    const tbody = $('#bulk-add-table-body');
+    if(mode==='fill') tbody.innerHTML = '';
+    dataRows.forEach(r=>{
+      const rowId = ++bulkAddRowSeq;
+      tbody.insertAdjacentHTML('beforeend', bulkAddRowHtml(rowId));
+      const row = tbody.lastElementChild;
+      const v = idx => idx>=0 && idx<r.length ? r[idx] : '';
+      row.querySelector('.ba-id').value = v(colMap.id);
+      row.querySelector('.ba-name').value = v(colMap.name);
+      row.querySelector('.ba-phone').value = v(colMap.phone);
+      setBulkSelectFuzzy(row.querySelector('.ba-nat'), v(colMap.nationality));
+      setBulkSelectFuzzy(row.querySelector('.ba-course'), v(colMap.courseType));
+      row.querySelector('.ba-coursenum').value = v(colMap.courseNum);
+      const paid = num(v(colMap.paid));
+      if(paid>0) row.querySelector('.ba-paid').value = paid;
+      setBulkSelectFuzzy(row.querySelector('.ba-channel'), v(colMap.channel));
+    });
+    showToast(`تم جلب ${dataRows.length} عميل من جوجل شيت`);
+  }catch(err){
+    showToast('فشل جلب الشيت: ' + (err.message || err));
+  }finally{
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
 /* ---------------- تحديث/استيراد بيانات العملاء دفعة واحدة (جدول داخل البرنامج) ----------------
    يحل محل الاستيراد القديم عبر ملفات Excel (البيانات الرئيسية + الخصم + نوع الدورة + الأسماء).
    القاعدة: رقم الهوية إلزامي في كل صف. إن كان موجوداً بالفعل تُحدَّث فقط الأعمدة التي بها قيمة في هذا
