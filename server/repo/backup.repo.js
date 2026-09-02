@@ -9,16 +9,33 @@ const { pool } = require('../db');
 const MAX_BACKUPS_RETAINED = 30;
 
 // حفظ نسخة جديدة + تنظيف تجاوز الحد (يبقي آخر MAX_BACKUPS_RETAINED فقط)
+// يتم كلاهما داخل معاملة واحدة (transaction) — حتى لا يتغيّر تقييد TTL/الحد الأقصى عدة مرات
+// بشكل غير ذرّي، ولا تبقى النسخة الجديدة ظاهرة في نفس لحظة زيادة العدد ثم تنظيفه.
+// قبل هذا التعديل كانت العملية تبدأ بـ INSERT ثم DELETE منفصلين (بلا transaction)، فلو حدث
+// خطأ بينهما أو تنافست عمليتان متزامنتان، قد يتجاوز عدد النسخ المحفوظة حدّ MAX_BACKUPS_RETAINED
+// مؤقتاً أو تُحذف نسخة لا يجوز (سباق غير محسوم). المعاملة تجعل العملية ذرّية تماماً.
+// (انتباه: `pool.connect` وحده لا يُغلّف العبارات في معاملة على pg خام — يجب BEGIN/COMMIT
+// صريحان، بنفس النمط المتّبع في user.repo.js / role.repo.js.)
 async function insertAndPrune({ kind, enc, createdBy }) {
-  const ins = await pool.query(
-    `INSERT INTO app_backups (kind, enc, size_bytes, created_by) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
-    [kind, enc, Buffer.byteLength(enc, 'utf8'), createdBy]
-  );
-  await pool.query(
-    `DELETE FROM app_backups WHERE id NOT IN (SELECT id FROM app_backups ORDER BY created_at DESC LIMIT $1)`,
-    [MAX_BACKUPS_RETAINED]
-  );
-  return { id: ins.rows[0].id, createdAt: ins.rows[0].created_at };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ins = await client.query(
+      `INSERT INTO app_backups (kind, enc, size_bytes, created_by) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+      [kind, enc, Buffer.byteLength(enc, 'utf8'), createdBy]
+    );
+    await client.query(
+      `DELETE FROM app_backups WHERE id NOT IN (SELECT id FROM app_backups ORDER BY created_at DESC LIMIT $1)`,
+      [MAX_BACKUPS_RETAINED]
+    );
+    await client.query('COMMIT');
+    return { id: ins.rows[0].id, createdAt: ins.rows[0].created_at };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // قائمة النسخ (بيانات وصفية فقط — بلا المحتوى المشفّر)
