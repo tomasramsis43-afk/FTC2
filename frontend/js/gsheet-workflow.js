@@ -973,10 +973,13 @@
       return;
     }
     host.innerHTML = w.sheets.map(function(s,i){
-      return '<div class="gsheet-cfg-row" data-row="'+i+'" style="border:1px solid var(--border,#ddd);border-radius:8px;padding:12px;margin-bottom:10px;">'+
+      var active = (s.enabled !== false); // أي شيت مضاف يكون مفعّل تلقائياً، إلا لو أُوقف صراحة
+      return '<div class="gsheet-cfg-row" data-row="'+i+'" data-enabled="'+active+'" style="border:1px solid var(--border,#ddd);border-radius:8px;padding:12px;margin-bottom:10px;'+(active?'':'opacity:0.6;')+'">'+
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">'+
           '<input type="text" class="gsc-name" value="'+escHtml(s.name||'')+'" placeholder="اسم الشيت" style="flex:1;min-width:140px;padding:8px 10px;border:1px solid var(--border,#ccc);border-radius:6px;">'+
-          '<label style="display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap;"><input type="checkbox" class="gsc-enabled" '+(s.enabled?'checked':'')+'> مفعّل</label>'+
+          '<button type="button" class="btn btn-sm gsc-toggle" data-row="'+i+'" style="white-space:nowrap;'+(active?'color:var(--success,#2fa86a);':'color:var(--danger,#d9534f);')+'">'+
+            (active ? '● نشط — إيقاف' : '○ متوقف — تشغيل')+
+          '</button>'+
           '<input type="number" class="gsc-interval" min="1" value="'+(s.intervalMin||2)+'" style="width:70px;padding:8px 6px;border:1px solid var(--border,#ccc);border-radius:6px;" title="كل كم دقيقة؟">'+
           '<span style="font-size:12px;color:var(--text-muted);">دقيقة</span>'+
           '<button type="button" class="btn btn-danger btn-sm gsc-del" data-row="'+i+'">✕</button>'+
@@ -1020,7 +1023,7 @@
         w.sheets.push({
           name: name || 'شيت '+(w.sheets.length+1),
           url: url,
-          enabled: row.querySelector('.gsc-enabled').checked,
+          enabled: row.dataset.enabled !== 'false',
           intervalMin: Math.max(1, Number(row.querySelector('.gsc-interval').value)||2)
         });
       });
@@ -1045,6 +1048,19 @@
       if(e.target.classList.contains('gsc-del')){
         var w = wfData(); var i = Number(e.target.dataset.row);
         w.sheets.splice(i,1); renderConfigRows();
+      }
+      if(e.target.classList.contains('gsc-toggle')){
+        // إيقاف/تشغيل فوري لشيت معيّن — يُحفظ ويُعاد جدولة الجلب مباشرة
+        // بدون الحاجة للضغط على «حفظ» بشكل منفصل.
+        var w = wfData(); var i = Number(e.target.dataset.row);
+        if(w.sheets[i]){
+          w.sheets[i].enabled = !(w.sheets[i].enabled !== false);
+          persistWf().then(function(){
+            renderConfigRows();
+            restartTimer();
+            showToast(w.sheets[i].enabled ? 'تم تشغيل الشيت' : 'تم إيقاف الشيت');
+          });
+        }
       }
     });
 
@@ -1173,9 +1189,27 @@
     return changed;
   }
 
+  /* ===================== One-time Auto-enable Migration ===================== */
+
+  // كانت الشيتات تتطلب تفعيل يدوي من الإعدادات (checkbox) كل مرة — أي شيت
+  // enabled=false غالباً كان بسبب عدم تفعيله يدوياً وليس إيقافاً مقصوداً.
+  // هذه الترحيلة تُفعّل كل الشيتات الموجودة تلقائياً مرة واحدة فقط؛ أي إيقاف
+  // لاحق يتم فقط عبر زر «إيقاف» الجديد ولا يُلغى بهذه الترحيلة مرة أخرى.
+  function migrateAutoEnableSheets(){
+    var w = wfData();
+    if(w.sheetsAutoEnableMigrated) return;
+    var changed = false;
+    w.sheets.forEach(function(s){
+      if(s.enabled !== true){ s.enabled = true; changed = true; }
+    });
+    w.sheetsAutoEnableMigrated = true;
+    persistWf(); // نحفظ دائماً هنا لتسجيل علم الترحيلة حتى لو مفيش تغيير فعلي
+  }
+
   /* ===================== Init ===================== */
 
   function init(){
+    migrateAutoEnableSheets();
     recoverStuckProcessing();
     cleanupStaleGsheetRows(); // تنظيف العناصر العالقة فور الفتح
     bind();
