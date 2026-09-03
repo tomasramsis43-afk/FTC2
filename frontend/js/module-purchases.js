@@ -866,6 +866,16 @@ async function startApp(){
   maybeRunAutoBackup().catch(e => console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e));
   try{ SoundFX.login(); }catch(e){ console.error('startApp: فشلت خطوة "SoundFX.login"', e); }
   backgroundSyncCheck().catch(()=>{}); // مزامنة خلفية فورية بعد ظهور الواجهة، دون تعطيل فتح البرنامج (الأخطاء القاتلة تُعالَج داخلها)
+  // إعادة تشغيل جدولة الجلب التلقائي لشيتات جوجل هنا تحديداً — بعد اكتمال تحميل الإعدادات
+  // الحقيقية من السيرفر فعلياً (settings أصبحت الآن هي القيمة المحفوظة الحقيقية وليست
+  // الافتراضية الفارغة). gsheet-workflow.js يستدعي restartTimer() أيضاً بمؤقت تخميني (2.5
+  // ثانية) عند فتح الصفحة، لكن لو تحميل الإعدادات الحقيقية استغرق أطول من ذلك (نت بطيء/تأخر
+  // استيقاظ السيرفر)، تلك المحاولة المبكرة تجدوِل صفر شيتات (تراها فارغة وقتها) ولا تُعاد
+  // أبداً تلقائياً بعدها — الشيت المفعّل يبقى معطّلاً فعلياً طوال الجلسة رغم ظهوره "مفعّل"
+  // في الواجهة، حتى يفتح المستخدم إعدادات الشيتات ويضغط "حفظ" يدوياً (المكان الوحيد الآخر
+  // الذي يستدعي restartTimer()). الاستدعاء هنا مضمون التوقيت الصحيح دائماً، وآمن للتكرار
+  // (restartTimer يمسح المؤقتات القديمة أولاً قبل إعادة بنائها).
+  try{ if(typeof restartTimer==='function') restartTimer(); }catch(e){}
   // اتصال البث اللحظي (SSE): لو متصل بالسيرفر فعلياً (SERVER_AUTH_TOKEN موجود)، أي تعديل لاحق
   // من مستخدم آخر يصل هنا فوراً بدل انتظار الفحص الدوري كل دقيقتين (راجع sse-client.js).
   try{ if(typeof connectRealtimeEvents==='function') connectRealtimeEvents(); }catch(e){ console.error('startApp: فشلت خطوة "connectRealtimeEvents"', e); }
