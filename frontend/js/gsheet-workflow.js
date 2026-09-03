@@ -846,6 +846,7 @@
       }
       var items = w.pending.concat(w.rejected);
       var next = new Map();
+      var syncedAny = false;
       items.forEach(function(p){
         var sid = p.sourceSheetId || makeSheetId(p.sheetUrl||'');
         var rows = sheetRows[sid] || [];
@@ -865,27 +866,53 @@
               changes.push({ label:f.label, old:oldp, val:live });
             }
           });
+          // مزامنة تلقائية: لو فيه فرق ولسه العنصر مش قيد المعالجة الآن من مستخدم آخر،
+          // نجيب القيم الصحيحة من الشيت فوراً ونعلّم الصف كـ"تعديل" بتاريخ المزامنة،
+          // بدل ما يفضل معروض ببيانات قديمة اتصلحت في الشيت.
+          if(changes.length && p.status !== 'PROCESSING'){
+            LIVE_FIELDS.forEach(function(f){
+              p[f.k] = f.k==='paid' ? Number(row[f.k]||0) : row[f.k];
+            });
+            p.lastSyncEditedAt = Date.now();
+            syncedAny = true;
+            auditLog('SYNC_EDIT', {
+              workflowId: p.workflowId,
+              clientId: p.clientId,
+              details: changes.map(function(c){ return c.label+': '+c.old+' -> '+c.val; }).join(' | ')
+            });
+            changes = [];
+          }
           rec = { present:true, changes:changes };
         }
         next.set(p.id, rec);
       });
       liveCompareMap = next;
+      if(syncedAny) await persistWf();
     } finally {
       _liveComparing = false;
     }
   }
 
+  function fmtSyncDate(ts){
+    try {
+      return new Date(ts).toLocaleString('ar-SA-u-nu-latn', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+    } catch(e){ return ''; }
+  }
+
   function liveBadge(p){
     var rec = liveCompareMap.get(p.id);
-    if(!rec) return '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+    var editedNote = p.lastSyncEditedAt
+      ? '<div style="font-size:11px;color:#b9770e;white-space:nowrap;">✏️ تعديل — '+fmtSyncDate(p.lastSyncEditedAt)+'</div>'
+      : '';
+    if(!rec) return editedNote || '<span style="color:var(--text-muted);font-size:12px;">—</span>';
     if(!rec.present){
-      return '<span class="badge" style="background:rgba(220,53,69,0.15);color:#c0392b;border:1px solid rgba(220,53,69,0.4);white-space:nowrap;" title="لم يعد هذا الصف وارِداً في شيت جوجل">⛔ غير موجود في الشيت</span>';
+      return editedNote + '<span class="badge" style="background:rgba(220,53,69,0.15);color:#c0392b;border:1px solid rgba(220,53,69,0.4);white-space:nowrap;" title="لم يعد هذا الصف وارِداً في شيت جوجل">⛔ غير موجود في الشيت</span>';
     }
     if(rec.changes.length){
       var tip = rec.changes.map(function(c){ return c.label+': «'+c.old+'» ← «'+c.val+'»'; }).join(' • ');
-      return '<span class="badge" style="background:rgba(243,156,18,0.15);color:#b9770e;border:1px solid rgba(243,156,18,0.5);white-space:nowrap;" title="'+escHtml(tip)+'">⚠ تعدُّل ('+rec.changes.length+')</span>';
+      return editedNote + '<span class="badge" style="background:rgba(243,156,18,0.15);color:#b9770e;border:1px solid rgba(243,156,18,0.5);white-space:nowrap;" title="'+escHtml(tip)+'">⚠ تعدُّل ('+rec.changes.length+')</span>';
     }
-    return '<span class="badge" style="background:rgba(39,174,96,0.12);color:#1e8449;border:1px solid rgba(39,174,96,0.35);white-space:nowrap;">✔ مطابق</span>';
+    return editedNote + '<span class="badge" style="background:rgba(39,174,96,0.12);color:#1e8449;border:1px solid rgba(39,174,96,0.35);white-space:nowrap;">✔ مطابق</span>';
   }
 
   function rowActions(p, fromRejected){
