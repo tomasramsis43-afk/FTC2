@@ -64,6 +64,7 @@ const SYNCED_FILES = [
   'js/gsheet-workflow.js',
   'js/module-finance.js', 'js/module-reports.js', 'js/module-accounting.js',
   'js/module-courses.js', 'js/module-companies.js', 'js/module-purchases.js',
+  'js/module-idsearch.js',
   'js/cockpit-pulse.js', 'js/notification-center.js', 'js/module-followups.js',
   'js/client-workspace.js', 'js/vault-workspace.js', 'js/report-studio.js',
   'js/grid-enhancements.js', 'js/onboarding.js',
