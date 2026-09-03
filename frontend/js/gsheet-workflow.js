@@ -254,6 +254,64 @@
     return s;
   }
 
+  /* ===================== Server Auto-Confirm (fix stuck pending clients) ===================== */
+
+  // مشكلة "العملاء العالقين ·قيد التنفيذ/قيد الاعتماد" بجانب الشيتات:
+  // عند اعتماد عميل من شيتات جوجل بواسطة جلسة استقبال (reception) يُرفَع السجل للسيرفر
+  // بحالة status='pending' بانتظار اعتماد الأدمن — فلا يدخل الحسابات/التقارير ويبقى عالقاً
+  // حتى يعتمده الأدمن يدوياً من شيت العملاء. هنا لو كان المستخدم الحالي أدمن نقوم باعتماد
+  // السجل على السيرفر فور إنشائه ليصبح confirmed لا pending — حل نهائي للتعليق.
+  async function ensureClientConfirmedOnServer(client){
+    if(typeof approveClientRecord !== 'function') return false;
+    if(typeof clientRecordMeta !== 'object' || !clientRecordMeta) return false;
+    try{
+      var meta = clientRecordMeta[client.id];
+      if(meta && meta.status === 'pending'){
+        var ok = await approveClientRecord(client.id);
+        if(ok && typeof syncClientLedgerEntry === 'function'){
+          syncClientLedgerEntry(client);
+          if(typeof saveVaultTx === 'function') await saveVaultTx();
+        }
+        return ok;
+      }
+    }catch(e){ /* لا نعطل عملية الاعتماد المحلية إن فشل اعتماد السيرفر */ }
+    return false;
+  }
+
+  /* ===================== Stale Row Cleanup ===================== */
+
+  // تنظيف تلقائي لقائمة الاعتماد من العناصر العالقة/غير القابلة للاعتماد:
+  //  1) أي صف رقم هويته صار عميلاً موجوداً فعلاً (مُعتمد من مكان آخر) — فيُحذف لأنه لم يعد صالحاً،
+  //  2) أي صف ظل PENDING فترة طويلة (افتراضياً 60 يوماً) بلا اعتماد/رفض — حتى لا تتكدس القائمة،
+  //     ويُعاد فحصه من الشيت عند الجلب التالي لو ما زال وارده.
+  //  3) أي صف FAILED قديم وتحوّل إلى عميل فعلي — يُحذف بدل بقائه معلقاً أمام المستخدم.
+  var GSHEET_STALE_MAX_AGE_DAYS = 60;
+  function cleanupStaleGsheetRows(){
+    try{
+      var w = wfData();
+      if(!w.pending.length && !w.rejected.length) return;
+      var known = new Set();
+      (typeof clients!=='undefined' && Array.isArray(clients) ? clients : []).forEach(function(c){
+        if(c.clientId) known.add(String(c.clientId).trim());
+      });
+      var cutoff = Date.now() - GSHEET_STALE_MAX_AGE_DAYS*86400000;
+      var changed = false;
+      var isRecent = function(p){ return !(p && p.fetchedAt && p.fetchedAt < cutoff); };
+      w.pending = w.pending.filter(function(p){
+        var dup = known.has(String(p.clientId||'').trim());
+        var aged = !isRecent(p);
+        var failedNowClient = (p.status === 'FAILED' && dup);
+        if(dup || aged || failedNowClient){ changed = true; return false; }
+        return true;
+      });
+      w.rejected = w.rejected.filter(function(p){
+        if(!isRecent(p)){ changed = true; return false; }
+        return true;
+      });
+      if(changed) persistWf();
+    }catch(e){ /* لا نوقف العرض على خطأ تنظيف */ }
+  }
+
   /* ===================== Single Sheet Fetch ===================== */
 
   async function fetchOneSheet(sheet){
@@ -529,6 +587,12 @@
       }
 
       await saveClients();
+      // إصلاح التعليق: اعتماد تلقائي للسجل على السيرفر لو خُلِق pending (جلسة استقبال) ليجتاز
+      // "قيد الاعتماد". بعد نجاح الحفظ يتحدّث clientRecordMeta بالحالة، فنعتمد عليه إن كان معلقاً.
+      var gsServerConfirmed = false;
+      if(typeof clientRecordMeta==='object' && clientRecordMeta && clientRecordMeta[client.id]){
+        gsServerConfirmed = await ensureClientConfirmedOnServer(client);
+      }
       await saveVaultTx();
       if(fromRejected){
         var rejIdx = w.rejected.findIndex(function(x){ return x.id===id; });
@@ -550,7 +614,9 @@
       if(typeof renderDashboard === 'function') renderDashboard();
       if(typeof refreshFilterOptions === 'function') refreshFilterOptions();
       if(typeof renderCourses === 'function') renderCourses();
-      showToast('تم اعتماد «'+client.name+'» وترحيل المدفوع للحركات المالية');
+      showToast(gsServerConfirmed
+        ? 'تم اعتماد «'+client.name+'» وترحيل المدفوع للحركات المالية'
+        : 'تم اعتماد «'+client.name+'» وترحيل المدفوع للحركات المالية — لكنه سيُكمل عرض "قيد الاعتماد" حتى يعتمده الأدمن (حساب الاستقبال بحاجة لموافقة الأدمن)');
 
     } catch(e) {
       releaseLease(pendingIdx, 'FAILED', (e && e.message) ? e.message : String(e));
@@ -720,6 +786,7 @@
   /* ===================== Rendering ===================== */
 
   function renderAll(){
+    cleanupStaleGsheetRows();
     var w = wfData();
     renderPending(w);
     renderRejected(w);
@@ -1014,6 +1081,7 @@
 
   function init(){
     recoverStuckProcessing();
+    cleanupStaleGsheetRows(); // تنظيف العناصر العالقة فور الفتح
     bind();
     setTimeout(renderAll, 800);
     setTimeout(function(){
