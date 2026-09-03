@@ -857,6 +857,7 @@ async function arkkanExamSyncOne(clientId, btn) {
   if (!c) return;
   if (arkkanExamPassed(c)) { showToast('العميل ناجح — نتائجه مكتملة في صندوق النجاح', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+  if (!ARKKAN_IS_DESKTOP) { showToast('لا يمكن الجلب من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل المحلي مدمجاً تلقائياً', 'info'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
@@ -936,6 +937,7 @@ async function arkkanExamSyncCard(clientId, btn) {
   const c = (clients || []).find(x => String(x.clientId) === String(clientId));
   if (!c) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+  if (!ARKKAN_IS_DESKTOP) { showToast('لا يمكن الجلب من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل المحلي مدمجاً تلقائياً', 'info'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '⏳ المزامنة...'; }
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
@@ -977,6 +979,13 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   const st = examBulkState(name);
   if (st.running) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
+  // الجلب/المقارنة هنا يعتمدان على الوكيل المحلي (Playwright على localhost:9955) —
+  // وده متاح فقط من تطبيق سطح المكتب. بدون هذا الفحص، نسخة الويب كانت تحاول الاتصال
+  // بالوكيل لكل عميل على حدة وتفشل واحداً واحداً بدل ما توضّح السبب من البداية.
+  if (!ARKKAN_IS_DESKTOP) {
+    showToast('لا يمكن الجلب/المقارنة من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل المحلي مدمجاً تلقائياً', 'info');
+    return;
+  }
 
   st.running = true;
   st.stop = false;
@@ -1051,7 +1060,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
 
       const skipEl =
         compare
-          ? '<span style="color:var(--text-muted);">⏭️ فُورن حديثاً — تخطٍّ</span>'
+          ? '<span style="color:var(--text-muted);">⏭️ فُحص حديثاً — تخطٍّ</span>'
           : '<span style="color:var(--text-muted);">⏭️ تم سابقاً — بلا تغيير</span>';
       const skipAndContinue = () => {
         skipped++;
@@ -1169,7 +1178,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   if (wrap) wrap.style.display = 'none';
   renderArkkanExamsTable();
   showToast(compare
-    ? `${doneMsg}: ${updated} حُدِّثت تلقائياً، ${same} مطابق، ${failed} فشل${skipped ? `، ${skipped} تجاوز (فُورن حديثاً)` : ''}`
+    ? `${doneMsg}: ${updated} حُدِّثت تلقائياً، ${same} مطابق، ${failed} فشل${skipped ? `، ${skipped} تجاوز (فُحص حديثاً)` : ''}`
     : `${doneMsg}: ${updated} محدّث، ${failed} فشل، ${skipped} تخطّي (بلا تغيير)`, updated > 0 ? 'success' : 'info');
 }
 
