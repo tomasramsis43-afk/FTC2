@@ -1315,7 +1315,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg>
         <div>
           <h3 style="margin:0 0 2px;">مزامنة بيانات أركان</h3>
-          <p class="hint" style="margin:0;">يجلب تلقائياً البيانات الناقصة للعملاء من منصة أركان عبر <b>"وكيل محلي"</b> يعمل على جهازك (متصفح مخفي عبر Playwright على <span class="mono">localhost:9955</span>) — منفصل تماماً عن سيرفر Render الذي ظل خفيفاً. يُعرض هنا فقط العملاء الذين لديهم <b>رقم مرجعي</b> وناقص منهم أي حقل من الحقول السبعة — بمجرد إضافة الرقم المرجعي للعميل يظهر تلقائياً.</p>
+          <p class="hint" style="margin:0;">يجلب تلقائياً البيانات الناقصة للعملاء من منصة أركان عبر <b>"وكيل محلي"</b> مدمج داخل البرنامج (متصفح مخفي عبر Playwright على <span class="mono">localhost:9955</span>) — يعمل تلقائياً فور فتح تطبيق سطح المكتب دون أي خطوة يدوية. يُعرض هنا فقط العملاء الذين لديهم <b>رقم مرجعي</b> وناقص منهم أي حقل من الحقول السبعة — بمجرد إضافة الرقم المرجعي للعميل يظهر تلقائياً.</p>
         </div>
       </div>
 
@@ -1325,9 +1325,7 @@
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-start-agent">▶ تشغيل الوكيل المحلي</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-autostart">🪟 تشغيل تلقائي مع ويندوز</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الاتصال</button>
-        <span style="font-size:11.5px; color:var(--text-muted);">"تشغيل تلقائي مع ويندوز" يضيف الوكيل لبدء التشغيل — يعمل في الخلفية محمّلاً تلقائياً عند كل فتح لهذا التبويب.</span>
       </div>
 
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">

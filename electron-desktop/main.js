@@ -566,7 +566,7 @@ function startLocalServer() {
       if (running) return { message: 'الوكيل يعمل بالفعل على localhost:9955', alreadyRunning: true };
       const agentPath = await arkkanSyncedAgentPath();
       if (!agentPath) {
-        return { error: 'arkkan-agent.js غير موجود مع البرنامج — أعد تثبيت البرنامج أو شغّل start-arkkan-agent.bat من مجلد المشروع' };
+        return { error: 'arkkan-agent.js غير موجود مع البرنامج — أعد تثبيت البرنامج' };
       }
       try {
         await arkkanInstallDeps();
@@ -576,43 +576,19 @@ function startLocalServer() {
       return arkkanSpawnAgent(agentPath);
     }
 
-    async function arkkanAutostartWanted() {
-      await arkkanStartAgent();
-      const agentPath = await arkkanSyncedAgentPath();
-      if (!agentPath) return { error: 'arkkan-agent.js غير موجود — لا يمكن إضافة التشغيل التلقائي' };
-      const startupDir = process.env.APPDATA
-        ? path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
-        : null;
-      if (!startupDir) return { error: 'مجلد التشغيل التلقائي غير متاح على هذا النظام' };
-      try {
-        fs.mkdirSync(startupDir, { recursive: true });
-        const envDir = arkkanEnvDir();
-        const launcher = path.join(startupDir, 'FTC2-ArkanAgent.cmd');
-        let content = '@echo off\r\n';
-        content += 'cd /d "' + envDir + '"\r\n';
-        content += 'if not exist "package.json" (echo {}> package.json)\r\n';
-        content += 'if not exist "node_modules\\playwright" (npm install --no-save --no-audit --no-fund playwright@^1.62.1)\r\n';
-        content += 'if not exist "%LOCALAPPDATA%\\ms-playwright" (npm exec --yes playwright install chromium)\r\n';
-        content += 'set "NODE_PATH=' + path.join(envDir, 'node_modules') + '"\r\n';
-        content += 'set "ARKKAN_BROWSERS_PATH=' + path.join(envDir, 'browsers') + '"\r\n';
-        content += 'start /min "" /d "' + envDir + '" node "' + agentPath + '"\r\n';
-        fs.writeFileSync(launcher, content, 'utf8');
-        console.log('[Arkkan Agent] launcher: ' + launcher);
-        return { message: 'أُضيف الوكيل إلى بدء تشغيل ويندوز — سيبدأ تلقائياً مع كل تشغيل للجهاز' };
-      } catch (e) {
-        return { error: e.message };
+    // إيقاف الوكيل المحلي تلقائياً عند إغلاق التطبيق — حتى لا يبقى عالقاً
+    // كعملية يتيمة (orphan) في الخلفية بعد خروج المستخدم من البرنامج.
+    function arkkanStopAgent() {
+      arkkanStopRequested = true;
+      if (arkkanChild && typeof arkkanChild.kill === 'function') {
+        try { arkkanChild.kill(); } catch (e) {}
       }
+      arkkanChild = null;
     }
 
     srv.post('/arkkan-agent/start', async (req, res) => {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       const result = await arkkanStartAgent();
-      res.status(result.error ? 500 : 200).json(result);
-    });
-
-    srv.post('/arkkan-agent/autostart', async (req, res) => {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      const result = await arkkanAutostartWanted();
       res.status(result.error ? 500 : 200).json(result);
     });
 
@@ -655,6 +631,15 @@ function startLocalServer() {
         console.log(r.error ? '[Arkkan Agent] ' + r.error : '[Arkkan Agent] ' + r.message);
       }).catch(() => {});
     }, 800);
+
+    // إيقاف الوكيل نهائياً عندما يُغلق المستخدم التطبيق (وليس عند مجرد التصغير/
+    // الإخفاء) — يتجنب بقاء عملية وكيل يتيمة تشغّل متصفحاً خفياً بعد إنهاء البرنامج.
+    const arkkanCleanup = () => arkkanStopAgent();
+    app.on('before-quit', arkkanCleanup);
+    app.on('window-all-closed', () => {
+      if (process.platform !== 'darwin') arkkanStopAgent();
+    });
+
     listener.on('error', (err) => {
       const { dialog } = require('electron');
       dialog.showErrorBox(

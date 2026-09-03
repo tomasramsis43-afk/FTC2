@@ -337,12 +337,12 @@ async function arkkanUpdateStatus() {
     el.className = 'hint hint-error';
     el.innerHTML = '❌ وكيل أركان يعمل لكن مكتبة playwright غير مثبتة. شغّل في مجلد المشروع:<br>' +
       '<code style="font-size:11px; user-select:all;">npm install && npx playwright install chromium</code>' +
-      ' ثم أعد تشغيل الوكيل (ابدأه من الزر أدناه أو من start-arkkan-agent.bat).';
+      ' ثم أعد تشغيل الوكيل (ابدأه من الزر أدناه).';
     if (btn) btn.disabled = true;
   } else {
     el.className = 'hint hint-info';
     el.innerHTML = '⏳ الوكيل المحلي غير متصل. اضغط <b>"▶ تشغيل الوكيل المحلي"</b> أدناه' +
-      (ARKKAN_IS_DESKTOP ? '' : ' (أو انقر نقراً مزدوجاً على <code style="font-size:11px; user-select:all;">start-arkkan-agent.bat</code> في مجلد المشروع)') +
+      (ARKKAN_IS_DESKTOP ? ' — سيعمل فوراً من داخل البرنامج' : ' — يتوجب استخدام تطبيق سطح المكتب لتفعيل الوكيل') +
       ' — يفتح مزمن المتصفح للجلب. إن كان يعمل لكنه قيد التهيئة فانتظر لحظات ثم اضغط "فحص الاتصال".';
     if (btn) btn.disabled = false; // الجلب يهيّئ تلقائياً
   }
@@ -352,9 +352,8 @@ async function arkkanUpdateStatus() {
    إدارة الوكيل المحلي من داخل تبويب المزامنة
    ══════════════════════════════════════════════ */
 
-/* تشغيل الوكيل المحلي — من داخل تطبيق سطح المكتب يتم إطلاقه مباشرة عبر
-   خادم سطح المكتب المحلي (/arkkan-agent/start)؛ ومن المتصفح العادي نوجد
-   تعليمات التشغيل اليدوي عبر start-arkkan-agent.bat. */
+/* تشغيل الوكيل المحلي — يُطلق مباشرة عبر خادم سطح المكتب المحلي
+   (/arkkan-agent/start) من داخل تطبيق سطح المكتب، وليس من أي ملف منفصل. */
 async function arkkanStartAgent() {
   const btn = $('#btn-arkkan-start-agent');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري التشغيل...'; }
@@ -365,7 +364,7 @@ async function arkkanStartAgent() {
       if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
       showToast('✅ تم تشغيل الوكيل المحلي — يُهيّئ المتصفح الآن (ثوانٍ)', 'success');
     } else {
-      showToast('لا يمكن تشغيل الوكيل من المتصفح — انقر نقراً مزدوجاً على start-arkkan-agent.bat في مجلد المشروع', 'info');
+      showToast('لا يمكن تشغيل الوكيل من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل مدمجاً تلقائياً', 'info');
     }
     setTimeout(arkkanUpdateStatus, 2500);
   } catch (err) {
@@ -377,26 +376,6 @@ async function arkkanStartAgent() {
     }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '▶ تشغيل الوكيل المحلي'; }
-  }
-}
-
-/* إضافة الوكيل إلى بدء التشغيل مع ويندوز — عبر خادم سطح المكتب المحلي */
-async function arkkanAddAutostart() {
-  const btn = $('#btn-arkkan-autostart');
-  if (!ARKKAN_IS_DESKTOP) {
-    showToast('هذه الميزة متاحة من تطبيق سطح المكتب فقط — أو ضع اختصاراً لـ start-arkkan-agent.bat في مجلد التشغيل التلقائي (Win+R ثم shell:startup)', 'info');
-    return;
-  }
-  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
-  try {
-    const r = await fetch('/arkkan-agent/autostart', { method: 'POST', signal: AbortSignal.timeout(15000) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
-    showToast('✅ ' + (j.message || 'أُضيف الوكيل إلى بدء تشغيل ويندوز — يعمل تلقائياً مع كل تشغيل'), 'success');
-  } catch (err) {
-    showToast('تعذّرت الإضافة لبدء التشغيل: ' + String((err && err.message) || err).slice(0, 90), 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🪟 تشغيل تلقائي مع ويندوز'; }
   }
 }
 
@@ -1193,7 +1172,6 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
-  if (e.target.closest('#btn-arkkan-autostart')) { arkkanAddAutostart(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
