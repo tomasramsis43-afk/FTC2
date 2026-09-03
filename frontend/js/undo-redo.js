@@ -951,6 +951,7 @@ $all('button[data-view]').forEach(btn=>{
       else if(_view==='courseinvoices' && typeof renderCourseInvoices==='function') renderCourseInvoices();
       else if(_view==='audit' && typeof renderAuditLog==='function') renderAuditLog();
       else if(_view==='reports' && typeof renderReports==='function') renderReports();
+      else if(_view==='idsearch' && typeof renderIdSearch==='function') renderIdSearch();
       else if(_view==='companies' && typeof renderCompanies==='function') renderCompanies();
       else if(_view==='accounting' && typeof renderAccounting==='function') renderAccounting();
       else if(_view==='ledger' && typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();

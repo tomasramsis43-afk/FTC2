@@ -178,6 +178,7 @@
     <button data-view="ledger" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h11a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2v-16a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6"></path></svg><span data-i18n="navLedger">دليل الحسابات والقيود اليومية</span></button>
     <button data-view="budget" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7"></path><path d="M3 20h18"></path><path d="M6.5 6.5l3.5 3 3-2 4.5 3.5" stroke-dasharray="1 2.6"></path></svg><span data-i18n="navBudget">الموازنة والتخطيط</span></button>
     <div class="nav-section-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 6v6l4 2"></path></svg><span>الذكاء والتقارير</span></div>
+    <button data-view="idsearch" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><span data-i18n="navIdSearch">البحث برقم الإقامة</span></button>
     <button data-view="reports" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"></path></svg><span data-i18n="navReports">التقارير</span></button>
     <button data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1z"></path><path d="M8.5 13.5l2 2 4-4.5"></path></svg><span data-i18n="navAudit">سجل المراجعة</span></button>
     <button data-view="arkkan-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg><span>مزامنة أركان</span></button>
@@ -2135,6 +2136,55 @@
     </div>
   </section>
 
+  <!-- ID SEARCH (البحث برقم الإقامة/الهوية) -->
+  <section class="view" id="view-idsearch">
+    <div class="panel" style="border-right:4px solid var(--gold);">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span> البحث برقم الإقامة (رقم الهوية)</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">اكتب رقم إقامة واحداً، أو الصق عدة أرقام دفعة واحدة (انسخ عمود أرقام من إكسل — كل رقم في سطر). اضغط «بحث» لعرض بيانات كل رقم: الموجود في النظام يظهر ببياناته كاملة، وغير الموجود يظهر برسالة «هذا الشخص غير موجود بالنظام». كل رقم الإقامة = رقم الهوية الوطني للعميل، والمطلوب 10 أرقام.</p>
+    </div>
+    <div class="panel">
+      <div class="idsearch-input-wrap">
+        <textarea id="idsearch-input" rows="4" placeholder="اكتب رقم إقامة — أو الصق أرقاماً متعددة هنا (كل رقم في سطر)&#10;مثال:&#10;1234567890&#10;9876543210" class="idsearch-textarea" dir="ltr"></textarea>
+      </div>
+      <div class="idsearch-actions">
+        <button type="button" class="btn btn-gold" id="btn-idsearch-run">🔍 بحث</button>
+        <button type="button" class="btn btn-ghost" id="btn-idsearch-clear">مسح</button>
+        <span class="spacer"></span>
+        <span class="hint" id="idsearch-count-hint"></span>
+      </div>
+    </div>
+    <div class="panel" id="idsearch-results-panel" style="padding:0;">
+      <div class="empty-state" id="idsearch-empty">
+        <div class="big">🔍</div>
+        اكتب أو الصق أرقام الإقامة ثم اضغط «بحث» لعرض البيانات
+      </div>
+      <div id="idsearch-results" style="display:none;">
+        <div class="toolbar" style="padding:12px 16px; align-items:center;">
+          <span class="mono" id="idsearch-summary" style="font-size:13px; color:var(--text-muted);"></span>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" id="btn-idsearch-export">⬇️ تصدير النتائج CSV</button>
+        </div>
+        <div class="table-scroll cards-mobile">
+          <table class="table table-striped" id="idsearch-table">
+            <thead>
+              <tr>
+                <th>رقم الإقامة</th>
+                <th>الاسم</th>
+                <th>الجوال</th>
+                <th>الجنسية</th>
+                <th>الدورة</th>
+                <th>رقم الدورة</th>
+                <th>رقم الفاتورة</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody id="idsearch-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- SETTINGS -->
   <section class="view" id="view-settings">
     <div class="panel">
@@ -3317,6 +3367,7 @@
 <script defer src="js/module-courses.js"></script>
 <script defer src="js/module-companies.js"></script>
 <script defer src="js/module-purchases.js"></script>
+<script defer src="js/module-idsearch.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
 <script defer src="js/notification-center.js"></script>
 <script defer src="js/module-followups.js"></script>
