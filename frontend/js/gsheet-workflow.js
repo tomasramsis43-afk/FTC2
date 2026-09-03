@@ -314,7 +314,7 @@
   async function fetchAllSheets(){
     var w = wfData();
     var enabled = w.sheets.filter(function(s){ return s.enabled && s.url; });
-    if(!enabled.length) return {total:0, results:[]};
+    if(!enabled.length) return {total:0, results:[], noEnabledSheets:true};
     var total = 0;
     var results = [];
     for(var i=0;i<enabled.length;i++){
@@ -879,7 +879,7 @@
     var addRowBtn = document.getElementById('btn-gsheet-add-row');
     if(addRowBtn) addRowBtn.addEventListener('click', function(){
       var w = wfData();
-      w.sheets.push({name:'',url:'',enabled:false,intervalMin:2});
+      w.sheets.push({name:'',url:'',enabled:true,intervalMin:2});
       renderConfigRows();
     });
 
@@ -896,7 +896,9 @@
       fetchBtn.disabled = true; fetchBtn.textContent = 'جارٍ الجلب...';
       try {
         var r = await fetchAllSheets();
-        if(r.results && r.results.length){
+        if(r.noEnabledSheets){
+          showToast('لا توجد شيتات مفعّلة — فعّل الشيت من ⚙️ إدارة الشيتات أولاً');
+        } else if(r.results && r.results.length){
           var errors = r.results.filter(function(x){ return x.error; });
           if(errors.length){
             var errMsgs = errors.map(function(x){ return x.sheet+': '+x.error; }).join('\n');
