@@ -219,16 +219,18 @@
     for(var i=1;i<rawLines.length;i++){
       var r = parseCsvLine(rawLines[i]);
       var clientId = sanitizeText(String(val(r,'id')).trim());
-      if(!clientId) continue;
+      if(!clientId) continue; // رقم الهوية مطلوب — الصف يُتجاهل لو فاضي
       var name = sanitizeText(String(val(r,'name')).trim());
       if(!name) continue;
+      var paidRaw = String(val(r,'paid')||'').trim();
+      if(!paidRaw) continue; // المدفوع مطلوب — الصف يُتجاهل لو خانة المدفوع فاضية
       rows.push({
         clientId: clientId,
         name: name,
         phone: sanitizeText(val(r,'phone').trim()),
         nationality: sanitizeText(val(r,'nationality').trim()),
         courseType: sanitizeText(val(r,'courseType').trim()),
-        paid: cleanPrice(val(r,'paid')),
+        paid: cleanPrice(paidRaw),
         channel: sanitizeText(val(r,'channel').trim()),
         bag: cleanPrice(val(r,'bag')),
         date: toIsoDate(val(r,'date'))
