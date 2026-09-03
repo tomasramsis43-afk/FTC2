@@ -639,24 +639,148 @@ function arkkanExamCardContent(c) {
     </div>${attempts}`;
 }
 
+/* ═══════════════════════════════════════════════════════
+   فلاتر مستقلة لكل صندوق (اسم/رقم هوية/جنسية/دورة/شركة/فترة)
+   + تصدير Excel لما هو ظاهر فعلياً بعد الفلترة في كل صندوق
+   ═══════════════════════════════════════════════════════ */
+var ARKKAN_EXAM_BOXES = [
+  { prefix: 'arkkan-exams',         label: 'صندوق النتائج (بلا نتيجة)', listFn: function(){ return arkkanExamClients(); } },
+  { prefix: 'arkkan-exams-needing', label: 'يحتاج إلى اختبار',          listFn: function(){ return arkkanExamNeedingClients(); } },
+  { prefix: 'arkkan-exams-passed',  label: 'صندوق النجاح',              listFn: function(){ return arkkanExamPassedClients(); } },
+  { prefix: 'arkkan-exams-failed',  label: 'صندوق الراسبين',            listFn: function(){ return arkkanExamFailedClients(); } }
+];
+
+function arkkanExamFilterState(prefix) {
+  var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+  return {
+    name: g(prefix + '-filter-name').trim().toLowerCase(),
+    id: g(prefix + '-filter-id').trim(),
+    nat: g(prefix + '-filter-nat'),
+    course: g(prefix + '-filter-course'),
+    company: g(prefix + '-filter-company'),
+    dateFrom: g(prefix + '-filter-date-from'),
+    dateTo: g(prefix + '-filter-date-to')
+  };
+}
+
+function arkkanExamApplyFilters(list, prefix) {
+  var f = arkkanExamFilterState(prefix);
+  if (!f.name && !f.id && !f.nat && !f.course && !f.company && !f.dateFrom && !f.dateTo) return list;
+  return list.filter(function (c) {
+    if (f.name && !String(c.name || '').toLowerCase().includes(f.name)) return false;
+    if (f.id && !String(c.clientId || '').includes(f.id)) return false;
+    if (f.nat && String(c.nationality || '').trim() !== f.nat) return false;
+    if (f.course && String(c.courseType || '').trim() !== f.course) return false;
+    if (f.company) {
+      var comp = String(c.companyName || '').trim() || '(بدون شركة)';
+      if (comp !== f.company) return false;
+    }
+    if (f.dateFrom && (!c.examLastDate || c.examLastDate < f.dateFrom)) return false;
+    if (f.dateTo && (!c.examLastDate || c.examLastDate > f.dateTo)) return false;
+    return true;
+  });
+}
+
+/* تعبئة قوائم الجنسية/الدورة/الشركة من كل عملاء الصندوق (قبل الفلترة) حتى
+   تبقى كل الخيارات متاحة للاختيار حتى لو الفلاتر التانية ضيّقت العرض حالياً */
+function arkkanExamPopulateFilterOptions(prefix, fullList) {
+  var fillSelect = function (sel, values, placeholder) {
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = ['<option value="">' + placeholder + '</option>']
+      .concat(values.map(function (v) { return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>'; }))
+      .join('');
+    if (values.indexOf(current) !== -1) sel.value = current;
+  };
+  var uniq = function (fn) {
+    var s = new Set();
+    fullList.forEach(function (c) { var v = fn(c); if (v) s.add(v); });
+    return Array.from(s).sort();
+  };
+  fillSelect(document.getElementById(prefix + '-filter-nat'), uniq(function (c) { return String(c.nationality || '').trim(); }), 'كل الجنسيات');
+  fillSelect(document.getElementById(prefix + '-filter-course'), uniq(function (c) { return String(c.courseType || '').trim(); }), 'كل الدورات');
+  fillSelect(document.getElementById(prefix + '-filter-company'), uniq(function (c) { return String(c.companyName || '').trim() || '(بدون شركة)'; }), 'كل الشركات');
+}
+
+function arkkanExamExportBox(box, list) {
+  var rows = list.map(function (c) {
+    var s = (typeof arkkanExamStatusOf === 'function') ? arkkanExamStatusOf(c) : null;
+    return {
+      'الاسم': c.name || '',
+      'رقم الهوية': c.clientId || '',
+      'الجنسية': c.nationality || '',
+      'الشركة': c.companyName || '',
+      'الدورة': c.courseType || '',
+      'تاريخ آخر اختبار': c.examLastDate || '',
+      'النتيجة': (s && s.r) || c.examResult || '',
+      'عدد المحاولات': Array.isArray(c.examAttempts) ? c.examAttempts.length : 0
+    };
+  });
+  var fname = 'تقرير_' + box.label.replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  downloadXlsx(fname, box.label.slice(0, 31), rows);
+  showToast('تم تصدير ' + rows.length + ' سجل — ' + box.label, rows.length ? 'success' : 'info');
+}
+
+/* عند تغيير أي حقل فلترة نعيد رسم الصناديق الأربعة فقط (بدون إعادة جلب) */
+document.addEventListener('input', function (e) {
+  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(name|id|date-from|date-to)$/.test(e.target.id)) {
+    renderArkkanExamsTable();
+  }
+});
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(nat|course|company)$/.test(e.target.id)) {
+    renderArkkanExamsTable();
+  }
+});
+document.addEventListener('click', function (e) {
+  var clearBtn = e.target.closest('[id^="btn-arkkan-exams"][id$="-filter-clear"]');
+  if (clearBtn) {
+    var prefix = clearBtn.id.replace(/^btn-/, '').replace(/-filter-clear$/, '');
+    ['name', 'id', 'nat', 'course', 'company', 'date-from', 'date-to'].forEach(function (k) {
+      var el = document.getElementById(prefix + '-filter-' + k);
+      if (el) el.value = '';
+    });
+    renderArkkanExamsTable();
+    return;
+  }
+  var expBtn = e.target.closest('[id^="btn-arkkan-exams"][id$="-export"]');
+  if (expBtn) {
+    var pfx = expBtn.id.replace(/^btn-/, '').replace(/-export$/, '');
+    var box = ARKKAN_EXAM_BOXES.find(function (b) { return b.prefix === pfx; });
+    if (box) arkkanExamExportBox(box, arkkanExamApplyFilters(box.listFn(), box.prefix));
+  }
+});
+
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
   const nbody = $('#arkkan-exams-needing-tbody');
   const pbody = $('#arkkan-exams-passed-tbody');
   const fbody = $('#arkkan-exams-failed-tbody');
-  const noResult = arkkanExamClients();          // صندوق النتائج: بلا نتيجة وبلا تاريخ اختبار
-  const needing = arkkanExamNeedingClients();    // يحتاج إلى اختبار: تاريخ اختبار وكل النتائج فاضية
-  const passed = arkkanExamPassedClients();      // صندوق النجاح
-  const failed = arkkanExamFailedClients();      // صندوق الراسبين (مستقل بجلبه)
+  const noResultFull = arkkanExamClients();          // صندوق النتائج: بلا نتيجة وبلا تاريخ اختبار
+  const needingFull = arkkanExamNeedingClients();    // يحتاج إلى اختبار: تاريخ اختبار وكل النتائج فاضية
+  const passedFull = arkkanExamPassedClients();      // صندوق النجاح
+  const failedFull = arkkanExamFailedClients();      // صندوق الراسبين (مستقل بجلبه)
 
+  // تعبئة قوائم الفلاتر (جنسية/دورة/شركة) من كل صندوق قبل تضييقه بالفلترة
+  arkkanExamPopulateFilterOptions('arkkan-exams', noResultFull);
+  arkkanExamPopulateFilterOptions('arkkan-exams-needing', needingFull);
+  arkkanExamPopulateFilterOptions('arkkan-exams-passed', passedFull);
+  arkkanExamPopulateFilterOptions('arkkan-exams-failed', failedFull);
+
+  const noResult = arkkanExamApplyFilters(noResultFull, 'arkkan-exams');
+  const needing = arkkanExamApplyFilters(needingFull, 'arkkan-exams-needing');
+  const passed = arkkanExamApplyFilters(passedFull, 'arkkan-exams-passed');
+  const failed = arkkanExamApplyFilters(failedFull, 'arkkan-exams-failed');
+
+  const cnt = (shown, total, label) => shown === total ? `${label}: ${total}` : `${label}: ${shown} من ${total}`;
   const counter = $('#arkkan-exams-counter');
-  if (counter) counter.textContent = `بلا نتيجة ولا تاريخ اختبار بعد: ${noResult.length}`;
+  if (counter) counter.textContent = cnt(noResult.length, noResultFull.length, 'بلا نتيجة ولا تاريخ اختبار بعد');
   const ncounter = $('#arkkan-exams-needing-counter');
-  if (ncounter) ncounter.textContent = `بلا نتيجة (لديهم تاريخ اختبار فقط): ${needing.length}`;
+  if (ncounter) ncounter.textContent = cnt(needing.length, needingFull.length, 'بلا نتيجة (لديهم تاريخ اختبار فقط)');
   const pcounter = $('#arkkan-exams-passed-counter');
-  if (pcounter) pcounter.textContent = `الناجحون (اكتمل جلب نتائجهم): ${passed.length}`;
+  if (pcounter) pcounter.textContent = cnt(passed.length, passedFull.length, 'الناجحون (اكتمل جلب نتائجهم)');
   const fcounter = $('#arkkan-exams-failed-counter');
-  if (fcounter) fcounter.textContent = `الراسبون (صندوق مستقل — يجلب لنفسه): ${failed.length}`;
+  if (fcounter) fcounter.textContent = cnt(failed.length, failedFull.length, 'الراسبون (صندوق مستقل — يجلب لنفسه)');
 
   const cells = c => {
     const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];

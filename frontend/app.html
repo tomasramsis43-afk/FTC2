@@ -1397,8 +1397,20 @@
         </button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-stop" style="display:none;">⏹ إيقاف</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-compare" title="يراجع كل عميل في هذا الصندوق: يجلب نتيجته من أركان ويقارنها بالمخزَّنة — أي اختلاف يُحفَظ تلقائياً ويُوضَّح أمام كل عميل">🔍 مقارنة مع أركان</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-export" title="يصدّر بالضبط الصفوف الظاهرة حالياً (بعد الفلاتر) إلى Excel">📤 تصدير Excel</button>
         <span class="spacer"></span>
         <span id="arkkan-exams-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <input type="text" id="arkkan-exams-filter-name" placeholder="بحث بالاسم" style="max-width:150px;">
+        <input type="text" id="arkkan-exams-filter-id" placeholder="رقم الهوية" style="max-width:130px;">
+        <select id="arkkan-exams-filter-nat" style="max-width:150px;"><option value="">كل الجنسيات</option></select>
+        <select id="arkkan-exams-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
+        <select id="arkkan-exams-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-filter-date-from"></label>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-filter-date-to"></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-filter-clear">✕ مسح الفلاتر</button>
       </div>
 
       <div id="arkkan-exams-progress-wrap" style="display:none; margin-bottom:12px;">
@@ -1443,8 +1455,19 @@
         </button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-stop" style="display:none;">⏹ إيقاف</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-compare" title="يراجع كل عميل في هذا الصندوق: يجلب نتيجته من أركان ويقارنها بالمخزَّنة — أي اختلاف يُحفَظ تلقائياً ويُوضَّح أمام كل عميل">🔍 مقارنة مع أركان</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-export" title="يصدّر بالضبط الصفوف الظاهرة حالياً (بعد الفلاتر) إلى Excel">📤 تصدير Excel</button>
         <span class="spacer"></span>
         <span id="arkkan-exams-needing-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <input type="text" id="arkkan-exams-needing-filter-name" placeholder="بحث بالاسم" style="max-width:150px;">
+        <input type="text" id="arkkan-exams-needing-filter-id" placeholder="رقم الهوية" style="max-width:130px;">
+        <select id="arkkan-exams-needing-filter-nat" style="max-width:150px;"><option value="">كل الجنسيات</option></select>
+        <select id="arkkan-exams-needing-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
+        <select id="arkkan-exams-needing-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-needing-filter-date-from"></label>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-needing-filter-date-to"></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-filter-clear">✕ مسح الفلاتر</button>
       </div>
       <div id="arkkan-exams-needing-progress-wrap" style="display:none; margin-bottom:12px;">
         <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
@@ -1483,8 +1506,19 @@
       <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-passed-compare" title="يراجع كل ناجح: يجلب نتيجته من أركان ويقارنها بالمخزَّنة — أي اختلاف يُحفَظ تلقائياً (لو ظهر راسب ينتقل لصندوق الراسبين)">🔍 مقارنة مع أركان</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-passed-stop" style="display:none;">⏹ إيقاف</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-passed-export" title="يصدّر بالضبط الصفوف الظاهرة حالياً (بعد الفلاتر) إلى Excel">📤 تصدير Excel</button>
         <span class="spacer"></span>
         <span id="arkkan-exams-passed-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <input type="text" id="arkkan-exams-passed-filter-name" placeholder="بحث بالاسم" style="max-width:150px;">
+        <input type="text" id="arkkan-exams-passed-filter-id" placeholder="رقم الهوية" style="max-width:130px;">
+        <select id="arkkan-exams-passed-filter-nat" style="max-width:150px;"><option value="">كل الجنسيات</option></select>
+        <select id="arkkan-exams-passed-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
+        <select id="arkkan-exams-passed-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-passed-filter-date-from"></label>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-passed-filter-date-to"></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-passed-filter-clear">✕ مسح الفلاتر</button>
       </div>
       <div id="arkkan-exams-passed-progress-wrap" style="display:none; margin-bottom:12px;">
         <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
@@ -1526,8 +1560,19 @@
         </button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-failed-stop" style="display:none;">⏹ إيقاف</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-failed-compare" title="يراجع كل عميل في هذا الصندوق: يجلب نتيجته من أركان ويقارنها بالمخزَّنة — أي اختلاف يُحفَظ تلقائياً ويُوضَّح أمام كل عميل">🔍 مقارنة مع أركان</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-failed-export" title="يصدّر بالضبط الصفوف الظاهرة حالياً (بعد الفلاتر) إلى Excel">📤 تصدير Excel</button>
         <span class="spacer"></span>
         <span id="arkkan-exams-failed-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <input type="text" id="arkkan-exams-failed-filter-name" placeholder="بحث بالاسم" style="max-width:150px;">
+        <input type="text" id="arkkan-exams-failed-filter-id" placeholder="رقم الهوية" style="max-width:130px;">
+        <select id="arkkan-exams-failed-filter-nat" style="max-width:150px;"><option value="">كل الجنسيات</option></select>
+        <select id="arkkan-exams-failed-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
+        <select id="arkkan-exams-failed-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-failed-filter-date-from"></label>
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-failed-filter-date-to"></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-failed-filter-clear">✕ مسح الفلاتر</button>
       </div>
       <div id="arkkan-exams-failed-progress-wrap" style="display:none; margin-bottom:12px;">
         <div style="height:6px; background:var(--border); border-radius:99px; overflow:hidden;">
