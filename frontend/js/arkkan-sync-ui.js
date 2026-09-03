@@ -77,7 +77,7 @@ function arkkanToInputDate(v) {
   if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
   m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
   if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`;
-  return s;
+  return ''; // صيغة غير معروفة — لا نُخزِّن نصاً مرفوضاً يظهر الحقل فارغاً
 }
 
 async function arkkanCheckReady() {
@@ -140,12 +140,18 @@ function arkkanPatchFromData(c, data){
   }
   // تاريخ إصدار الفاتورة (data.date = Invoice Date من أركان) — يُعبّي "تاريخ الفاتورة"
   // في شيت فواتير الدورات (receiptIssueDate) تحديداً، وهو مصدر عمود المزامنة الوحيد
-  // (لا نقرأ من شيت العملاء c.date). يُملأ فقط لو كان غير موجود حتى لا نمس تاريخاً
-  // مسجّلاً يدوياً مسبقاً، وc.date (تاريخ التسجيل/الاستيراد) يبقى كما هو دون تغيير.
-  // يُطبيع بصيغة YYYY-MM-DD (arkkanToInputDate) وإلا يُخزَّن بصيغة أركان
-  // (2026/07/21) فيظهر حقل التاريخ فارغاً في شيت فواتير الدورات (input type=date).
-  if (!c.receiptIssueDate && data.date) {
-    patch.receiptIssueDate = arkkanToInputDate(data.date);
+  // (لا نقرأ من شيت العملاء c.date). كان يُملأ فقط لو كان الحقل فارغاً (شرط
+  // !c.receiptIssueDate)، فكان أي تاريخ سابق محلّلاً/قديم/غير صحيح يمنع التحديث بعناد
+  // فلا تُخزَّن القيمة الصحيحة القادمة من أركان أبداً — لكن باقي مسارات الكتابة
+  // (الشيت اليدوي، استيراد ملف، مسار الدورات) تحدِّث هذا الحقل بحرية دون أي تمييز بين
+  // "يدوي" و"آلي". لاتساق السلوك، يُحدَّث دائماً من أركان طالما جاء تاريخ صالح:
+  // نُطيّع التاريخ (arkkanToInputDate) إلى YYYY-MM-DD وفقط لو خرج تاريخاً صالحاً
+  // (isValidIsoDate) نُخزّنه — وإلا لا نمسه، فلا يُخزَّن نص مرفوض يظهر الحقل
+  // فارغاً في شيت فواتير الدورات (input type=date). c.date (تاريخ التسجيل/الاستيراد)
+  // يبقى كما هو دون تغيير.
+  if (data.date) {
+    const normDate = arkkanToInputDate(data.date);
+    if (normDate && isValidIsoDate(normDate)) patch.receiptIssueDate = normDate;
   }
   // تاريخ الدورة: نستعمل تاريخ بداية الدورة من أركان (data.startDate) أولاً؛
   // ولو غير متاح نرجّع للتاريخ المحلي (جدول الدورات / expectedCourseDate).
