@@ -411,6 +411,13 @@ async function loadData(cacheOnly){
   try{
     const r = kv.settings;
     settings = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    // إشارة مهمة لوحدات تعتمد على الإعدادات (مثل gsheet-workflow): تُضبط فور تحميل الإعدادات
+    // الحقيقية (المحفوظة/المؤكدة) في الذاكرة، وليس نسخة DEFAULT_SETTINGS الفارغة في بداية السكربت.
+    // قبل هذه اللحظة يكون settings.gsheetWorkflow (صندوق الاعتماد/الرفض) فارغاً افتراضياً — أي
+    // حفظ تلقائي مبكر (مثل migrateAutoEnableSheets في gsheet-workflow) كان يكتب الصندوق الفارغ فوق
+    // الصندوق المحفوظ فعلياً فيمسحه عند كل إعادة فتح. تُستخدم هذه الإشارة لتأجيل أي كتابة حتى
+    // اكتمال تحميل الإعدادات.
+    window.appSettingsLoaded = true;
     if(settings.bagPrice===undefined) settings.bagPrice = DEFAULT_SETTINGS.bagPrice;
     if(settings.priceSaudi===undefined) settings.priceSaudi = DEFAULT_SETTINGS.priceSaudi;
     if(settings.priceNonSaudi===undefined) settings.priceNonSaudi = DEFAULT_SETTINGS.priceNonSaudi;

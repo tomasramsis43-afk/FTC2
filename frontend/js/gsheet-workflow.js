@@ -42,7 +42,16 @@
     return w;
   }
 
-  function persistWf(){ return saveSettings(); }
+  function persistWf(){
+    // أمان حرج ضد مسح صندوق الاعتماد/الرفض: لا نكتب أبداً قبل أن تُحمَّل الإعدادات الحقيقية
+    // (المحفوظة) في الذاكرة. عند فتح البرنامج، تكون settings في البداية نسخة من DEFAULT_SETTINGS
+    // الفارغة (gsheetWorkflow = [])، ولا يُستبدل بالحقيقي إلا بعد loadData(). أي persistence مبكر —
+    // كاستدعاء migrateAutoEnableSheets/recoverStuckProcessing في init — كان يرفع الصندوق الفارغ إلى
+    // السيرفر فيمسح الصندوق المحفوظ فعلياً عند كل إعادة فتح. بمجرد أن تصبح الإشارة صحيحة نكتب
+    // بحرية؛ ولو لم تُضبط بعد، نتجاهل الكتابة (الذاكرة تبقى لتُقرأ وتُحفظ لاحقاً من المحفوظ الحقيقي).
+    if(window.appSettingsLoaded !== true) return Promise.resolve(false);
+    return saveSettings();
+  }
 
   /* ===================== Source Identity ===================== */
 
@@ -1238,10 +1247,30 @@
   /* ===================== Init ===================== */
 
   function init(){
+    // نربط أحداث الواجهة فوراً (آمن، لا يكتب شيئاً)، ونؤجّل كل ما يكتب على السيرفر —
+    // migrateAutoEnableSheets/recoverStuckProcessing/restartTimer — حتى تُحمَّل الإعدادات الحقيقية.
+    // قبل ذلك تكون settings نسخة DEFAULT الفارغة، وأي persistWf مبكر كان يمسح صندوق الاعتماد/الرفض.
+    bind();
+    if(window.appSettingsLoaded === true){
+      initAfterSettingsReady();
+    }else{
+      var _tries = 0;
+      var _watch = setInterval(function(){
+        if(window.appSettingsLoaded === true){
+          clearInterval(_watch);
+          initAfterSettingsReady();
+        }else if(++_tries > 120){ // ~10 ثانية حد أقصى — فقط حتى لا يدور المؤقت للأبد لو تعطّل التحميل
+          clearInterval(_watch);
+          initAfterSettingsReady();
+        }
+      }, 80);
+    }
+  }
+
+  function initAfterSettingsReady(){
     migrateAutoEnableSheets();
     recoverStuckProcessing();
     cleanupStaleGsheetRows(); // تنظيف العناصر العالقة فور الفتح
-    bind();
     setTimeout(renderAll, 800);
     setTimeout(function(){
       if(typeof settings!=='undefined' && settings) restartTimer();
