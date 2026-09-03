@@ -410,6 +410,9 @@
     enabled.forEach(function(sheet){
       var intervalMs = Math.max(1, Number(sheet.intervalMin)||2) * 60000;
       _sheetTimers[sheet.name] = setInterval(function(){
+        // فحص دوري لأي عملية "قيد التنفيذ" عالقة (أكثر من دقيقتين) قبل الجلب،
+        // حتى لا تحتاج الصفحة لإعادة تحميل كاملة لفك التعليق.
+        if(recoverStuckProcessing()) renderAll();
         fetchOneSheet(sheet).then(function(r){
           runLiveCompare().then(function(){ renderAll(); });
         }).catch(function(e){
@@ -1152,6 +1155,7 @@
   function recoverStuckProcessing(){
     var w = wfData();
     var timeoutMs = 120000;
+    var changed = false;
     w.pending.forEach(function(p){
       if(p.status === 'PROCESSING' && p.processingStartedAt){
         if(Date.now() - p.processingStartedAt > timeoutMs){
@@ -1159,9 +1163,14 @@
           p.processedBy = null;
           p.processingStartedAt = null;
           p.leaseUntil = null;
+          changed = true;
         }
       }
     });
+    // إصلاح: كانت الحالة تُصحَّح في الذاكرة المحلية فقط بدون حفظ على السيرفر،
+    // فيفضل السجل "قيد التنفيذ" عالقاً للأبد لأي مستخدم آخر يفتح الصفحة لاحقاً.
+    if(changed) persistWf();
+    return changed;
   }
 
   /* ===================== Init ===================== */
