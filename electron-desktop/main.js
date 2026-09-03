@@ -23,7 +23,18 @@ try {
 } catch (e) { /* تجاهل أي خطأ في القراءة والاستمرار بالقيمة الافتراضية */ }
 // عنوان الوكيل الحيّ في الريبو — من هنا يتحدّث arkkan-agent.js تلقائياً عند كل
 // تشغيل (طالما فيه إنترنت)، فيصل لأي إصلاح أو تحسين جديد بدون إعادة بناء/تثبيت.
-const AGENT_REMOTE_RAW = 'https://raw.githubusercontent.com/tomasramsis43-afk/FTC2/main/arkkan-agent.js';
+// وكيل أركان ليس ملفاً منفرداً — يعتمد على ملفات مرافقة companion في نفس المجلد
+// (config/logger/utils/sync). كلها يجب أن تُنقل وتُحدَّث معاً من الريبو وإلا فشل
+// تشغيل الوكيل بـ MODULE_NOT_FOUND (مثل require('./arkkan-config')). نعلنها هنا
+// بقائمة مرتبة تُستخدم في المزامنة من الريبو وفي ضمّها مع الحزمة (extraResources).
+const AGENT_FILES = [
+  'arkkan-agent.js',
+  'arkkan-config.js',
+  'arkkan-logger.js',
+  'arkkan-utils.js',
+  'arkkan-sync.js'
+];
+const AGENT_REMOTE_BASE = 'https://raw.githubusercontent.com/tomasramsis43-afk/FTC2/main/';
 // نفس ملفات الواجهة اللي تتحدّث فعلياً (بلا الأيقونات والـ manifest الثابتة اللي
 // نادراً ما تتغيّر) — بنجيبها من السيرفر الحيّ في كل تشغيل عنده نت، ونكتبها فوق
 // النسخة المحلية في مجلد بيانات المستخدم (مش داخل مجلد التثبيت نفسه، عشان الكتابة
@@ -443,35 +454,73 @@ function startLocalServer() {
       return path.join(app.getPath('userData'), 'arkkan-agent-env');
     }
 
+    // مجلد بيانات المستخدم حيث يُحفظ كامل «حزمة» ملفات الوكيل (agent + مرافقاته).
+    function arkkanUserDir() {
+      return path.join(app.getPath('userData'), 'arkkan-agent-files');
+    }
+
+    // أماكن محتملة لملف الوكيل الرئيسي — كلها يجب أن تُصطحب معها ملفاتها المرافقة.
     async function arkkanAgentPath() {
+      const userDir = arkkanUserDir();
+      const devDir = path.join(__dirname, '..');
       const candidates = [
-        path.join(app.getPath('userData'), 'arkkan-agent.js'), // النسخة المُحدَّثة من الريبو
-        path.join(__dirname, '..', 'arkkan-agent.js'),     // وضع التطوير (جذر المشروع)
-        path.join(process.cwd(), 'arkkan-agent.js'),
+        path.join(userDir, 'arkkan-agent.js'),       // النسخة المُحدَّثة من الريبو (كامل الحزمة)
+        path.join(devDir, 'arkkan-agent.js'),         // وضع التطوير (جذر المشروع — مرافقاته موجودة بجانبه)
+        path.join(process.cwd(), 'arkkan-agent.js'),  // وضع التطوير من مجلد آخر
         path.join(process.resourcesPath, 'arkkan-agent.js') // النسخة المثبتة (resources)
       ];
       for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (e) {} }
       return null;
     }
 
-    // ينزّل أحدث نسخة من الوكيل من الريبو إلى مجلد بيانات المستخدم، ويعيد مساره.
-    // لو مفيش إنترنت يرجع لأي نسخة محلية متاحة (المرفقة مع الـ setup أو من المشروع).
-    async function arkkanSyncedAgentPath() {
-      const userAgent = path.join(app.getPath('userData'), 'arkkan-agent.js');
+    // يضمن وجود كل ملفات حزمة الوكيل في مجلد بيانات المستخدم (إما محدّثة من الريبو
+    // أو منسوخة من موضع الحزمة/المشروع عند عدم وجود إنترنت)، ويعيد مجلدها.
+    async function arkkanEnsureUserBundle() {
+      const userDir = arkkanUserDir();
+      fs.mkdirSync(userDir, { recursive: true });
+
+      const sourceDirs = [process.resourcesPath, path.join(__dirname, '..'), process.cwd()];
+
+      // 1) محاولة تحديث كل الملفات من الريبو (لو فيه إنترنت).
+      let anyRemote = false;
       try {
-        const remote = await fetchText(AGENT_REMOTE_RAW);
-        // نتأكد إن المحتوى فعلاً وكيل أركان (منفذ 9955 + playwright) قبل الكتابة فوق
-        // أي نسخة محلية سليمة — حماية من صفحة خطأ أو استجابة فارغة.
-        if (remote && remote.length > 500 && remote.includes('9955') && remote.includes('playwright')) {
-          const existing = fs.existsSync(userAgent) ? fs.readFileSync(userAgent, 'utf8') : null;
+        await Promise.all(AGENT_FILES.map(async (f) => {
+          const remote = await fetchText(AGENT_REMOTE_BASE + f);
+          // نحرس الوكيل الرئيسي بأن يحتوي المنفذ/playwright فعلاً (حماية من خطأ)
+          // والملفات المرافقة بأن لا يكون الرد فارغاً/قصيراً جداً قبل الكتابة.
+          const valid = f === 'arkkan-agent.js'
+            ? (remote && remote.length > 500 && remote.includes('9955') && remote.includes('playwright'))
+            : (remote && remote.length >= 50);
+          if (!valid) return;
+          const dest = path.join(userDir, f);
+          const existing = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : '';
           if (existing !== remote) {
-            fs.mkdirSync(path.dirname(userAgent), { recursive: true });
-            fs.writeFileSync(userAgent, remote, 'utf8');
-            console.log('[Arkkan Agent] تم تحديث الوكيل تلقائياً من الريبو');
+            fs.writeFileSync(dest, remote, 'utf8');
+            anyRemote = true;
           }
-          return userAgent;
+        }));
+        if (anyRemote) console.log('[Arkkan Agent] حزمة الوكيل حُدِّثت تلقائياً من الريبو');
+      } catch (e) { /* دون نت — نكمل بالنسخة المحلية */ }
+
+      // 2) ضمان اكتمال الحزمة: أي ملف مطلوب ناقص يُنسخ من موضع الحزمة/المشروع المتاح.
+      for (const f of AGENT_FILES) {
+        const dest = path.join(userDir, f);
+        if (fs.existsSync(dest)) continue;
+        for (const dir of sourceDirs) {
+          const src = path.join(dir, f);
+          try { if (fs.existsSync(src)) { fs.copyFileSync(src, dest); break; } } catch (e) {}
         }
-      } catch (e) { /* دون نت — نستخدم النسخة المحلية */ }
+      }
+
+      return userDir;
+    }
+
+    // ينزّل أحدث نسخة من حزمة الوكيل إلى مجلد بيانات المستخدم ويعيد مسار الوكيل
+    // الرئيسي فيها. لو مفيش إنترنت يرجع لأي نسخة محلية (المرفقة مع الـ setup/المشروع).
+    async function arkkanSyncedAgentPath() {
+      const userDir = await arkkanEnsureUserBundle();
+      const userAgent = path.join(userDir, 'arkkan-agent.js');
+      if (fs.existsSync(userAgent)) return userAgent;
       return arkkanAgentPath();
     }
 
@@ -530,7 +579,11 @@ function startLocalServer() {
       try {
         const envDir = arkkanEnvDir();
         const logFile = path.join(app.getPath('userData'), 'arkkan-agent.log');
-        const log = fs.createWriteStream(logFile, { flags: 'a' });
+        // نفتح ملف السجل بعنوان fd عدد صحيح فعلي فوراً عبر fs.openSync. تمرير
+        // createWriteStream مباشرة إلى stdio كان يفشل لأن fd ما زال null لحظة
+        // الاستدعاء فيرفضه spawn ("The argument 'stdio' is invalid")، فيتوقف الوكيل
+        // من الأساس. openSync يضمن fd جاهزاً يُمرَّر للعملية الابنة بأمان.
+        const logFd = fs.openSync(logFile, 'a');
         const child = spawn('node', [agentPath], {
           cwd: envDir,
           env: Object.assign({}, process.env, {
@@ -538,9 +591,12 @@ function startLocalServer() {
             ARKKAN_BROWSERS_PATH: path.join(envDir, 'browsers')
           }),
           detached: true,
-          stdio: ['ignore', log, log],
+          stdio: ['ignore', logFd, logFd],
           windowsHide: true
         });
+        // نغلق fd في عملية الأصل بعد التسليم — العملية الابنة تحتفظ بنسختها الخاصة
+        // للكتابة، وعدم إغلاقه هنا يبقيه عالقاً (ذاكرة/مورد) في الأصل.
+        try { fs.closeSync(logFd); } catch (e) {}
         child.unref();
         arkkanChild = child;
         arkkanStopRequested = false;
@@ -595,7 +651,8 @@ function startLocalServer() {
     srv.get('/arkkan-agent/status', async (req, res) => {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       const running = await arkkanPing();
-      res.json({ running, agentPath: arkkanAgentPath() ? path.basename(arkkanAgentPath()) : null });
+      const ap = await arkkanAgentPath();
+      res.json({ running, agentPath: ap ? path.basename(ap) : null });
     });
 
     // ⚠️ إصلاح مهم: بدون هذا الميدل وير، Chromium (نافذة Electron نفسها) كانت

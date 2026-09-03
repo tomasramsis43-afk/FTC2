@@ -27,6 +27,22 @@
                                          {
                                              "from":  "../arkkan-agent.js",
                                              "to":  "arkkan-agent.js"
+                                         },
+                                         {
+                                             "from":  "../arkkan-config.js",
+                                             "to":  "arkkan-config.js"
+                                         },
+                                         {
+                                             "from":  "../arkkan-logger.js",
+                                             "to":  "arkkan-logger.js"
+                                         },
+                                         {
+                                             "from":  "../arkkan-utils.js",
+                                             "to":  "arkkan-utils.js"
+                                         },
+                                         {
+                                             "from":  "../arkkan-sync.js",
+                                             "to":  "arkkan-sync.js"
                                          }
                                      ],
                   "win":  {
