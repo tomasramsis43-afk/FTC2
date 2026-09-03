@@ -411,7 +411,7 @@
       var intervalMs = Math.max(1, Number(sheet.intervalMin)||2) * 60000;
       _sheetTimers[sheet.name] = setInterval(function(){
         fetchOneSheet(sheet).then(function(r){
-          if(r.added) renderAll();
+          runLiveCompare().then(function(){ renderAll(); });
         }).catch(function(e){
           console.error('[gsheet-workflow] auto-fetch error for "'+sheet.name+'":', e);
         });
@@ -419,7 +419,9 @@
     });
     fetchAllSheets().catch(function(e){
       console.error('[gsheet-workflow] initial fetch error:', e);
-    });
+    }).then(function(){
+      return runLiveCompare();
+    }).then(function(){ renderAll(); });
   }
 
   /* ===================== Validation ===================== */
@@ -798,6 +800,89 @@
     return String(s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
   }
 
+  /* ===================== Live Compare against Google Sheet ===================== */
+  // مقارنة تلقائية (مع كل جلب دوري للشيت) بين بيانات الصف المخزّنة في صندوق
+  // الاعتماد/الرفض وما وردَ فعلياً في شيت جوجل الحي، لرصد أي تغيّر أو حذف.
+  var liveCompareMap = new Map(); // key: p.id -> { present, changes:[{label,old,val}] }
+  var _liveComparing = false;
+  var LIVE_FIELDS = [
+    { k:'name', label:'الاسم' },
+    { k:'phone', label:'الجوال' },
+    { k:'nationality', label:'الجنسية' },
+    { k:'courseType', label:'الدورة' },
+    { k:'paid', label:'المدفوع' },
+    { k:'channel', label:'طريقة الدفع' },
+    { k:'date', label:'التاريخ' }
+  ];
+
+  function liveValueEqual(k, a, b){
+    if(k==='paid') return Number(a||0) === Number(b||0);
+    if(k==='date') return String(a||'').trim() === String(b||'').trim();
+    return String(a||'').trim() === String(b||'').trim();
+  }
+
+  // يجري مقارنة صفوف كل الشيتات المفعّلة ويملأ liveCompareMap (ذاكرة فقط، لا يُحفظ)
+  async function runLiveCompare(){
+    if(_liveComparing) return;
+    _liveComparing = true;
+    try {
+      var w = wfData();
+      var enabled = w.sheets.filter(function(s){ return s.enabled && s.url; });
+      if(!enabled.length){ liveCompareMap.clear(); return; }
+      var sheetRows = {}; // sheetId -> array of parsed live rows
+      for(var i=0;i<enabled.length;i++){
+        try {
+          var csv = await fetchSheetCsv(enabled[i].url);
+          sheetRows[makeSheetId(enabled[i].url)] = parseSheetRows(csv);
+        } catch(e){
+          console.error('[gsheet-workflow] live-compare fetch failed for "'+enabled[i].name+'":', e);
+          sheetRows[makeSheetId(enabled[i].url)] = [];
+        }
+      }
+      var items = w.pending.concat(w.rejected);
+      var next = new Map();
+      items.forEach(function(p){
+        var sid = p.sourceSheetId || makeSheetId(p.sheetUrl||'');
+        var rows = sheetRows[sid] || [];
+        var row = null;
+        for(var j=0;j<rows.length;j++){
+          if(rows[j].clientId === p.clientId){ row = rows[j]; break; }
+        }
+        var rec;
+        if(!row){
+          rec = { present:false, changes:[] };
+        } else {
+          var changes = [];
+          LIVE_FIELDS.forEach(function(f){
+            var live = f.k==='paid' ? Number(row[f.k]||0) : row[f.k];
+            var oldp = p[f.k];
+            if(!liveValueEqual(f.k, live, oldp)){
+              changes.push({ label:f.label, old:oldp, val:live });
+            }
+          });
+          rec = { present:true, changes:changes };
+        }
+        next.set(p.id, rec);
+      });
+      liveCompareMap = next;
+    } finally {
+      _liveComparing = false;
+    }
+  }
+
+  function liveBadge(p){
+    var rec = liveCompareMap.get(p.id);
+    if(!rec) return '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+    if(!rec.present){
+      return '<span class="badge" style="background:rgba(220,53,69,0.15);color:#c0392b;border:1px solid rgba(220,53,69,0.4);white-space:nowrap;" title="لم يعد هذا الصف وارِداً في شيت جوجل">⛔ غير موجود في الشيت</span>';
+    }
+    if(rec.changes.length){
+      var tip = rec.changes.map(function(c){ return c.label+': «'+c.old+'» ← «'+c.val+'»'; }).join(' • ');
+      return '<span class="badge" style="background:rgba(243,156,18,0.15);color:#b9770e;border:1px solid rgba(243,156,18,0.5);white-space:nowrap;" title="'+escHtml(tip)+'">⚠ تعدُّل ('+rec.changes.length+')</span>';
+    }
+    return '<span class="badge" style="background:rgba(39,174,96,0.12);color:#1e8449;border:1px solid rgba(39,174,96,0.35);white-space:nowrap;">✔ مطابق</span>';
+  }
+
   function rowActions(p, fromRejected){
     if(p.status === 'PROCESSING'){
       return '<span style="color:var(--text-muted);font-size:12px;">⏳ قيد التنفيذ</span>';
@@ -836,6 +921,7 @@
         '<td class="mono"'+statusClass+'>'+String(p.paid||0)+'</td>'+
         '<td'+statusClass+'>'+escHtml(p.channel||'')+'</td>'+
         '<td class="mono"'+statusClass+'>'+escHtml(p.date||'')+'</td>'+
+        '<td style="white-space:nowrap;"'+statusClass+'>'+liveBadge(p)+'</td>'+
         '<td style="white-space:nowrap;"'+statusClass+'>'+rowActions(p,false)+'</td>';
       tbody.appendChild(tr);
     });
@@ -859,6 +945,7 @@
         '<td class="mono">'+String(p.paid||0)+'</td>'+
         '<td>'+escHtml(p.channel||'')+'</td>'+
         '<td class="mono">'+escHtml(p.date||'')+'</td>'+
+        '<td style="white-space:nowrap;">'+liveBadge(p)+'</td>'+
         '<td style="white-space:nowrap;">'+rowActions(p,true)+'</td>';
       tbody.appendChild(tr);
     });
