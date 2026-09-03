@@ -40,9 +40,15 @@ function arkkanCourseDate(c){
   return c.expectedCourseDate || '';
 }
 
+/* تاريخ صالح بصيغة ISO فقط (YYYY-MM-DD) — أي قيمة أخرى (فاضية أو نص تالف من استيراد
+   قديم أو صيغة غير قياسية) تُعتبر غير صالحة، حتى لو كانت "موجودة" تقنياً كسلسلة نصية.
+   بدونها: قيمة تالفة تُخفي العميل من صندوق المزامنة (لأنها "موجودة") بينما تظهر فاضية
+   فعلياً في حقل <input type="date"> بشيت فواتير الدورات (المتصفح يرفض أي صيغة غير ISO). */
+function isValidIsoDate(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()); }
+
 function arkkanFieldMissing(c, f) {
   if (f === 'startDate') return !(c.startDate || arkkanCourseDate(c));
-  if (f === 'date') return !c.receiptIssueDate; // تاريخ الفاتورة يأتي حصراً من شيت فواتير الدورات (receiptIssueDate) لا من شيت العملاء
+  if (f === 'date') return !isValidIsoDate(c.receiptIssueDate); // تاريخ الفاتورة يأتي حصراً من شيت فواتير الدورات (receiptIssueDate) لا من شيت العملاء
   const v = c[f];
   if (v === undefined || v === null || v === '') return true;
   if (f === 'coursePrice') return (Number(v) || 0) === 0; // قيمة صفر = لم تُسجَّل
