@@ -35,6 +35,63 @@
     });
   }
 
+  /* ---------- معلومات الدفع للعميل ---------- */
+  function clientPayments(c) {
+    if (typeof vaultTx === 'undefined') return [];
+    return (vaultTx || []).filter(function (t) {
+      return t && t.type === 'in' && !t.deletedAt && String(t.clientId || '') === String(c.clientId);
+    });
+  }
+  function paymentMethodText(c) {
+    var pays = clientPayments(c);
+    if (pays.length) {
+      var parts = pays.map(function (t) { return String(t.method || '').trim(); }).filter(Boolean);
+      if (parts.length) return parts[parts.length - 1];
+    }
+    var m = String(c.channel || '').trim();
+    var m2 = String(c.channel2 || '').trim();
+    if (m && m2) return m + ' + ' + m2;
+    return m || m2 || null;
+  }
+  function paymentDateText(c) {
+    var pays = clientPayments(c);
+    if (pays.length) {
+      var last = pays[pays.length - 1];
+      if (last && last.date) return last.date;
+    }
+    return null;
+  }
+  function courseDateText(c) {
+    var d = String(c.startDate || '').trim();
+    return d || null;
+  }
+  function fmtDate(d) {
+    if (!d) return '—';
+    return (typeof formatDateDisplay === 'function' ? formatDateDisplay(d) : d) || '—';
+  }
+
+  /* ---------- خلية نتيجة الاختبار للعميل ---------- */
+  function examInfo(c) {
+    if (typeof arkkanExamStatusOf === 'function') {
+      return arkkanExamStatusOf(c);
+    }
+    var er = String(c.examResult || '').trim();
+    return er ? { r: er, d: c.examLastDate || '' } : null;
+  }
+  function examCellHtml(c) {
+    var s = examInfo(c);
+    if (!s) return '<span style="color:var(--text-muted);">لم يُختبَر</span>';
+    var r = String(s.r).trim();
+    var d = s.d || c.examLastDate || '';
+    var tip = d ? 'آخر اختبار: ' + r + ' — بتاريخ ' + d : 'آخر اختبار: ' + r;
+    if (typeof arkkanExamCell === 'function') {
+      return '<span title="' + escapeHtml(tip) + '">' + arkkanExamCell(r) + '</span>';
+    }
+    if (r.includes('ناجح')) return '<span style="color:var(--success, green); font-weight:600;cursor:help;" title="' + escapeHtml(tip) + '">ناجح ✓</span>';
+    if (r.includes('راسب')) return '<span style="color:var(--danger, red); font-weight:600;cursor:help;" title="' + escapeHtml(tip) + '">راسب</span>';
+    return '<span style="color:var(--text-muted);cursor:help;" title="' + escapeHtml(tip) + '">' + escapeHtml(r) + '</span>';
+  }
+
   /* ---------- ذاكرة مؤقتة لنتائج آخر بحث ---------- */
   var lastResults = [];
 
@@ -65,7 +122,7 @@
       if (!r.found) {
         return '<tr class="idsearch-missing">' +
           '<td class="mono">' + escapeHtml(r.id) + '</td>' +
-          '<td colspan="6" class="idsearch-notfound"><span class="badge badge-danger">✕</span> هذا الشخص غير موجود بالنظام</td>' +
+          '<td colspan="10" class="idsearch-notfound"><span class="badge badge-danger">✕</span> هذا الشخص غير موجود بالنظام</td>' +
           '<td><span class="pill pill-red">غير موجود</span></td>' +
         '</tr>';
       }
@@ -76,7 +133,11 @@
         '<td>' + escapeHtml(c.nationality || '—') + '</td>' +
         '<td>' + escapeHtml(c.courseType || '—') + '</td>' +
         '<td class="mono">' + escapeHtml(c.courseNumber || '—') + '</td>' +
+        '<td>' + fmtDate(courseDateText(c)) + '</td>' +
         '<td class="mono">' + escapeHtml(c.invoice || '—') + '</td>' +
+        '<td>' + escapeHtml(paymentMethodText(c) || '—') + '</td>' +
+        '<td>' + fmtDate(paymentDateText(c)) + '</td>' +
+        '<td>' + examCellHtml(c) + '</td>' +
         '<td><span class="pill pill-green">موجود</span></td>' +
       '</tr>';
     }).join('');
@@ -107,12 +168,20 @@
   function exportCSV() {
     if (!lastResults.length) { showToast('لا توجد نتائج للتصدير'); return; }
     var rows = [
-      ['رقم الإقامة', 'الاسم', 'الجوال', 'الجنسية', 'الدورة', 'رقم الدورة', 'رقم الفاتورة', 'الحالة']
+      ['رقم الإقامة', 'الاسم', 'الجوال', 'الجنسية', 'الدورة', 'رقم الدورة', 'تاريخ الدورة', 'رقم الفاتورة', 'طريقة الدفع', 'تاريخ الدفع', 'نتيجة الاختبار', 'الحالة']
     ];
     lastResults.forEach(function (r) {
-      if (!r.found) { rows.push([r.id, '', '', '', '', '', '', 'غير موجود']); return; }
+      if (!r.found) { rows.push([r.id, '', '', '', '', '', '', '', '', '', '', 'غير موجود']); return; }
       var c = r.client;
-      rows.push([c.clientId || '', c.name || '', c.phone || '', c.nationality || '', c.courseType || '', c.courseNumber || '', c.invoice || '', 'موجود']);
+      var ex = examInfo(c);
+      var pays = clientPayments(c);
+      var lastPay = pays.length ? pays[pays.length - 1] : null;
+      rows.push([
+        c.clientId || '', c.name || '', c.phone || '', c.nationality || '', c.courseType || '',
+        c.courseNumber || '', c.startDate || '', c.invoice || '',
+        paymentMethodText(c), (lastPay && lastPay.date) || '',
+        ex ? ex.r : '', 'موجود'
+      ]);
     });
     var csv = rows.map(function (row) {
       return row.map(function (cell) {
