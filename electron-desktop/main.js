@@ -741,11 +741,20 @@ function createWindow() {
     mainWindow.show();
   });
   mainWindow.loadURL(`http://127.0.0.1:${PORT}/app.html`);
-  // أدوات المطوّر تُفتح فقط عند التشغيل بمتغيّر البيئة FTC2_DEBUG=1 (لتشخيص مشكلة
-  // لاحقاً)، مش تلقائياً مع كل تشغيل عادي للمستخدم النهائي.
+  // أدوات المطوّر تُفتح تلقائياً فقط عند التشغيل بمتغيّر البيئة FTC2_DEBUG=1، مش مع
+  // كل تشغيل عادي للمستخدم النهائي.
   if (process.env.FTC2_DEBUG === '1') {
     mainWindow.webContents.openDevTools({ mode: 'right' });
   }
+  // Menu.setApplicationMenu(null) بالأسفل بيشيل شريط القوائم بالكامل — وبيشيل معاه
+  // اختصار Ctrl+Shift+I الافتراضي بتاع Electron (لأنه أصلاً متصل بعنصر "View > Toggle
+  // Developer Tools" في القائمة المحذوفة، مش اختصار مستقل على مستوى النظام). فبنسجّله
+  // يدوياً هنا عشان يفضل شغال حتى بدون قائمة، ويسمح بتشخيص أي مشكلة وقت الحاجة.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow.webContents.toggleDevTools();
+    }
+  });
 
   // أي رابط خارجي يفتح في المتصفح — إلا نوافذ الطباعة الداخلية (about:blank) فنسمح بها
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
