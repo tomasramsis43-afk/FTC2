@@ -3641,8 +3641,6 @@ body:not(.dark-theme) {
 .card,
 .close-entity-card {
   background: var(--surface);
-  backdrop-filter: var(--pro-glass-blur);
-  -webkit-backdrop-filter: var(--pro-glass-blur);
   box-shadow: var(--pro-shadow-ambient);
 }
 
@@ -3666,8 +3664,6 @@ body:not(.dark-theme) {
 /* ---------- اللوحات (.panel): نفس المعاملة الزجاجية ---------- */
 .panel {
   background: var(--surface);
-  backdrop-filter: var(--pro-glass-blur);
-  -webkit-backdrop-filter: var(--pro-glass-blur);
   box-shadow: var(--pro-shadow-ambient);
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
@@ -3799,8 +3795,6 @@ tbody tr {
 .cfo-hero-item,
 .cfo-panel {
   background: var(--surface);
-  backdrop-filter: var(--pro-glass-blur);
-  -webkit-backdrop-filter: var(--pro-glass-blur);
   box-shadow: var(--pro-shadow-ambient);
 }
 
