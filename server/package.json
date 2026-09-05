@@ -8,7 +8,7 @@
     "start": "node server.js",
     "seed-user": "node seed-user.js",
     "migrate": "node migrate-from-localstorage.js",
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.2",
