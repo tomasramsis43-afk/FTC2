@@ -276,6 +276,21 @@ ensureSchema()
     }
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
+
+    // شبكة أمان أخيرة: أي خطأ يفلت خارج دورة الطلب/الاستجابة تماماً (centralErrorHandler
+    // يغطي فقط ما يحدث داخل route handlers) — مثلاً throw متزامن داخل callback مؤقّت،
+    // أو Promise مرفوض بدون .catch فى أي مكان بالكود. بدون هذا، Node يوقف العملية فوراً
+    // (سلوكه الافتراضي) فيسقط السيرفر بالكامل بصمت، ولا يظهر إلا "توقف الخدمة" فى Render
+    // من غير أي تفصيل فى نفس اللحظة. هنا نسجّل بوضوح أولاً، ثم نحاول إغلاقاً سلساً كالمعتاد
+    // بدل الخروج المفاجئ — وبنفس مهلة الأمان (10 ثوانٍ إجبارية) لو تعلّق الإغلاق نفسه.
+    process.on('uncaughtException', (err) => {
+      console.error('🔴 uncaughtException — خطأ غير متوقع أوقف تدفق الكود الطبيعي:', err);
+      shutdown('uncaughtException');
+    });
+    process.on('unhandledRejection', (reason) => {
+      console.error('🔴 unhandledRejection — Promise مرفوض بدون معالجة فى أي مكان بالكود:', reason);
+      shutdown('unhandledRejection');
+    });
   })
   .catch(e => {
     console.error('❌ تعذّر تجهيز قاعدة البيانات:', e);
