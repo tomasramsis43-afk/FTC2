@@ -49,9 +49,9 @@ function isValidIsoDate(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '').t
 function arkkanFieldMissing(c, f) {
   if (f === 'startDate') return !(c.startDate || arkkanCourseDate(c));
   if (f === 'date') return !isValidIsoDate(c.receiptIssueDate); // تاريخ الفاتورة يأتي حصراً من شيت فواتير الدورات (receiptIssueDate) لا من شيت العملاء
+  if (f === 'coursePrice') return !(Number(c.receiptActualValue) > 0); // العمود "قيمة الفاتورة" يعرض القيمة الفعلية بالإيصال (شيت فواتير الدورات)، وليس سعر الدورة المسجَّل بالنظام — فالنقص يُقاس بها حصراً
   const v = c[f];
   if (v === undefined || v === null || v === '') return true;
-  if (f === 'coursePrice') return (Number(v) || 0) === 0; // قيمة صفر = لم تُسجَّل
   return false;
 }
 function arkkanMissingFields(c) {
@@ -302,7 +302,7 @@ function renderArkkanSyncTable() {
       <td class="col-invoice">${escapeHtml(c.invoice || '—')}</td>
       <td class="col-coursenum">${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-date">${escapeHtml(c.receiptIssueDate || '—')}</td>
-      <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : (c.coursePrice ?? '—')))}</td>
+      <td class="col-courseprice">${escapeHtml(String(c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : '—'))}</td>
       <td class="col-startdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       <td class="col-baginvoice">${escapeHtml(c.bagInvoice || '—')}</td>
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
@@ -1269,7 +1269,7 @@ function arkkanRefreshRowCells(c) {
   set('.col-invoice', c.invoice);
   set('.col-coursenum', c.courseNumber);
   set('.col-date', c.receiptIssueDate);
-  set('.col-courseprice', c.receiptActualValue !== undefined && c.receiptActualValue !== null && c.receiptActualValue !== '' ? c.receiptActualValue : c.coursePrice);
+  set('.col-courseprice', c.receiptActualValue);
   set('.col-startdate', c.startDate || arkkanCourseDate(c));
   set('.col-baginvoice', c.bagInvoice);
   set('.col-bagdate', c.bagPurchaseDate);
