@@ -836,15 +836,6 @@ $('#btn-run-due-schedules')?.addEventListener('click', async ()=>{
   renderVault();
 });
 
-function seqNumbers(){
-  const map = {};
-  ['vault','bank','network','network2','other'].forEach(dest=>{
-    const list = vaultTx.filter(t=>(t.destination||'vault')===dest)
-      .sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.createdAt||0)-(b.createdAt||0));
-    list.forEach((t,i)=>{ map[t.id] = i+1; });
-  });
-  return map;
-}
 let vaultCurrentPage = 1;
 let vaultLastFilterSig = '';
 let selectedVaultIds = new Set();
@@ -913,7 +904,6 @@ function renderVault(){
     $('#vault-page-last').disabled = vaultCurrentPage>=vTotalPages;
   }
 
-  const seq = seqNumbers();
   const dupIdsForHighlight = vaultDuplicateClientIds();
   const anomalyIdsForHighlight = vaultAnomalyIds();
   $('#vault-table-body').innerHTML = pageRows.map(t=>{
@@ -929,7 +919,6 @@ function renderVault(){
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
       <td class="sticky-col sticky-col-2" data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
       <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
-      <td class="mono" data-label="الرقم">${destLabel(t.destination||'vault').split(' ')[0]}-${seq[t.id]||'—'}</td>
       <td class="mono" data-label="التاريخ">${t.date||'—'}</td>
       <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
       <td data-label="النوع"><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
@@ -1750,9 +1739,8 @@ $('#btn-extract-nomethod').addEventListener('click', ()=>{
   renderVault();
   const rows = vaultFilteredRows();
   if(!rows.length){ showToast('لا توجد حركات بدون طريقة دفع ضمن الفلتر الحالي'); return; }
-  const seq = seqNumbers();
   const reportRows = rows.map(t=>({
-    'الرقم التسلسلي الرسمي': t.seq||'', 'الرقم': seq[t.id]||'', 'التاريخ': t.date||'',
+    'الرقم التسلسلي الرسمي': t.seq||'', 'التاريخ': t.date||'',
     'الحساب': destLabel(t.destination||'vault'), 'النوع': t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'),
     'رقم الهوية': t.clientId||'', 'العميل / البيان': (t.type==='in'||t.isReturn)?(t.clientName||t.manual||''):(t.category||''),
     'التصنيف': t.type==='out' ? (t.category||'') : '', 'المبلغ': num(t.amount), 'ملاحظات': t.notes||''
@@ -1762,9 +1750,8 @@ $('#btn-extract-nomethod').addEventListener('click', ()=>{
 });
 $('#btn-export-vault').addEventListener('click', ()=>{
   const rows = vaultFilteredRows();
-  const seq = seqNumbers();
-  const headers = ['الرقم التسلسلي الرسمي','الرقم','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','رقم المستند/المرفق','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
-  const data = rows.map(t=>[t.seq||'', seq[t.id]||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.referenceNo||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
+  const headers = ['الرقم التسلسلي الرسمي','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','رقم المستند/المرفق','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
+  const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.referenceNo||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
   const csv = '\uFEFF'+[headers, ...data].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
