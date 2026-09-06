@@ -1797,16 +1797,14 @@ table {
   contain: content;
 }
 
-@media(max-width: 900px) {
-  .table-scroll table {
-    width: max-content;
-    min-width: 100%;
-  }
+.table-scroll table {
+  width: max-content;
+  min-width: 100%;
+}
 
-  .table-scroll th,
-  .table-scroll td {
-    white-space: nowrap;
-  }
+.table-scroll th,
+.table-scroll td {
+  white-space: nowrap;
 }
 
 .table-scroll-course {
