@@ -27,6 +27,7 @@
   "overrides": {
     "xmldom": "npm:@xmldom/xmldom@^0.9.10",
     "axios": "^1.18.1",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "qs": "^6.16.0"
   }
 }
