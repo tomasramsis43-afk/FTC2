@@ -207,6 +207,21 @@
         <option value="3">آخر 3 أشهر</option>
       </select>
       <span class="hint hint-info" style="margin:0;">الرسوم البيانية في لوحة التحكم تُعرض على آخر 12 شهراً افتراضياً — يمكنك تضييق النطاق إلى 6 أو 3 أشهر.</span>
+      <span class="spacer"></span>
+      <div class="overflow-wrap">
+        <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⚙ تخصيص اللوحة</button>
+        <div class="overflow-menu">
+          <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="dash-toggle-cockpit" style="width:auto; margin:0;" checked> نبض التدفق النقدي وسجل النشاط
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="dash-toggle-followups" style="width:auto; margin:0;" checked> المتابعات
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="dash-toggle-emailreports" style="width:auto; margin:0;" checked> إرسال التقارير بالإيميل
+          </label>
+        </div>
+      </div>
     </div>
     <div class="cfo-grid" id="cfo-grid"></div>
     <div id="cockpit-pulse" style="margin-top:14px;"></div>

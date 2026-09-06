@@ -1,3 +1,34 @@
+/* ---------------- تخصيص لوحة التحكم: إخفاء/إظهار عناصر اختيارية ----------------
+   تفضيل محلي بالجهاز (localStorage، بنفس أسلوب ftc2-row-density) وليس مزامَناً مع
+   السيرفر — كل مستخدم على جهازه يختار العناصر التي تهمه. الإخفاء يوقف حساب العنصر
+   المخفي أيضاً (وليس فقط إخفاءه بصرياً) توفيراً لنفس نوع الحساب الذي كان renderDashboard
+   يتجنبه أصلاً عند إغلاق تبويب لوحة التحكم بالكامل. */
+const DASH_WIDGETS = {
+  'dash-toggle-cockpit': { storageKey: 'ftc2-dash-hide-cockpit', panel: '#cockpit-pulse' },
+  'dash-toggle-followups': { storageKey: 'ftc2-dash-hide-followups', panel: '#followups-panel' },
+  'dash-toggle-emailreports': { storageKey: 'ftc2-dash-hide-emailreports', panel: '#reports-email-panel' },
+};
+function isDashWidgetHidden(checkboxId){
+  try{ return localStorage.getItem(DASH_WIDGETS[checkboxId].storageKey) === '1'; }catch(e){ return false; }
+}
+function applyDashWidgetVisibility(){
+  Object.keys(DASH_WIDGETS).forEach(cbId=>{
+    const hidden = isDashWidgetHidden(cbId);
+    const panel = $(DASH_WIDGETS[cbId].panel);
+    if(panel) panel.style.display = hidden ? 'none' : '';
+    const cb = $('#'+cbId);
+    if(cb) cb.checked = !hidden;
+  });
+}
+applyDashWidgetVisibility();
+Object.keys(DASH_WIDGETS).forEach(cbId=>{
+  $('#'+cbId)?.addEventListener('change', e=>{
+    try{ localStorage.setItem(DASH_WIDGETS[cbId].storageKey, e.target.checked ? '0' : '1'); }catch(err){}
+    applyDashWidgetVisibility();
+    if(e.target.checked) renderDashboard(); // أظهرناه الآن لأول مرة فربما لم يُحسَب بعد
+  });
+});
+
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){
   const c = clients.filter(x=>matchYear(x.date));
@@ -14,9 +45,9 @@ function renderDashboard(){
   // قسم تاني بالبرنامج (فواتير، خزنة، حقائب، دورات...) وهو أصلاً مش شايف لوحة التحكم دلوقتي.
   if(isViewActive('dashboard')){
     renderCfoDashboard();
-    renderCockpitPulse();
+    if(!isDashWidgetHidden('dash-toggle-cockpit')) renderCockpitPulse();
     renderSmartAlerts();
-    if(typeof renderFollowUpsPanel==='function') renderFollowUpsPanel();
+    if(typeof renderFollowUpsPanel==='function' && !isDashWidgetHidden('dash-toggle-followups')) renderFollowUpsPanel();
     if(currentUserRole==='admin') refreshPendingApprovals();
   }
 }
