@@ -30,7 +30,6 @@ const REPORT_CATALOG = [
   { icon:'account_balance',   title:'الميزانية العمومية',         desc:'المركز المالي: أصول والتزامات وحقوق ملكية', run:'btn-export-balance', print:'btn-print-balance' },
   { icon:'water_drop',        title:'التدفقات النقدية',           desc:'حركة السيولة الداخلة والخارجة', run:'btn-export-cashflow', print:'btn-print-cashflow' },
   { icon:'payments',          title:'الإيرادات التفصيلية',        desc:'تفصيل الإيرادات حسب المصدر والدورة', run:'btn-export-income', print:'btn-print-income' },
-  { icon:'stacked_line_chart',title:'الموازنة والتخطيط',          desc:'مقارنة المخطط بالفعلي لكل بند', run:'btn-export-budget' },
   { icon:'compare_arrows',    title:'المقارنة السنوية',           desc:'هذا العام مقابل الماضي (YoY)', run:'btn-export-yoy' },
   { icon:'hourglass_top',     title:'أعمار الديون — العملاء',    desc:'المتأخرات مقسمة بفترات التقادم', run:'btn-export-ar' },
   { icon:'hourglass_bottom',  title:'أعمار الديون — الموردون',   desc:'المستحق على المركز للموردين', run:'btn-export-ap' },

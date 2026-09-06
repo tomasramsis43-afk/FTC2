@@ -734,17 +734,6 @@ $('#btn-export-accounting-full')?.addEventListener('click', ()=>{
 function getBudgetEntry(year, kind, key){
   return budgetEntries.find(b=> b.year===year && b.kind===kind && b.key===key);
 }
-function ensureBudgetEntry(year, kind, key){
-  let e = getBudgetEntry(year, kind, key);
-  if(!e){
-    e = { id: uid(), year, kind, key, months: Array(12).fill(0), updatedBy:null, updatedAt:null };
-    budgetEntries.push(e);
-  }
-  return e;
-}
-function budgetYearTotal(entry){
-  return (entry && entry.months) ? entry.months.reduce((a,b)=>a+num(b),0) : 0;
-}
 function budgetLineSources(){
   const courseTypes = new Set((settings.courses||[]).map(c=>c.name));
   clients.forEach(c=>{ if(c.courseType) courseTypes.add(c.courseType); });
@@ -764,94 +753,6 @@ function actualForLineMonth(kind, key, year, monthIndex){
   return vaultTx.filter(t=> t.type==='out' && (t.category||'')===key && (t.date||'').slice(0,7)===monthKey)
     .reduce((s,t)=>s+num(t.amount),0);
 }
-function actualForLineYear(kind, key, year){
-  let total = 0;
-  for(let m=0;m<12;m++) total += actualForLineMonth(kind, key, year, m);
-  return total;
-}
-function renderEpmBudget(){
-  if(!$('#view-budget')) return;
-  const year = parseInt($('#budget-year')?.value || new Date().getFullYear(), 10);
-  const sources = budgetLineSources();
-  const allLines = [
-    ...sources.revenue.map(key=>({kind:'revenue', key, label:'إيراد: '+key})),
-    ...sources.expense.map(key=>({kind:'expense', key, label:'مصروف: '+key}))
-  ];
-
-  const inputBody = $('#budget-input-body');
-  if(inputBody){
-    inputBody.innerHTML = allLines.map(line=>{
-      const entry = ensureBudgetEntry(year, line.kind, line.key);
-      const monthInputs = entry.months.map((v,i)=> `<td><input type="number" class="budget-month-input" data-kind="${line.kind}" data-key="${escapeHtml(line.key)}" data-month="${i}" value="${v||''}" style="width:78px;"></td>`).join('');
-      return `<tr><td>${escapeHtml(line.label)}</td>${monthInputs}<td class="mono" data-line-total="${line.kind}::${escapeHtml(line.key)}">${fmt(budgetYearTotal(entry))}</td></tr>`;
-    }).join('') || `<tr><td colspan="14" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد أنواع دورات أو تصنيفات مصروفات معرَّفة بعد في الإعدادات</td></tr>`;
-  }
-
-  const compareBody = $('#budget-compare-body');
-  if(compareBody){
-    let totalBudgetRev=0, totalActualRev=0, totalBudgetExp=0, totalActualExp=0;
-    let worst = null;
-    const rows = allLines.map(line=>{
-      const entry = getBudgetEntry(year, line.kind, line.key);
-      const budget = budgetYearTotal(entry);
-      const actual = actualForLineYear(line.kind, line.key, year);
-      const variance = actual - budget;
-      const pct = budget!==0 ? (actual/budget*100) : (actual!==0 ? null : 100);
-      if(line.kind==='revenue'){ totalBudgetRev+=budget; totalActualRev+=actual; }
-      else { totalBudgetExp+=budget; totalActualExp+=actual; }
-      if(budget!==0 && (!worst || Math.abs(variance) > Math.abs(worst.variance))) worst = { name:line.label, variance };
-      const badColor = line.kind==='expense' ? (variance>0) : (variance<0);
-      const style = variance===0 ? '' : (badColor ? 'color:var(--red);' : 'color:var(--teal);');
-      return `<tr><td>${escapeHtml(line.label)}</td><td class="mono">${fmt(budget)}</td><td class="mono">${fmt(actual)}</td><td class="mono" style="${style}">${fmt(variance)}</td><td class="mono">${pct===null?'—':fmt(pct)+'%'}</td></tr>`;
-    }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">لا توجد بيانات</td></tr>`;
-    compareBody.innerHTML = rows;
-
-    const cardsEl = $('#budget-summary-cards');
-    if(cardsEl){
-      const revPct = totalBudgetRev!==0 ? (totalActualRev/totalBudgetRev*100) : 0;
-      const expPct = totalBudgetExp!==0 ? (totalActualExp/totalBudgetExp*100) : 0;
-      cardsEl.innerHTML = `
-        <div class="card"><div class="k">نسبة تحقيق الإيرادات المخططة</div><div class="v teal">${fmt(revPct)}%</div></div>
-        <div class="card"><div class="k">نسبة تنفيذ المصروفات المخططة</div><div class="v ${expPct>100?'red':'gold'}">${fmt(expPct)}%</div></div>
-        <div class="card"><div class="k">صافي المخطط (${year})</div><div class="v gold">${fmt(totalBudgetRev-totalBudgetExp)}</div></div>
-        <div class="card"><div class="k">صافي الفعلي (${year})</div><div class="v teal">${fmt(totalActualRev-totalActualExp)}</div></div>
-        ${worst ? `<div class="card"><div class="k">أكبر انحراف عن الموازنة</div><div class="v red" style="font-size:14px;">${escapeHtml(worst.name)} (${fmt(worst.variance)})</div></div>` : ''}
-      `;
-    }
-  }
-}
-$('#budget-year')?.addEventListener('change', renderEpmBudget);
-$('#budget-input-body')?.addEventListener('change', async e=>{
-  const input = e.target.closest('.budget-month-input');
-  if(!input) return;
-  const year = parseInt($('#budget-year').value, 10);
-  const kind = input.dataset.kind;
-  const key = input.dataset.key;
-  const monthIdx = parseInt(input.dataset.month, 10);
-  const entry = ensureBudgetEntry(year, kind, key);
-  entry.months[monthIdx] = num(input.value);
-  entry.updatedBy = (typeof currentUser!=='undefined' && currentUser) ? currentUser : 'غير معروف';
-  entry.updatedAt = Date.now();
-  await saveBudgetEntries();
-  await logAudit('edit','الموازنة', `تم تعديل موازنة ${year} — ${kind==='revenue'?'إيراد':'مصروف'} "${key}" — شهر ${monthIdx+1}: ${fmt(entry.months[monthIdx])}`);
-  renderEpmBudget();
-});
-$('#btn-export-budget')?.addEventListener('click', ()=>{
-  const year = parseInt($('#budget-year').value, 10);
-  const sources = budgetLineSources();
-  const allLines = [
-    ...sources.revenue.map(key=>({kind:'revenue', key, label:'إيراد: '+key})),
-    ...sources.expense.map(key=>({kind:'expense', key, label:'مصروف: '+key}))
-  ];
-  const rows = allLines.map(line=>{
-    const entry = getBudgetEntry(year, line.kind, line.key);
-    const budget = budgetYearTotal(entry);
-    const actual = actualForLineYear(line.kind, line.key, year);
-    return { 'البند': line.label, 'المخطط (سنوي)': budget, 'الفعلي': actual, 'الفرق': actual-budget };
-  });
-  downloadXlsx(`الموازنة_${year}.xlsx`, 'الموازنة', rows);
-});
-
 /* ============ بحث شامل (Global Search) ============ */
 function runGlobalSearch(q){
   q = (q||'').trim().toLowerCase();

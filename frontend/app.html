@@ -176,7 +176,6 @@
     <button data-view="purchases" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"></circle><circle cx="17" cy="20" r="1.4"></circle><path d="M2.5 3.5h2.3l1.9 11.4a2 2 0 0 0 2 1.7h8.4a2 2 0 0 0 2-1.6l1.4-7.4H6.2"></path></svg><span data-i18n="navPurchases">المشتريات</span></button>
     <button data-view="accounting" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M8 9h8M8 13h8M8 17h4"></path><circle cx="17.5" cy="17" r="3.4" fill="var(--bg)"></circle><path d="M16.2 17l.9.9 1.6-1.7"></path></svg><span data-i18n="navAccounting">المحاسبة</span></button>
     <button data-view="ledger" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h11a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2v-16a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6"></path></svg><span data-i18n="navLedger">دليل الحسابات والقيود اليومية</span></button>
-    <button data-view="budget" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7"></path><path d="M3 20h18"></path><path d="M6.5 6.5l3.5 3 3-2 4.5 3.5" stroke-dasharray="1 2.6"></path></svg><span data-i18n="navBudget">الموازنة والتخطيط</span></button>
     <div class="nav-section-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 6v6l4 2"></path></svg><span>الذكاء والتقارير</span></div>
     <button data-view="idsearch" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><span data-i18n="navIdSearch">البحث برقم الإقامة</span></button>
     <button data-view="reports" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"></path></svg><span data-i18n="navReports">التقارير</span></button>
@@ -2089,52 +2088,6 @@
       </div>
     </div>
 
-  </section>
-
-  <!-- BUDGET / EPM -->
-  <section class="view" id="view-budget">
-    <div class="panel" style="border-right:4px solid var(--navy);">
-      <h3>الموازنة التقديرية والتخطيط المالي</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">أدخل الأرقام المستهدفة شهرياً لكل نوع دورة (إيراد) وكل تصنيف مصروف، وقارنها تلقائياً بالأرقام الفعلية المسحوبة مباشرة من بيانات العملاء والحركات المالية الحقيقية في البرنامج. هذا القسم متاح للمدير فقط.</p>
-    </div>
-
-    <div class="panel">
-      <div class="toolbar">
-        <div class="field" style="max-width:170px;"><label>السنة</label>
-          <select id="budget-year">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026" selected>2026</option>
-            <option value="2027">2027</option>
-          </select>
-        </div>
-        <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" id="btn-export-budget">تصدير Excel (مخطط وفعلي)</button>
-      </div>
-      <div class="hint hint-info" style="margin-top:0;">الفعلي لكل شهر يُحسب تلقائياً: الإيراد من دخل المركز الحقيقي للعملاء المسجَّلين في ذلك الشهر لكل نوع دورة، والمصروف من مجموع حركات الخزنة الفعلية (صرف) لكل تصنيف — لا حاجة لإدخال أي رقم فعلي يدوياً.</div>
-    </div>
-
-    <div class="grid-cards" id="budget-summary-cards"></div>
-
-    <div class="panel" style="border-right:4px solid var(--teal);">
-      <h3 style="margin:0 0 6px;">إدخال الموازنة الشهرية (حسب أنواع الدورات وتصنيفات المصروفات الفعلية)</h3>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>البند</th><th>يناير</th><th>فبراير</th><th>مارس</th><th>أبريل</th><th>مايو</th><th>يونيو</th><th>يوليو</th><th>أغسطس</th><th>سبتمبر</th><th>أكتوبر</th><th>نوفمبر</th><th>ديسمبر</th><th>الإجمالي</th></tr></thead>
-          <tbody id="budget-input-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="panel" style="border-right:4px solid var(--gold);">
-      <h3 style="margin:0 0 6px;">مقارنة الفعلي بالمخطط (Actual vs Budget)</h3>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>الحساب</th><th>المخطط (سنوي)</th><th>الفعلي (حتى الآن)</th><th>الفرق</th><th>نسبة التحقق</th></tr></thead>
-          <tbody id="budget-compare-body"></tbody>
-        </table>
-      </div>
-    </div>
   </section>
 
   <!-- AUDIT LOG -->
