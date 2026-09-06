@@ -18,7 +18,8 @@ function renderBudget(){
     <div class="card"><div class="k">صافي الربح / الخسارة</div><div class="v ${t.net<0?'red':'gold'}">${fmt(t.net)}</div></div>
     <div class="card"><div class="k">رصيد الخزنة (كاش)</div><div class="v ${balanceOf('vault')<0?'red':''}">${fmt(balanceOf('vault'))}</div></div>
     <div class="card"><div class="k">رصيد البنك</div><div class="v ${balanceOf('bank')<0?'red':'teal'}">${fmt(balanceOf('bank'))}</div></div>
-    <div class="card"><div class="k">رصيد الشبكة</div><div class="v ${balanceOf('network')<0?'red':'gold'}">${fmt(balanceOf('network'))}</div></div>
+    <div class="card"><div class="k">رصيد شبكة المركز</div><div class="v ${balanceOf('network')<0?'red':'gold'}">${fmt(balanceOf('network'))}</div></div>
+    <div class="card"><div class="k">رصيد شبكة المستوصف</div><div class="v ${balanceOf('network2')<0?'red':'gold'}">${fmt(balanceOf('network2'))}</div></div>
     <div class="card"><div class="k">إجمالي المتبقي على العملاء (ذمم)</div><div class="v red">${fmt(t.totalRemaining)}</div></div>
     <div class="card"><div class="k">عدد العملاء المسجّلين إجمالاً</div><div class="v">${clients.length}</div></div>
     <div class="card"><div class="k">حصيلة الحقائب من العملاء</div><div class="v">${fmt(t.bagCollected)}</div></div>
@@ -593,6 +594,7 @@ function renderReports(){
       <td class="mono">${m.regCount}</td>
       <td class="mono">${fmt(m.cash)}</td>
       <td class="mono">${fmt(m.network)}</td>
+      <td class="mono">${fmt(m.network2)}</td>
       <td class="mono">${fmt(m.bank)}</td>
       <td class="mono" style="font-weight:bold;">${fmt(m.total)}</td>
     </tr>`).join('');
@@ -605,8 +607,8 @@ function renderReports(){
 ['#rp-from','#rp-to'].forEach(sel=> $(sel).addEventListener('input', renderReports));
 $('#btn-export-monthly-summary')?.addEventListener('click', ()=>{
   const monthlyTable = monthlyRegistrationsPaymentsTable(12);
-  const headers = ['الشهر','عدد المسجّلين','نقدي (كاش)','شبكة','بنك','إجمالي المدفوع'];
-  const rows = monthlyTable.map(m=>[m.label, m.regCount, m.cash, m.network, m.bank, m.total]);
+  const headers = ['الشهر','عدد المسجّلين','نقدي (كاش)','شبكة المركز','شبكة المستوصف','بنك','إجمالي المدفوع'];
+  const rows = monthlyTable.map(m=>[m.label, m.regCount, m.cash, m.network, m.network2, m.bank, m.total]);
   const csv = '\uFEFF'+[headers, ...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
@@ -932,6 +934,7 @@ function buildBalanceSheet(asOf){
   const cash = balanceOfAsOf('vault', asOf);
   const bank = balanceOfAsOf('bank', asOf);
   const network = balanceOfAsOf('network', asOf);
+  const network2 = balanceOfAsOf('network2', asOf);
   const receivables = receivablesAsOf(asOf);
   const bagInventory = bagInventoryValueAsOf(asOf);
   const fixedAssetsGross = fixedAssetsTotalAsOf(asOf);
@@ -946,14 +949,14 @@ function buildBalanceSheet(asOf){
   const accrued = accruedTotalAsOf(asOf);
   const otherLiab = otherLiabilityTotalAsOf(asOf);
 
-  const totalAssets = cash + bank + network + receivables + bagInventory + Math.max(0,fixedAssetsNet) + bagCustodyAsset;
+  const totalAssets = cash + bank + network + network2 + receivables + bagInventory + Math.max(0,fixedAssetsNet) + bagCustodyAsset;
   const totalLiabilities = bagCustody + loans + accrued + otherLiab;
   const retainedEarnings = retainedEarningsAsOf(asOf);
   const totalEquity = totalAssets - totalLiabilities;
   const ownerCapital = totalEquity - retainedEarnings;
 
   return {
-    cash, bank, network, receivables, bagInventory, fixedAssetsGross, accumDep, fixedAssetsNet,
+    cash, bank, network, network2, receivables, bagInventory, fixedAssetsGross, accumDep, fixedAssetsNet,
     bagCustody, bagCustodyAsset, loans, accrued, otherLiab,
     totalAssets, totalLiabilities, retainedEarnings, ownerCapital, totalEquity
   };
@@ -988,8 +991,8 @@ function buildCashFlowStatement(from, to){
   const netFinancing = finIn - finOut;
   const netChange = netOperating + netInvesting + netFinancing;
   const priorDay = addDaysISO(from, -1);
-  const beginCash = balanceOfAsOf('vault', priorDay) + balanceOfAsOf('bank', priorDay) + balanceOfAsOf('network', priorDay);
-  const endCash = balanceOfAsOf('vault', to) + balanceOfAsOf('bank', to) + balanceOfAsOf('network', to);
+  const beginCash = balanceOfAsOf('vault', priorDay) + balanceOfAsOf('bank', priorDay) + balanceOfAsOf('network', priorDay) + balanceOfAsOf('network2', priorDay);
+  const endCash = balanceOfAsOf('vault', to) + balanceOfAsOf('bank', to) + balanceOfAsOf('network', to) + balanceOfAsOf('network2', to);
   return { opIn, opReturns, opOut, netOperating, invOut, netInvesting, finIn, finOut, netFinancing, netChange, beginCash, endCash };
 }
 function renderCashFlowTable(from, to){
@@ -1260,11 +1263,12 @@ function renderBalanceSheetTable(asOf, bs){
   let html = accHeaderRow('الأصول المتداولة');
   html += accRow('الخزنة (كاش)', bs.cash, {indent:true});
   html += accRow('البنك', bs.bank, {indent:true});
-  html += accRow('الشبكة', bs.network, {indent:true});
+  html += accRow('شبكة المركز', bs.network, {indent:true});
+  html += accRow('شبكة المستوصف', bs.network2, {indent:true});
   html += accRow('ذمم العملاء (مدينون)', bs.receivables, {indent:true});
   html += accRow('مخزون الحقائب', bs.bagInventory, {indent:true});
   if(bs.bagCustodyAsset>0) html += accRow('سلفة حقائب مسلَّمة تفوق المحصَّل', bs.bagCustodyAsset, {indent:true});
-  const currentAssets = bs.cash+bs.bank+bs.network+bs.receivables+bs.bagInventory+bs.bagCustodyAsset;
+  const currentAssets = bs.cash+bs.bank+bs.network+bs.network2+bs.receivables+bs.bagInventory+bs.bagCustodyAsset;
   html += accRow('إجمالي الأصول المتداولة', currentAssets);
 
   if(bs.fixedAssetsGross>0){
@@ -1303,7 +1307,8 @@ function renderTrialBalanceTable(asOf, bs, incomeStmt, periodFrom){
   const rows = [
     ['الخزنة (كاش)','أصول', bs.cash, 0],
     ['البنك','أصول', bs.bank, 0],
-    ['الشبكة','أصول', bs.network, 0],
+    ['الشبكة (المركز)','أصول', bs.network, 0],
+    ['شبكة المستوصف','أصول', bs.network2, 0],
     ['ذمم العملاء (مدينون)','أصول', bs.receivables, 0],
     ['مخزون الحقائب','أصول', bs.bagInventory, 0],
     ['الأصول الثابتة (بالتكلفة)','أصول', bs.fixedAssetsGross, 0],
@@ -1637,6 +1642,7 @@ function buildDailyReportBodyHtml(dateStr){
   const bagValue = bagBuyers.reduce((s,c)=>s+num(c.bagPrice),0);
   const cash = dayIn.filter(t=>(t.destination||'vault')==='vault').reduce((s,t)=>s+num(t.amount),0);
   const network = dayIn.filter(t=>(t.destination||'vault')==='network').reduce((s,t)=>s+num(t.amount),0);
+  const network2 = dayIn.filter(t=>(t.destination||'vault')==='network2').reduce((s,t)=>s+num(t.amount),0);
   const bank = dayIn.filter(t=>(t.destination||'vault')==='bank').reduce((s,t)=>s+num(t.amount),0);
 
   const row = (label, value, opts={}) => `<tr${opts.total?` style="font-weight:800; background:#F1F4F7;"`:''}><td>${label}</td><td class="mono" style="text-align:left;">${value}</td></tr>`;
@@ -1740,7 +1746,8 @@ function buildDailyReportBodyHtml(dateStr){
     <table>
       <tbody>
         ${row('نقدي (كاش)', fmt(cash)+' ﷼')}
-        ${row('شبكة', fmt(network)+' ﷼')}
+        ${row('شبكة المركز', fmt(network)+' ﷼')}
+        ${row('شبكة المستوصف', fmt(network2)+' ﷼')}
         ${row('بنك', fmt(bank)+' ﷼')}
         ${row('الإجمالي المحصّل', fmt(income)+' ﷼', {total:true})}
       </tbody>

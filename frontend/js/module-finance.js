@@ -214,7 +214,7 @@ function syncClientLedgerEntry(client){
       method: client.channel,
       category:'',
       manual:'',
-      networkInvoice: dest==='network' ? (client.networkInvoice||'') : '',
+      networkInvoice: (dest==='network'||dest==='network2') ? (client.networkInvoice||'') : '',
       notes: dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : ''),
       autoClientId: client.id,
       createdAt: Date.now(),
@@ -241,7 +241,7 @@ function syncClientLedgerEntry(client){
       method: client.channel2,
       category:'',
       manual:'',
-      networkInvoice: dest2==='network' ? (client.networkInvoice2||'') : '',
+      networkInvoice: (dest2==='network'||dest2==='network2') ? (client.networkInvoice2||'') : '',
       notes: dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين',
       autoClientId: client.id,
       createdAt: Date.now(),
@@ -838,7 +838,7 @@ $('#btn-run-due-schedules')?.addEventListener('click', async ()=>{
 
 function seqNumbers(){
   const map = {};
-  ['vault','bank','network'].forEach(dest=>{
+  ['vault','bank','network','network2','other'].forEach(dest=>{
     const list = vaultTx.filter(t=>(t.destination||'vault')===dest)
       .sort((a,b)=> (a.date||'').localeCompare(b.date||'') || (a.createdAt||0)-(b.createdAt||0));
     list.forEach((t,i)=>{ map[t.id] = i+1; });
@@ -874,7 +874,8 @@ function renderVault(){
   $('#vault-cards').innerHTML = `
     <div class="card"><div class="k">الخزنة (كاش) — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('vault')<0?'red':''}">${fmt(netOfDestFiltered('vault'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('vault'))}</div></div>
     <div class="card"><div class="k">البنك — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('bank')<0?'red':'teal'}">${fmt(netOfDestFiltered('bank'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('bank'))}</div></div>
-    <div class="card"><div class="k">الشبكة — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('network')<0?'red':'gold'}">${fmt(netOfDestFiltered('network'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('network'))}</div></div>
+    <div class="card"><div class="k">شبكة المركز — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('network')<0?'red':'gold'}">${fmt(netOfDestFiltered('network'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('network'))}</div></div>
+    <div class="card"><div class="k">شبكة المستوصف — حسب الفلتر الحالي</div><div class="v ${netOfDestFiltered('network2')<0?'red':'gold'}">${fmt(netOfDestFiltered('network2'))}</div><div style="font-size:11px; color:var(--text-muted); margin-top:4px;">الرصيد الفعلي الكلي (بدون فلتر): ${fmt(balanceOf('network2'))}</div></div>
     <div class="card"><div class="k">صافي الفترة المحددة (كل الحسابات المفلترة)</div><div class="v">${fmt(periodIn-periodOut)}</div></div>
     ${renderProjectedBalanceCard()}
     ${renderAnomalyCard(rows)}
@@ -1277,7 +1278,7 @@ function toggleVaultFields(){
   $('#wrap-category').style.display = isOut ? '' : 'none';
   $('#wrap-recipient').style.display = isOut ? '' : 'none';
   $('#wrap-refno').style.display = isOut ? '' : 'none';
-  $('#wrap-netinvoice').style.display = $('#vf-destination').value==='network' ? '' : 'none';
+  $('#wrap-netinvoice').style.display = ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? '' : 'none';
   $('#wrap-bagdeposit-qty').style.display = (isOut && $('#vf-category').value==='حقائب') ? '' : 'none';
 }
 $('#vf-type').addEventListener('change', toggleVaultFields);
@@ -1491,7 +1492,7 @@ $('#vault-form').addEventListener('submit', async e=>{
     recipientName: isOut ? $('#vf-recipient').value.trim() : '',
     referenceNo: isOut ? $('#vf-refno').value.trim() : '',
     destination: $('#vf-destination').value,
-    networkInvoice: $('#vf-destination').value==='network' ? $('#vf-netinvoice').value.trim() : ''
+    networkInvoice: ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? $('#vf-netinvoice').value.trim() : ''
   };
   const wasVaultEdit = !!editingVaultId;
   let prevLinkedClientId = '';

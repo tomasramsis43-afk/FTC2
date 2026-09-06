@@ -1079,7 +1079,8 @@ document.addEventListener('change', async e=>{
 function destLabelToValue(l){
   const v = String(l||'').trim();
   if(v==='البنك') return 'bank';
-  if(v==='الشبكة') return 'network';
+  if(v==='الشبكة' || v==='شبكة المركز') return 'network';
+  if(v==='شبكة المستوصف') return 'network2';
   if(v==='الخزنة (كاش)' || v==='الخزنة' || v==='كاش') return 'vault';
   return 'vault';
 }
@@ -1118,7 +1119,7 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
       const destCh = (settings.channels||[]).find(c=>c.dest===destination);
       const method = methodRaw2 ? canonicalizeChannelName(methodRaw2) : (destCh ? destCh.name : '');
       const notes = String(row['ملاحظات']||'').trim();
-      const networkInvoice = destination==='network' ? String(row['رقم فاتورة الشبكة']||'').trim() : '';
+      const networkInvoice = (destination==='network'||destination==='network2') ? String(row['رقم فاتورة الشبكة']||'').trim() : '';
 
       let newTx;
       if(type==='in'){

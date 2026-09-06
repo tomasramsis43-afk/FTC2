@@ -151,7 +151,7 @@ function renderCfoHero(){
   const prevYearCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(prevYear)).reduce((s,t)=>s+num(t.amount),0);
   const prevCollectionRate = prevYearSales>0 ? Math.min(999, (prevYearCollected/prevYearSales)*100) : 0;
 
-  const totalBalance = balanceOf('vault') + balanceOf('bank') + balanceOf('network');
+  const totalBalance = balanceOf('vault') + balanceOf('bank') + balanceOf('network') + balanceOf('network2');
   const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
 
   const fc = forecastCurrentMonthIncome();
@@ -270,7 +270,7 @@ function renderCfoDashboard(){
   const remainBars = remainingByCourseType();
 
   // === لوحة 3: الخزنة والبنك ===
-  const vaultBal = balanceOf('vault'), bankBal = balanceOf('bank'), networkBal = balanceOf('network');
+  const vaultBal = balanceOf('vault'), bankBal = balanceOf('bank'), networkBal = balanceOf('network'), network2Bal = balanceOf('network2');
   const netFlowYear = vaultTx.filter(t=>String(t.date||'').slice(0,4)===String(thisYear)).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
   const netFlowLastYear = vaultTx.filter(t=>String(t.date||'').slice(0,4)===String(lastYear)).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
   const netFlowThisMonth = vaultTx.filter(t=>String(t.date||'').slice(0,7)===thisMonthKey).reduce((s,t)=> s + (t.type==='in'?num(t.amount):-num(t.amount)), 0);
@@ -338,7 +338,8 @@ function renderCfoDashboard(){
       <div class="cfo-kpis cfo-kpis-3">
         ${cfoKpi('vault','الخزنة (كاش)', fmt(vaultBal)+' ﷼')}
         ${cfoKpi('bank','البنك', fmt(bankBal)+' ﷼')}
-        ${cfoKpi('network','الشبكة', fmt(networkBal)+' ﷼')}
+        ${cfoKpi('network','شبكة المركز', fmt(networkBal)+' ﷼')}
+        ${cfoKpi('network2','شبكة المستوصف', fmt(network2Bal)+' ﷼')}
       </div>
       ${cfoDeltasRow(netFlowYear, netFlowLastYear, netFlowThisMonth, netFlowLastMonth)}
       <div class="cfo-visual" id="cfo-trend-cash"></div>
@@ -576,20 +577,21 @@ function monthlyClientsDailyReport(yearMonth){
   const year = Number(yStr), month = Number(mStr); // month: 1-12
   const daysInMonth = new Date(year, month, 0).getDate();
   const rows = [];
-  let totalReg = 0, totalCash = 0, totalNetwork = 0, totalBank = 0, totalAmount = 0;
+  let totalReg = 0, totalCash = 0, totalNetwork = 0, totalNetwork2 = 0, totalBank = 0, totalAmount = 0;
   for(let day=1; day<=daysInMonth; day++){
     const dateStr = `${yStr}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const regCount = clients.filter(c=>c.date===dateStr).length;
     const dayIn = vaultTx.filter(t=>t.type==='in' && t.date===dateStr);
     const cash = dayIn.filter(t=>(t.destination||'vault')==='vault').reduce((s,t)=>s+num(t.amount),0);
     const network = dayIn.filter(t=>(t.destination||'vault')==='network').reduce((s,t)=>s+num(t.amount),0);
+    const network2 = dayIn.filter(t=>(t.destination||'vault')==='network2').reduce((s,t)=>s+num(t.amount),0);
     const bank = dayIn.filter(t=>(t.destination||'vault')==='bank').reduce((s,t)=>s+num(t.amount),0);
-    const amount = cash + network + bank;
+    const amount = cash + network + network2 + bank;
     const weekday = WEEKDAY_NAMES_AR[new Date(year, month-1, day).getDay()];
-    totalReg += regCount; totalCash += cash; totalNetwork += network; totalBank += bank; totalAmount += amount;
-    rows.push({ day, dateStr, weekday, regCount, cash, network, bank, amount });
+    totalReg += regCount; totalCash += cash; totalNetwork += network; totalNetwork2 += network2; totalBank += bank; totalAmount += amount;
+    rows.push({ day, dateStr, weekday, regCount, cash, network, network2, bank, amount });
   }
-  return { year, month, monthLabel: `${MONTH_NAMES_AR_FULL[month-1]} ${year}`, rows, totalReg, totalCash, totalNetwork, totalBank, totalAmount };
+  return { year, month, monthLabel: `${MONTH_NAMES_AR_FULL[month-1]} ${year}`, rows, totalReg, totalCash, totalNetwork, totalNetwork2, totalBank, totalAmount };
 }
 function monthlyClientsReportBodyHtml(yearMonth){
   const rep = monthlyClientsDailyReport(yearMonth);
@@ -603,6 +605,7 @@ function monthlyClientsReportBodyHtml(yearMonth){
       <td class="mono">${r.regCount}</td>
       <td class="mono">${fmt(r.cash)}</td>
       <td class="mono">${fmt(r.network)}</td>
+      <td class="mono">${fmt(r.network2)}</td>
       <td class="mono">${fmt(r.bank)}</td>
       <td class="mono" style="font-weight:bold;">${fmt(r.amount)}</td>
     </tr>`).join('');
@@ -613,7 +616,7 @@ function monthlyClientsReportBodyHtml(yearMonth){
     </div>
     <div class="meta">تاريخ الطباعة: ${escapeHtml(today)}</div>
     <table>
-      <thead><tr><th>اليوم</th><th>التاريخ</th><th>اسم اليوم</th><th>عدد العملاء المسجّلين</th><th>نقدي (كاش)</th><th>شبكة</th><th>بنك</th><th>الإجمالي</th></tr></thead>
+      <thead><tr><th>اليوم</th><th>التاريخ</th><th>اسم اليوم</th><th>عدد العملاء المسجّلين</th><th>نقدي (كاش)</th><th>شبكة المركز</th><th>شبكة المستوصف</th><th>بنك</th><th>الإجمالي</th></tr></thead>
       <tbody>
         ${rowsHtml}
         <tr style="font-weight:800; background:#F1F4F7;">
@@ -621,6 +624,7 @@ function monthlyClientsReportBodyHtml(yearMonth){
           <td class="mono">${rep.totalReg}</td>
           <td class="mono">${fmt(rep.totalCash)}</td>
           <td class="mono">${fmt(rep.totalNetwork)}</td>
+          <td class="mono">${fmt(rep.totalNetwork2)}</td>
           <td class="mono">${fmt(rep.totalBank)}</td>
           <td class="mono">${fmt(rep.totalAmount)}</td>
         </tr>
@@ -676,8 +680,9 @@ function monthlyRegistrationsPaymentsTable(n=12){
     const monthIn = vaultTx.filter(t=>t.type==='in' && (t.date||'').slice(0,7)===k);
     const cash = monthIn.filter(t=>(t.destination||'vault')==='vault').reduce((s,t)=>s+num(t.amount),0);
     const network = monthIn.filter(t=>(t.destination||'vault')==='network').reduce((s,t)=>s+num(t.amount),0);
+    const network2 = monthIn.filter(t=>(t.destination||'vault')==='network2').reduce((s,t)=>s+num(t.amount),0);
     const bank = monthIn.filter(t=>(t.destination||'vault')==='bank').reduce((s,t)=>s+num(t.amount),0);
-    return { key:k, label: monthLabelAr(k), regCount, cash, network, bank, total: cash+network+bank };
+    return { key:k, label: monthLabelAr(k), regCount, cash, network, network2, bank, total: cash+network+network2+bank };
   });
 }
 /* دخل المركز حسب نوع الدورة، مقيّداً بفلتر الفترة الحالي في شاشة التقارير */

@@ -123,10 +123,11 @@ function guessDest(name){
   const n = (name||'').toLowerCase();
   if(n.includes('نقد')||n.includes('كاش')||n.includes('خزين')) return 'vault';
   if(n.includes('بنك')||n.includes('تحويل')) return 'bank';
+  if(n.includes('مستوصف')) return 'network2';
   if(n.includes('بطاق')||n.includes('شبك')||n.includes('مدى')) return 'network';
   return 'other';
 }
-function destLabel(d){ return {vault:'الخزنة (كاش)', bank:'البنك', network:'الشبكة', other:'أخرى'}[d] || 'أخرى'; }
+function destLabel(d){ return {vault:'الخزنة (كاش)', bank:'البنك', network:'شبكة المركز', network2:'شبكة المستوصف', other:'أخرى'}[d] || 'أخرى'; }
 /* تصحيح/مزامنة تلقائي لسجل عمليات مخزون الحقائب: تُضيف عملية "تسليم" (issue) بأثر رجعي لأي عميل
    مصدر حقيبته "من المخزون" (bagSource==='stock') وليس له عملية مقابلة مسجّلة بعد في bagStock.
    تُستدعى عند تحميل البيانات وأيضاً فور انتهاء أي استيراد Excel قد يضبط مصدر حقيبة عميل على "من المخزون"،
@@ -431,7 +432,7 @@ async function loadData(cacheOnly){
     if(!settings.expenseCategories.includes('مشتريات')){ settings.expenseCategories.push('مشتريات'); await saveSettings(); }
     if(!settings.nextVaultSeq) settings.nextVaultSeq = DEFAULT_SETTINGS.nextVaultSeq;
     if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.nextVaultSeqByDest));
-    else ['vault','bank','network','other'].forEach(d=>{ if(!settings.nextVaultSeqByDest[d]) settings.nextVaultSeqByDest[d] = 1; });
+    else ['vault','bank','network','network2','other'].forEach(d=>{ if(!settings.nextVaultSeqByDest[d]) settings.nextVaultSeqByDest[d] = 1; });
     if(!settings.powerAutomate) settings.powerAutomate = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.powerAutomate));
     if(settings.vaultLockedThrough===undefined) settings.vaultLockedThrough = DEFAULT_SETTINGS.vaultLockedThrough;
     if(settings.channels && typeof settings.channels[0]==='string'){

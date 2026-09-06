@@ -561,7 +561,7 @@ async function printReturnInvoice(id){
   const tx = vaultTx.find(x=>x.id===id);
   if(!tx || !tx.isReturn){ showToast('تعذر إيجاد بيانات المردود'); return; }
   // ترجمة إنجليزية لحساب الصرف (قيمة ثابتة معروفة داخل النظام)
-  const destLabelEn = d => ({vault:'Vault (Cash)', bank:'Bank', network:'Network', other:'Other'}[d] || 'Other');
+  const destLabelEn = d => ({vault:'Vault (Cash)', bank:'Bank', network:'Network (Center)', network2:'Network (Clinic)', other:'Other'}[d] || 'Other');
   // ترجمة إنجليزية "أفضل محاولة" لطريقة الاسترجاع — القيمة تأتي من قنوات دفع قابلة للتخصيص من الإعدادات
   // فلا يوجد تعداد ثابت لها؛ إن لم تُطابق القاموس، تُعرض بالعربي فقط بدون افتراض ترجمة خاطئة
   const methodLabelEn = m => {
@@ -1393,7 +1393,7 @@ $('#btn-reset-app')?.addEventListener('click', async ()=>{
 
     // تحقّق فعلي من أن الأرصدة صارت صفراً — للتأكد أمام المستخدم أن الحذف تم بالفعل
     const verifyMsg = (typeof balanceOf==='function')
-      ? `الأرصدة الآن — الخزنة: ${fmt(balanceOf('vault'))} | البنك: ${fmt(balanceOf('bank'))} | الشبكة: ${fmt(balanceOf('network'))}`
+      ? `الأرصدة الآن — الخزنة: ${fmt(balanceOf('vault'))} | البنك: ${fmt(balanceOf('bank'))} | شبكة المركز: ${fmt(balanceOf('network'))} | شبكة المستوصف: ${fmt(balanceOf('network2'))}`
       : '';
 
     if(deleteErrors.length || saveErrors.length){

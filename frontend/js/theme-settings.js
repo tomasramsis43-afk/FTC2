@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS = {
   nextVaultSeq: 1,
   // عداد تسلسلي منفصل ومستقل لكل حساب/وجهة (الخزنة كاش / البنك / الشبكة / أخرى) — كل حساب له
   // ترقيمه الخاص به بدءاً من 1، بدل رقم تسلسلي واحد موحّد لكل الحركات المالية مهما كان حسابها.
-  nextVaultSeqByDest: { vault:1, bank:1, network:1, other:1 },
+  nextVaultSeqByDest: { vault:1, bank:1, network:1, network2:1, other:1 },
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
   powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },

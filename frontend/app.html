@@ -834,7 +834,8 @@
       <button type="button" class="fund-tab active" data-fund="" role="tab" aria-selected="true">الكل</button>
       <button type="button" class="fund-tab" data-fund="vault" role="tab" aria-selected="false">💵 الخزنة (كاش)</button>
       <button type="button" class="fund-tab" data-fund="bank" role="tab" aria-selected="false">🏦 البنك</button>
-      <button type="button" class="fund-tab" data-fund="network" role="tab" aria-selected="false">💳 الشبكة</button>
+      <button type="button" class="fund-tab" data-fund="network" role="tab" aria-selected="false">💳 شبكة المركز</button>
+      <button type="button" class="fund-tab" data-fund="network2" role="tab" aria-selected="false">💳 شبكة المستوصف</button>
     </div>
 
     <div class="grid-cards" id="vault-cards"></div>
@@ -848,7 +849,8 @@
           <option value="">كل الحسابات</option>
           <option value="vault">الخزنة (كاش)</option>
           <option value="bank">البنك</option>
-          <option value="network">الشبكة</option>
+          <option value="network">شبكة المركز</option>
+          <option value="network2">شبكة المستوصف</option>
         </select>
         <select id="v-filter-type" data-multi-filter><option value="">كل الحركات</option><option value="in">وارد فقط</option><option value="out">صادر فقط</option></select>
         <span id="v-filter-reception-wrap" style="display:none;">
@@ -2430,14 +2432,15 @@
     </div>
     <div class="panel">
       <h3>طرق الدفع ووجهتها المحاسبية</h3>
-      <div class="hint hint-info">كل طريقة دفع تُربط بحساب: الخزنة (كاش) / البنك / الشبكة — وعند تسجيل عميل، يُرحَّل المبلغ المدفوع تلقائياً إلى نفس الحساب في تبويب "الحركات المالية".</div>
+      <div class="hint hint-info">كل طريقة دفع تُربط بحساب: الخزنة (كاش) / البنك / شبكة المركز / شبكة المستوصف — وعند تسجيل عميل، يُرحَّل المبلغ المدفوع تلقائياً إلى نفس الحساب في تبويب "الحركات المالية".</div>
       <div class="taglist" id="channel-list"></div>
       <div class="addrow">
         <input type="text" id="new-channel" placeholder="اسم طريقة الدفع">
         <select id="new-channel-dest">
           <option value="vault">الخزنة (كاش)</option>
           <option value="bank">البنك</option>
-          <option value="network">الشبكة</option>
+          <option value="network">شبكة المركز</option>
+          <option value="network2">شبكة المستوصف</option>
           <option value="other">أخرى (بدون ترحيل تلقائي)</option>
         </select>
         <button class="btn btn-primary btn-sm" id="btn-add-channel">إضافة</button>
@@ -3019,7 +3022,8 @@
           <select id="sched-destination">
             <option value="vault">الخزنة (كاش)</option>
             <option value="bank">البنك</option>
-            <option value="network">الشبكة</option>
+            <option value="network">شبكة المركز</option>
+            <option value="network2">شبكة المستوصف</option>
           </select>
         </div>
         <div class="field"><label>طريقة الدفع</label><select id="sched-method"></select></div>
@@ -3059,7 +3063,8 @@
           <select id="vf-destination">
             <option value="vault">الخزنة (كاش)</option>
             <option value="bank">البنك</option>
-            <option value="network">الشبكة</option>
+            <option value="network">شبكة المركز</option>
+            <option value="network2">شبكة المستوصف</option>
           </select>
         </div>
 

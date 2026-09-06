@@ -7,8 +7,8 @@ function formatManualSalesInvoiceNo(n){ return 'MSI-' + String(n).padStart(6,'0'
 // البنك / الشبكة / أخرى)، بحيث تبدأ كل وجهة بترقيمها المستقل من 1 ولا تتأثر بعدد حركات باقي
 // الوجهات الأخرى إطلاقاً.
 function allocVaultSeq(destination){
-  const dest = (destination && ['vault','bank','network','other'].includes(destination)) ? destination : 'vault';
-  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, other:1 };
+  const dest = (destination && ['vault','bank','network','network2','other'].includes(destination)) ? destination : 'vault';
+  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, network2:1, other:1 };
   let s = settings.nextVaultSeqByDest[dest] || 1;
   // حماية من إعادة استخدام رقم تسلسلي رسمي قيد الاستخدام: العداد (nextVaultSeqByDest) كان قد
   // يصبح أقل من أعلى رقم موجود فعلاً لنفس الوجهة — بعد استعادة نسخة احتياطية قديمة، أو عند
@@ -33,15 +33,15 @@ function allocVaultSeq(destination){
 function renumberVaultSeqChronologically(){
   if(settings.vaultSeqRenumberedByDestV1) return 0;
   const all = [...vaultTx, ...deletedVaultTx];
-  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, other:1 };
+  if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = { vault:1, bank:1, network:1, network2:1, other:1 };
   if(!all.length){ settings.vaultSeqRenumberedByDestV1 = true; return 0; }
-  const byDest = { vault:[], bank:[], network:[], other:[] };
+  const byDest = { vault:[], bank:[], network:[], network2:[], other:[] };
   all.forEach(t=>{
-    const d = ['vault','bank','network','other'].includes(t.destination) ? t.destination : 'vault';
+    const d = ['vault','bank','network','network2','other'].includes(t.destination) ? t.destination : 'vault';
     byDest[d].push(t);
   });
   let totalRenumbered = 0;
-  ['vault','bank','network','other'].forEach(dest=>{
+  ['vault','bank','network','network2','other'].forEach(dest=>{
     const group = byDest[dest];
     group.sort((a,b)=>{
       const da = a.date || '', db = b.date || '';

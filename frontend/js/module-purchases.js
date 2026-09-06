@@ -518,7 +518,7 @@ $('#purchase-form')?.addEventListener('submit', async e=>{
       manual: `فاتورة شراء من ${supplier.name}${invoiceNo?` — رقم ${invoiceNo}`:''}`,
       recipientName: supplier.name,
       referenceNo: invoiceNo,
-      networkInvoice: dest==='network' ? invoiceNo : '',
+      networkInvoice: (dest==='network'||dest==='network2') ? invoiceNo : '',
       notes: notes || `مشتريات: ${items.map(i=>i.name).join('، ')} (شامل ضريبة ${fmt(taxAmount)} ﷼)`,
       createdAt: Date.now()
     });
