@@ -854,6 +854,7 @@ function currentVaultPageSize(){
   return v==='all' ? Infinity : Number(v);
 }
 function renderVault(){
+  syncFundTabsFromFilter();
   renderVaultLockStatus();
   if(typeof renderBankRecon==='function') renderBankRecon();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
@@ -1134,6 +1135,31 @@ function renderDenomHistory(){
 // الجدول الكبير مرتين لكل تفاعل، ويزيد بشكل ملحوظ مع كثرة البيانات.
 ['#v-from','#v-to'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); });
 ['#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
+// تبويبات الصناديق (الكل/الخزنة/البنك/الشبكة): تضبط فلتر الوجهة الموجود أصلاً وتُطلق change
+// عليه لإعادة استخدام نفس مسار renderVault والفرز والصفحات دون أي تكرار لأي منطق.
+$('#vault-fund-tabs')?.addEventListener('click', e=>{
+  const btn = e.target.closest('.fund-tab');
+  if(!btn) return;
+  const sel = $('#v-filter-dest');
+  if(!sel) return;
+  const fund = btn.dataset.fund || '';
+  Array.from(sel.options).forEach(o=> o.selected = (o.value === fund));
+  refreshMultiSelectFilterUI(sel);
+  sel.dispatchEvent(new Event('change'));
+});
+// تبقي التبويب النشط متسقاً مع الفلتر الفعلي أياً كان مصدر تغييره (استعادة عرض محفوظ مثلاً،
+// لا الضغط على تبويب فقط) — تُستدعى من renderVault نفسها فى كل مرة.
+function syncFundTabsFromFilter(){
+  const wrap = $('#vault-fund-tabs');
+  if(!wrap) return;
+  const vals = selectedFilterValues($('#v-filter-dest'));
+  const active = vals.length === 1 ? vals[0] : '';
+  wrap.querySelectorAll('.fund-tab').forEach(btn=>{
+    const isActive = (btn.dataset.fund || '') === active;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+}
 onSearchInput('#v-search', renderVault);
 $('#vault-page-size')?.addEventListener('change', ()=>{ vaultCurrentPage = 1; renderVault(); });
 $('#vault-page-first')?.addEventListener('click', ()=>{ vaultCurrentPage = 1; renderVault(); });

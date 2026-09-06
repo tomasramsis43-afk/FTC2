@@ -4396,6 +4396,33 @@ body.dark-theme .gsr-cmd-icon {
 .flow-chart rect { transition: opacity .15s ease; }
 .flow-chart g:hover rect { opacity: 1 !important; }
 
+/* ---------- تبويبات الصناديق المالية (الخزنة/البنك/الشبكة) — أعلى شاشة الحركات المالية:
+   كل زر يضبط فلتر "الوجهة" الموجود (#v-filter-dest) وفق ما اختير، فيشعر كل صندوق كأنه
+   شيت مستقل بنفسه دون تكرار أي منطق أو جدول جديد. ---------- */
+.fund-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.fund-tab {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.fund-tab:hover { border-color: var(--gold); color: var(--text); }
+.fund-tab.active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--on-accent-text);
+}
+
 .pulse-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .chip {
   display: inline-flex;
