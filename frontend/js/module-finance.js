@@ -856,7 +856,6 @@ function currentVaultPageSize(){
 function renderVault(){
   syncFundTabsFromFilter();
   renderVaultLockStatus();
-  if(typeof renderBankRecon==='function') renderBankRecon();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   runDueScheduledVaultTx().then(ran=>{ if(ran) renderVault(); });

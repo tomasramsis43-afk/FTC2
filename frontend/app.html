@@ -800,36 +800,7 @@
       </div>
     </div>
 
-    <div class="panel" style="border-right:4px solid var(--teal); margin-bottom:14px;">
-      <h3 style="margin:0 0 4px;">مطابقة كشف الحساب البنكي</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 10px;">استورد كشف حساب البنك (Excel) هنا لمطابقته تلقائياً مع حركات "البنك" المسجّلة في شيت الحركات المالية حسب التاريخ والمبلغ ونوع الحركة. الحركات التي لا تُطابَق تلقائياً تظهر أدناه لربطها يدوياً بأقرب حركة، أو تبقى بلا ربط لتنبيهك بوجود فرق يستحق المراجعة.</p>
-      <div class="computed" style="margin-bottom:10px;" id="bankrecon-summary">
-    <span>سطور كشف الحساب: <b class="mono">0</b></span>
-    <span>مطابَقة: <b class="mono" style="color:var(--teal);">0</b></span>
-    <span>غير مطابَقة: <b class="mono" style="color:var(--red);">0</b></span>
-    <span>حركات "البنك" بالنظام غير مطابَقة: <b class="mono" style="color:var(--red);">3586</b></span>
-    <span>صافي كشف الحساب: <b class="mono">0 ﷼</b></span>
-    <span>صافي حركات البنك بالنظام: <b class="mono">2,692,602.57 ﷼</b></span>
-  </div>
-      <div class="toolbar" style="margin-bottom:10px;">
-        <button class="btn btn-ghost btn-sm" id="btn-import-bankrecon">استيراد كشف الحساب من Excel</button>
-        <input type="file" id="import-bankrecon-input" accept=".xlsx,.xls,.csv" style="display:none;">
-        <button class="btn btn-ghost btn-sm" id="btn-bankrecon-toggle-matched">إظهار/إخفاء الحركات المطابَقة</button>
-        <span class="spacer"></span>
-        <div class="overflow-wrap">
-          <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⋮ إجراءات أخرى</button>
-          <div class="overflow-menu">
-            <button class="btn btn-ghost btn-sm" id="btn-template-bankrecon">تحميل نموذج فارغ</button>
-            <button class="btn btn-ghost btn-sm" id="btn-bankrecon-rerun-automatch">🔄 إعادة تشغيل المطابقة التلقائية</button>
-            <hr>
-            <button class="btn btn-danger btn-sm" id="btn-bankrecon-clear">مسح كشف الحساب المستورد بالكامل</button>
-          </div>
-        </div>
-      </div>
-      <div id="bankrecon-wrap"><div class="empty-state" style="padding:20px;"><div class="big">🏦</div>لم يتم استيراد كشف حساب بنكي بعد</div></div>
-    </div>
 
-    <div class="fund-tabs" id="vault-fund-tabs" role="tablist">
       <button type="button" class="fund-tab active" data-fund="" role="tab" aria-selected="true">الكل</button>
       <button type="button" class="fund-tab" data-fund="vault" role="tab" aria-selected="false">💵 الخزنة (كاش)</button>
       <button type="button" class="fund-tab" data-fund="bank" role="tab" aria-selected="false">🏦 البنك</button>
