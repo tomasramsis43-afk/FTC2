@@ -1355,13 +1355,28 @@ async function saveCollectionGeneric(collection, arr){
       return;
     }
     // خط الرجعة: المزامنة مع نظام السجلات المستقلة لم تتأكد بعد هذه الجلسة (أول تحميل فاشل، أو
-    // انقطاع أثناء آخر محاولة). بدل "الكتلة القديمة" في kv_store (مخزن لا يُقرأ لاحقاً — سبب
-    // فقدان البيانات)، نرفع كل العناصر عبر نظام السجلات نفسه ونُثبّت الـ baseline من النتيجة.
-    const listToUpload = arr.filter(x=>x && x.id);
+    // انقطاع أثناء آخر محاولة). قبل رفع أي حاجة، نراجع أولاً الحالة الحقيقية الموجودة فعلاً على
+    // السيرفر (مراجعة قبل الرفع) بدل افتراض أن كل شيء محلي يحتاج رفعاً من جديد — فأي سجل مطابق
+    // لما هو محفوظ على السيرفر أصلاً يُستبعد من الرفع تماماً، ولا يُرفع فعلياً إلا الجديد/المتغيّر
+    // فقط. لو تعذّرت المراجعة نفسها (لا اتصال) نرجع لخط الرجعة القديم: رفع كل شيء عبر نظام
+    // السجلات، حفاظاً على عدم فقدان أي تعديل معلّق.
+    const listAll = arr.filter(x=>x && x.id);
     try{
-      const conflictIds = await bulkUploadRecordsGeneric(collection, listToUpload);
+      let serverBaseline = null;
+      try{
+        const reviewed = await fetchAllRecordsGeneric(collection);
+        serverBaseline = reviewed && reviewed.baseline instanceof Map ? reviewed.baseline : null;
+      }catch(e){ serverBaseline = null; } // تعذّرت المراجعة — سنرفع الكل كخط رجعة أدناه
+
+      const listToUpload = serverBaseline
+        ? listAll.filter(item => serverBaseline.get(item.id) !== JSON.stringify(item))
+        : listAll; // ما قدرناش نراجع السيرفر فعلياً — نفس السلوك القديم (رفع كامل احتياطاً)
+
+      const conflictIds = listToUpload.length ? await bulkUploadRecordsGeneric(collection, listToUpload) : [];
       const conflictSet = new Set(conflictIds);
-      const newBaseline = new Map();
+      // الأساس الجديد: نبدأ من حالة السيرفر الحقيقية (لو راجعناها) حتى لا نظن أن سجلات لم تتغيّر
+      // أصلاً ما زالت غير مُزامَنة، ثم نُحدّث فقط ما رفعناه فعلاً بنجاح.
+      const newBaseline = serverBaseline ? new Map(serverBaseline) : new Map();
       for(const item of listToUpload){
         const json = JSON.stringify(item);
         if(!conflictSet.has(item.id)) newBaseline.set(item.id, json);

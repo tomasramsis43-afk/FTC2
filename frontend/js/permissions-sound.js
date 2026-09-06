@@ -764,13 +764,25 @@ async function saveClients(allowDrop){
       return;
     }
     // خط الرجعة: المزامنة مع نظام "عملاء كسجلات مستقلة" لم تتأكد بعد هذه الجلسة (أول تحميل، أو
-    // انقطاع أثناء آخر محاولة). بدل "الكتلة القديمة" في kv_store (مخزن لا يُقرأ لاحقاً — سبب
-    // فقدان البيانات)، نرفع كل العملاء عبر نظام السجلات نفسه ونُثبّت الـ baseline من النتيجة.
-    const clientsToUpload = clients.filter(c=>c && c.id);
+    // انقطاع أثناء آخر محاولة). قبل رفع أي حاجة، نراجع أولاً الحالة الحقيقية الموجودة فعلاً على
+    // السيرفر (مراجعة قبل الرفع) بدل افتراض أن كل العملاء يحتاجون رفعاً من جديد — فأي عميل مطابق
+    // لما هو محفوظ على السيرفر أصلاً يُستبعد من الرفع تماماً. لو تعذّرت المراجعة نفسها (لا اتصال)
+    // نرجع لخط الرجعة القديم: رفع كل العملاء، حفاظاً على عدم فقدان أي تعديل معلّق.
+    const clientsAll = clients.filter(c=>c && c.id);
     try{
-      const conflictIds = await bulkUploadClientRecords(clientsToUpload);
+      let serverBaseline = null;
+      try{
+        const reviewed = await fetchAllClientRecords();
+        serverBaseline = reviewed && reviewed.baseline instanceof Map ? reviewed.baseline : null;
+      }catch(e){ serverBaseline = null; } // تعذّرت المراجعة — سنرفع الكل كخط رجعة أدناه
+
+      const clientsToUpload = serverBaseline
+        ? clientsAll.filter(c => serverBaseline.get(c.id) !== JSON.stringify(c))
+        : clientsAll; // ما قدرناش نراجع السيرفر فعلياً — نفس السلوك القديم (رفع كامل احتياطاً)
+
+      const conflictIds = clientsToUpload.length ? await bulkUploadClientRecords(clientsToUpload) : [];
       const conflictSet = new Set(conflictIds);
-      const newBaseline = new Map();
+      const newBaseline = serverBaseline ? new Map(serverBaseline) : new Map();
       for(const c of clientsToUpload){
         const json = JSON.stringify(c);
         if(!conflictSet.has(c.id)) newBaseline.set(c.id, json);
