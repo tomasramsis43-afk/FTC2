@@ -148,10 +148,9 @@ function finishPrintDoc(win){
         }
       }, 180);
     });
-    // تفعيل تلقائي للمعاينة في Electron بعد ثانية (اختياري)
-    if(isElectron){
-      setTimeout(()=>{ try{ btn.click(); }catch(e){} }, 600);
-    }
+    // تم إلغاء التفعيل التلقائي لزر الطباعة (كان يضغط الزر تلقائياً بعد نصف ثانية فيفتح
+    // نافذة طباعة الويندوز من غير ما يطلب المستخدم ده). دلوقتي المعاينة بس تظهر، والطباعة
+    // الفعلية متبقاش تحصل إلا لما المستخدم يدوس زر "طباعة / حفظ PDF" بنفسه.
   }
   try{
     if(win) win.addEventListener('afterprint', ()=>{ setTimeout(()=>{ const ov=document.getElementById('print-preview-overlay'); if(ov) ov.remove(); }, 400); });
@@ -623,7 +622,7 @@ function applyCompanyAgreedPricing(company){
 $('#f-company').addEventListener('change', updateCompanyHint);
 function toggleClientNetInvoice(){
   const chan = settings.channels.find(c=>c.name===$('#f-channel').value);
-  $('#wrap-f-netinvoice').style.display = (chan && chan.dest==='network') ? '' : 'none';
+  $('#wrap-f-netinvoice').style.display = (chan && (chan.dest==='network'||chan.dest==='network2')) ? '' : 'none';
 }
 $('#f-channel').addEventListener('change', toggleClientNetInvoice);
 function toggleSplitPayment(){
@@ -636,7 +635,7 @@ function toggleSplitPayment(){
 function toggleClientNetInvoice2(){
   const on = $('#f-split-payment').checked;
   const chan2 = settings.channels.find(c=>c.name===$('#f-channel2').value);
-  $('#wrap-f-netinvoice2').style.display = (on && chan2 && chan2.dest==='network') ? '' : 'none';
+  $('#wrap-f-netinvoice2').style.display = (on && chan2 && (chan2.dest==='network'||chan2.dest==='network2')) ? '' : 'none';
 }
 $('#f-split-payment').addEventListener('change', toggleSplitPayment);
 $('#f-channel2').addEventListener('change', toggleClientNetInvoice2);
