@@ -812,7 +812,7 @@ async function runDueScheduledVaultTx(){
         type: 'out', isReturn: false, date: today, amount: num(s.amount),
         method: s.method, notes: (s.notes ? s.notes+' — ' : '') + 'حركة مجدولة تلقائية',
         clientId: '', clientName: '', manual: '', category: s.category,
-        recipientName: s.recipientName, referenceNo: 'مجدولة تلقائياً',
+        recipientName: s.recipientName,
         destination: s.destination||'vault', networkInvoice: ''
       };
       vaultTx.push(savedTx); bumpVaultVersion();
@@ -923,7 +923,7 @@ function renderVault(){
       <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
       <td data-label="النوع"><span class="stamp ${t.type==='in'?'paid':'owe'}">${t.type==='in'?'وارد':(t.isReturn?'مردود مبيعات':'صادر')}</span></td>
       <td class="mono" data-label="رقم الهوية"${isDup?' style="color:var(--red); font-weight:700;" title="رقم هوية مكرر — ظهر أكثر من مرة في حركات الخزنة/البنك/الشبكة"':''}>${escapeHtml(t.clientId||'—')}${isDup?' ⚠️':''}</td>
-      <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}${(t.type==='out' && t.referenceNo) ? `<br><span style="font-size:11px; color:var(--text-muted);">مستند: ${escapeHtml(t.referenceNo)}</span>` : ''}</td>
+      <td data-label="التصنيف">${escapeHtml(t.type==='out' ? (t.category||'—') : '—')}</td>
       <td data-label="طريقة الدفع">${escapeHtml(t.method||'')}</td>
       <td class="mono" data-label="رقم فاتورة الشبكة">${escapeHtml(t.networkInvoice||'—')}</td>
       <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isVPending ? ` <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تدخل رصيد/حسابات/تقارير الأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
@@ -1265,7 +1265,6 @@ function toggleVaultFields(){
   $('#wrap-manual').style.display = (isIn && !linked) ? '' : 'none';
   $('#wrap-category').style.display = isOut ? '' : 'none';
   $('#wrap-recipient').style.display = isOut ? '' : 'none';
-  $('#wrap-refno').style.display = isOut ? '' : 'none';
   $('#wrap-netinvoice').style.display = ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? '' : 'none';
   $('#wrap-bagdeposit-qty').style.display = (isOut && $('#vf-category').value==='حقائب') ? '' : 'none';
 }
@@ -1275,14 +1274,13 @@ $('#vf-destination').addEventListener('change', toggleVaultFields);
 $('#vf-category').addEventListener('change', toggleVaultFields);
 
 /* ---------------- تصنيف تلقائي للمصروفات بالذكاء الاصطناعي ----------------
-   يقرأ اسم مستلم المبلغ + الملاحظات + رقم المستند + المبلغ، ويقترح أنسب تصنيف
+   يقرأ اسم مستلم المبلغ + الملاحظات + المبلغ، ويقترح أنسب تصنيف
    من قائمة التصنيفات المعرَّفة في الإعدادات (أو تصنيف جديد مختصر إن لم يوجد مناسب). */
 async function aiClassifyExpense(){
   const btn = $('#btn-ai-classify');
   const statusEl = $('#ai-classify-status');
   const recipient = $('#vf-recipient').value.trim();
   const notes = $('#vf-notes').value.trim();
-  const refno = $('#vf-refno').value.trim();
   const amount = $('#vf-amount').value;
   if(!recipient && !notes){
     showToast('أدخل اسم مستلم المبلغ أو ملاحظة أولاً حتى يقدر الذكاء الاصطناعي يقترح تصنيفاً مناسباً');
@@ -1296,7 +1294,6 @@ async function aiClassifyExpense(){
     const payload = {
       recipientName: recipient || null,
       notes: notes || null,
-      documentRef: refno || null,
       amount: amount || null,
       availableCategories: settings.expenseCategories
     };
@@ -1417,7 +1414,6 @@ function openVaultModal(id){
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   $('#vf-category').value = t?.category || '';
   $('#vf-recipient').value = t?.recipientName || '';
-  $('#vf-refno').value = t?.referenceNo || '';
   // طرق الدفع الموحدة (نفس طرق الدفع المُعرَّفة في الإعدادات — يطابق شيت "الحركات المالية")
   populateSelect($('#vf-method'), settings.channels.map(c=>c.name), false);
   {
@@ -1451,11 +1447,10 @@ $('#vault-form').addEventListener('submit', async e=>{
   const date = $('#vf-date').value || todayISO();
   if(amount<=0){ showToast('أدخل مبلغاً صحيحاً'); return; }
   if(isReturn && !$('#vf-clientid').value.trim()){ showToast('يجب تحديد العميل الذي سيُسترجع له المبلغ'); return; }
-  // إلزام الحقول الأساسية حسب نوع الحركة — لا يُحفظ صادر بدون تصنيف، مستلم، ومستند مؤيّد
+  // إلزام الحقول الأساسية حسب نوع الحركة — لا يُحفظ صادر بدون تصنيف ومستلم
   if(isOut){
     if(!$('#vf-category').value.trim()){ showToast('يجب اختيار تصنيف المصروف'); return; }
     if(!$('#vf-recipient').value.trim()){ showToast('يجب إدخال اسم مستلم المبلغ'); return; }
-    if(!$('#vf-refno').value.trim()){ showToast('يجب إدخال رقم المستند/المرفق المؤيّد لهذا الصادر'); return; }
   }
   if(isIn && !linked && !$('#vf-manual').value.trim()){ showToast('يجب إدخال البيان / الجهة لهذه الحركة الواردة'); return; }
   if(isIn && linked && !$('#vf-clientid').value.trim()){ showToast('يجب إدخال رقم الهوية للعميل المرتبط بالحركة'); return; }
@@ -1478,7 +1473,6 @@ $('#vault-form').addEventListener('submit', async e=>{
     manual: (isIn && !linked) ? $('#vf-manual').value.trim() : '',
     category: isReturn ? 'مردودات المبيعات' : (isOut ? $('#vf-category').value : ''),
     recipientName: isOut ? $('#vf-recipient').value.trim() : '',
-    referenceNo: isOut ? $('#vf-refno').value.trim() : '',
     destination: $('#vf-destination').value,
     networkInvoice: ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? $('#vf-netinvoice').value.trim() : ''
   };
@@ -1517,7 +1511,6 @@ $('#vault-form').addEventListener('submit', async e=>{
          <tr><td style="padding:4px 0; color:#66707E;">المبلغ</td><td style="padding:4px 0; text-align:left;"><b>${fmt(num(savedTx.amount))} ﷼</b></td></tr>
          <tr><td style="padding:4px 0; color:#66707E;">مستلم المبلغ</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.recipientName || '—')}</td></tr>
          <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.method || '—')}</td></tr>
-         <tr><td style="padding:4px 0; color:#66707E;">رقم المستند/المرفق</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.referenceNo || '—')}</td></tr>
          <tr><td style="padding:4px 0; color:#66707E;">البيان</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedTx.notes || '—')}</td></tr>
          <tr><td style="padding:4px 0; color:#66707E;">الوجهة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(destLabel(savedTx.destination || 'vault'))}</td></tr>
        </table>`
@@ -1750,8 +1743,8 @@ $('#btn-extract-nomethod').addEventListener('click', ()=>{
 });
 $('#btn-export-vault').addEventListener('click', ()=>{
   const rows = vaultFilteredRows();
-  const headers = ['الرقم التسلسلي الرسمي','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','رقم المستند/المرفق','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
-  const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.referenceNo||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
+  const headers = ['الرقم التسلسلي الرسمي','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
+  const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
   const csv = '\uFEFF'+[headers, ...data].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');

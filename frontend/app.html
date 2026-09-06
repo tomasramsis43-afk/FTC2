@@ -968,7 +968,7 @@
 
     <div class="panel">
       <h3>استيراد حركات وارد وصادر من Excel</h3>
-      <div class="hint hint-info">ملف Excel بالأعمدة: "التاريخ"، "نوع الحركة" (وارد / صادر)، "المبلغ"، "الحساب/الوجهة" (الخزنة (كاش) / البنك / الشبكة)، "طريقة الدفع"، "رقم الهوية" (اختياري — لربط حركة وارد بعميل مسجّل)، "البيان/الجهة" (لحركة وارد غير مرتبطة بعميل، مثال: شركاء، قرض، إيداع رأس مال)، "التصنيف" (لحركة صادر فقط)، "اسم مستلم المبلغ" (لحركة صادر فقط)، "رقم المستند" (رقم الفاتورة/الإيصال المؤيّد — لحركة صادر)، "رقم فاتورة الشبكة" (فقط إذا الوجهة = الشبكة)، "ملاحظات". كل صف يُضاف كحركة جديدة مستقلة في "الحركات المالية" حسب نوعها ويُعطى رقماً تسلسلياً رسمياً تلقائياً — الاستيراد لا يحدّث حركات موجودة، فقط يضيف حركات جديدة، ويتخطى تلقائياً أي صف بتاريخ يقع ضمن فترة محاسبية مُقفلة.</div>
+      <div class="hint hint-info">ملف Excel بالأعمدة: "التاريخ"، "نوع الحركة" (وارد / صادر)، "المبلغ"، "الحساب/الوجهة" (الخزنة (كاش) / البنك / الشبكة)، "طريقة الدفع"، "رقم الهوية" (اختياري — لربط حركة وارد بعميل مسجّل)، "البيان/الجهة" (لحركة وارد غير مرتبطة بعميل، مثال: شركاء، قرض، إيداع رأس مال)، "التصنيف" (لحركة صادر فقط)، "اسم مستلم المبلغ" (لحركة صادر فقط)، "رقم فاتورة الشبكة" (فقط إذا الوجهة = الشبكة)، "ملاحظات". كل صف يُضاف كحركة جديدة مستقلة في "الحركات المالية" حسب نوعها ويُعطى رقماً تسلسلياً رسمياً تلقائياً — الاستيراد لا يحدّث حركات موجودة، فقط يضيف حركات جديدة، ويتخطى تلقائياً أي صف بتاريخ يقع ضمن فترة محاسبية مُقفلة.</div>
       <button class="btn btn-ghost btn-sm" id="btn-template-vault-expenses">تحميل نموذج فارغ</button>
       <button class="btn btn-ghost btn-sm" id="btn-import-vault-expenses">استيراد من Excel</button>
       <input type="file" id="import-vaultexp-input" accept=".xlsx,.xls,.csv" style="display:none;">
@@ -3017,7 +3017,6 @@
           <div class="hint hint-info" id="ai-classify-status" style="margin:4px 0 0; display:none;"></div>
         </div>
         <div class="field" id="wrap-recipient" style=""><label>اسم مستلم المبلغ *</label><input id="vf-recipient" type="text" placeholder="اسم الشخص الذي استلم المبلغ فعلياً"></div>
-        <div class="field" id="wrap-refno" style=""><label>رقم المستند / المرفق *</label><input id="vf-refno" type="text" placeholder="رقم الفاتورة/الإيصال/المستند المؤيد للمصروف"></div>
         <div class="field"><label data-i18n="thChannel">طريقة الدفع</label><select id="vf-method"><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select></div>
         <div class="field" id="wrap-netinvoice" style="display: none;"><label>رقم فاتورة الشبكة</label><input id="vf-netinvoice" type="text" placeholder="رقم إيصال جهاز الشبكة"></div>
         <div class="field full" id="wrap-bagdeposit-qty" style="font-size: 12.5px; color: var(--text-muted); display: none;">سيُضاف هذا المبلغ لرصيد حساب الحقائب تلقائياً لاختيارك تصنيف "حقائب"، ويُحتسب عدد الحقائب المضافة للمخزون حسب السعر الثابت للحقيبة في الإعدادات.</div>

@@ -1666,9 +1666,8 @@ function buildDailyReportBodyHtml(dateStr){
       <td>${escapeHtml(t.category||'—')}</td>
       <td>${escapeHtml(t.recipientName||'—')}</td>
       <td>${escapeHtml(t.method||'—')}</td>
-      <td class="mono">${escapeHtml(t.referenceNo||'—')}</td>
       <td class="mono">${fmt(num(t.amount))}</td>
-    </tr>`).join('') : emptyRow(5, 'لا توجد مصروفات في هذا اليوم');
+    </tr>`).join('') : emptyRow(4, 'لا توجد مصروفات في هذا اليوم');
 
   const purchRows = dayPurchases.length ? dayPurchases.map(p=>`
     <tr>
@@ -1755,7 +1754,7 @@ function buildDailyReportBodyHtml(dateStr){
 
     <h3 style="margin:22px 0 8px;">٤. المصروفات اليوم (${dayExp.length})</h3>
     <table>
-      <thead><tr><th>التصنيف</th><th>مستلم المبلغ</th><th>طريقة الدفع</th><th>رقم المستند</th><th>المبلغ</th></tr></thead>
+      <thead><tr><th>التصنيف</th><th>مستلم المبلغ</th><th>طريقة الدفع</th><th>المبلغ</th></tr></thead>
       <tbody>
         ${expRows}
         ${dayExp.length ? sumRow(4, 'إجمالي المصروفات', fmt(expense)+' ﷼') : ''}

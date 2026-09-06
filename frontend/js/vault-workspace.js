@@ -56,7 +56,6 @@ function openVaultWorkspace(id){
         ${row('المبلغ', fmt(num(t.amount)))}
         ${row('طريقة الدفع', escapeHtml(t.method || ''))}
         ${row('رقم فاتورة الشبكة', escapeHtml(t.networkInvoice || ''))}
-        ${row('المستند', escapeHtml(t.referenceNo || ''))}
         ${row('المستلم', escapeHtml(t.recipientName || ''))}
         ${(t.type === 'out' && !t.isReturn) ? row('التصنيف', escapeHtml(t.category || '')) : ''}
         ${row('العميل', (t.clientName ? escapeHtml(t.clientName) : '') + (t.clientId ? ` <span style="color:var(--text-muted); font-weight:400;">(${escapeHtml(t.clientId)})</span>` : ''))}

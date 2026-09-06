@@ -1093,7 +1093,7 @@ function txTypeLabelToValue(l){
 $('#btn-template-vault-expenses').addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_حركات_مالية.xlsx', 'نموذج', [
     {'التاريخ':'2026-01-15', 'نوع الحركة':'وارد', 'المبلغ':1000, 'الحساب/الوجهة':'الخزنة (كاش)', 'طريقة الدفع':'كاش مباشر', 'رقم الهوية':'', 'البيان/الجهة':'دعم شركاء', 'التصنيف':'', 'اسم مستلم المبلغ':'', 'رقم فاتورة الشبكة':'', 'ملاحظات':''},
-    {'التاريخ':'2026-01-16', 'نوع الحركة':'صادر', 'المبلغ':500, 'الحساب/الوجهة':'الخزنة (كاش)', 'طريقة الدفع':'كاش مباشر', 'رقم الهوية':'', 'البيان/الجهة':'', 'التصنيف':'إيجار', 'اسم مستلم المبلغ':'', 'رقم المستند':'', 'رقم فاتورة الشبكة':'', 'ملاحظات':''}
+    {'التاريخ':'2026-01-16', 'نوع الحركة':'صادر', 'المبلغ':500, 'الحساب/الوجهة':'الخزنة (كاش)', 'طريقة الدفع':'كاش مباشر', 'رقم الهوية':'', 'البيان/الجهة':'', 'التصنيف':'إيجار', 'اسم مستلم المبلغ':'', 'رقم فاتورة الشبكة':'', 'ملاحظات':''}
   ]);
 });
 $('#btn-import-vault-expenses').addEventListener('click', ()=> $('#import-vaultexp-input').click());
@@ -1144,7 +1144,6 @@ $('#import-vaultexp-input').addEventListener('change', async e=>{
           clientId:'', clientName:'', manual:'',
           category,
           recipientName: String(row['اسم مستلم المبلغ']||'').trim(),
-          referenceNo: String(row['رقم المستند']||'').trim(),
           destination, networkInvoice
         };
         if(category && !settings.expenseCategories.includes(category)) settings.expenseCategories.push(category);
