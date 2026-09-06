@@ -855,7 +855,7 @@ $('#btn-export-budget')?.addEventListener('click', ()=>{
 /* ============ بحث شامل (Global Search) ============ */
 function runGlobalSearch(q){
   q = (q||'').trim().toLowerCase();
-  if(q.length < 2) return { clients:[], vault:[], purchases:[] };
+  if(q.length < 2) return { clients:[], vault:[], purchases:[], journal:[] };
   const matchClients = clients.filter(c=>
     String(c.name||'').toLowerCase().includes(q) ||
     String(c.phone||'').toLowerCase().includes(q) ||
@@ -875,7 +875,11 @@ function runGlobalSearch(q){
     String(p.invoiceNo||'').toLowerCase().includes(q) ||
     String(num(p.total)).includes(q)
   ).slice(0,8);
-  return { clients: matchClients, vault: matchVault, purchases: matchPurchases };
+  const matchJournal = journalEntries.filter(j=>
+    String(j.description||'').toLowerCase().includes(q) ||
+    String(num(j.amount)).includes(q)
+  ).slice(0,8);
+  return { clients: matchClients, vault: matchVault, purchases: matchPurchases, journal: matchJournal };
 }
 /* ============ مركز الأوامر (Command Center v1) — فوق البحث الشامل ============
    الأوامر تُبنى من DOM وقت الفتح لتبقى متزامنة تلقائياً مع الصلاحيات والتسميات.
@@ -947,7 +951,7 @@ function renderGlobalSearchResults(q){
     gsSyncActive();
     return;
   }
-  const { clients: rc, vault: rv, purchases: rp } = runGlobalSearch(q);
+  const { clients: rc, vault: rv, purchases: rp, journal: rj } = runGlobalSearch(q);
   const cmds = gsCommandItems().filter(c=> c.kw.toLowerCase().includes(ql)).slice(0,7);
   let html = '';
   if(cmds.length){
@@ -981,6 +985,15 @@ function renderGlobalSearchResults(q){
       ()=>{
         closeGlobalSearch();
         document.querySelector('nav.tabs button[data-view="purchases"]')?.click();
+      })).join('');
+  }
+  if(rj.length){
+    html += `<h4 class="gsr-head">قيود اليومية (${rj.length})</h4>`;
+    html += rj.map(j=> gsRunRow(
+      `<b>${escapeHtml(j.description||'')}</b><span class="gsr-meta">${fmt(num(j.amount))} · ${escapeHtml(j.date||'')}</span>`,
+      ()=>{
+        closeGlobalSearch();
+        document.querySelector('nav.tabs button[data-view="accounting"]')?.click();
       })).join('');
   }
   el.innerHTML = html || `<div class="hint">لا توجد نتائج مطابقة</div>`;
