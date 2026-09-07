@@ -4,9 +4,14 @@
 const { pool } = require('../db');
 
 // يرجع true إذا كانت القاعدة تستجيب (أي أنها متاحة)
+// ملحوظة: PostgreSQL يُرجع اسم العمود لتعبير غير مُسمّى مثل `SELECT 1` باسم `?column?`
+// وليس `'1'` — الشرط القديم `r.rows[0]['1'] === 1` كان يقرأ مفتاحاً غير موجود أصلاً
+// (undefined) فيرجع false دائماً بغض النظر عن حالة القاعدة الفعلية، ما يجعل /api/health
+// يُبلّغ "db: false" باستمرار حتى مع اتصال سليم تماماً (عمى فعلي لأي مراقبة/uptime check
+// حقيقية). الإصلاح: تسمية العمود صراحةً AS ok والقراءة منه.
 async function ping() {
-  const r = await pool.query('SELECT 1');
-  return r.rows[0]?.['1'] === 1;
+  const r = await pool.query('SELECT 1 AS ok');
+  return r.rows[0]?.ok === 1;
 }
 
 module.exports = { ping };

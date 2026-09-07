@@ -41,8 +41,15 @@ async function clientAggVersion({ where, params }) {
 }
 
 // قائمة (id, client_id) لفحص تكرار أرقام الهوية (يعالج التجزئة في المتصل)
+// ملحوظة: هذا الاستعلام له شرط WHERE ثابت خاص به (client_id IS NOT NULL...)، بينما `where`
+// القادم من clientRecordsVisibilitySql هو شرط WHERE كامل (يبدأ بـ"WHERE") مُعدّ أصلاً للإلصاق
+// مباشرة بعد "FROM client_records" بلا أي شرط سابق (راجع clientRecords/clientVersionPairs
+// أعلاه). إلحاقه هنا كما هو كان ينتج "WHERE ... WHERE ..." (شرطان متتاليان) فيفشل الاستعلام
+// بخطأ SQL قاتل (500) لأي دور غير admin (حيث where فارغ فقط فى حالة admin). الإصلاح: تحويل
+// "WHERE" فى البداية إلى "AND" ليُلحق بشرط الجدول الموجود مسبقاً بدل تكراره.
 async function clientIdPairs({ where, params }) {
-  const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> '' ${where}`, params);
+  const andFragment = where ? where.replace(/^\s*WHERE\s+/i, 'AND ') : '';
+  const r = await pool.query(`SELECT id, client_id FROM client_records WHERE client_id IS NOT NULL AND client_id <> '' ${andFragment}`, params);
   return r.rows;
 }
 
