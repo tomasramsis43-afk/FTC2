@@ -1836,15 +1836,36 @@ async function checkClientRecordsChanged(){
 }
 
 // ================= رفع سريع بسيط بعد مسح كامل للسيرفر (استعادة نسخة احتياطية) =================
-// يُستخدم فقط بعد wipeServerDataForFreshRestore حيث السيرفر فارغ فعلياً: كل سجل يُرسَل برقم
-// نسخة 0 فيُدرجه السيرفر فوراً برقم 1 بلا أي تعارض ممكن، بدون طابور معلّقات، بدون إعادة محاولة
-// تعارضات، وبدون لمس الـ baseline — طلبات أقل بكثير ورفع أسرع بمراحل من المسار المعتاد.
+// يُستخدم فقط بعد wipeServerDataForFreshRestore حيث السيرفر فارغ فعلياً فى الحالة الطبيعية — لكن لو
+// فشل مسح تصنيف معيّن (راجع `failures` داخل wipeServerDataForFreshRestore) تبقى سجلات قديمة على
+// السيرفر بنسخة >= 1، وإرسالها من جديد برقم نسخة 0 كان يسبب تعارض (409) لكل سجل منها دون أي معالجة
+// فعلية (كان يُسجَّل رقم التعارض فقط بلا إعادة رفع، فتبقى بيانات الاستعادة غير مطبَّقة على هذا
+// السجل تحديداً على السيرفر). الحل: تحقق أولاً بطلب خفيف واحد (versions، بلا أي بيانات فعلية) من
+// السجلات الموجودة فعلاً على السيرفر لهذا التصنيف، فتُستبعد من الرفع تماماً (لا تعارض ممكن إطلاقاً
+// لأننا لا نحاول إدراجها من الأساس) ويُرفع فقط ما هو غير موجود فعلاً.
 async function fastUploadCollection(collection, list){
   const CHUNK = 4000;
   if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
   const versions = _recordVersions[collection];
-  for(let i=0;i<list.length;i+=CHUNK){
-    const chunk = list.slice(i, i+CHUNK);
+  let existingVersions = null;
+  try{
+    const verRes = await serverFetch(`/api/records/${encodeURIComponent(collection)}/versions`);
+    if(verRes && verRes.ok){
+      const verData = await verRes.json().catch(()=>({}));
+      existingVersions = new Map(verData.pairs || []);
+    }
+  }catch(e){ console.error('fastUploadCollection: تعذّر التحقق من السجلات الموجودة فعلاً على السيرفر لـ "' + collection + '" — سيُرفع الكل كالمعتاد', e); }
+  // لو تعذّر التحقق (انقطاع اتصال لحظي)، نكمل بالسلوك القديم (رفع الكل) بدل إيقاف الاستعادة كلها.
+  const toUpload = existingVersions ? list.filter(item => !existingVersions.has(item.id)) : list;
+  if(existingVersions){
+    // سجلات موجودة فعلاً على السيرفر: لا نحاول رفعها إطلاقاً (فلا تعارض ممكن)، ونثبّت رقم نسختها
+    // المعروف من السيرفر محلياً حتى لا تُعتبر "متغيّرة" وتُرفع من جديد فى أي مزامنة عادية لاحقة.
+    for(const item of list){
+      if(existingVersions.has(item.id)) versions.set(item.id, existingVersions.get(item.id));
+    }
+  }
+  for(let i=0;i<toUpload.length;i+=CHUNK){
+    const chunk = toUpload.slice(i, i+CHUNK);
     const records = [];
     for(const item of chunk) records.push({ id: item.id, enc: await encryptValue(JSON.stringify(item)), version: 0 });
     for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير سجل من "' + collection + '" — أُوقف الرفع حفاظاً على بياناتك'); }
@@ -1873,8 +1894,22 @@ async function fastUploadCollection(collection, list){
 
 async function fastUploadClients(clientsList){
   const CHUNK = 4000;
-  for(let i=0;i<clientsList.length;i+=CHUNK){
-    const chunk = clientsList.slice(i, i+CHUNK);
+  let existingVersions = null;
+  try{
+    const verRes = await serverFetch('/api/client-records/versions');
+    if(verRes && verRes.ok){
+      const verData = await verRes.json().catch(()=>({}));
+      existingVersions = new Map(verData.pairs || []);
+    }
+  }catch(e){ console.error('fastUploadClients: تعذّر التحقق من سجلات العملاء الموجودة فعلاً على السيرفر — سيُرفع الكل كالمعتاد', e); }
+  const toUpload = existingVersions ? clientsList.filter(c => !existingVersions.has(c.id)) : clientsList;
+  if(existingVersions){
+    for(const c of clientsList){
+      if(existingVersions.has(c.id)) _clientRecordVersions[c.id] = existingVersions.get(c.id);
+    }
+  }
+  for(let i=0;i<toUpload.length;i+=CHUNK){
+    const chunk = toUpload.slice(i, i+CHUNK);
     const records = [];
     for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: 0 });
     for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير بيانات عميل — أُوقف الرفع حفاظاً على بياناتك'); }
