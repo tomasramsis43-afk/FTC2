@@ -1356,3 +1356,121 @@ document.addEventListener('change', async e => {
     showToast(`${isCompare ? 'فترة تخطي المقارنة المُعاد' : 'فترة تخطي الفحص المُعاد'} = ${v} ساعة — يُطبق من التشغيل القادم`, 'info');
   }
 });
+
+/* ══════════════════════════════════════════════
+   8) رفع "طلب متدرب" إلى بوابة الحقيبة التثقيفية
+   ── زر في شاشة كل عميل: تعبئة النموذج عبر الوكيل المحلي
+      من بيانات العميل (الاسم كاملاً في الخانة الأولى + نوع ذكر
+      + رقم الهوية + البلدية الثابتة) وتصنيف النتيجة على العميل.
+      بيانات الحساب تُخزن في settings (arkkanBagUser/arkkanBagPass)
+      عبر حقلي التبويب، أو تُقرأ من env/ملف .env بالوكيل مباشرة.
+   ══════════════════════════════════════════════ */
+
+function arkkanBagCreds() {
+  return {
+    user: String((settings && settings.arkkanBagUser) || '').trim(),
+    pass: String((settings && settings.arkkanBagPass) || '')
+  };
+}
+
+/* ملء حقلي بيانات الحساب عند فتح التبويب — بلا مسح ما يكتبه المستخدم */
+function arkkanCredsFieldSync() {
+  const u = document.querySelector('#fix-arkkan-user');
+  const p = document.querySelector('#fix-arkkan-pass');
+  if (!u || !p) return;
+  const c = arkkanBagCreds();
+  if (u.value.trim() === '' && c.user) u.value = c.user;
+  if (p.value === '' && c.pass) p.value = c.pass;
+  const fb = document.querySelector('#arkkan-creds-feedback');
+  if (fb) fb.textContent = (c.user && c.pass) ? '✓ محفوظة على الجهاز' : '';
+}
+
+async function arkkanSaveCreds(btn) {
+  const fb = document.querySelector('#arkkan-creds-feedback');
+  const fail = m => { if (fb) { fb.textContent = m; fb.style.color = 'var(--danger,#c0392b)'; } };
+  const ok = m => { if (fb) { fb.textContent = m; fb.style.color = 'var(--ok,#27ae60)'; } };
+  const u = (document.querySelector('#fix-arkkan-user') || {}).value;
+  const p = (document.querySelector('#fix-arkkan-pass') || {}).value;
+  if (!u || !String(u).trim() || !p) return fail('⚠️ أدخل اسم المستخدم وكلمة المرور معاً');
+  if (!settings || typeof DEFAULT_SETTINGS === 'undefined') settings = {};
+  settings.arkkanBagUser = String(u).trim();
+  settings.arkkanBagPass = String(p);
+  try { await saveSettings(); } catch {}
+  ok('✓ تم الحفظ — لن تُعرض كلمة المرور بعد الآن');
+}
+
+/* بناء الحمولة المرسلة للوكيل من بيانات العميل */
+function arkkanTraineePayload(c) {
+  return {
+    clientId: String(c.clientId || '').trim(),
+    name: String(c.name || '').trim(),
+    phone: String(c.phone || '').trim(),
+    nationality: String(c.nationality || '').trim(),
+    credentials: arkkanBagCreds(),
+  };
+}
+
+/* الاتصال بالوكيل المحلي ورفع الطلب — يرمي رسالة فشل جاهزة للتوست */
+async function arkkanSubmitTrainee(c) {
+  const payload = arkkanTraineePayload(c);
+  let res;
+  try {
+    res = await fetch(ARKKAN_API_BASE + '/api/arkkan/submit-trainee', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(125000),
+    });
+  } catch (e) {
+    const isAbort = e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    throw new Error(isAbort ? 'انتهت المهلة من البرنامج — راجع الوكيل' : 'لا يوجد اتصال بالوكيل المحلي (9955) — شغّله أولاً');
+  }
+  let body = {};
+  try { body = await res.json(); } catch {}
+  if (!res.ok) throw new Error((body && body.error) || `فشل الوكيل (HTTP ${res.status})`);
+  return body;
+}
+
+/* زرار "رفع لأركان" في شاشة العميل — نفس نمط arkkanFetchCardButton */
+async function arkkanSubmitCardButton(id, btn) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  if (!String(c.clientId || '').trim()) { showToast('لا يوجد رقم هوية لهذا العميل — اضبطه أولاً', 'error'); return; }
+  if (!String(c.name || '').trim()) { showToast('لا يوجد اسم لهذا العميل', 'error'); return; }
+  const creds = arkkanBagCreds();
+  if (!creds.user || !creds.pass) { showToast('ضع بيانات حساب بوابة الحقيبة في تبويب "مزامنة أركان" أولاً', 'error'); return; }
+  btn.disabled = true;
+  const old = btn.innerHTML;
+  btn.textContent = '⏳ جاري الرفع...';
+  try {
+    const res = await arkkanSubmitTrainee(c);
+    const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+    if (idx !== -1) {
+      clients[idx].arkkanSubmission = {
+        status: res.status,
+        at: res.submittedAt,
+        msg: String(res.message || res.toast || '').slice(0, 200),
+      };
+      try { await saveClients(); } catch {}
+    }
+    if (res.status === 'submitted') showToast('✅ تم رفع طلب المتدرب إلى بوابة الحقيبة', 'success');
+    else if (res.status === 'duplicate') showToast('⚠️ المتدرب مسجّل مسبقاً في البوابة — لم يُرفع تكرار', 'info');
+    else showToast('؟ ' + String(res.message || res.status || '').slice(0, 90), 'info');
+  } catch (err) {
+    showToast('فشل رفع طلب المتدرب: ' + String(err.message).slice(0, 95), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = old;
+  }
+}
+
+/* ربط الحفظ + ملء الحقلين عند فتح التبويب */
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#btn-arkkan-save-creds');
+  if (btn) { arkkanSaveCreds(btn); return; }
+});
+document.addEventListener('click', e => {
+  if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
+    arkkanCredsFieldSync();
+  }
+});

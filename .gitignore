@@ -6,3 +6,5 @@ node_modules/
 .DS_Store
 dist/
 FTC2/
+.arkkan-submits/
+.inspect-shots/

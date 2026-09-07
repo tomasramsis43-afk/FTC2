@@ -92,12 +92,22 @@ function cwInfoHtml(c){
         ${row('الحقيبة', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
         ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
         ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
+        ${c.arkkanSubmission ? row('رفع لأركان', arkkanSubmissionLabel(c.arkkanSubmission)) : ''}
       </div>
     </div>
     <div class="cw-section" id="cw-exam-section">
       <h4>نتيجة الاختبار</h4>
       <div class="cw-exam-content">${typeof arkkanExamCardContent === 'function' ? arkkanExamCardContent(c) : ''}</div>
     </div>`;
+}
+
+function arkkanSubmissionLabel(s){
+  if(!s) return '';
+  const icons = { submitted: '✅', duplicate: '⚠️', unknown: '❓' };
+  const st = `${icons[s.status] || ''} ${s.status === 'submitted' ? 'تم الرفع' : s.status === 'duplicate' ? 'مسجّل مسبقاً' : s.status || ''}`;
+  const at = s.at ? new Date(s.at).toLocaleString() : '';
+  const tip = s.msg ? String(s.msg).slice(0, 120) : '';
+  return `<span title="${escapeHtml(tip)}">${st}${at ? ' — ' + escapeHtml(at) : ''}</span>`;
 }
 
 let _cwClientId = null; // العميل المفتوح حالياً في الكرت (لزرار جلب أركان)
@@ -156,6 +166,7 @@ function openClientWorkspace(id){
     acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">تعديل البيانات</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً">⏬ جلب من أركان</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-exam-sync" title="جلب نتيجة الاختبار الأخيرة من أركان وتحديث شارة النتيجة في شيت العملاء">🔄 مزامنة النتيجة</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan-submit" title="رفع طلب متدرب لهذا العميل إلى بوابة الحقيبة التثقيفية — النوع ذكر، والبلدية أمانة منطقة الرياض -- بلدية الخرج">⬆️ رفع لأركان</button>`);
   }
   acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-invoice">الفاتورة</button>`);
   if(canAccessView('vault') && typeof openVaultModal === 'function'){
@@ -191,6 +202,7 @@ document.addEventListener('click', e => {
   if(e.target.id === 'btn-cw-close'){ closeClientWorkspace(); return; }
   if(e.target.id === 'cw-arkkan' && _cwClientId){ arkkanFetchCardButton(_cwClientId, e.target); return; }
   if(e.target.id === 'cw-exam-sync' && _cwClientId){ arkkanExamSyncCard(_cwClientId, e.target); return; }
+  if(e.target.id === 'cw-arkkan-submit' && _cwClientId){ arkkanSubmitCardButton(_cwClientId, e.target); return; }
   if(e.target.id === 'client-workspace-overlay') closeClientWorkspace();
 });
 document.addEventListener('keydown', e => {

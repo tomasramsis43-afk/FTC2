@@ -25,12 +25,39 @@
  *   POST /api/arkkan/warm
  *   POST /api/arkkan/fetch   { clientId, referNum? }
  *   POST /api/arkkan/exams   { clientId, referNum? }
+ *   POST /api/arkkan/submit-trainee { clientId, name, phone?, nationality?, credentials?: { user, pass } }
+ *     ← يرفع "طلب متدرب" إلى بوابة الحقيبة (Traniee_Request.aspx) بعد تسجيل الدخول؛
+ *       الاعتمادات من ARKKAN_USER/ARKKAN_PASS أو من جسم الطلب، ولا تُسجَّل أبداً.
  * ============================================================ */
 
 const http = require('http');
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
+
+/* تحميل ملف .env بسيط (بلا اعتماديات خارجية) — يُقرأ من مجلد التشغيل ومن مجلد
+   الوكيل؛ القيم الموجودة فعلاً في البيئة لها الأولوية ولا تُستبدل أبداً.
+   الاعتمادات هنا (إن كانت في .env) تظل على الجهاز ولا تُرسل لأي مكان. */
+function loadEnvFile(dir) {
+  try {
+    const f = path.join(dir, '.env');
+    if (!fs.existsSync(f)) return;
+    for (let line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) {
+      line = line.trim();
+      if (!line || line.startsWith('#') || line.startsWith(';')) continue;
+      const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (!m) continue;
+      let val = m[2].trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+      if (process.env[m[1]] === undefined) process.env[m[1]] = val;
+    }
+  } catch {}
+}
+loadEnvFile(process.cwd());
+loadEnvFile(__dirname);
+
 const cfg = require('./arkkan-config');
-const { log, ProtectionError, TimeoutError, FrameError, NoDataError, maskId, isProtectionError } = require('./arkkan-logger');
+const { log, ProtectionError, ValidationError, TimeoutError, FrameError, NoDataError, maskId, isProtectionError } = require('./arkkan-logger');
 const { wait, SequentialQueue, JOB_STATUS, withRetry, snapshotFrames, findNewFrame, waitForStable, clearInputFields, isolateClientState, validateClientId, validateReferNum, readJsonBody, dateKey } = require('./arkkan-utils');
 
 let playwright = null;
@@ -483,6 +510,198 @@ async function fetchExamScoresOn(pg, { clientId, referNum = '' }) {
 }
 
 /* ══════════════════════════════════════════════
+   Submit Trainee Request (بوابة الحقيبة التثقيفية)
+   ── يرفع "طلب متدرب" من بيانات برنامج FTC2 إلى نموذج
+      Traniee_Request.aspx داخل بوابة الحقيبة (بعد تسجيل الدخول) ──
+   ══════════════════════════════════════════════ */
+
+// كل عملية رفع تستخدم سياقاً مستقلاً (دخول + صفحة) يُغلق بعد الانتهاء —
+// حتى لا تتسرب بيانات عميل إلى آخر ولا تتداخل مع جلسات جلب البيانات العامة.
+const SUBMIT_SHOT_DIR = path.join(__dirname, '.arkkan-submits');
+
+/* إنشاء صفحة مخصصة لهذه العملية فقط + تسجيل الدخول + فتح النموذج.
+   يُغلق المتصل السياق دائماً بعد النهاية (try/finally). */
+async function openTraineePage(creds) {
+  const ctx = await _browser.newContext({ locale: 'ar' });
+  blockHeavyResources(ctx);
+  const pg = await ctx.newPage();
+
+  await pg.goto(cfg.ARKKAN_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+  await wait(cfg.DELAY.PAGE_LOAD);
+  const hasLoginForm = await pg.locator('#UsernameLog').count();
+  if (hasLoginForm) {
+    log.info(`رفع طلب: تسجيل الدخول إلى بوابة الحقيبة (${String(creds.user).slice(0, 4)}…)`);
+    await pg.fill('#UsernameLog', creds.user);
+    await pg.fill('#Password', creds.pass);
+    await pg.click('#btn_submitEnter');
+    // انتظار انتهاء postback الدخول
+    const t0 = Date.now();
+    while (Date.now() - t0 < cfg.TIMEOUT.LOGIN) {
+      const still = await pg.locator('#UsernameLog').count().catch(() => 0);
+      if (!still) break;
+      await wait(cfg.DELAY.DIALOG_POLL);
+    }
+    await wait(cfg.DELAY.PAGE_LOAD);
+    await checkForProtection(pg);
+    if (isProtectionActive()) throw new ProtectionError('تم اكتشاف حماية أثناء تسجيل الدخول — إيقاف مؤقت');
+  }
+
+  await pg.goto(cfg.ARKKAN_TRAINEE_URL, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+  let fr = await findTraineeFrame(pg, '#firstName', cfg.DELAY.PAGE_LOAD * 3);
+  if (!fr) {
+    // انتهت الجلسة بعد الدخول؟ محاولة واحدة إضافية
+    if (await pg.locator('#UsernameLog').count()) {
+      await pg.fill('#UsernameLog', creds.user);
+      await pg.fill('#Password', creds.pass);
+      await pg.click('#btn_submitEnter');
+      await wait(cfg.DELAY.PAGE_LOAD);
+      await pg.goto(cfg.ARKKAN_TRAINEE_URL, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+      fr = await findTraineeFrame(pg, '#firstName', cfg.DELAY.PAGE_LOAD * 3);
+    }
+    if (!fr) {
+      await checkForProtection(pg);
+      throw new FrameError('تعذّر فتح نموذج "اضافة طلب متدرب" في بوابة الحقيبة');
+    }
+  }
+  return { ctx, pg, fr };
+}
+
+/* الاعتمادات: البيئة/ملف .env أولاً، ثم جسم الطلب (بحسب ما يقدمه البرنامج).
+   لا تُسجَّل كلمة المرور في أي سجل. */
+function traineeCredentials(body) {
+  const envUser = String(cfg.ARKKAN_USER || '').trim();
+  const envPass = String(cfg.ARKKAN_PASS || '');
+  const b = (body && body.credentials) || {};
+  const user = String(b.user || '').trim();
+  const pass = String(b.pass || '');
+  const finalUser = envUser || user;
+  const finalPass = envPass || pass;
+  if (!finalUser || !finalPass) {
+    throw new ValidationError('بيانات حساب بوابة الحقيبة غير مضبوطة — ضع ARKKAN_USER/ARKKAN_PASS في ملف .env أو أدخل بيانات الحساب في تبويب "مزامنة أركان" بالبرنامج');
+  }
+  return { user: finalUser, pass: finalPass };
+}
+
+/* مطابقة جنسية البرنامج (مفتاح إنجليزي أو اسم عربي) مع كود أركان.
+   الرقم وحده يُقبل كما هو. لا يرسل أبداً جنسية غير معروفة. */
+function resolveNationalityCode(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^\d{1,4}$/.test(s)) return s;
+  const key = s.replace(/\s+/g, ' ').toLowerCase();
+  return cfg.TRAINEE.NATIONALITIES[key] || null;
+}
+
+/* بحث عن حقل في الإطار الرئيسي أو أي إطار (النموذج قد يُفتح داخل iframe) */
+async function findTraineeFrame(pg, sel, timeoutMs) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    for (const fr of pg.frames()) {
+      if (fr.isDetached()) continue;
+      try { if (await fr.locator(sel).count()) return fr; } catch {}
+    }
+    await wait(cfg.DELAY.FRAME_WAIT);
+  }
+  return null;
+}
+
+/* تصنيف نتيجة الإرسال من نص التأكيد/الرفض الظاهر على الموقع */
+function classifyTraineeResult(text) {
+  const t = String(text || '').toLowerCase();
+  if (!t) return null;
+  const ok = ['تمت الاضافة', 'تمت إضافة', 'تم الاضافة', 'تم اضافة', 'تم الحفظ', 'تم حفظ', 'تم بنجاح', 'تم التسجيل', 'تم تسجيل', 'success', 'ناجح'];
+  const dup = ['موجود', 'مكرر', 'مسجل مسبق', 'مسجّل مسبق', 'مسجل سابقا', 'مسجّل سابقاً', 'سبق تسجيله', 'مسبقا', 'مسبقاً', 'already', 'موجودة'];
+  if (ok.some(w => t.includes(w))) return { status: 'submitted', message: text };
+  if (dup.some(w => t.includes(w))) return { status: 'duplicate', message: text };
+  return null;
+}
+
+/* انتظار نتيجة الإرسال: يقرأ رسالة التأكيد (toast) حتى تصنيفها أو انتهاء المهلة */
+async function waitTraineeResult(pg) {
+  const t0 = Date.now();
+  let lastToast = '';
+  while (Date.now() - t0 < cfg.TIMEOUT.SUBMIT) {
+    try {
+      let toast = '';
+      for (const fr of pg.frames()) {
+        if (fr.isDetached()) continue;
+        const txt = await fr.evaluate(() => {
+          const el = document.querySelector('.toastyDialog_msgContainer')
+            || document.querySelector('[id^="toastyDialog_"]');
+          return el ? (el.innerText || '').trim() : '';
+        }).catch(() => '');
+        if (txt) { toast = txt; break; }
+      }
+      if (toast) lastToast = toast;
+      const cls = classifyTraineeResult(toast);
+      if (cls) return { ...cls, toast };
+    } catch {}
+    await checkForProtection(pg);
+    if (isProtectionActive()) throw new ProtectionError('تم اكتشاف حماية أثناء إرسال الطلب — إيقاف مؤقت');
+    await wait(cfg.DELAY.DIALOG_POLL);
+  }
+  return { status: 'unknown', message: 'لم يظهر تأكيد/رفض خلال المهلة — راجع اللقطة المرفقة', toast: lastToast };
+}
+
+/* لقطة للنتيجة — للمراجعة اليدوية عند أي شك */
+function saveSubmitShot(pg, idMask) {
+  try {
+    fs.mkdirSync(SUBMIT_SHOT_DIR, { recursive: true });
+    const file = path.join(SUBMIT_SHOT_DIR, `submit-${Date.now()}-${idMask}.png`);
+    return pg.screenshot({ path: file, fullPage: false }).then(() => file).catch(() => '');
+  } catch { return Promise.resolve(''); }
+}
+
+async function submitTraineeRequest(body) {
+  const idResult = validateClientId(body.clientId);
+  if (!idResult.valid) throw new ValidationError(idResult.reason);
+  const name = String(body.name || '').trim();
+  if (!name) throw new ValidationError('اسم المتدرب مطلوب');
+  const natCode = resolveNationalityCode(body.nationality);
+  if (!natCode) throw new ValidationError('الجنسية غير معروفة في أركان: ' + String(body.nationality || '—').slice(0, 40));
+  const phone = String(body.phone || '').trim();
+  const creds = traineeCredentials(body);
+
+  const idenType = natCode === cfg.TRAINEE.SAUDI_CODE ? cfg.TRAINEE.IDEN_SAUDI : cfg.TRAINEE.IDEN_RESIDENT;
+  const empty = cfg.TRAINEE.NAME_EMPTY_FILL;
+
+  const { ctx, pg, fr } = await openTraineePage(creds);
+  try {
+    // تعديل الحقول بحسب قرارات المستخدم:
+    //   الاسم كاملاً في الخانة الأولى والثلاث الأخرى مسافة واحدة فقط
+    //   النوع = ذكر دائماً، نوع الهوية تلقائي حسب الجنسية
+    //   البلدية = "أمانة منطقة الرياض -- بلدية الخرج"
+    //   الرخصة/رقم السجل تُترك فارغة
+    await fr.fill('#firstName', name);
+    await fr.fill('#secoundName', empty);
+    await fr.fill('#thirdName', empty);
+    await fr.fill('#familyName', empty);
+    await fr.selectOption('#type', cfg.TRAINEE.GENDER);
+    await fr.selectOption('#iden_type', idenType);
+    await fr.fill('#iden_Num', idResult.value);
+    await fr.selectOption('#Nat', natCode);
+    await fr.selectOption('#allcity', cfg.TRAINEE.CITY_VALUE);
+    await fr.fill('#phone', phone);
+
+    log.info(`رفع طلب: client=${maskId(idResult.value)} name=${mask(name, 2)} nat=${natCode} type=${idenType}`);
+    await fr.click('#btn_add11');
+
+    const res = await waitTraineeResult(pg);
+    const shot = await saveSubmitShot(pg, maskId(idResult.value));
+    log.clientResult(idResult.value, 'submit', res.status);
+    return {
+      status: res.status,
+      message: res.message,
+      toast: res.toast || '',
+      screenshot: shot,
+      submittedAt: new Date().toISOString(),
+    };
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+}
+
+/* ══════════════════════════════════════════════
    Smart Refresh (المتصفح → صفحة فارغة → أركان)
    ══════════════════════════════════════════════ */
 async function smartRefresh(pg) {
@@ -691,6 +910,35 @@ const server = http.createServer(async (req, res) => {
           return sendJson(res, 429, { error: e.message });
         }
         const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
+        return sendJson(res, status, { error: e.message });
+      }
+    }
+
+    // ── Submit Trainee Request (رفع طلب متدرب إلى بوابة الحقيبة) ──
+    if (url === '/api/arkkan/submit-trainee' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+
+      if (isProtectionActive()) {
+        return sendJson(res, 429, {
+          error: 'تم اكتشاف حماية خارجية — إيقاف مؤقت',
+          retryAfter: Math.round((_protectionUntil - Date.now()) / 1000),
+        });
+      }
+
+      try {
+        await initBrowser();
+        const result = await _jobQueue.enqueue({
+          id: `submit-${Date.now()}`,
+          clientId: String(body.clientId || ''),
+          action: 'submit',
+          fn: () => withTimeout(submitTraineeRequest(body), cfg.TIMEOUT.SUBMIT),
+        });
+        return sendJson(res, 200, result);
+      } catch (e) {
+        if (isProtectionError(e)) {
+          return sendJson(res, 429, { error: e.message });
+        }
+        const status = e.code === 'VALIDATION_FAILED' ? 400 : (/playwright|chromium|متصفح/.test(e.message) ? 503 : 502);
         return sendJson(res, status, { error: e.message });
       }
     }
