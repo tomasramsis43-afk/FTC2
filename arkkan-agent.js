@@ -57,7 +57,7 @@ loadEnvFile(process.cwd());
 loadEnvFile(__dirname);
 
 const cfg = require('./arkkan-config');
-const { log, ProtectionError, ValidationError, TimeoutError, FrameError, NoDataError, maskId, isProtectionError } = require('./arkkan-logger');
+const { log, ProtectionError, ValidationError, TimeoutError, FrameError, NoDataError, maskId, mask, isProtectionError } = require('./arkkan-logger');
 const { wait, SequentialQueue, JOB_STATUS, withRetry, snapshotFrames, findNewFrame, waitForStable, clearInputFields, isolateClientState, validateClientId, validateReferNum, readJsonBody, dateKey } = require('./arkkan-utils');
 
 let playwright = null;
