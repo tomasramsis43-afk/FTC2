@@ -680,15 +680,10 @@ function startLocalServer() {
     srv.use(express.static(path.join(__dirname, 'app-assets'), { etag: false, lastModified: false, cacheControl: false }));
     const listener = srv.listen(PORT, '127.0.0.1', () => resolve());
 
-    // تشغيل وكيل أركان المحلي تلقائياً فور فتح التطبيق (إن لم يكن يعمل على
-    // localhost:9955) — فيكون تبويب "مزامنة أركان" جاهزاً دون أي تدخل يدوي.
-    // يُجدول هنا جوّه scope الدالة حتى تكون arkkanStartAgent مرئية — الاستدعاء
-    // القديم كان في app.whenReady على المستوى العام فيرمي ReferenceError.
-    setTimeout(() => {
-      arkkanStartAgent().then(r => {
-        console.log(r.error ? '[Arkkan Agent] ' + r.error : '[Arkkan Agent] ' + r.message);
-      }).catch(() => {});
-    }, 800);
+    // ملحوظة: كان الوكيل يُشغَّل تلقائياً هنا فور فتح التطبيق (setTimeout بعد 800ms).
+    // أُلغي هذا التشغيل التلقائي عمداً — الوكيل الآن لا يعمل إلا عند ضغط المستخدم
+    // على زر "تشغيل" في تبويب "مزامنة أركان" (الذي ينادي /arkkan-agent/start)، وليس
+    // مجرد فتح البرنامج.
 
     // إيقاف الوكيل نهائياً عندما يُغلق المستخدم التطبيق (وليس عند مجرد التصغير/
     // الإخفاء) — يتجنب بقاء عملية وكيل يتيمة تشغّل متصفحاً خفياً بعد إنهاء البرنامج.
