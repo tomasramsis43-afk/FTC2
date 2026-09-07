@@ -605,14 +605,19 @@ async function findTraineeFrame(pg, sel, timeoutMs) {
   return null;
 }
 
-/* تصنيف نتيجة الإرسال من نص التأكيد/الرفض الظاهر على الموقع */
+/* تصنيف نتيجة الإرسال من نص التأكيد/الرفض الظاهر على الموقع.
+   ملاحظة: رسالة النجاح الفعلية في بوابة الحقيبة هي
+   "تم تنفيذ طلبك بنجاح" — نلتقطها بمؤشر "بنجاح" مع حارس يمنع
+   التصنيف الناجح لو النص يحمل نفي (فشل/لم يتم/خطأ...). */
 function classifyTraineeResult(text) {
-  const t = String(text || '').toLowerCase();
+  const t = String(text || '').trim().toLowerCase();
   if (!t) return null;
-  const ok = ['تمت الاضافة', 'تمت إضافة', 'تم الاضافة', 'تم اضافة', 'تم الحفظ', 'تم حفظ', 'تم بنجاح', 'تم التسجيل', 'تم تسجيل', 'success', 'ناجح'];
+  const negative = ['لم يتم', 'لم تتم', 'لم تنجح', 'فشل', 'غير ناجح', 'غير مكتمل', 'خطا', 'خطأ', 'لا يمكن', 'يرجى التأكد', 'تعذر'];
+  if (negative.some(w => t.includes(w))) return null;
   const dup = ['موجود', 'مكرر', 'مسجل مسبق', 'مسجّل مسبق', 'مسجل سابقا', 'مسجّل سابقاً', 'سبق تسجيله', 'مسبقا', 'مسبقاً', 'already', 'موجودة'];
-  if (ok.some(w => t.includes(w))) return { status: 'submitted', message: text };
   if (dup.some(w => t.includes(w))) return { status: 'duplicate', message: text };
+  const ok = ['بنجاح', 'تمت الاضافة', 'تمت الإضافة', 'تم الاضافة', 'تم اضافة', 'تم الحفظ', 'تم حفظ', 'تم التسجيل', 'تم تسجيل', 'تم بنجاح', 'success', 'ناجح'];
+  if (ok.some(w => t.includes(w))) return { status: 'submitted', message: text };
   return null;
 }
 
@@ -626,9 +631,12 @@ async function waitTraineeResult(pg) {
       for (const fr of pg.frames()) {
         if (fr.isDetached()) continue;
         const txt = await fr.evaluate(() => {
-          const el = document.querySelector('.toastyDialog_msgContainer')
-            || document.querySelector('[id^="toastyDialog_"]');
-          return el ? (el.innerText || '').trim() : '';
+          const els = document.querySelectorAll('.toastyDialog_msgContainer, [id^="toastyDialog_"], [class*="toast"]');
+          for (const el of els) {
+            const t = (el.innerText || '').trim();
+            if (t) return t;
+          }
+          return '';
         }).catch(() => '');
         if (txt) { toast = txt; break; }
       }
