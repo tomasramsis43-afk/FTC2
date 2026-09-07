@@ -1474,3 +1474,99 @@ document.addEventListener('click', e => {
     arkkanCredsFieldSync();
   }
 });
+
+/* ══════════════════════════════════════════════
+   رفع لأركان — دفعة (كل المحددين، واحد وراء واحد)
+   ══════════════════════════════════════════════ */
+let _bulkSubmitRunning = false;
+let _bulkSubmitStop = false;
+
+/* من سبق رفعه بنجاح (dive وجهته للبوابة وكتبناها) — العمود المعتمد: arkkanSubmission.status */
+function _arkkanWasSubmitted(c) {
+  return !!(c && c.arkkanSubmission && c.arkkanSubmission.status === 'submitted');
+}
+
+async function arkkanBulkSubmitSelected() {
+  const ids = [...selectedClientIds].filter(id => clients.some(c => c.id === id));
+  if (!ids.length) { showToast('لا يوجد عملاء محددين', 'info'); return; }
+  if (_bulkSubmitRunning) return;
+  const creds = arkkanBagCreds();
+  if (!creds.user || !creds.pass) { showToast('ضع بيانات حساب بوابة الحقيبة في تبويب "مزامنة أركان" أولاً', 'error'); return; }
+
+  const skipSubmitted = !!(document.getElementById('chk-arkkan-skip-submitted') || {}).checked;
+
+  /* إعادة أرقام الهوية قيمةً حال النقص؛ لو عميل بدون رقم هوية أو اسم نستثنيه
+     تلقائياً ونحسبه في الملخص — لا نوقف الدفعة عليه. */
+  const list = ids
+    .map(id => clients.find(c => c.id === id))
+    .filter(c => c && String(c.clientId || '').trim() && String(c.name || '').trim());
+  const invalid = ids.length - list.length;
+
+  let target = list.filter(c => !(skipSubmitted && _arkkanWasSubmitted(c)));
+  const skippedDup = list.length - target.length;
+
+  if (!target.length) {
+    showToast(`لا يوجد عملاء للرفع${skippedDup ? ` — ${skippedDup} مرفوع مسبقاً تخطّوهم` : ''}${invalid ? ` — ${invalid} بدون رقم هوية/اسم` : ''}`, 'info');
+    renderBulkSelectionBar(filteredClients());
+    return;
+  }
+
+  _bulkSubmitRunning = true;
+  _bulkSubmitStop = false;
+
+  const submitBtn = document.getElementById('btn-bulk-arkkan-submit');
+  const stopBtn = document.getElementById('btn-bulk-arkkan-stop');
+  const statusEl = document.getElementById('bulk-arkkan-status');
+  if (submitBtn) submitBtn.disabled = true;
+  if (stopBtn) stopBtn.style.display = '';
+  if (statusEl) statusEl.style.display = '';
+
+  let idx = 0, submitted = 0, dup = 0, failed = 0;
+  const failMsgs = [];
+  const updateStatus = () => {
+    if (statusEl) statusEl.textContent = `✅ ${submitted} · ⚠️ ${dup} · ❌ ${failed} — ${idx}/${target.length}`;
+  };
+
+  for (const c of target) {
+    if (_bulkSubmitStop) break;
+    updateStatus();
+    const row = document.getElementById(`arkkan-status-${cssEscapeId(c.clientId)}`);
+    if (row) row.innerHTML = '<span style="color:var(--gold);">⏳ رفع...</span>';
+    try {
+      const res = await arkkanSubmitTrainee(c);
+      const fi = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+      if (fi !== -1) {
+        clients[fi].arkkanSubmission = {
+          status: res.status,
+          at: res.submittedAt,
+          msg: String(res.message || res.toast || '').slice(0, 200),
+        };
+        if (typeof saveClients === 'function') await saveClients();
+      }
+      if (res.status === 'submitted') { submitted++; if (row) row.innerHTML = '<span style="color:var(--success, green);">✅ رُفع</span>'; }
+      else if (res.status === 'duplicate') { dup++; if (row) row.innerHTML = '<span style="color:#c26511;">⚠️ مسجّل مسبقاً</span>'; }
+      else { failed++; if (row) row.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(res.message || '')}">❌ ؟</span>`; }
+    } catch (err) {
+      failed++;
+      if (row) row.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
+      failMsgs.push(`${c.name || c.clientId}: ${String(err.message).slice(0, 60)}`);
+    }
+    idx++;
+  }
+
+  _bulkSubmitRunning = false;
+  if (submitBtn) submitBtn.disabled = false;
+  if (stopBtn) stopBtn.style.display = 'none';
+  updateStatus();
+
+  let msg = `انتهى رفع ${target.length} عميل: ✅ ${submitted} · ⚠️ ${dup} · ❌ ${failed}`;
+  if (skippedDup) msg += ` · ↩️ ${skippedDup} تخطّي (مرفوع مسبقاً)`;
+  if (invalid) msg += ` · 🚫 ${invalid} بلا رقم/اسم`;
+  showToast(msg, failed ? 'error' : 'success');
+  if (failMsgs.length) console.warn('أركان رفع دفعة — أخطاء:', failMsgs);
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('#btn-bulk-arkkan-submit')) { arkkanBulkSubmitSelected(); return; }
+  if (e.target.closest('#btn-bulk-arkkan-stop')) { _bulkSubmitStop = true; return; }
+});

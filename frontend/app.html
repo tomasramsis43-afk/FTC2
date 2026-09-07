@@ -307,6 +307,12 @@
       <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-selection" data-i18n="clearSelection">إلغاء التحديد</button>
       <span class="spacer"></span>
       <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-send-message" data-i18n="sendWhatsappSelected">📨 إرسال رسالة واتساب للمحدد</button>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;" title="تفادي إعادة رفع من سُجّل رفعه بنجاح مسبقاً — ألغِ تفشيكه لتشملهم">
+        <input type="checkbox" id="chk-arkkan-skip-submitted" checked> تخطّي المرفوع مسبقاً
+      </label>
+      <button type="button" class="btn btn-gold btn-sm" id="btn-bulk-arkkan-submit" title="رفع طلب متدرب لكل عميل محدد إلى بوابة الحقيبة — واحد وراء واحد، وتُحفظ نتيجة كل عميل فوراً">⬆️ رفع لأركان للمحدد</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-arkkan-stop" style="display:none;">⏹ إيقاف الرفع</button>
+      <span id="bulk-arkkan-status" class="mono" style="display:none;color:var(--gold);"></span>
       <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete-selected" data-i18n="deleteSelected">🗑 حذف المحدد</button>
     </div>
     <div class="panel" style="padding:0;">
