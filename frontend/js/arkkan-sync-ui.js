@@ -1419,7 +1419,7 @@ async function arkkanSubmitTrainee(c) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(125000),
+      signal: AbortSignal.timeout(180000),
     });
   } catch (e) {
     const isAbort = e && (e.name === 'TimeoutError' || e.name === 'AbortError');

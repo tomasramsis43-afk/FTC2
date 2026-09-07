@@ -526,6 +526,40 @@ async function openTraineePage(creds) {
   blockHeavyResources(ctx);
   const pg = await ctx.newPage();
 
+  // التقط أي نافذة JS أصلية (alert/confirm) — بعض الشاشات تستخدمها بدل SweetAlert.
+  // رسائل بوابة الحقيبة الأساسية تخرج عبر sweetalert (عنصر في الـ DOM)، وده زائد للأمان.
+  let submitDialog = '';
+  const dialog = {
+    read: () => submitDialog,
+    clear: () => { submitDialog = ''; },
+  };
+  pg.on('dialog', async d => {
+    try { submitDialog = String(d.message() || '').trim(); } catch {}
+    await d.dismiss().catch(() => {});
+  });
+
+  // الطريق الأضمن: اعتراض استجابة AJAX الخاصة بطلب addtrainee —
+  // السيرفر يرد JSON فيه d.check و d.retmas (نص النتيجة الرسمي).
+  let xhrSubmit = null;
+  const xhr = {
+    read: () => xhrSubmit,
+    clear: () => { xhrSubmit = null; },
+  };
+  pg.on('response', async res => {
+    try {
+      const u = res.url() || '';
+      if (!u.includes('addtrainee')) return;
+      const ct = res.headers()['content-type'] || '';
+      if (!ct.includes('json')) return;
+      const j = await res.json().catch(() => null);
+      if (!j || !j.d) return;
+      xhrSubmit = {
+        check: j.d.check,
+        retmas: String(j.d.retmas || '').trim(),
+      };
+    } catch {}
+  });
+
   await pg.goto(cfg.ARKKAN_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
   await wait(cfg.DELAY.PAGE_LOAD);
   const hasLoginForm = await pg.locator('#UsernameLog').count();
@@ -563,7 +597,7 @@ async function openTraineePage(creds) {
       throw new FrameError('تعذّر فتح نموذج "اضافة طلب متدرب" في بوابة الحقيبة');
     }
   }
-  return { ctx, pg, fr };
+  return { ctx, pg, fr, dialog, xhr };
 }
 
 /* الاعتمادات: البيئة/ملف .env أولاً، ثم جسم الطلب (بحسب ما يقدمه البرنامج).
@@ -614,48 +648,85 @@ function classifyTraineeResult(text) {
   if (!t) return null;
   const negative = ['لم يتم', 'لم تتم', 'لم تنجح', 'فشل', 'غير ناجح', 'غير مكتمل', 'خطا', 'خطأ', 'لا يمكن', 'يرجى التأكد', 'تعذر'];
   if (negative.some(w => t.includes(w))) return null;
-  const dup = ['موجود', 'مكرر', 'مسجل مسبق', 'مسجّل مسبق', 'مسجل سابقا', 'مسجّل سابقاً', 'سبق تسجيله', 'مسبقا', 'مسبقاً', 'already', 'موجودة'];
+  const dup = ['موجود', 'مكرر', 'مسجل مسبق', 'مسجّل مسبق', 'مسجل سابقا', 'مسجّل سابقاً', 'سبق تسجيله', 'مسبقا', 'مسبقاً', 'بالفعل', 'already', 'موجودة'];
   if (dup.some(w => t.includes(w))) return { status: 'duplicate', message: text };
   const ok = ['بنجاح', 'تمت الاضافة', 'تمت الإضافة', 'تم الاضافة', 'تم اضافة', 'تم الحفظ', 'تم حفظ', 'تم التسجيل', 'تم تسجيل', 'تم بنجاح', 'success', 'ناجح'];
   if (ok.some(w => t.includes(w))) return { status: 'submitted', message: text };
   return null;
 }
 
-/* انتظار نتيجة الإرسال: يقرأ رسالة التأكيد (toast) حتى تصنيفها أو انتهاء المهلة */
-async function waitTraineeResult(pg) {
+/* قراءة رسالة الإرسال من الـ DOM — بوابة الحقيبة تعرضها عبر SweetAlert v1
+   (عنصر .sweet-alert يُضاف للمستند لحظة ظهوره ثم يختفي تلقائياً بعده ثانيتين)،
+   مع بدائل swal2 والتحقق وأي toast عام — نمسح كل الإطارات. */
+async function readVisibleSubmitMsg(pg) {
+  for (const fr of pg.frames()) {
+    if (fr.isDetached()) continue;
+    const t = await fr.evaluate(() => {
+      const sels = [
+        '.sweet-alert',
+        '.swal2-popup',
+        '.swal2-title',
+        '.swal2-html-container',
+        '.toastyDialog_msgContainer',
+        '[id^="toastyDialog_"]',
+        '[class*="toast"]',
+        '[class*="alert-success"]',
+        '[class*="alert-danger"]',
+      ];
+      for (const el of document.querySelectorAll(sels.join(','))) {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
+        const t2 = (el.innerText || '').trim();
+        if (t2) return t2;
+      }
+      return '';
+    }).catch(() => '');
+    if (t) return t;
+  }
+  return '';
+}
+
+/* انتظار نتيجة الإرسال. مصادر النتيجة بالترتيب:
+   1) رد السيرفر المباشر (XHR addtrainee) — check + retmas الرسميين.
+   2) رسالة SweetAlert / التحقق في الـ DOM.
+   3) أي نافذة JS أصلية (alert/confirm) عبر getDialog().
+   عند وصول رد السيرفر بنجاح (check=1) نقرر فوراً دون انتظار. */
+async function waitTraineeResult(pg, opts) {
   const t0 = Date.now();
   let lastToast = '';
+  let rawRetmas = '';
+  let softCap = 0;
   while (Date.now() - t0 < cfg.TIMEOUT.SUBMIT) {
-    try {
-      let toast = '';
-      for (const fr of pg.frames()) {
-        if (fr.isDetached()) continue;
-        const txt = await fr.evaluate(() => {
-          const els = document.querySelectorAll('.toastyDialog_msgContainer, [id^="toastyDialog_"], [class*="toast"]');
-          for (const el of els) {
-            const t = (el.innerText || '').trim();
-            if (t) return t;
-          }
-          return '';
-        }).catch(() => '');
-        if (txt) { toast = txt; break; }
-      }
-      if (toast) lastToast = toast;
-      const cls = classifyTraineeResult(toast);
-      if (cls) return { ...cls, toast };
-    } catch {}
+    if (softCap && Date.now() >= softCap) break;
+    const x = opts && opts.getXhr ? opts.getXhr() : null;
+    if (x && x.retmas && !rawRetmas) { rawRetmas = x.retmas; softCap = Date.now() + 6000; }
+    let toast = await readVisibleSubmitMsg(pg);
+    if (!toast && x && x.retmas) toast = x.retmas;
+    const native = opts && opts.getDialog ? opts.getDialog() : '';
+    if (native) toast = toast ? toast + ' | ' + native : native;
+    if (toast) lastToast = toast;
+    if (x && String(x.check) === '1') return { status: 'submitted', message: x.retmas, toast: toast || '', check: String(x.check) };
+    const cls = classifyTraineeResult(toast);
+    if (cls) return { ...cls, toast: toast || '', check: x ? String(x.check) : '' };
     await checkForProtection(pg);
     if (isProtectionActive()) throw new ProtectionError('تم اكتشاف حماية أثناء إرسال الطلب — إيقاف مؤقت');
     await wait(cfg.DELAY.DIALOG_POLL);
   }
-  return { status: 'unknown', message: 'لم يظهر تأكيد/رفض خلال المهلة — راجع اللقطة المرفقة', toast: lastToast };
+  return {
+    status: 'unknown',
+    message: rawRetmas ? ('؟ غير مألوف من السيرفر: ' + rawRetmas.slice(0, 200)) : 'لم يظهر تأكيد/رفض خلال المهلة — راجع اللقطة المرفقة',
+    toast: lastToast,
+    retmas: rawRetmas,
+  };
 }
 
 /* لقطة للنتيجة — للمراجعة اليدوية عند أي شك */
 function saveSubmitShot(pg, idMask) {
   try {
     fs.mkdirSync(SUBMIT_SHOT_DIR, { recursive: true });
-    const file = path.join(SUBMIT_SHOT_DIR, `submit-${Date.now()}-${idMask}.png`);
+    const safe = String(idMask).replace(/[^A-Za-z0-9._-]/g, '_');
+    const file = path.join(SUBMIT_SHOT_DIR, `submit-${Date.now()}-${safe}.png`);
     return pg.screenshot({ path: file, fullPage: false }).then(() => file).catch(() => '');
   } catch { return Promise.resolve(''); }
 }
@@ -673,7 +744,7 @@ async function submitTraineeRequest(body) {
   const idenType = natCode === cfg.TRAINEE.SAUDI_CODE ? cfg.TRAINEE.IDEN_SAUDI : cfg.TRAINEE.IDEN_RESIDENT;
   const empty = cfg.TRAINEE.NAME_EMPTY_FILL;
 
-  const { ctx, pg, fr } = await openTraineePage(creds);
+  const { ctx, pg, fr, dialog, xhr } = await openTraineePage(creds);
   try {
     // تعديل الحقول بحسب قرارات المستخدم:
     //   الاسم كاملاً في الخانة الأولى والثلاث الأخرى مسافة واحدة فقط
@@ -691,11 +762,17 @@ async function submitTraineeRequest(body) {
     await fr.selectOption('#allcity', cfg.TRAINEE.CITY_VALUE);
     await fr.fill('#phone', phone);
 
+    if (dialog) dialog.clear();
+    if (xhr) xhr.clear();
     log.info(`رفع طلب: client=${maskId(idResult.value)} name=${mask(name, 2)} nat=${natCode} type=${idenType}`);
     await fr.click('#btn_add11');
 
-    const res = await waitTraineeResult(pg);
+    const res = await waitTraineeResult(pg, {
+      getDialog: () => (dialog ? dialog.read() : ''),
+      getXhr: () => (xhr ? xhr.read() : null),
+    });
     const shot = await saveSubmitShot(pg, maskId(idResult.value));
+    log.info(`رفع طلب: msg=${String(res.message || res.toast || '').slice(0, 80)}`);
     log.clientResult(idResult.value, 'submit', res.status);
     return {
       status: res.status,
