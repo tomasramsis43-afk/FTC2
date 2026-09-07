@@ -385,6 +385,11 @@ document.addEventListener('click', async e=>{
       (async ()=>{
         await saveClients(); await saveVaultTx();
         await logAudit('delete','العملاء', `تم حذف بيانات العميل: ${removedClient?.name || delId}`);
+        // تنبيه إيميل فوري للإدارة عند حذف عميل.
+        notifyAdminAlert(
+          `تم حذف عميل: ${removedClient?.name || delId}`,
+          `<p>تم حذف بيانات العميل <b>${escapeHtml(removedClient?.name || delId)}</b> بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>.</p>`
+        );
         renderTable(); renderDashboard(); renderBags();
       })().catch(e=>console.error('فشل فى إكمال حذف العميل فى الخلفية:', e));
     }
@@ -993,6 +998,22 @@ $('#client-form').addEventListener('submit', async e=>{
          </table>`
       );
       sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
+    }else{
+      // تنبيه إيميل فوري للإدارة فقط عند تغيّر قيمة المدفوع فعلياً (paid/paid2) عند تعديل عميل موجود.
+      const paidBefore = num(prevForLedger.paid) + num(prevForLedger.paid2);
+      const paidAfter = num(savedClient.paid) + num(savedClient.paid2);
+      if(paidBefore !== paidAfter){
+        notifyAdminAlert(
+          `تعديل قيمة مدفوعات: ${savedClient.name}`,
+          `<p>تم تعديل قيمة المدفوعات للعميل <b>${escapeHtml(savedClient.name)}</b> بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
+           <table style="border-collapse:collapse; width:100%; max-width:420px; font-size:13px;">
+             <tr><td style="padding:4px 0; color:#66707E;">المدفوع قبل التعديل</td><td style="padding:4px 0; text-align:left;">${fmt(paidBefore)} ﷼</td></tr>
+             <tr><td style="padding:4px 0; color:#66707E;">المدفوع بعد التعديل</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidAfter)} ﷼</b></td></tr>
+             <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
+             <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
+           </table>`
+        );
+      }
     }
     if(savedClient.courseNumber && savedClient.courseNumber!==prevCourseNumberForEvent){
       sendPowerAutomateEvent('course_number_updated', {clientId: savedClient.clientId, name: savedClient.name, courseNumber: savedClient.courseNumber, courseType: savedClient.courseType||''});
