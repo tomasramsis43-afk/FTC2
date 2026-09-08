@@ -65,6 +65,7 @@ function clientsQueryIsSimple(){
   if(selectedFilterValues($('#filter-course')).length > 1) return false;
   if(selectedFilterValues($('#filter-course')).includes('__unknown__')) return false;
   if(selectedFilterValues($('#filter-nat')).length > 1) return false;
+  if(selectedFilterValues($('#filter-nat')).includes('__no_nationality__')) return false;
   // المسار السريع (GET /api/clients على السيرفر) يبحث فقط فى name/clientId/referNum/invoiceNo —
   // جدول clients_rows المفهرَس ليس به عمود phone أصلاً، فأي بحث برقم هاتف يرجّع دائماً صفر نتائج
   // من السيرفر حتى لو الرقم موجود فعلياً ومرتبط بعدة متدربين. لذا نجبر المسار المحلي الكامل

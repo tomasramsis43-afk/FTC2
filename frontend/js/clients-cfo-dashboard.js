@@ -781,6 +781,7 @@ function refreshFilterOptions(){
   const natFilterVals = selectedFilterValues($('#filter-nat'));
   populateSelect($('#filter-nat'), settings.nationalities, false);
   $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="">كل الجنسيات</option>');
+  $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="__no_nationality__">🚫 بدون جنسية</option>');
   Array.from($('#filter-nat').options).forEach(o=> o.selected = natFilterVals.includes(o.value));
   refreshMultiSelectFilterUI($('#filter-nat'));
 
@@ -828,7 +829,12 @@ function filteredClients(opts){
       const okCourse = fcVals.some(v => v==='__unknown__' ? !(c.courseType && c.courseType.trim()) : c.courseType===v);
       if(!okCourse) return false;
     }
-    if(fnVals.length && !fnVals.includes(c.nationality)) return false;
+    if(fnVals.length){
+      const okNat = fnVals.some(v => v==='__no_nationality__'
+        ? !(String(c.nationality||'').trim())
+        : c.nationality===v);
+      if(!okNat) return false;
+    }
     if(fsVals.length){
       const rem = remaining(c);
       const okStatus = (fsVals.includes('paid') && rem<=0) || (fsVals.includes('owe') && rem>0);
