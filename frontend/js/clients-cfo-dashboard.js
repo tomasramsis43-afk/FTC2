@@ -773,7 +773,7 @@ function refreshFilterOptions(){
   // بقية الاختيارات المتعددة في كل مرة يُعاد فيها بناء القائمة (تغيير بحث/بيانات...الخ)
   const courseFilterVals = selectedFilterValues($('#filter-course'));
   populateSelect($('#filter-course'), settings.courses.map(c=>c.name), false);
-  $('#filter-course').insertAdjacentHTML('afterbegin','<option value="__unknown__">⚠ الدورات غير المعلومة (بدون نوع دورة)</option>');
+  $('#filter-course').insertAdjacentHTML('afterbegin','<option value="__unknown__">⚠ بدون نوع دورة</option>');
   $('#filter-course').insertAdjacentHTML('afterbegin','<option value="">كل الدورات</option>');
   Array.from($('#filter-course').options).forEach(o=> o.selected = courseFilterVals.includes(o.value));
   refreshMultiSelectFilterUI($('#filter-course'));
