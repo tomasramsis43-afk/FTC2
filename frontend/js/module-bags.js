@@ -82,6 +82,7 @@ function bagStockTotals(){
 function bagStockFiltered(){
   const dfrom = $('#bst-date-from')?.value || '';
   const dto = $('#bst-date-to')?.value || '';
+  const q = ($('#bst-search')?.value || '').trim().toLowerCase();
   // نستبعد عمليات "تسليم لعميل من المخزون" (type==='issue') من سجل التمويل نفسه وتصديره ومجموع الفترة:
   // هذا السجل مخصص لحركات التمويل الفعلية (إيداع/سحب) فقط. الخصم الفعلي من "المخزون الحالي" يبقى يعمل
   // كالمعتاد لأنه يُحسب من bagStockTotals() على كامل السجل بدون هذا الفلتر.
@@ -89,6 +90,13 @@ function bagStockFiltered(){
     if(b.type==='issue') return false;
     if(dfrom && (!b.date || b.date<dfrom)) return false;
     if(dto && (!b.date || b.date>dto)) return false;
+    if(q){
+      const typeLabel = (b.type==='withdraw' ? 'سحب' : (b.type==='deposit' ? 'إيداع' : 'إضافة يدوية'));
+      const amount = b.amount!==undefined ? String(b.amount) : String(num(b.qty)*num(b.unitPrice));
+      const hay = [b.notes, b.method, typeLabel, amount, String(b.qty), String(b.balanceAfter!==undefined?b.balanceAfter:'')]
+        .map(v=>String(v||'').toLowerCase());
+      if(!hay.some(v=>v.includes(q))) return false;
+    }
     return true;
   });
 }
@@ -250,7 +258,7 @@ function renderBags(){
     $('#bagstock-period-deposit-total').textContent = periodNetQty;
   }
   const bagStockPageRows = applyGenericPagination('bagstock', bagStockRows, bagStockPageState, [
-    $('#bst-date-from')?.value, $('#bst-date-to')?.value
+    $('#bst-search')?.value, $('#bst-date-from')?.value, $('#bst-date-to')?.value
   ]);
   $('#bag-stock-body').innerHTML = bagStockRows.length ? bagStockPageRows.map(b=>{
     const typeLabel = (b.type==='withdraw' ? 'سحب' : (b.type==='deposit' ? 'إيداع' : (b.type==='issue' ? 'تسليم لعميل من المخزون' : 'إضافة يدوية (سجل قديم)'))) + (b.manualQty ? ' (عدد فعلي)' : '');
@@ -444,6 +452,7 @@ $('#client-bag-purchases-body')?.addEventListener('change', async e=>{
 });
 $('#bst-date-from')?.addEventListener('input', renderBags);
 $('#bst-date-to')?.addEventListener('input', renderBags);
+onSearchInput('#bst-search', renderBags);
 $('#btn-export-bagstock')?.addEventListener('click', ()=>{
   const headers = ['التاريخ','النوع','المبلغ','عدد الحقائب (+/-)','الرصيد بعد العملية','طريقة الدفع','ملاحظات'];
   const rows = bagStockFiltered().map(b=>{
