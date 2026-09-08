@@ -906,13 +906,29 @@ function initMultiSelectFilters(root){
     function updateBtn(){ refreshMultiSelectFilterUI(sel); }
     function positionMenu(){
       const r = btn.getBoundingClientRect();
-      const menuW = Math.max(r.width, 190);
+      // نقيس أولاً العرض الطبيعي اللازم لأطول عنصر (بدون قص) عن طريق وضع القائمة خارج الشاشة
+      // مؤقتاً بعرضها التلقائي (max-content)، بدل تحديد عرضها من عرض الزر نفسه — الزر ممكن يكون
+      // أضيق بكثير من أطول اسم في القائمة (شركات/عملاء...) فيقص النص بالـ ellipsis
+      const wasOpen = menu.classList.contains('open');
+      menu.style.left = '-9999px';
+      menu.style.top = '-9999px';
+      menu.style.width = 'max-content';
+      menu.style.maxWidth = Math.max(window.innerWidth - 12, 190) + 'px';
+      menu.classList.add('open');
+      const naturalW = menu.offsetWidth;
+      if(!wasOpen) menu.classList.remove('open');
+
+      const menuW = Math.min(Math.max(naturalW, r.width, 190), window.innerWidth - 12);
       let left = r.right - menuW;
       if(left < 6) left = 6;
+      if(left + menuW > window.innerWidth - 6) left = Math.max(6, window.innerWidth - 6 - menuW);
+      let top = r.bottom + 4;
+      const menuH = menu.offsetHeight;
+      if(top + menuH > window.innerHeight - 6) top = Math.max(6, r.top - menuH - 4);
       menu.style.position = 'fixed';
-      menu.style.top = (r.bottom + 4) + 'px';
+      menu.style.top = top + 'px';
       menu.style.left = left + 'px';
-      menu.style.minWidth = menuW + 'px';
+      menu.style.width = menuW + 'px';
     }
     function closeMenu(){ menu.classList.remove('open'); }
 
