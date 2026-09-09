@@ -1049,7 +1049,7 @@ async function initBrowser() {
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      _browser = await playwright.chromium.launch({ headless: cfg.HEADLESS });
+      _browser = await playwright.chromium.launch({ headless: true });
       for (let i = 0; i < cfg.MAX_WORKERS; i++) {
         const ctx = await _browser.newContext();
         blockHeavyResources(ctx);
