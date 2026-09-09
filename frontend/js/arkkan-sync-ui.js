@@ -67,6 +67,12 @@ function clientEligibleForArkkan(c) {
   return !!(c.clientId && String(c.referNum || '').trim());
 }
 
+/* شرط جلب نتائج الاختبارات: زي شرط أركان العادي + لازم يكون عنده رقم دورة،
+   لأن أركان بتربط نتيجة الاختبار برقم الدورة ولا يمكن جلبها بدونه */
+function clientEligibleForArkkanExams(c) {
+  return clientEligibleForArkkan(c) && !!String(c.courseNumber || '').trim();
+}
+
 /* تاريخ أركان (2026/07/21 أو 21/07/2026) → صيغة input type=date (2026-07-21).
    يحوّل أي صيغة واردة من أركان إلى YYYY-MM-DD القياسية — وبدونها يظهر حقل
    "تاريخ صدور الفاتورة" (input type=date) فارغاً رغم وجود قيمة. */
@@ -558,7 +564,7 @@ function arkkanExamFailed(c) {
 /* صندوق النتائج الرئيسي: بلا نتيجة وبلا تاريخ اختبار (لم يُسجّل له أي اختبار بعد) */
 function arkkanExamClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !(c.examLastDate || '').trim())
+    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !(c.examLastDate || '').trim())
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -566,21 +572,21 @@ function arkkanExamClients() {
    (لا نجاح ولا رسوب سابق) — يُعيد الاختبار حتى تظهر نتيجة */
 function arkkanExamNeedingClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !!(c.examLastDate || '').trim())
+    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !!(c.examLastDate || '').trim())
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 /* عملاء صندوق النجاح: من أكملوا بالنجاح (لا يُعرض لهم جلب أصلاً) */
 function arkkanExamPassedClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && arkkanExamPassed(c))
+    .filter(c => clientEligibleForArkkanExams(c) && arkkanExamPassed(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 /* عملاء صندوق الراسبين: صندوق مستقل يجلب لنفسه، وإذا نجحوا ينتقلون للنجاح */
 function arkkanExamFailedClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && arkkanExamFailed(c))
+    .filter(c => clientEligibleForArkkanExams(c) && arkkanExamFailed(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -938,6 +944,7 @@ async function arkkanExamSyncCard(clientId, btn) {
   if (!c) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
   if (!ARKKAN_IS_DESKTOP) { showToast('لا يمكن الجلب من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل المحلي مدمجاً تلقائياً', 'info'); return; }
+  if (!clientEligibleForArkkanExams(c)) { showToast('لا يمكن جلب نتيجة الاختبار — لازم يكون عند المتدرب رقم دورة أولاً', 'error'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '⏳ المزامنة...'; }
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
