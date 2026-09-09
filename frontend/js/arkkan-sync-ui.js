@@ -14,7 +14,7 @@ const ARKKAN_API_BASE = 'http://localhost:9955';
 
 /* ── الحقول التي نجلبها من أركان (حقول "كارت العميل") ──
    نعرض في مزامنة أركان فقط العملاء الناقص فيهم أي حقل من هذه السبعة. */
-const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate','referNum'];
+const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate'];
 const ARKKAN_FIELD_LABELS = {
   invoice:      'رقم الفاتورة',
   courseNumber: 'رقم الدورة',
@@ -61,11 +61,10 @@ function clientIsMissingArkkanData(c) {
   return arkkanMissingFields(c).length > 0;
 }
 
-/* العميل يُعالج في مزامنة أركان — يجلب "الرقم المرجعي" تلقائياً من منصة
-   إدارة النظام (بحث برقم الهوية) إن توفرت اعتمادات المصدر، لذا يستفيد من
-   الجلب أيضاً من دون رقم مرجعي مسبق */
+/* العميل يُعالج في مزامنة أركان لو عنده رقم مرجعي — أما جلب الرقم المرجعي فيتم
+   منفصلاً بزر مستقل في شريط التحديد الجماعي بشيت العملاء (بحث برقم الهوية). */
 function clientEligibleForArkkan(c) {
-  return !!(c.clientId && String(c.clientId).trim());
+  return !!(c.clientId && String(c.referNum || '').trim());
 }
 
 /* شرط جلب نتائج الاختبارات: زي شرط أركان العادي + لازم يكون عنده رقم دورة،
@@ -101,7 +100,7 @@ async function arkkanFetchOne(clientId, referNum = '') {
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, referNum, basesCreds: arkkanBasesCreds() }),
+    body: JSON.stringify({ clientId, referNum }),
     signal: AbortSignal.timeout(95000)
   });
   if (!r.ok) {
@@ -127,7 +126,6 @@ function arkkanNumPrice(v){ return parseFloat(String(v).replace(/[^\d.,]/g, '').
    الحقول المُلئّة: رقم الفاتورة، رقم الدورة، قيمة الفاتورة، رقم إيصال الحقيبة. */
 function arkkanPatchFromData(c, data){
   const patch = {};
-  if (!c.referNum && data.referNum) patch.referNum = data.referNum;
   if (!c.invoice && data.invoice) patch.invoice = data.invoice;
   if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
@@ -452,7 +450,7 @@ function renderArkkanSyncTable() {
   const missing = arkkanMissingClients();
   const skipped = missing.filter(arkkanIsSkipped);
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصي البيانات: ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
 
   tbody.innerHTML = missing.map(c => `
     <tr id="arkkan-row-${escapeHtml(c.clientId)}"${arkkanIsSkipped(c) ? ' style="opacity:.5;"' : ''}>
@@ -1789,4 +1787,96 @@ async function arkkanBulkSubmitSelected() {
 document.addEventListener('click', e => {
   if (e.target.closest('#btn-bulk-arkkan-submit')) { arkkanBulkSubmitSelected(); return; }
   if (e.target.closest('#btn-bulk-arkkan-stop')) { _bulkSubmitStop = true; return; }
+  if (e.target.closest('#btn-bulk-arkkan-refnum')) { arkkanBulkRefNumSelected(); return; }
+  if (e.target.closest('#btn-bulk-arkkan-refnum-stop')) { _bulkRefNumStop = true; return; }
 });
+
+/* ══════════════════════════════════════════════
+   8.6) جلب الرقم المرجعي فقط للمحددين في شيت العملاء
+   ── زر مستقل في شريط التحديد الجماعي: يستعلم عن الرقم المرجعي لكل عميل
+      محدد من منصة إدارة النظام (بحث برقم الهوية فقط) ويُحفظه في الحقل —
+      بلا جلب أي بيانات أخرى. ──
+   ══════════════════════════════════════════════ */
+let _bulkRefNumRunning = false;
+let _bulkRefNumStop = false;
+
+async function arkkanRefNumFetchOne(clientId) {
+  const creds = arkkanBasesCreds();
+  if (!creds.user || !creds.pass) {
+    throw new Error('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً');
+  }
+  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/refnum', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, basesCreds: creds }),
+    signal: AbortSignal.timeout(70000)
+  });
+  let body = {};
+  try { body = await r.json(); } catch {}
+  if (!r.ok) throw new Error((body && body.error) || `فشل الوكيل المحلي (HTTP ${r.status})`);
+  return body;
+}
+
+async function arkkanBulkRefNumSelected() {
+  const ids = [...selectedClientIds].filter(id => clients.some(c => c.id === id));
+  if (!ids.length) { showToast('لا يوجد عملاء محددين', 'info'); return; }
+  if (_bulkRefNumRunning) return;
+  const creds = arkkanBasesCreds();
+  if (!creds.user || !creds.pass) {
+    showToast('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً', 'error');
+    return;
+  }
+
+  _bulkRefNumRunning = true;
+  _bulkRefNumStop = false;
+
+  const btn = document.getElementById('btn-bulk-arkkan-refnum');
+  const stopBtn = document.getElementById('btn-bulk-arkkan-refnum-stop');
+  const statusEl = document.getElementById('bulk-arkkan-refnum-status');
+  if (btn) btn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = '';
+  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري الاستعلام عن الأرقام المرجعية...'; }
+
+  let okCount = 0, failCount = 0, done = 0;
+  const failMsgs = [];
+  const saveQueued = [];
+
+  for (const id of ids) {
+    if (!_bulkRefNumRunning || _bulkRefNumStop) break;
+    const c = clients.find(x => x.id === id);
+    if (!c) continue;
+    try {
+      const res = await arkkanRefNumFetchOne(c.clientId);
+      const refNum = String(res && res.refNum || '').trim();
+      if (refNum) {
+        if (String(c.referNum || '').trim() !== refNum) {
+          c.referNum = refNum;
+          saveQueued.push(c);
+        }
+        okCount++;
+      } else {
+        failCount++;
+        failMsgs.push(`${c.name}: لا يوجد رقم مرجعي لهذه الهوية`);
+      }
+    } catch (err) {
+      failCount++;
+      failMsgs.push(`${c.name}: ${String(err.message).slice(0, 70)}`);
+    }
+    done++;
+    if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ...`;
+    if (typeof renderBulkSelectionBar === 'function') renderBulkSelectionBar(filteredClients());
+  }
+
+  if (saveQueued.length && typeof saveClients === 'function') {
+    try { await saveClients(); } catch {}
+  }
+  if (typeof renderTable === 'function') renderTable();
+
+  if (statusEl) statusEl.style.display = 'none';
+  if (btn) btn.style.display = '';
+  if (stopBtn) stopBtn.style.display = 'none';
+
+  _bulkRefNumRunning = false;
+  showToast(`انتهى جلب الأرقام المرجعية: ✅ ${okCount} ناجح${okCount ? ` (حُفظت تلقائياً)`: ''} · ❌ ${failCount} فشل`, failCount ? 'error' : 'success');
+  if (failMsgs.length) console.warn('أركان أرقام مرجعية — ملاحظات:', failMsgs.slice(0, 20));
+}

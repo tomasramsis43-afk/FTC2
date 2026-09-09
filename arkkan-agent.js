@@ -323,7 +323,7 @@ async function fetchBasesRefNum({ clientId, creds }) {
   }
 }
 
-async function fetchClientData(pg, { clientId, referNum = '', basesCreds = {} }) {
+async function fetchClientData(pg, { clientId, referNum = '' }) {
   const result = {
     invoice: '', courseNumber: '', date: '',
     coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: '',
@@ -331,20 +331,7 @@ async function fetchClientData(pg, { clientId, referNum = '', basesCreds = {} })
     _validation: { clientId, referNum, timestamp: Date.now() },
   };
 
-  // ── الرقم المرجعي من منصة إدارة النظام (Bases) برقم الهوية فقط ──
-  // يُملأ للعملاء الناقصين؛ وأيضاً لتسجيل على النتيجة حتى تلتقطه الواجهة تلقائياً.
-  let basesRefNum = '';
-  if (basesCreds && String(basesCreds.user || '').trim() && String(basesCreds.pass || '')) {
-    try {
-      basesRefNum = await withTimeout(
-        fetchBasesRefNum({ clientId, creds: basesCreds }),
-        cfg.TIMEOUT.REFNUM
-      ).catch(() => '');
-    } catch { basesRefNum = ''; }
-    if (basesRefNum) result.referNum = basesRefNum;
-  }
-
-  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum: referNum || basesRefNum });
+  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
 
   // ── قاعدة FHD الصارمة: لا نأخذ أي بيانات إلا إذا كان رقم الدورة يبدأ بـ FHD ──
   if (nC > 0) {
@@ -1187,13 +1174,55 @@ const server = http.createServer(async (req, res) => {
             fetchClientData(pg, {
               clientId: idResult.value,
               referNum: String(body.referNum || '').trim(),
-              basesCreds: (body && body.basesCreds) || {},
             }),
             cfg.TIMEOUT.FETCH
           ),
         });
 
         return sendJson(res, 200, data);
+      } catch (e) {
+        if (isProtectionError(e)) {
+          return sendJson(res, 429, { error: e.message });
+        }
+        const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
+        return sendJson(res, status, { error: e.message });
+      }
+    }
+
+    // ── Fetch RefNum Only (الرقم المرجعي من منصة إدارة النظام بالهوية فقط) ──
+    // زر مستقل في شريط التحديد الجماعي بشيت العملاء — لا يتداخل مع جلب البيانات.
+    if (url === '/api/arkkan/refnum' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      const idResult = validateClientId(body.clientId);
+      if (!idResult.valid) return sendJson(res, 400, { error: idResult.reason });
+
+      if (isProtectionActive()) {
+        return sendJson(res, 429, {
+          error: 'تم اكتشاف حماية خارجية — إيقاف مؤقت',
+          retryAfter: Math.round((_protectionUntil - Date.now()) / 1000),
+        });
+      }
+
+      try {
+        const basesCreds = (body && body.basesCreds) || {};
+        const user = String(basesCreds.user || '').trim();
+        const pass = String(basesCreds.pass || '');
+        if (!user || !pass) {
+          return sendJson(res, 400, { error: 'ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً' });
+        }
+
+        await ensureInit();
+        const data = await _jobQueue.enqueue({
+          id: `refnum-${idResult.value}-${Date.now()}`,
+          clientId: idResult.value,
+          action: 'refnum',
+          fn: () => withTimeout(
+            fetchBasesRefNum({ clientId: idResult.value, creds: { user, pass } }),
+            cfg.TIMEOUT.REFNUM
+          ),
+        });
+
+        return sendJson(res, 200, { clientId: idResult.value, refNum: data || '' });
       } catch (e) {
         if (isProtectionError(e)) {
           return sendJson(res, 429, { error: e.message });
