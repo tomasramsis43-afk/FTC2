@@ -448,6 +448,8 @@ function startLocalServer() {
     // الوكيل، ويراقبه ويعيد تشغيله تلقائياً عند أي انهيار. كل شيء يعمل في وضع
     // التطوير (من مجلد المشروع) وفي النسخة المثبتة (من resources) على حد سواء.
     const ARKKAN_AGENT_PORT = 9955;
+    // كود الخروج الذي يصدره الوكيل عند إيقافه الذاتي بعد الخمول (لا يعمل إلا عند الطلب)
+    const IDLE_EXIT_CODE = 42;
     let arkkanChild = null;
     let arkkanStopRequested = false;
 
@@ -602,14 +604,18 @@ function startLocalServer() {
         arkkanChild = child;
         arkkanStopRequested = false;
         const born = Date.now();
-        child.on('exit', () => {
+        child.on('exit', (code, signal) => {
           arkkanChild = null;
-          if (arkkanStopRequested) return;
+          // الوكيل لا يعمل إلا عند ضغط المستخدم على زر "تشغيل" أو أي زر جلب/رفع
+          // (الذي ينادي /arkkan-agent/start). لذلك لا يُعاد تشغيله تلقائياً بعد أي
+          // خروج — سواء كان إيقافاً ذاتياً بعد الخمول (الكود 42)، أو انهياراً،
+          // أو إيقافاً مطلوباً عند إغلاق التطبيق — حتى لا يعمل في الخلفية وحده.
+          if (code === IDLE_EXIT_CODE || arkkanStopRequested) {
+            console.log('[Arkkan Agent] متوقف ' + (code === IDLE_EXIT_CODE ? '(بعد إتمام العمل — لا يعمل إلا عند الطلب)' : ''));
+            return;
+          }
           const wait = Date.now() - born < 8000 ? 5000 : 1500;
-          console.log('[Arkkan Agent] توقف — إعادة تشغيل بعد ' + Math.round(wait / 1000) + ' ث');
-          setTimeout(() => {
-            arkkanStartAgent().then(r => { if (r.error) console.log('[Arkkan Agent] ' + r.error); }).catch(() => {});
-          }, wait);
+          console.log('[Arkkan Agent] انتهى بشكل غير متوقع (code=' + code + ', signal=' + signal + ') — لن يُعاد تشغيله تلقائياً؛ اضغط زر "تشغيل الوكيل المحلي" أو أي زر جلب عند الحاجة');
         });
         child.on('error', e => { arkkanChild = null; console.log('[Arkkan Agent] تعذّر الإقلاع: ' + e.message); });
         return { message: 'تم تشغيل الوكيل المحلي — يُهيّئ المتصفح الآن' };
