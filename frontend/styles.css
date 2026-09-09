@@ -3354,10 +3354,14 @@ body.dark-theme .hint-warn {
 }
 
 #view-clients .client-stats-combined-row .stat {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: 128px;
   padding: 12px 10px;
   white-space: nowrap;
+}
+
+#view-clients .client-stats-combined-row .stat b {
+  font-size: 19px;
 }
 
 #view-clients .client-stats .stat {
