@@ -252,7 +252,8 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
 async function fetchBasesRefNum({ clientId, creds }) {
   const user = String((creds && creds.user) || '').trim();
   const pass = String((creds && creds.pass) || '');
-  if (!user || !pass || !_browser) return '';
+  if (!user || !pass) throw new Error('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً');
+  if (!_browser) throw new Error('الوكيل المحلي لم يُنشئ المتصفح بعد — أعد تشغيله');
   log.info(`جلب رقم مرجعي: تسجيل الدخول إلى منصة إدارة النظام`);
 
   let ctx = null;
@@ -276,12 +277,17 @@ async function fetchBasesRefNum({ clientId, creds }) {
         await wait(cfg.DELAY.DIALOG_POLL);
       }
       await wait(cfg.DELAY.PAGE_LOAD);
+      if (await pg.locator('#UsrName').count().catch(() => 0)) {
+        throw new Error('فشل تسجيل الدخول إلى منصة إدارة النظام — تحقق من اسم المستخدم وكلمة المرور');
+      }
+    } else {
+      throw new Error('صفحة تسجيل الدخول غير متوفرة — قد تكون المنصة محجوبة مؤقتاً');
     }
 
     // رابط وحدة "استعلام عن رقم مرجعي" (روابط الوحدات مشفّرة/ديناميكية لكل جلسة)
     const href = await pg.locator('#dvMenu a', { hasText: 'استعلام عن رقم مرجعي' }).first()
       .getAttribute('href').catch(() => '');
-    if (!href) return '';
+    if (!href) throw new Error('رابط وحدة «استعلام عن رقم مرجعي» غير موجود في القائمة');
 
     await pg.goto('https://arkkanapp2.net/Bases/' + href, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
     await wait(cfg.DELAY.PAGE_LOAD);
@@ -293,7 +299,7 @@ async function fetchBasesRefNum({ clientId, creds }) {
       if (fr) break;
       await wait(cfg.DELAY.DIALOG_POLL);
     }
-    if (!fr) return '';
+    if (!fr) throw new Error('نموذج الاستعلام لم يُفتح بعد البحث');
 
     // البحث برقم الهوية فقط — بدون أي اعتماد على الرقم المرجعي الحالي
     await fr.fill('#ctl00_ID_Number-fltr', String(clientId).trim());
@@ -317,7 +323,7 @@ async function fetchBasesRefNum({ clientId, creds }) {
     return val || '';
   } catch (e) {
     log.warn('fetchBasesRefNum: ' + (e.message || '').slice(0, 160));
-    return '';
+    throw e;
   } finally {
     await ctx?.close().catch(() => {});
   }

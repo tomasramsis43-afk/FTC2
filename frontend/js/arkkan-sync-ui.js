@@ -219,6 +219,51 @@ async function arkkanFetchCardButton(id, btn) {
   }
 }
 
+/* زر "🔖 الرقم المرجعي" في كرت العميل: يجلب الرقم المرجعي من منصة إدارة
+   النظام بالهوية فقط ويحفظه في الحقل — ثم يحدّث الكرت فوراً. */
+async function arkkanRefNumCardButton(id, btn) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
+  const creds = arkkanBasesCreds();
+  if (!creds.user || !creds.pass) {
+    showToast('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  const oldLabel = btn.innerHTML;
+  btn.textContent = '⏳ جاري الاستعلام...';
+
+  try {
+    const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/refnum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: c.clientId, basesCreds: creds }),
+      signal: AbortSignal.timeout(70000)
+    });
+    let body = {};
+    try { body = await r.json(); } catch {}
+    if (!r.ok) throw new Error((body && body.error) || `HTTP ${r.status}`);
+
+    const refNum = String(body.refNum || '').trim();
+    if (!refNum) throw new Error('لا يوجد رقم مرجعي لهذه الهوية في منصة إدارة النظام');
+
+    const oldRef = String(c.referNum || '').trim();
+    c.referNum = refNum;
+    if (typeof saveClients === 'function') {
+      try { await saveClients(); } catch (e) { throw new Error(`تم الجلب (${refNum}) لكن تعذّر الحفظ: ${String(e.message).slice(0, 50)}`); }
+    }
+    showToast(`✅ الرقم المرجعي: ${refNum}${oldRef && oldRef !== refNum ? ` (كان ${oldRef})` : ''}`, 'success');
+    if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id);
+  } catch (err) {
+    showToast('خطأ جلب الرقم المرجعي: ' + String(err.message).slice(0, 100), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldLabel;
+  }
+}
+
 /* زر "جلب" بجانب صف واحد في شيت المزامنة: يجلب بيانات هذا العميل فقط
    ويملأ الناقص ويحفظ — دون الحاجة للمزامنة الكاملة لكل العملاء. */
 async function arkkanSyncOne(clientId, btn) {
@@ -1837,9 +1882,8 @@ async function arkkanBulkRefNumSelected() {
   if (stopBtn) stopBtn.style.display = '';
   if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري الاستعلام عن الأرقام المرجعية...'; }
 
-  let okCount = 0, failCount = 0, done = 0;
+  let okCount = 0, failCount = 0, savedCount = 0, done = 0;
   const failMsgs = [];
-  const saveQueued = [];
 
   for (const id of ids) {
     if (!_bulkRefNumRunning || _bulkRefNumStop) break;
@@ -1849,34 +1893,42 @@ async function arkkanBulkRefNumSelected() {
       const res = await arkkanRefNumFetchOne(c.clientId);
       const refNum = String(res && res.refNum || '').trim();
       if (refNum) {
-        if (String(c.referNum || '').trim() !== refNum) {
-          c.referNum = refNum;
-          saveQueued.push(c);
-        }
+        const oldRef = String(c.referNum || '').trim();
+        c.referNum = refNum;
         okCount++;
+        if (oldRef !== refNum) {
+          try {
+            if (typeof saveClients === 'function') await saveClients();
+            savedCount++;
+          } catch (e) {
+            failMsgs.push(`${c.name}: تم الجلب لكن تعذّر الحفظ (${String(e.message).slice(0, 50)})`);
+          }
+        }
       } else {
         failCount++;
         failMsgs.push(`${c.name}: لا يوجد رقم مرجعي لهذه الهوية`);
       }
     } catch (err) {
       failCount++;
-      failMsgs.push(`${c.name}: ${String(err.message).slice(0, 70)}`);
+      failMsgs.push(`${c.name}: ${String(err.message).slice(0, 80)}`);
     }
     done++;
-    if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ...`;
-    if (typeof renderBulkSelectionBar === 'function') renderBulkSelectionBar(filteredClients());
+    if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
+    if (typeof renderTable === 'function') renderTable();
   }
-
-  if (saveQueued.length && typeof saveClients === 'function') {
-    try { await saveClients(); } catch {}
-  }
-  if (typeof renderTable === 'function') renderTable();
 
   if (statusEl) statusEl.style.display = 'none';
   if (btn) btn.style.display = '';
   if (stopBtn) stopBtn.style.display = 'none';
 
   _bulkRefNumRunning = false;
-  showToast(`انتهى جلب الأرقام المرجعية: ✅ ${okCount} ناجح${okCount ? ` (حُفظت تلقائياً)`: ''} · ❌ ${failCount} فشل`, failCount ? 'error' : 'success');
-  if (failMsgs.length) console.warn('أركان أرقام مرجعية — ملاحظات:', failMsgs.slice(0, 20));
+  if (failMsgs.length) console.warn('أركان أرقام مرجعية — تفاصيل:', failMsgs);
+  if (statusEl && failMsgs.length) {
+    statusEl.style.display = '';
+    statusEl.innerHTML = `<span style="color:var(--danger,red);">❌ ${failCount} فشل</span>`;
+    statusEl.title = failMsgs.join('\n');
+    setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
+  }
+  const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
+  showToast(`انتهى: ✅ ${okCount} جلب${savedCount ? ` (${savedCount} محفوظ)` : ''} · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
