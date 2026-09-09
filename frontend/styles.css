@@ -3337,16 +3337,23 @@ body.dark-theme .hint-warn {
   flex-wrap: wrap;
 }
 
-/* كروت فلتر الدورات: صف واحد بالعرض الكامل دائماً (بدون التفاف لسطرين)،
-   مع سكرول أفقي لو زاد عدد الدورات عن العرض المتاح */
-#view-clients .client-stats#course-stat-cards {
+/* صف الإحصائيات العلوي + كروت فلتر الدورات: كل الكروت في صف واحد متصل، بدون التفاف
+   لسطرين، مع سكرول أفقي لو زاد العدد عن العرض المتاح. الصفّان الفرعيان (client-stats)
+   يصبحان display:contents فتنضم كروتهما مباشرة لنفس صف flex الخاص بالغلاف الأب. */
+#view-clients .client-stats-combined-row {
+  display: flex;
+  gap: 12px;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: thin;
   padding-bottom: 4px;
 }
 
-#view-clients .client-stats#course-stat-cards .stat {
+#view-clients .client-stats-combined-row .client-stats {
+  display: contents;
+}
+
+#view-clients .client-stats-combined-row .stat {
   flex: 1 1 0;
   min-width: 0;
   padding: 12px 10px;
