@@ -97,6 +97,7 @@ async function arkkanCheckReady() {
 }
 
 async function arkkanFetchOne(clientId, referNum = '') {
+  await arkkanEnsureAgentReady();
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -225,6 +226,7 @@ async function arkkanRefNumCardButton(id, btn) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
   if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
+  await arkkanEnsureAgentReady();
   const creds = arkkanBasesCreds();
   if (!creds.user || !creds.pass) {
     showToast('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً', 'error');
@@ -314,6 +316,7 @@ async function arkkanSyncOne(clientId, btn) {
    ══════════════════════════════════════════════ */
 
 async function arkkanReceiptsFetchOne(clientId, referNum = '') {
+  await arkkanEnsureAgentReady();
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/receipts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -586,6 +589,29 @@ async function arkkanStartAgent() {
   }
 }
 
+/* يضمن أن الوكيل المحلي يعمل قبل أي جلب/رفع — يشغّله تلقائياً من خادم سطح
+   المكتب إن كان متوقفاً وينتظر اكتمال تجهيز المتصفح. لا يُستدعى عند فتح
+   البرنامج أو التبويب — فقط من أزرار الجلب/التشغيل نفسها. بذاكرة فحص مؤقتة
+   حتى لا يتكرر الفحص لكل عميل داخل الحلقات الجماعية. */
+let _arkkanAgentCheckAt = 0;
+async function arkkanEnsureAgentReady() {
+  if (typeof ARKKAN_IS_DESKTOP === 'undefined' || !ARKKAN_IS_DESKTOP) return;
+  const now = Date.now();
+  if (now - _arkkanAgentCheckAt < 3000) return;
+  _arkkanAgentCheckAt = now;
+  const st = await arkkanCheckReady().catch(() => ({ ready: false }));
+  if (st && st.ready) return;
+  const r = await fetch('/arkkan-agent/start', { method: 'POST', signal: AbortSignal.timeout(15000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  for (let i = 0; i < 25; i++) {
+    await new Promise(res => setTimeout(res, 1000));
+    const nowSt = await arkkanCheckReady().catch(() => ({ ready: false }));
+    if (nowSt && nowSt.ready) return;
+  }
+  throw new Error('تعذّر اكتمال تجهيز الوكيل خلال المهلة — أعد الضغط بعد ثوانٍ');
+}
+
 async function arkkanBulkSync() {
   if (_arkkanBulkRunning) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
@@ -719,6 +745,7 @@ function cssEscapeId(id) {
    ══════════════════════════════════════════════ */
 
 async function arkkanExamFetchOne(clientId, referNum = '') {
+  await arkkanEnsureAgentReady();
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/exams', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1667,6 +1694,7 @@ function arkkanTraineePayload(c) {
 
 /* الاتصال بالوكيل المحلي ورفع الطلب — يرمي رسالة فشل جاهزة للتوست */
 async function arkkanSubmitTrainee(c) {
+  await arkkanEnsureAgentReady();
   const payload = arkkanTraineePayload(c);
   let res;
   try {
@@ -1838,6 +1866,7 @@ let _bulkRefNumRunning = false;
 let _bulkRefNumStop = false;
 
 async function arkkanRefNumFetchOne(clientId) {
+  await arkkanEnsureAgentReady();
   const creds = arkkanBasesCreds();
   if (!creds.user || !creds.pass) {
     throw new Error('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً');
