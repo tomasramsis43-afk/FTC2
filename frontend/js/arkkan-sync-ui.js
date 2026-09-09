@@ -526,14 +526,6 @@ async function arkkanUpdateStatus() {
   el.className = 'hint hint-info';
   el.innerHTML = '⏳ جاري التحقق من الوكيل المحلي...';
 
-  // نوجّه الوكيل المحلي لتفعيل المتصفح مسبقاً (warm) حتى يكون جاهزاً قبل أول جلب
-  try {
-    await fetch(ARKKAN_API_BASE + '/api/arkkan/warm', {
-      method: 'POST',
-      signal: AbortSignal.timeout(65000)
-    }).catch(() => {});
-  } catch {}
-
   const st = await arkkanCheckReady();
   if (st.ready) {
     el.className = 'hint hint-success';
