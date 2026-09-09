@@ -270,14 +270,18 @@ async function fetchBasesRefNum({ clientId, creds }) {
       await pg.fill('#UsrName', user);
       await pg.fill('#Pwd', pass);
       await pg.click('#btnLogin');
+      // الانتظار: إما اختفاء نموذج الدخول، أو تحوّل الصفحة إلى الصفحة الرئيسية، أو انقضاء المهلة
       const t0 = Date.now();
+      let loggedIn = false;
       while (Date.now() - t0 < cfg.TIMEOUT.LOGIN) {
+        const url = pg.url();
+        if (/MainPagewebsite/.test(url)) { loggedIn = true; break; }
         const still = await pg.locator('#UsrName').count().catch(() => 0);
-        if (!still) break;
+        if (!still) { loggedIn = true; break; }
         await wait(cfg.DELAY.DIALOG_POLL);
       }
       await wait(cfg.DELAY.PAGE_LOAD);
-      if (await pg.locator('#UsrName').count().catch(() => 0)) {
+      if (!loggedIn) {
         throw new Error('فشل تسجيل الدخول إلى منصة إدارة النظام — تحقق من اسم المستخدم وكلمة المرور');
       }
     } else {
