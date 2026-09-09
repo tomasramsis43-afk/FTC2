@@ -751,6 +751,40 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // ── حفظ إيصالات أركان تلقائياً في مجلد التنزيلات دون نافذة حفظ ──
+  // زر «الإيصالات» في تبويب المزامنة وكرت العميل يولّد ملفات PDF باسم يبدأ بـ
+  // «إيصال_». نمسك التنزيلات قبل نافذة الحفظ ونوجهها مباشرة إلى مجلد التنزيلات
+  // الافتراضي للجهاز، ونضيف إذناً (تسلسلي) لو الاسم موجود مسبقاً فلا تتعرّض
+  // ملفات العهود السابقة للحذف. أي تنزيل آخر لا يبدأ بالمقدمة يبقى بسلوكه الافتراضي.
+  const ARKAN_RECEIPT_PREFIX = 'إيصال_';
+  function arkkanUniqueDownloadPath(dir, fileName) {
+    const ext = path.extname(fileName);
+    const base = path.basename(fileName, ext);
+    let candidate = path.join(dir, fileName);
+    let n = 1;
+    while (fs.existsSync(candidate)) {
+      candidate = path.join(dir, `${base} (${n})${ext}`);
+      n++;
+    }
+    return candidate;
+  }
+  mainWindow.webContents.session.on('will-download', (event, item) => {
+    const name = String(item.getFilename() || '');
+    // إيصالات أركان تُسمَّى الآن باسم رقم الهوية: دورة_<هوية>.pdf / حقيبة_<هوية>.pdf
+    // (وإيصال_… من النسخ السابقة للتوافق) — أي شيء آخر يبقى بسلوكه الافتراضي
+    if (!(name.startsWith(ARKAN_RECEIPT_PREFIX) || /^(دورة|حقيبة)_\d/.test(name))) return;
+    const dir = app.getPath('downloads');
+    const savePath = arkkanUniqueDownloadPath(dir, name);
+    item.setSavePath(savePath);
+    item.on('done', (e, state) => {
+      if (state === 'completed') {
+        console.log('[Arkkan Receipts] حُفظ الإيصال:', savePath);
+      } else if (state === 'interrupted') {
+        console.warn('[Arkkan Receipts] فشل حفظ الإيصال:', name);
+      }
+    });
+  });
+
   Menu.setApplicationMenu(null); // شريط قوائم نظيف بدون عناصر Electron الافتراضية
 }
 

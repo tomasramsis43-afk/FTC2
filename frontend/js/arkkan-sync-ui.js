@@ -338,6 +338,34 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
   }
 }
 
+/* زر «📥 الإيصالات» في كرت العميل: تحميل إيصال الدورة + الحقيبة للعميل المعروض */
+async function arkkanReceiptsCardButton(id, btn) {
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+  if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
+  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
+
+  btn.disabled = true;
+  const oldLabel = btn.innerHTML;
+  btn.textContent = '⏳ جاري التحميل...';
+
+  try {
+    const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
+    const list = Array.isArray(data.receipts) ? data.receipts : [];
+    if (!list.length) { showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info'); return; }
+    let n = 0;
+    for (const rc of list) {
+      if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+    }
+    showToast(`✅ تم تنزيل ${n} إيصال للعميل (دورة وحقيبة)`, 'success');
+  } catch (err) {
+    showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldLabel;
+  }
+}
+
 /* وضع جلب جماعي مستقل للإيصالات (لا يتعارض مع المزامنة ولا مع فحص النتائج) */
 const _arkkanReceiptsState = { running: false, stop: false };
 

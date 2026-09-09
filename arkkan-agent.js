@@ -432,7 +432,7 @@ async function captureReceiptAsFile(baseCtx, recF) {
 
 // فتح إيصال صف معين (دورة أو حقيبة)، التقاط ملفه، ثم إغلاق النافذة والعودة للإطار الأصلي.
 // يعيد الإطار المحدَّث (may be refreshed بعد إغلاق المستند) عبر الثنائي { receipt, fr }.
-async function openDocAndCapture(pg, fr, gridSel, rowIdx, kind, nameHint) {
+async function openDocAndCapture(pg, fr, gridSel, rowIdx, kind, nameHint, clientId) {
   const beforeDocFrames = snapshotFrames(pg, DOCUMENTS_FRAME_PATTERN);
   const clicked = await fr.evaluate(({ sel, i }) => {
     const el = document.querySelectorAll(sel)[i];
@@ -473,7 +473,7 @@ async function openDocAndCapture(pg, fr, gridSel, rowIdx, kind, nameHint) {
   fr = pg.frames().find(f => DETAILS_FRAME_PATTERN.test(f.url())) || await ensureDetailsFrame(pg);
 
   if (!file) return { receipt: null, fr };
-  const token = kind === 'course' ? (nameHint || inv || 'دورة') : (inv || dt || 'حقيبة');
+  const idNum = cleanFileToken(clientId, 'عميل');
   const receipt = {
     kind,
     invoice: inv,
@@ -481,7 +481,7 @@ async function openDocAndCapture(pg, fr, gridSel, rowIdx, kind, nameHint) {
     mime: file.mime,
     base64: file.base64,
     ext: file.ext,
-    fileName: `${kind === 'course' ? 'إيصال_دورة' : 'إيصال_حقيبة'}_${cleanFileToken(token)}.${file.ext}`,
+    fileName: `${kind === 'course' ? 'دورة' : 'حقيبة'}_${idNum}.${file.ext}`,
   };
   return { receipt, fr };
 }
@@ -501,7 +501,7 @@ async function fetchClientReceipts(pg, { clientId, referNum = '' }) {
     }).catch(() => []);
     const fhdRows = courseRows.filter(r => /^FHD/i.test(r.cn)).slice(0, 5);
     for (const cr of fhdRows) {
-      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Courses_Students_GridView1 tr.RowItems', cr.i, 'course', cr.cn);
+      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Courses_Students_GridView1 tr.RowItems', cr.i, 'course', cr.cn, clientId);
       fr = nextFr;
       if (receipt && receipt.protection) { log.info('receipts: توقف بسبب الحماية'); break; }
       if (receipt && receipt.base64) receipts.push({ courseNumber: cr.cn, ...receipt });
@@ -521,7 +521,7 @@ async function fetchClientReceipts(pg, { clientId, referNum = '' }) {
         .slice(0, 5);
     }).catch(() => []);
     for (const br of bagRows) {
-      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Training_bags_GridView1 tr.RowItems', br.i, 'bag', '');
+      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Training_bags_GridView1 tr.RowItems', br.i, 'bag', '', clientId);
       fr = nextFr;
       if (receipt && receipt.protection) { log.info('receipts: توقف بسبب الحماية'); break; }
       if (receipt && receipt.base64) receipts.push(receipt);

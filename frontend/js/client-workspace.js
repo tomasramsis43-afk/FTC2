@@ -165,6 +165,7 @@ function openClientWorkspace(id){
   if(typeof canReceptionEditClient !== 'function' || canReceptionEditClient(c)){
     acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">تعديل البيانات</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً">⏬ جلب من أركان</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan-receipts" title="تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز">📥 الإيصالات</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-exam-sync" title="جلب نتيجة الاختبار الأخيرة من أركان وتحديث شارة النتيجة في شيت العملاء">🔄 مزامنة النتيجة</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan-submit" title="رفع طلب متدرب لهذا العميل إلى بوابة الحقيبة التثقيفية — النوع ذكر، والبلدية أمانة منطقة الرياض -- بلدية الخرج">⬆️ رفع لأركان</button>`);
   }
@@ -201,6 +202,7 @@ document.addEventListener('click', e => {
   if(wid){ openClientWorkspace(wid); return; }
   if(e.target.id === 'btn-cw-close'){ closeClientWorkspace(); return; }
   if(e.target.id === 'cw-arkkan' && _cwClientId){ arkkanFetchCardButton(_cwClientId, e.target); return; }
+  if(e.target.id === 'cw-arkkan-receipts' && _cwClientId){ arkkanReceiptsCardButton(_cwClientId, e.target); return; }
   if(e.target.id === 'cw-exam-sync' && _cwClientId){ arkkanExamSyncCard(_cwClientId, e.target); return; }
   if(e.target.id === 'cw-arkkan-submit' && _cwClientId){ arkkanSubmitCardButton(_cwClientId, e.target); return; }
   if(e.target.id === 'client-workspace-overlay') closeClientWorkspace();
