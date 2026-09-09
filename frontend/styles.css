@@ -3337,6 +3337,22 @@ body.dark-theme .hint-warn {
   flex-wrap: wrap;
 }
 
+/* كروت فلتر الدورات: صف واحد بالعرض الكامل دائماً (بدون التفاف لسطرين)،
+   مع سكرول أفقي لو زاد عدد الدورات عن العرض المتاح */
+#view-clients .client-stats#course-stat-cards {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+}
+
+#view-clients .client-stats#course-stat-cards .stat {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 10px;
+  white-space: nowrap;
+}
+
 #view-clients .client-stats .stat {
   background: color-mix(in srgb, var(--surface-solid) 60%, transparent);
   border: 1px solid var(--border);
