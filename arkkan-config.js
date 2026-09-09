@@ -104,6 +104,7 @@ module.exports = {
   TIMEOUT: {
     WARM:         parseInt(process.env.ARKKAN_WARM_TIMEOUT || '60000', 10),
     FETCH:        parseInt(process.env.ARKKAN_FETCH_TIMEOUT || '90000', 10),
+    RECEIPTS:     parseInt(process.env.ARKKAN_RECEIPTS_TIMEOUT || '150000', 10),
     SUBMIT:       parseInt(process.env.ARKKAN_SUBMIT_TIMEOUT || '120000', 10),
     LOGIN:        parseInt(process.env.ARKKAN_LOGIN_TIMEOUT || '45000', 10),
     INIT:         parseInt(process.env.ARKKAN_INIT_TIMEOUT || '60000', 10),

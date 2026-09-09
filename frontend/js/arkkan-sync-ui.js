@@ -263,6 +263,132 @@ async function arkkanSyncOne(clientId, btn) {
 }
 
 /* ══════════════════════════════════════════════
+   1.5) تحميل الإيصالات (دورة + حقيبة) PDF
+   ── زر لكل صف: يجلب إيصال العميل من الوكيل وينزّله كملف على الجهاز.
+      زر جماعي في شريط أدوات الصندوق الأول: ينزّل إيصالات كل العملاء. ──
+   ══════════════════════════════════════════════ */
+
+async function arkkanReceiptsFetchOne(clientId, referNum = '') {
+  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/receipts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, referNum }),
+    signal: AbortSignal.timeout(165000)
+  });
+  if (!r.ok) {
+    let msg = 'فشل الوكيل المحلي (' + r.status + ')';
+    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+/* تحويل base64 من الوكيل إلى ملف محمّل على الجهاز عبر Blob + رابط مخفي —
+   التطبيق معزول تماماً (لا Node)، لكن روابط التنزيل تعمل داخل الصفحة. */
+function arkkanDownloadBase64(base64, mime, fileName) {
+  if (!base64) return false;
+  const bin = atob(base64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const blob = new Blob([arr], { type: mime || 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || 'receipt.' + (mime === 'image/png' ? 'png' : 'pdf');
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
+  a.remove();
+  return true;
+}
+
+/* معالج زر «📥 إيصال» بجانب صف واحد: جلب إيصالات هذا العميل وتنزيلها */
+async function arkkanSyncReceiptsOne(clientId, btn) {
+  const c = clients.find(x => x.clientId === clientId);
+  if (!c) return;
+  if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
+  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
+
+  const statusEl = $(`#arkkan-status-${cssEscapeId(clientId)}`);
+  const oldLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري تحميل الإيصالات...</span>';
+
+  try {
+    const data = await arkkanReceiptsFetchOne(clientId, c.referNum || '');
+    const list = Array.isArray(data.receipts) ? data.receipts : [];
+    if (!list.length) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا إيصالات</span>';
+      showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info');
+      return;
+    }
+    let n = 0;
+    for (const rc of list) {
+      if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+    }
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${n} إيصال</span>`;
+    showToast(`✅ تم تنزيل ${n} إيصال للعميل ${clientId} (دورة وحقيبة)`, 'success');
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
+    showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldLabel;
+  }
+}
+
+/* وضع جلب جماعي مستقل للإيصالات (لا يتعارض مع المزامنة ولا مع فحص النتائج) */
+const _arkkanReceiptsState = { running: false, stop: false };
+
+async function arkkanBulkReceipts() {
+  const st = _arkkanReceiptsState;
+  if (st.running) return;
+  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
+
+  st.running = true;
+  st.stop = false;
+
+  const startBtn = $('#btn-arkkan-receipts-start');
+  const stopBtn = $('#btn-arkkan-receipts-stop');
+  const counter = $('#arkkan-receipts-counter');
+  if (startBtn) startBtn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = '';
+
+  const rows = arkkanMissingClients().filter(c => !arkkanIsSkipped(c));
+  const total = rows.length;
+  let done = 0, okd = 0, failed = 0;
+  showToast(`بدأ تحميل إيصالات ${total} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
+
+  for (let i = 0; i < total; i++) {
+    if (st.stop) break;
+    const c = rows[i];
+    const statusEl = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري تحميل الإيصالات...</span>';
+    try {
+      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
+      const list = Array.isArray(data.receipts) ? data.receipts : [];
+      let n = 0;
+      for (const rc of list) {
+        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+      }
+      if (n) { okd++; if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${n} إيصال</span>`; }
+      else if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا إيصالات</span>';
+    } catch (err) {
+      failed++;
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
+    }
+    done++;
+    if (counter) counter.textContent = `✅ ${okd} · ❌ ${failed} · ${done}/${total}`;
+  }
+
+  st.running = false;
+  if (startBtn) startBtn.style.display = '';
+  if (stopBtn) stopBtn.style.display = 'none';
+  showToast(`انتهى تحميل الإيصالات: ${okd} عميل نجح، ${failed} فشل`, okd > 0 ? 'success' : 'info');
+}
+
+/* ══════════════════════════════════════════════
    2) صفحة المزامنة الكاملة (Bulk Sync)
    ══════════════════════════════════════════════ */
 let _arkkanBulkRunning = false;
@@ -314,6 +440,7 @@ function renderArkkanSyncTable() {
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد من الجلب (ألغِ تفشيكه من عمود «إيقاف»)' : 'جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>جلب</button></td>
+      <td style="text-align:center;"><button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt="${escapeHtml(c.clientId)}" style="padding:2px 10px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>📥 إيصال</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}">${arkkanIsSkipped(c) ? '<span style="color:var(--text-muted);">⛔ مستبعد</span>' : '<span style="color:var(--text-muted);">في الانتظار</span>'}</td>
     </tr>`).join('');
 }
@@ -321,6 +448,7 @@ function renderArkkanSyncTable() {
 async function arkkanUpdateStatus() {
   const el = $('#arkkan-agent-status');
   const btn = $('#btn-arkkan-bulk-start');
+  const receiptsBtn = $('#btn-arkkan-receipts-start');
   if (!el) return;
   el.className = 'hint hint-info';
   el.innerHTML = '⏳ جاري التحقق من الوكيل المحلي...';
@@ -345,6 +473,7 @@ async function arkkanUpdateStatus() {
     }
     el.innerHTML = `✅ الوكيل المحلي جاهز — يجلب البيانات من أركان مباشرة عبر ${escapeHtml(ARKKAN_API_BASE)}.` + memTxt;
     if (btn) btn.disabled = false;
+    if (receiptsBtn) receiptsBtn.disabled = false;
   } else if (st.playwrightInstalled === false) {
     el.className = 'hint hint-error';
     el.innerHTML = '❌ وكيل أركان يعمل لكن مكتبة playwright غير مثبتة. شغّل في مجلد المشروع:<br>' +
@@ -357,6 +486,7 @@ async function arkkanUpdateStatus() {
       (ARKKAN_IS_DESKTOP ? ' — سيعمل فوراً من داخل البرنامج' : ' — يتوجب استخدام تطبيق سطح المكتب لتفعيل الوكيل') +
       ' — يفتح مزمن المتصفح للجلب. إن كان يعمل لكنه قيد التهيئة فانتظر لحظات ثم اضغط "فحص الاتصال".';
     if (btn) btn.disabled = false; // الجلب يهيّئ تلقائياً
+    if (receiptsBtn) receiptsBtn.disabled = !ARKKAN_IS_DESKTOP; // التحويل للجهاز متاح من التطبيق فقط
   }
 }
 
@@ -1315,11 +1445,14 @@ document.addEventListener('click', e => {
 
 document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
+  if (e.target.closest('[data-arkkan-receipt]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt]').dataset.arkkanReceipt, e.target.closest('[data-arkkan-receipt]')); return; }
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
+  if (e.target.closest('#btn-arkkan-receipts-start')) { arkkanBulkReceipts(); return; }
+  if (e.target.closest('#btn-arkkan-receipts-stop')) { _arkkanReceiptsState.stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
   if (e.target.closest('#btn-arkkan-exams-stop')) { examBulkState('exams').stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-failed-start')) { arkkanExamsFailedBulk(); return; }

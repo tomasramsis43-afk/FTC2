@@ -24,6 +24,9 @@
  *   GET  /api/arkkan/status
  *   POST /api/arkkan/warm
  *   POST /api/arkkan/fetch   { clientId, referNum? }
+ *   POST /api/arkkan/receipts { clientId, referNum? }
+ *     ← يفتح إيصالات الدورة (FHD) + الحقيبة ويلتقطها كـ PDF (أو PNG في الوضع غير النصي)
+ *       على الجهاز: يعيد { count, receipts: [{ kind, invoice, date, mime, base64, ext, fileName }] }
  *   POST /api/arkkan/exams   { clientId, referNum? }
  *   POST /api/arkkan/submit-trainee { clientId, name, phone?, nationality?, credentials?: { user, pass } }
  *     ← يرفع "طلب متدرب" إلى بوابة الحقيبة (Traniee_Request.aspx) بعد تسجيل الدخول؛
@@ -384,6 +387,154 @@ async function fetchClientData(pg, { clientId, referNum = '' }) {
 
   await smartRefresh(pg);
   return finalizeResult(result);
+}
+
+/* ══════════════════════════════════════════════
+   Receipt Download (تصدير إيصالات الدورة + الحقيبة كملفات على الجهاز)
+   ── يفتح كل إيصال في سياق نظيف (بدون حجب الموارد) ويلتقطه كـ PDF؛
+      في الوضع غير Headless يسقط تلقائياً إلى PNG بصفحة الإيصال كاملة. ──
+   ══════════════════════════════════════════════ */
+
+// اسم ملف نظيف من رقم الفاتورة/الدورة — يُحذف أي محرف غير أمن في أسماء الملفات
+function cleanFileToken(v, fallback) {
+  const s = String(v || '').replace(/[^\w\u0600-\u06FF\-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 80);
+  return s || fallback || 'receipt';
+}
+
+// التقاط صفحة الإيصال كملف: سياق جديد في نفس المتصفح مع نفس كوكيز الجلسة —
+// لأن سياقات العمال تحجب الاستايلات/الصور (لتسريع الجلب) فتصبح النسخة الفوتوغرافية
+// بلا تنسيق. السياق النظيف يعيد نسخة مطابقة للمعروض للمستخدم.
+async function captureReceiptAsFile(baseCtx, recF) {
+  if (!recF || !_browser) return null;
+  const url = recF.url();
+  if (!url) return null;
+  let newCtx = null;
+  try {
+    const cookies = await baseCtx.cookies();
+    newCtx = await _browser.newContext({ locale: 'ar' });
+    if (cookies && cookies.length) await newCtx.addCookies(cookies).catch(() => {});
+    const shot = await newCtx.newPage();
+    await shot.goto(url, { waitUntil: 'load', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+    await wait(cfg.DELAY.PAGE_LOAD);
+    if (cfg.HEADLESS && typeof shot.pdf === 'function') {
+      const buf = await shot.pdf({ format: 'A4', printBackground: true, preferCSSPageSize: true });
+      if (buf && buf.length) return { mime: 'application/pdf', base64: buf.toString('base64'), ext: 'pdf' };
+    }
+    const buf = await shot.screenshot({ fullPage: true });
+    return { mime: 'image/png', base64: buf.toString('base64'), ext: 'png' };
+  } catch (e) {
+    log.warn('captureReceiptAsFile failed:', (e.message || '').slice(0, 120));
+    return null;
+  } finally {
+    await newCtx?.close().catch(() => {});
+  }
+}
+
+// فتح إيصال صف معين (دورة أو حقيبة)، التقاط ملفه، ثم إغلاق النافذة والعودة للإطار الأصلي.
+// يعيد الإطار المحدَّث (may be refreshed بعد إغلاق المستند) عبر الثنائي { receipt, fr }.
+async function openDocAndCapture(pg, fr, gridSel, rowIdx, kind, nameHint) {
+  const beforeDocFrames = snapshotFrames(pg, DOCUMENTS_FRAME_PATTERN);
+  const clicked = await fr.evaluate(({ sel, i }) => {
+    const el = document.querySelectorAll(sel)[i];
+    if (!el) return false;
+    const a = el.querySelector('a');
+    const inp = [...el.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
+    const t = (a && (a.textContent || '').includes('الايصال')) ? a : inp;
+    if (t) { t.click(); return true; }
+    return false;
+  }, { sel: gridSel, i: rowIdx }).catch(() => false);
+  if (!clicked) return { receipt: null, fr };
+
+  const recF = await findNewFrame(pg, DOCUMENTS_FRAME_PATTERN, beforeDocFrames, cfg.DELAY.DOCUMENT_OPEN);
+  if (!recF) return { receipt: { protection: isProtectionActive() }, fr };
+
+  const txt = await recF.evaluate(() => document.body.innerText || '').catch(() => '');
+  if (isProtectionPage(txt)) {
+    _protectionActive = true;
+    _protectionUntil = Date.now() + 5 * 60 * 1000;
+    log.protection('IN_DOCUMENT', 'تم اكتشاف حماية داخل مستند الإيصال');
+    await closeDialog(pg);
+    return { receipt: { protection: true }, fr };
+  }
+
+  const inv = ((txt.match(/(?:Invoice No\.|رقم الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+    .replace(/[^\x20-\x7E\u0600-\u06FF0-9]/g, ' ').trim();
+  const dt = ((txt.match(/(?:Invoice Date|تاريخ الفاتورة)\s*([^\t\n]+)/) || [])[1] || '')
+    .replace(/[^\d\/-]/g, '').trim();
+
+  const file = await captureReceiptAsFile(pg.context(), recF);
+
+  await closeDialog(pg);
+  const t1 = Date.now();
+  while (Date.now() - t1 < cfg.DELAY.DIALOG_CLOSE &&
+         pg.frames().some(f => DOCUMENTS_FRAME_PATTERN.test(f.url()) && !beforeDocFrames.includes(f))) {
+    await wait(cfg.DELAY.DIALOG_POLL);
+  }
+  fr = pg.frames().find(f => DETAILS_FRAME_PATTERN.test(f.url())) || await ensureDetailsFrame(pg);
+
+  if (!file) return { receipt: null, fr };
+  const token = kind === 'course' ? (nameHint || inv || 'دورة') : (inv || dt || 'حقيبة');
+  const receipt = {
+    kind,
+    invoice: inv,
+    date: dt,
+    mime: file.mime,
+    base64: file.base64,
+    ext: file.ext,
+    fileName: `${kind === 'course' ? 'إيصال_دورة' : 'إيصال_حقيبة'}_${cleanFileToken(token)}.${file.ext}`,
+  };
+  return { receipt, fr };
+}
+
+/* جلب إيصالات عميل: كر الإيصالات لكل الصفوف FHD + كل إيصالات الحقائب. */
+async function fetchClientReceipts(pg, { clientId, referNum = '' }) {
+  const receipts = [];
+  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
+
+  // ── إيصالات الدورات (قاعدة FHD فقط) ──
+  if (nC > 0) {
+    const courseRows = await fr.evaluate(() => {
+      return [...document.querySelectorAll('#ctl00_Courses_Students_GridView1 tr.RowItems')].map((r, i) => ({
+        i,
+        cn: (r.querySelector('.Course_number')?.innerText || '').trim(),
+      }));
+    }).catch(() => []);
+    const fhdRows = courseRows.filter(r => /^FHD/i.test(r.cn)).slice(0, 5);
+    for (const cr of fhdRows) {
+      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Courses_Students_GridView1 tr.RowItems', cr.i, 'course', cr.cn);
+      fr = nextFr;
+      if (receipt && receipt.protection) { log.info('receipts: توقف بسبب الحماية'); break; }
+      if (receipt && receipt.base64) receipts.push({ courseNumber: cr.cn, ...receipt });
+    }
+  }
+
+  // ── إيصالات الحقائب ──
+  if (fr && nB > 0) {
+    const bagRows = await fr.evaluate(() => {
+      return [...document.querySelectorAll('#ctl00_Training_bags_GridView1 tr.RowItems')]
+        .map((r, i) => {
+          const inp = [...r.querySelectorAll('input')].find(x => x.value === 'الايصال' || x.value === 'الإيصال');
+          if (!inp) return null;
+          return { i };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+    }).catch(() => []);
+    for (const br of bagRows) {
+      const { receipt, fr: nextFr } = await openDocAndCapture(pg, fr, '#ctl00_Training_bags_GridView1 tr.RowItems', br.i, 'bag', '');
+      fr = nextFr;
+      if (receipt && receipt.protection) { log.info('receipts: توقف بسبب الحماية'); break; }
+      if (receipt && receipt.base64) receipts.push(receipt);
+    }
+  }
+
+  await smartRefresh(pg);
+  return {
+    clientId,
+    count: receipts.length,
+    receipts,
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 /* ══════════════════════════════════════════════
@@ -958,7 +1109,46 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // ── Fetch Exam Scores ──
+    // ── Fetch Client Receipts (إيصالات الدورة + الحقيبة كـ PDF) ──
+    if (url === '/api/arkkan/receipts' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      const idResult = validateClientId(body.clientId);
+      if (!idResult.valid) return sendJson(res, 400, { error: idResult.reason });
+
+      if (isProtectionActive()) {
+        return sendJson(res, 429, {
+          error: 'تم اكتشاف حماية خارجية — إيقاف مؤقت',
+          retryAfter: Math.round((_protectionUntil - Date.now()) / 1000),
+        });
+      }
+
+      try {
+        await ensureInit();
+        const pg = pickPage();
+        if (!pg) throw new Error('المتصفح غير جاهز بعد');
+
+        const data = await _jobQueue.enqueue({
+          id: `receipts-${idResult.value}-${Date.now()}`,
+          clientId: idResult.value,
+          action: 'receipts',
+          fn: () => withTimeout(
+            fetchClientReceipts(pg, {
+              clientId: idResult.value,
+              referNum: String(body.referNum || '').trim(),
+            }),
+            cfg.TIMEOUT.RECEIPTS
+          ),
+        });
+
+        return sendJson(res, 200, data);
+      } catch (e) {
+        if (isProtectionError(e)) {
+          return sendJson(res, 429, { error: e.message });
+        }
+        const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
+        return sendJson(res, status, { error: e.message });
+      }
+    }
     if (url === '/api/arkkan/exams' && req.method === 'POST') {
       const body = await readJsonBody(req);
       const idResult = validateClientId(body.clientId);
