@@ -213,7 +213,13 @@ $('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
   ADVANCED_FILTER_IDS.forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
-    if(el.tagName === 'SELECT'){ el.selectedIndex = 0; refreshMultiSelectFilterUI(el); } else el.value = '';
+    if(el.tagName === 'SELECT'){
+      // إلغاء تحديد كل الخيارات (يعادل "الكل") بدل selectedIndex=0، لأن خيارات مثل
+      // "بدون جنسية"/"بدون نوع دورة" تُضاف ديناميكياً في أول القائمة (afterbegin) فتصبح
+      // هي index 0 فعلياً وقت التشغيل، فكانت "مسح الفلاتر" تحدّدها هي بدل "الكل"
+      Array.from(el.options).forEach(o=> o.selected = false);
+      refreshMultiSelectFilterUI(el);
+    } else el.value = '';
   });
   updateAdvancedFiltersBadge();
   renderTable();
