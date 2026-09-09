@@ -14,6 +14,11 @@ module.exports = {
   /* ── بوابة الحقيبة التثقيفية (رفع "طلب متدرب") ── */
   ARKKAN_LOGIN_URL:    process.env.ARKKAN_LOGIN_URL || 'https://arkkanapp2.net/Municipal/educational-bags-login.aspx',
   ARKKAN_TRAINEE_URL:  process.env.ARKKAN_TRAINEE_URL || 'https://arkkanapp2.net/Municipal/Traniee_Request.aspx',
+
+  /* ── منصة النظام الجديدة (Bases) — جلب "الرقم المرجعي" برقم الهوية ──
+     تتطلب تسجيل دخول (حساب إدارة النظام). الاعتمادات اختيارية تُمرَّر من
+     إعدادات البرنامج في كل طلب — بلا اعتمادات يُتخطى جلب الرقم المرجعي. */
+  ARKKAN_BASES_LOGIN_URL: process.env.ARKKAN_BASES_LOGIN_URL || 'https://arkkanapp2.net/Bases/Login.aspx',
   /* الاعتمادات تُقرأ من البيئة/ملف .env أو تُرسل في جسم الطلب من البرنامج —
      لا تُكتب في الكود أبداً */
   ARKKAN_USER:         process.env.ARKKAN_USER || '',
@@ -105,6 +110,7 @@ module.exports = {
     WARM:         parseInt(process.env.ARKKAN_WARM_TIMEOUT || '60000', 10),
     FETCH:        parseInt(process.env.ARKKAN_FETCH_TIMEOUT || '90000', 10),
     RECEIPTS:     parseInt(process.env.ARKKAN_RECEIPTS_TIMEOUT || '150000', 10),
+    REFNUM:       parseInt(process.env.ARKKAN_REFNUM_TIMEOUT || '60000', 10),
     SUBMIT:       parseInt(process.env.ARKKAN_SUBMIT_TIMEOUT || '120000', 10),
     LOGIN:        parseInt(process.env.ARKKAN_LOGIN_TIMEOUT || '45000', 10),
     INIT:         parseInt(process.env.ARKKAN_INIT_TIMEOUT || '60000', 10),

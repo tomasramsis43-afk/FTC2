@@ -14,7 +14,7 @@ const ARKKAN_API_BASE = 'http://localhost:9955';
 
 /* ── الحقول التي نجلبها من أركان (حقول "كارت العميل") ──
    نعرض في مزامنة أركان فقط العملاء الناقص فيهم أي حقل من هذه السبعة. */
-const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate'];
+const ARKKAN_FIELDS = ['invoice','courseNumber','date','coursePrice','bagInvoice','bagPurchaseDate','startDate','referNum'];
 const ARKKAN_FIELD_LABELS = {
   invoice:      'رقم الفاتورة',
   courseNumber: 'رقم الدورة',
@@ -61,10 +61,11 @@ function clientIsMissingArkkanData(c) {
   return arkkanMissingFields(c).length > 0;
 }
 
-/* العميل يُعالج في مزامنة أركان فقط لو ليه رقم مرجعي (salt service: جلب البيانات
-   بدون رقم مرجعي لا يحدد العميل بدقة) — بمجرد إضافة رقم مرجعي يظهر تلقائياً */
+/* العميل يُعالج في مزامنة أركان — يجلب "الرقم المرجعي" تلقائياً من منصة
+   إدارة النظام (بحث برقم الهوية) إن توفرت اعتمادات المصدر، لذا يستفيد من
+   الجلب أيضاً من دون رقم مرجعي مسبق */
 function clientEligibleForArkkan(c) {
-  return !!(c.clientId && String(c.referNum || '').trim());
+  return !!(c.clientId && String(c.clientId).trim());
 }
 
 /* شرط جلب نتائج الاختبارات: زي شرط أركان العادي + لازم يكون عنده رقم دورة،
@@ -100,7 +101,7 @@ async function arkkanFetchOne(clientId, referNum = '') {
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, referNum }),
+    body: JSON.stringify({ clientId, referNum, basesCreds: arkkanBasesCreds() }),
     signal: AbortSignal.timeout(95000)
   });
   if (!r.ok) {
@@ -126,6 +127,7 @@ function arkkanNumPrice(v){ return parseFloat(String(v).replace(/[^\d.,]/g, '').
    الحقول المُلئّة: رقم الفاتورة، رقم الدورة، قيمة الفاتورة، رقم إيصال الحقيبة. */
 function arkkanPatchFromData(c, data){
   const patch = {};
+  if (!c.referNum && data.referNum) patch.referNum = data.referNum;
   if (!c.invoice && data.invoice) patch.invoice = data.invoice;
   if (!c.courseNumber && data.courseNumber) patch.courseNumber = data.courseNumber;
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
@@ -450,7 +452,7 @@ function renderArkkanSyncTable() {
   const missing = arkkanMissingClients();
   const skipped = missing.filter(arkkanIsSkipped);
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات: ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
 
   tbody.innerHTML = missing.map(c => `
     <tr id="arkkan-row-${escapeHtml(c.clientId)}"${arkkanIsSkipped(c) ? ' style="opacity:.5;"' : ''}>
@@ -1522,6 +1524,56 @@ document.addEventListener('change', async e => {
     try { await saveSettings(); } catch {}
     (isCompare ? arkkanCompareResumeFieldSync : arkkanResumeFieldSync)();
     showToast(`${isCompare ? 'فترة تخطي المقارنة المُعاد' : 'فترة تخطي الفحص المُعاد'} = ${v} ساعة — يُطبق من التشغيل القادم`, 'info');
+  }
+});
+
+/* ══════════════════════════════════════════════
+   8.5) جلب "الرقم المرجعي" من منصة إدارة النظام (Bases)
+   ── حساب إدارة النظام يُحفظ في settings (arkkanBasesUser/arkkanBasesPass)
+      عبر حقلي التبويب — اختياري: بدونها يُتخطى جلب الرقم المرجعي بصمت. ──
+   ══════════════════════════════════════════════ */
+
+function arkkanBasesCreds() {
+  return {
+    user: String((settings && settings.arkkanBasesUser) || '').trim(),
+    pass: String((settings && settings.arkkanBasesPass) || '')
+  };
+}
+
+/* ملء حقلي حساب إدارة النظام عند فتح التبويب — بلا مسح ما يكتبه المستخدم */
+function arkkanBasesCredsFieldSync() {
+  const u = document.querySelector('#fix-arkkan-bases-user');
+  const p = document.querySelector('#fix-arkkan-bases-pass');
+  if (!u || !p) return;
+  const c = arkkanBasesCreds();
+  if (u.value.trim() === '' && c.user) u.value = c.user;
+  if (p.value === '' && c.pass) p.value = c.pass;
+  const fb = document.querySelector('#arkkan-bases-creds-feedback');
+  if (fb) fb.textContent = (c.user && c.pass) ? '✓ محفوظة على الجهاز' : '';
+}
+
+async function arkkanSaveBasesCreds(btn) {
+  const fb = document.querySelector('#arkkan-bases-creds-feedback');
+  const fail = m => { if (fb) { fb.textContent = m; fb.style.color = 'var(--danger,#c0392b)'; } };
+  const ok = m => { if (fb) { fb.textContent = m; fb.style.color = 'var(--ok,#27ae60)'; } };
+  const u = (document.querySelector('#fix-arkkan-bases-user') || {}).value;
+  const p = (document.querySelector('#fix-arkkan-bases-pass') || {}).value;
+  if (!u || !String(u).trim() || !p) return fail('⚠️ أدخل اسم المستخدم وكلمة المرور معاً');
+  if (!settings || typeof DEFAULT_SETTINGS === 'undefined') settings = {};
+  settings.arkkanBasesUser = String(u).trim();
+  settings.arkkanBasesPass = String(p);
+  try { await saveSettings(); } catch {}
+  ok('✓ تم الحفظ — لن تُعرض كلمة المرور بعد الآن');
+}
+
+/* ربط الحفظ + ملء حقلي حساب إدارة النظام عند فتح التبويب */
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#btn-arkkan-save-bases-creds');
+  if (btn) { arkkanSaveBasesCreds(btn); return; }
+});
+document.addEventListener('click', e => {
+  if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
+    arkkanBasesCredsFieldSync();
   }
 });
 

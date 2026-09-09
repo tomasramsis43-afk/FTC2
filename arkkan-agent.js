@@ -244,14 +244,107 @@ async function loadStudent(pg, { clientId, referNum = '' }) {
 /* ══════════════════════════════════════════════
    Fetch Client Data (مع FHD Rules + Frame Snapshot)
    ══════════════════════════════════════════════ */
-async function fetchClientData(pg, { clientId, referNum = '' }) {
+
+/* جلب "الرقم المرجعي" من منصة إدارة النظام (Bases) — بحث برقم الهوية فقط.
+   ── تستخدم اعتمادات حساب إدارة النظام (من إعدادات البرنامج، منفصلة عن بوابة
+      الحقيبة). سياق مستقل يُغلق بعد الانتهاء. بلا اعتمادات تعود فارغة بصمت
+      ولا تُوقف جلب البيانات العادي (تخطي ضمني للرقم المرجعي). ── */
+async function fetchBasesRefNum({ clientId, creds }) {
+  const user = String((creds && creds.user) || '').trim();
+  const pass = String((creds && creds.pass) || '');
+  if (!user || !pass || !_browser) return '';
+  log.info(`جلب رقم مرجعي: تسجيل الدخول إلى منصة إدارة النظام`);
+
+  let ctx = null;
+  try {
+    ctx = await _browser.newContext({ locale: 'ar' });
+    blockHeavyResources(ctx);
+    const pg = await ctx.newPage();
+
+    await pg.goto(cfg.ARKKAN_BASES_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+    await wait(cfg.DELAY.PAGE_LOAD);
+
+    const hasLogin = await pg.locator('#UsrName').count().catch(() => 0);
+    if (hasLogin) {
+      await pg.fill('#UsrName', user);
+      await pg.fill('#Pwd', pass);
+      await pg.click('#btnLogin');
+      const t0 = Date.now();
+      while (Date.now() - t0 < cfg.TIMEOUT.LOGIN) {
+        const still = await pg.locator('#UsrName').count().catch(() => 0);
+        if (!still) break;
+        await wait(cfg.DELAY.DIALOG_POLL);
+      }
+      await wait(cfg.DELAY.PAGE_LOAD);
+    }
+
+    // رابط وحدة "استعلام عن رقم مرجعي" (روابط الوحدات مشفّرة/ديناميكية لكل جلسة)
+    const href = await pg.locator('#dvMenu a', { hasText: 'استعلام عن رقم مرجعي' }).first()
+      .getAttribute('href').catch(() => '');
+    if (!href) return '';
+
+    await pg.goto('https://arkkanapp2.net/Bases/' + href, { waitUntil: 'domcontentloaded', timeout: cfg.TIMEOUT.LOGIN }).catch(() => {});
+    await wait(cfg.DELAY.PAGE_LOAD);
+
+    let fr = null;
+    const tF = Date.now();
+    while (Date.now() - tF < cfg.DELAY.DETAILS_TIMEOUT) {
+      fr = pg.frames().find(f => /frm8023_Students/.test(f.url()));
+      if (fr) break;
+      await wait(cfg.DELAY.DIALOG_POLL);
+    }
+    if (!fr) return '';
+
+    // البحث برقم الهوية فقط — بدون أي اعتماد على الرقم المرجعي الحالي
+    await fr.fill('#ctl00_ID_Number-fltr', String(clientId).trim());
+    await fr.click('#ctl00_btnSearch');
+
+    const readRef = () => fr.evaluate(() => {
+      // أعمدة الجدول: [checkbox, اسم المتدرب, الرقم المرجعي, رقم الهوية]
+      const row = document.querySelector('#ctl00_GridSearch_GridView1 tr.RowItems');
+      if (!row) return '';
+      const cells = [...row.querySelectorAll('td')];
+      return (cells[2]?.innerText || '').trim();
+    }).catch(() => '');
+
+    const val = await waitForStable({
+      readFn: readRef,
+      hasDataFn: v => !!v,
+      timeoutMs: cfg.DELAY.RESULT_TIMEOUT,
+      pollMs: cfg.DELAY.RESULT_STABLE,
+    });
+    log.info(`fetchBasesRefNum: client=${maskId(clientId)} — ${val ? 'refNum=' + mask(val) : 'لا نتيجة'}`);
+    return val || '';
+  } catch (e) {
+    log.warn('fetchBasesRefNum: ' + (e.message || '').slice(0, 160));
+    return '';
+  } finally {
+    await ctx?.close().catch(() => {});
+  }
+}
+
+async function fetchClientData(pg, { clientId, referNum = '', basesCreds = {} }) {
   const result = {
     invoice: '', courseNumber: '', date: '',
     coursePrice: '', bagInvoice: '', bagPurchaseDate: '', bagOwnDate: '', startDate: '',
+    referNum: '',
     _validation: { clientId, referNum, timestamp: Date.now() },
   };
 
-  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum });
+  // ── الرقم المرجعي من منصة إدارة النظام (Bases) برقم الهوية فقط ──
+  // يُملأ للعملاء الناقصين؛ وأيضاً لتسجيل على النتيجة حتى تلتقطه الواجهة تلقائياً.
+  let basesRefNum = '';
+  if (basesCreds && String(basesCreds.user || '').trim() && String(basesCreds.pass || '')) {
+    try {
+      basesRefNum = await withTimeout(
+        fetchBasesRefNum({ clientId, creds: basesCreds }),
+        cfg.TIMEOUT.REFNUM
+      ).catch(() => '');
+    } catch { basesRefNum = ''; }
+    if (basesRefNum) result.referNum = basesRefNum;
+  }
+
+  let { fr, nC, nB } = await loadStudent(pg, { clientId, referNum: referNum || basesRefNum });
 
   // ── قاعدة FHD الصارمة: لا نأخذ أي بيانات إلا إذا كان رقم الدورة يبدأ بـ FHD ──
   if (nC > 0) {
@@ -1094,6 +1187,7 @@ const server = http.createServer(async (req, res) => {
             fetchClientData(pg, {
               clientId: idResult.value,
               referNum: String(body.referNum || '').trim(),
+              basesCreds: (body && body.basesCreds) || {},
             }),
             cfg.TIMEOUT.FETCH
           ),
