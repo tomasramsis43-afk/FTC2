@@ -1558,6 +1558,7 @@ function initArkkanSyncView() {
       arkkanUpdateStatus();
     });
   }
+  arkkanUpdateStatus();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initArkkanSyncView);
 else initArkkanSyncView();
