@@ -1074,7 +1074,14 @@ async function initBrowser() {
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      _browser = await playwright.chromium.launch({ headless: true });
+      // headless:true ثابت أصلاً، بس على بعض أجهزة ويندوز بيظهر باگ معروف في Chromium
+      // (chrome-headless-shell) بيفتح نافذة حقيقية رغم إنه headless فعليًا من ناحية
+      // الرندر. الحل: نجبر أي نافذة ممكن تتفتح إنها تطلع برّه حدود الشاشة تمامًا
+      // بإحداثيات سالبة كبيرة، فمتبقاش ظاهرة للمستخدم مهما حصل.
+      _browser = await playwright.chromium.launch({
+        headless: true,
+        args: ['--window-position=-32000,-32000', '--window-size=1,1']
+      });
       for (let i = 0; i < cfg.MAX_WORKERS; i++) {
         const ctx = await _browser.newContext();
         blockHeavyResources(ctx);
