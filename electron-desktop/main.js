@@ -1,4 +1,11 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron');
+// تعطيل تسريع الرسوميات (GPU) للنص: على بعض أجهزة ويندوز (خصوصاً كروت الشاشة
+// المدمجة/القديمة) بيحصل باگ معروف في Chromium/Electron بيخلي بعض الحروف
+// العربية (خصوصاً أشكال الحروف المتصلة زي "الم") تترسم كمربعات مكسورة (tofu)
+// بشكل متقطّع (تظهر وتختفي مع كل إعادة رسم) بسبب فساد كاش الخط على الـ GPU.
+// الحل القياسي: تعطيل التسريع بالكامل فيرجع الرسم للمعالج (CPU) فيثبت شكل
+// الحروف دائماً — الفرق في الأداء غير محسوس في تطبيق جداول/نماذج زي ده.
+app.disableHardwareAcceleration();
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
