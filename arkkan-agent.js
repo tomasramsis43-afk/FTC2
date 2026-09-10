@@ -37,6 +37,7 @@ const http = require('http');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 /* تحميل ملف .env بسيط (بلا اعتماديات خارجية) — يُقرأ من مجلد التشغيل ومن مجلد
    الوكيل؛ القيم الموجودة فعلاً في البيئة لها الأولوية ولا تُستبدل أبداً.
@@ -70,6 +71,34 @@ try { playwright = require('playwright'); } catch { playwright = null; }
    Browser State
    ══════════════════════════════════════════════ */
 let _browser = null;
+
+/* ── إخفاء أي نافذة متصفح تظهر عنوة على ويندوز (شبكة أمان) ──
+   الاعتماد على --window-position/--window-size وحده مش كافي أحياناً: على بعض
+   أجهزة ويندوز فيه باگ معروف في Chromium بيخلي عملية chrome-headless-shell
+   تفتح نافذة حقيقية ظاهرة رغم إنها headless فعليًا من ناحية الرندر، وممكن
+   تتكرر (تقفل وتفتح) مع كل إعادة تشغيل للمتصفح. الحل الضامن: مسح دوري (كل
+   ثانيتين) بأمر PowerShell بسيط بيخفي أي نافذة لأي عملية اسمها
+   chrome-headless-shell/headless_shell عن طريق Win32 ShowWindow(hwnd, SW_HIDE)
+   — العملية نفسها فاضلة شغالة عادي، بس مش ظاهرة للمستخدم خالص. لا يعمل شيء
+   على أنظمة غير ويندوز (macOS/Linux ما عندهمش الباگ ده أصلاً). */
+let _winHideTimer = null;
+function startWindowsWindowHider() {
+  if (process.platform !== 'win32' || _winHideTimer) return;
+  const psCmd = [
+    '$ErrorActionPreference=\'SilentlyContinue\';',
+    'Add-Type -Name W -Namespace P -MemberDefinition',
+    '\'[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int n);\';',
+    'Get-Process -Name chrome-headless-shell,headless_shell -ErrorAction SilentlyContinue |',
+    'ForEach-Object { if ($_.MainWindowHandle -ne 0) { [P.W]::ShowWindow($_.MainWindowHandle,0) } }'
+  ].join(' ');
+  const run = () => {
+    exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCmd}"`, { windowsHide: true }, () => {});
+  };
+  run();
+  _winHideTimer = setInterval(run, 2000);
+  if (typeof _winHideTimer.unref === 'function') _winHideTimer.unref();
+}
+startWindowsWindowHider();
 let _workers = [];
 let _ready = false;
 let _protectionActive = false;
