@@ -1317,46 +1317,6 @@
         ⏳ جاري التحقق من حالة العميل المحلي (arkkan-agent)...
       </div>
 
-      <div style="margin-bottom:12px; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-          <strong style="font-size:13px;">⬆️ رفع "طلب متدرب" إلى بوابة الحقيبة التثقيفية</strong>
-          <span style="font-size:11.5px; color:var(--text-muted);">الزرار موجود في شاشة كل عميل: <b>⬆️ رفع لأركان</b> (بجانب "جلب من أركان")</span>
-        </div>
-        <div style="display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap;">
-          <div>
-            <label for="fix-arkkan-user" style="font-size:12px; color:var(--text-muted);">اسم مستخدم بوابة الحقيبة</label>
-            <input type="text" id="fix-arkkan-user" autocomplete="off" spellcheck="false" placeholder="Username" style="width:190px; margin-top:4px;">
-          </div>
-          <div>
-            <label for="fix-arkkan-pass" style="font-size:12px; color:var(--text-muted);">كلمة المرور</label>
-            <input type="password" id="fix-arkkan-pass" autocomplete="new-password" placeholder="••••••••" style="width:180px; margin-top:4px;">
-          </div>
-          <button type="button" class="btn btn-gold btn-sm" id="btn-arkkan-save-creds">💾 حفظ</button>
-          <span id="arkkan-creds-feedback" style="font-size:12px;"></span>
-        </div>
-        <div class="hint" style="margin:8px 0 0;">يُرفع الرفع فقط لحساب مُدخل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل، وبديل أفضل أمنياً: وضع <code class="mono">ARKKAN_USER</code> و <code class="mono">ARKKAN_PASS</code> كمتغيرات بيئة أو في ملف <code class="mono">.env</code> بجانب الوكيل (عندئذٍ لا تُحفظ هنا). يُنصح بتغيير كلمة المرور دورياً.</div>
-      </div>
-
-      <div style="margin-bottom:12px; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
-          <strong style="font-size:13px;">🔖 جلب الرقم المرجعي من منصة إدارة النظام</strong>
-          <span style="font-size:11.5px; color:var(--text-muted);">يُبحث برقم الهوية فقط خلال أي جلب من أركان، فيُملأ الرقم المرجعي تلقائياً للعملاء الناقصين</span>
-        </div>
-        <div style="display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap;">
-          <div>
-            <label for="fix-arkkan-bases-user" style="font-size:12px; color:var(--text-muted);">اسم مستخدم إدارة النظام</label>
-            <input type="text" id="fix-arkkan-bases-user" autocomplete="off" spellcheck="false" placeholder="Username" style="width:190px; margin-top:4px;">
-          </div>
-          <div>
-            <label for="fix-arkkan-bases-pass" style="font-size:12px; color:var(--text-muted);">كلمة المرور</label>
-            <input type="password" id="fix-arkkan-bases-pass" autocomplete="new-password" placeholder="••••••••" style="width:180px; margin-top:4px;">
-          </div>
-          <button type="button" class="btn btn-gold btn-sm" id="btn-arkkan-save-bases-creds">💾 حفظ</button>
-          <span id="arkkan-bases-creds-feedback" style="font-size:12px;"></span>
-        </div>
-        <div class="hint" style="margin:8px 0 0;">اختياري — بدون بيانات الحساب يُتخطى جلب الرقم المرجعي ويبقى الجلب العادي يعمل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل.</div>
-      </div>
-
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-start-agent">▶ تشغيل الوكيل المحلي</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الاتصال</button>
@@ -2256,6 +2216,48 @@
       <button class="btn btn-gold btn-sm" id="btn-update-app">📥 اختيار ملف التحديث وتثبيته</button>
       <button class="btn btn-ghost btn-sm" id="btn-export-app">📤 تصدير نسخة من البرنامج (index.html)</button>
       <div id="update-status" class="hint hint-info" style="margin-top:10px; display:none;"></div>
+    </div>
+    <div class="panel" id="panel-arkkan-creds">
+      <h3 style="margin:0 0 4px;">بيانات اعتماد أركان</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">مستخدمة في تبويب "مزامنة أركان" — لرفع طلبات المتدربين وجلب الأرقام المرجعية عبر الوكيل المحلي.</p>
+      <div style="margin-bottom:12px; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+          <strong style="font-size:13px;">⬆️ رفع "طلب متدرب" إلى بوابة الحقيبة التثقيفية</strong>
+          <span style="font-size:11.5px; color:var(--text-muted);">الزرار موجود في شاشة كل عميل: <b>⬆️ رفع لأركان</b> (بجانب "جلب من أركان")</span>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap;">
+          <div>
+            <label for="fix-arkkan-user" style="font-size:12px; color:var(--text-muted);">اسم مستخدم بوابة الحقيبة</label>
+            <input type="text" id="fix-arkkan-user" autocomplete="off" spellcheck="false" placeholder="Username" style="width:190px; margin-top:4px;">
+          </div>
+          <div>
+            <label for="fix-arkkan-pass" style="font-size:12px; color:var(--text-muted);">كلمة المرور</label>
+            <input type="password" id="fix-arkkan-pass" autocomplete="new-password" placeholder="••••••••" style="width:180px; margin-top:4px;">
+          </div>
+          <button type="button" class="btn btn-gold btn-sm" id="btn-arkkan-save-creds">💾 حفظ</button>
+          <span id="arkkan-creds-feedback" style="font-size:12px;"></span>
+        </div>
+        <div class="hint" style="margin:8px 0 0;">يُرفع الرفع فقط لحساب مُدخل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل، وبديل أفضل أمنياً: وضع <code class="mono">ARKKAN_USER</code> و <code class="mono">ARKKAN_PASS</code> كمتغيرات بيئة أو في ملف <code class="mono">.env</code> بجانب الوكيل (عندئذٍ لا تُحفظ هنا). يُنصح بتغيير كلمة المرور دورياً.</div>
+      </div>
+      <div style="margin-bottom:0; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+          <strong style="font-size:13px;">🔖 جلب الرقم المرجعي من منصة إدارة النظام</strong>
+          <span style="font-size:11.5px; color:var(--text-muted);">يُبحث برقم الهوية فقط خلال أي جلب من أركان، فيُملأ الرقم المرجعي تلقائياً للعملاء الناقصين</span>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap;">
+          <div>
+            <label for="fix-arkkan-bases-user" style="font-size:12px; color:var(--text-muted);">اسم مستخدم إدارة النظام</label>
+            <input type="text" id="fix-arkkan-bases-user" autocomplete="off" spellcheck="false" placeholder="Username" style="width:190px; margin-top:4px;">
+          </div>
+          <div>
+            <label for="fix-arkkan-bases-pass" style="font-size:12px; color:var(--text-muted);">كلمة المرور</label>
+            <input type="password" id="fix-arkkan-bases-pass" autocomplete="new-password" placeholder="••••••••" style="width:180px; margin-top:4px;">
+          </div>
+          <button type="button" class="btn btn-gold btn-sm" id="btn-arkkan-save-bases-creds">💾 حفظ</button>
+          <span id="arkkan-bases-creds-feedback" style="font-size:12px;"></span>
+        </div>
+        <div class="hint" style="margin:8px 0 0;">اختياري — بدون بيانات الحساب يُتخطى جلب الرقم المرجعي ويبقى الجلب العادي يعمل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل.</div>
+      </div>
     </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"></path><path d="M7 4v6h9V4M7 14h10v6"></path></svg></span> النسخ الاحتياطي والاستعادة</h3>
