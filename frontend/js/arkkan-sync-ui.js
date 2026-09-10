@@ -1858,6 +1858,8 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-bulk-arkkan-stop')) { _bulkSubmitStop = true; return; }
   if (e.target.closest('#btn-bulk-arkkan-refnum')) { arkkanBulkRefNumSelected(); return; }
   if (e.target.closest('#btn-bulk-arkkan-refnum-stop')) { _bulkRefNumStop = true; return; }
+  if (e.target.closest('#btn-bulk-arkkan-receipts')) { arkkanBulkReceiptsSelected(); return; }
+  if (e.target.closest('#btn-bulk-arkkan-receipts-stop')) { _bulkReceiptsStop = true; return; }
 });
 
 /* ══════════════════════════════════════════════
@@ -1956,4 +1958,70 @@ async function arkkanBulkRefNumSelected() {
   }
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
   showToast(`انتهى: ✅ ${okCount} جلب${savedCount ? ` (${savedCount} محفوظ)` : ''} · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
+}
+
+/* ══════════════════════════════════════════════
+   8.7) تحميل إيصالات الدورة والحقيبة للمحددين في شيت العملاء
+   ── زر مستقل في شريط التحديد الجماعي: يجلب إيصالات (دورة + حقيبة) كل
+      عميل محدد من الوكيل وتنزيلها PDF على الجهاز — بلا فتح كرت العميل. ──
+   ══════════════════════════════════════════════ */
+let _bulkReceiptsRunning = false;
+let _bulkReceiptsStop = false;
+
+async function arkkanBulkReceiptsSelected() {
+  const ids = [...selectedClientIds].filter(id => clients.some(c => c.id === id));
+  if (!ids.length) { showToast('لا يوجد عملاء محددين', 'info'); return; }
+  if (_bulkReceiptsRunning) return;
+  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
+  await arkkanEnsureAgentReady();
+
+  _bulkReceiptsRunning = true;
+  _bulkReceiptsStop = false;
+
+  const btn = document.getElementById('btn-bulk-arkkan-receipts');
+  const stopBtn = document.getElementById('btn-bulk-arkkan-receipts-stop');
+  const statusEl = document.getElementById('bulk-arkkan-receipts-status');
+  if (btn) btn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = '';
+  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري تحميل الإيصالات...'; }
+
+  let okCount = 0, failCount = 0, noCount = 0, done = 0;
+  const failMsgs = [];
+
+  for (const id of ids) {
+    if (!_bulkReceiptsRunning || _bulkReceiptsStop) break;
+    const c = clients.find(x => x.id === id);
+    if (!c) continue;
+    if (!c.clientId) { failCount++; failMsgs.push(`${c.name}: لا يوجد رقم هوية`); done++; continue; }
+    try {
+      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
+      const list = Array.isArray(data.receipts) ? data.receipts : [];
+      let n = 0;
+      for (const rc of list) {
+        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+      }
+      if (n) okCount++;
+      else noCount++;
+    } catch (err) {
+      failCount++;
+      failMsgs.push(`${c.name}: ${String(err.message).slice(0, 80)}`);
+    }
+    done++;
+    if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
+  }
+
+  if (statusEl) statusEl.style.display = 'none';
+  if (btn) btn.style.display = '';
+  if (stopBtn) stopBtn.style.display = 'none';
+
+  _bulkReceiptsRunning = false;
+  if (failMsgs.length) console.warn('أركان إيصالات — تفاصيل:', failMsgs);
+  if (statusEl && failMsgs.length) {
+    statusEl.style.display = '';
+    statusEl.innerHTML = `<span style="color:var(--danger,red);">❌ ${failCount} فشل</span>`;
+    statusEl.title = failMsgs.join('\n');
+    setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
+  }
+  const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
+  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
