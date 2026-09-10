@@ -37,7 +37,7 @@ const http = require('http');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 /* تحميل ملف .env بسيط (بلا اعتماديات خارجية) — يُقرأ من مجلد التشغيل ومن مجلد
    الوكيل؛ القيم الموجودة فعلاً في البيئة لها الأولوية ولا تُستبدل أبداً.
@@ -84,15 +84,32 @@ let _browser = null;
 let _winHideTimer = null;
 function startWindowsWindowHider() {
   if (process.platform !== 'win32' || _winHideTimer) return;
-  const psCmd = [
-    '$ErrorActionPreference=\'SilentlyContinue\';',
-    'Add-Type -Name W -Namespace P -MemberDefinition',
-    '\'[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int n);\';',
-    'Get-Process -Name chrome-headless-shell,headless_shell -ErrorAction SilentlyContinue |',
-    'ForEach-Object { if ($_.MainWindowHandle -ne 0) { [P.W]::ShowWindow($_.MainWindowHandle,0) } }'
-  ].join(' ');
+  // نكتب السكريبت في ملف .ps1 حقيقي بدل تمريره كنص مضمّن في سطر أوامر — تمريره
+  // inline عبر exec() كان فيه تعارض اقتباسات (علامات " داخل نص PowerShell نفسه
+  // اتصادمت مع علامات " اللي بتلف الأمر كله لـ cmd.exe)، فكان الأمر بيفشل بصمت
+  // في كل مرة ومفيش أي نافذة بتتخفي فعليًا رغم إن التايمر شغال. execFile بدون
+  // shell + ملف .ps1 حقيقي يتفادى مشكلة الاقتباسات دي نهائيًا.
+  let scriptPath = null;
+  try {
+    const psScript = [
+      '$ErrorActionPreference = "SilentlyContinue"',
+      'Add-Type -Name W -Namespace P -MemberDefinition \'[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h,int n);\'',
+      'Get-Process -Name chrome-headless-shell,headless_shell -ErrorAction SilentlyContinue | ForEach-Object {',
+      '  if ($_.MainWindowHandle -ne 0) { [P.W]::ShowWindow($_.MainWindowHandle, 0) }',
+      '}'
+    ].join("\r\n");
+    scriptPath = path.join(os.tmpdir(), 'ftc2-arkkan-hide-window.ps1');
+    fs.writeFileSync(scriptPath, psScript, 'utf8');
+  } catch (e) {
+    log.warn('تعذّر إنشاء سكريبت إخفاء النافذة:', e.message);
+    return;
+  }
   const run = () => {
-    exec(`powershell -NoProfile -WindowStyle Hidden -Command "${psCmd}"`, { windowsHide: true }, () => {});
+    execFile('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+      { windowsHide: true },
+      () => {}
+    );
   };
   run();
   _winHideTimer = setInterval(run, 2000);
