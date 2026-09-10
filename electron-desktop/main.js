@@ -455,8 +455,6 @@ function startLocalServer() {
     // الوكيل، ويراقبه ويعيد تشغيله تلقائياً عند أي انهيار. كل شيء يعمل في وضع
     // التطوير (من مجلد المشروع) وفي النسخة المثبتة (من resources) على حد سواء.
     const ARKKAN_AGENT_PORT = 9955;
-    // كود الخروج الذي يصدره الوكيل عند إيقافه الذاتي بعد الخمول (لا يعمل إلا عند الطلب)
-    const IDLE_EXIT_CODE = 42;
     let arkkanChild = null;
     let arkkanStopRequested = false;
 
@@ -615,10 +613,10 @@ function startLocalServer() {
           arkkanChild = null;
           // الوكيل لا يعمل إلا عند ضغط المستخدم على زر "تشغيل" أو أي زر جلب/رفع
           // (الذي ينادي /arkkan-agent/start). لذلك لا يُعاد تشغيله تلقائياً بعد أي
-          // خروج — سواء كان إيقافاً ذاتياً بعد الخمول (الكود 42)، أو انهياراً،
-          // أو إيقافاً مطلوباً عند إغلاق التطبيق — حتى لا يعمل في الخلفية وحده.
-          if (code === IDLE_EXIT_CODE || arkkanStopRequested) {
-            console.log('[Arkkan Agent] متوقف ' + (code === IDLE_EXIT_CODE ? '(بعد إتمام العمل — لا يعمل إلا عند الطلب)' : ''));
+          // خروج — سواء كان إيقافاً يدوياً من المستخدم، أو انهياراً، أو إيقافاً
+          // مطلوباً عند إغلاق التطبيق — حتى لا يعمل في الخلفية وحده.
+          if (arkkanStopRequested) {
+            console.log('[Arkkan Agent] متوقف يدوياً — لا يعمل إلا عند الضغط على «تشغيل الوكيل المحلي»');
             return;
           }
           const wait = Date.now() - born < 8000 ? 5000 : 1500;
@@ -660,6 +658,14 @@ function startLocalServer() {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       const result = await arkkanStartAgent();
       res.status(result.error ? 500 : 200).json(result);
+    });
+
+    // إيقاف يدوي من المستخدم: يغلق الوكيل ولا يُعاد تشغيله تلقائياً — فقط
+    // عند الضغط على زر "تشغيل الوكيل المحلي" (أو أي زر جلب/رفع لاحقاً).
+    srv.post('/arkkan-agent/stop', (req, res) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      arkkanStopAgent();
+      res.json({ stopped: true });
     });
 
     srv.get('/arkkan-agent/status', async (req, res) => {

@@ -124,39 +124,6 @@ let _protectionUntil = 0;
 // (Concurrency ثابت 1 — ممنوع تشغيل عدة عمليات أركان في نفس الوقت)
 const _jobQueue = new SequentialQueue(1);
 
-/* ── الإيقاف الذاتي بعد الخمول ──
-   الوكيل لا يعمل إلا عند ضغط زر جلب/رفع من البرنامج (وبضغطة "تشغيل" اليدوية).
-   بعد إكمال أي طلب وظيفي وتمضية IDLE_EXIT_MS دون مهام، يُغلق المتصفح ويخرج
-   بكود خروج مميز (IDLE_EXIT_CODE=42) — يتبيَّنه المٌشغّل في Electron فلا
-   يُعيد تشغيله تلقائياً، بل يبقى متوقفاً حتى ضغطة الزرار التالية. */
-const IDLE_EXIT_CODE = 42;
-const IDLE_EXIT_MS = (() => {
-  // كانت القيمة الافتراضية 20 ثانية فقط — قصيرة جداً بالنسبة للعمليات الجماعية
-  // (bulk fetch/submit تعمل عميل وراء عميل بالتتابع)، حيث كل عميل لوحده بياخد
-  // عشرات الثواني (تنقّل صفحات + تأخيرات عشوائية لتفادي كشف البوت + حفظ النتيجة
-  // فى قاعدة البيانات قبل بدء العميل التالي). فكان الوكيل بيدخل خمول ويقفل
-  // المتصفح بين عميل وعميل، وأول طلب للعميل التالي بيشغّله من الصفر تاني —
-  // فتظهر نافذة المتصفح وتختفي بالتناوب أثناء أي عملية جماعية. رفعناها لـ 90
-  // ثانية عشان تستحمل الفجوات الطبيعية دي، ولسه بتقفل تلقائياً لو فعلاً
-  // المستخدم بلاش استخدام الوكيل لمدة كافية.
-  const v = parseInt(process.env.ARKKAN_IDLE_EXIT_MS || '90000', 10);
-  return Number.isFinite(v) && v > 0 ? v : 90000;
-})();
-let _idleExitTimer = null;
-function cancelIdleExit() {
-  if (_idleExitTimer) { clearTimeout(_idleExitTimer); _idleExitTimer = null; }
-}
-function scheduleIdleExit(delayMs = IDLE_EXIT_MS) {
-  cancelIdleExit();
-  _idleExitTimer = setTimeout(() => {
-    log.info(`🛑 لا توجد مهام — إيقاف الوكيل والإغلاق التلقائي بعد ${Math.round(delayMs / 1000)} ث`);
-    (async () => {
-      try { await _browser?.close().catch(() => {}); } catch {}
-      process.exit(IDLE_EXIT_CODE);
-    })();
-  }, delayMs);
-}
-
 /* ══════════════════════════════════════════════
    Resource Blocking (لتسريع الجلب)
    ══════════════════════════════════════════════ */
@@ -1226,12 +1193,6 @@ const server = http.createServer(async (req, res) => {
 
   const url = req.url.split('?')[0];
 
-  // الإيقاف الذاتي: أي طلب وظيفي يلغي مؤقت الخروج (نشاط جديد)، وطلبات
-  // status/ping لا تُبقي الوكيل حياً ولا تعيد تسليح المؤقت.
-  const isIdleSafeQuery = url === '/api/arkkan/status' || url === '/ping';
-  if (!isIdleSafeQuery) cancelIdleExit();
-  res.once('finish', () => { if (!isIdleSafeQuery) scheduleIdleExit(); });
-
   try {
     // ── Status ──
     if (url === '/api/arkkan/status' && req.method === 'GET') {
@@ -1466,9 +1427,6 @@ server.listen(cfg.AGENT_PORT, async () => {
   } catch (e) {
     console.error('❌ فشل فتح المتصفح عند البدء (يُعاد المحاولة تلقائياً):', e.message);
   }
-  // لا يعمل الوكيل في الخلفية إلا عند الطلب: إذا لم يأتِ أي جلب/رفع خلال مهلة
-  // الإقلاع يغلق نفسه بنفسه (كود خروج مميز 42 يوقفه Electron بدون إعادة تشغيل).
-  scheduleIdleExit(Math.max(IDLE_EXIT_MS * 2, 60000));
 });
 
 process.on('SIGINT', async () => {

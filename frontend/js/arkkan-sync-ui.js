@@ -477,11 +477,15 @@ function renderArkkanSyncTable() {
 async function arkkanUpdateStatus() {
   const el = $('#arkkan-agent-status');
   const btn = $('#btn-arkkan-bulk-start');
+  const startBtn = $('#btn-arkkan-start-agent');
+  const stopBtn = $('#btn-arkkan-stop-agent');
   if (!el) return;
   el.className = 'hint hint-info';
   el.innerHTML = '⏳ جاري التحقق من الوكيل المحلي...';
 
   const st = await arkkanCheckReady();
+  if (startBtn) startBtn.style.display = st.ready ? 'none' : '';
+  if (stopBtn) stopBtn.style.display = st.ready ? '' : 'none';
   if (st.ready) {
     el.className = 'hint hint-success';
     const mem = st.memory;
@@ -512,9 +516,14 @@ async function arkkanUpdateStatus() {
    إدارة الوكيل المحلي من داخل تبويب المزامنة
    ══════════════════════════════════════════════ */
 
+/* إيقاف يدوي صريح: بمجرد أن يوقف المستخدم الوكيل، لا نشغّله تلقائياً لأي
+   جلب/رفع حتى يضغط «تشغيل الوكيل المحلي» بنفسه — عكس السلوك التلقائي السابق. */
+let _arkkanStopRequested = false;
+
 /* تشغيل الوكيل المحلي — يُطلق مباشرة عبر خادم سطح المكتب المحلي
    (/arkkan-agent/start) من داخل تطبيق سطح المكتب، وليس من أي ملف منفصل. */
 async function arkkanStartAgent() {
+  _arkkanStopRequested = false;
   const btn = $('#btn-arkkan-start-agent');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري التشغيل...'; }
   try {
@@ -539,16 +548,42 @@ async function arkkanStartAgent() {
   }
 }
 
+/* إيقاف الوكيل المحلي يدوياً — يغلق الوكيل وأي متصفح مفتوح ولا يعمل بعدها
+   تلقائياً لأي جلب/رفع حتى يضغط المستخدم «تشغيل الوكيل المحلي» بنفسه. */
+async function arkkanStopAgent() {
+  const btn = $('#btn-arkkan-stop-agent');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الإيقاف...'; }
+  try {
+    _arkkanStopRequested = true;
+    if (ARKKAN_IS_DESKTOP) {
+      const r = await fetch('/arkkan-agent/stop', { method: 'POST', signal: AbortSignal.timeout(15000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+      showToast('⏹ تم إيقاف الوكيل المحلي — لن يعمل تلقائياً حتى تشغيله يدوياً', 'info');
+    } else {
+      showToast('إيقاف الوكيل متاح من تطبيق سطح المكتب فقط', 'info');
+    }
+    setTimeout(arkkanUpdateStatus, 800);
+  } catch (err) {
+    showToast('تعذّر إيقاف الوكيل: ' + String((err && err.message) || err).slice(0, 90), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⏹ إيقاف الوكيل'; }
+  }
+}
+
 /* يضمن أن الوكيل المحلي يعمل قبل أي جلب/رفع — يشغّله تلقائياً من خادم سطح
    المكتب إن كان متوقفاً وينتظر اكتمال تجهيز المتصفح. لا يُستدعى عند فتح
    البرنامج أو التبويب — فقط من أزرار الجلب/التشغيل نفسها. بذاكرة فحص مؤقتة
-   حتى لا يتكرر الفحص لكل عميل داخل الحلقات الجماعية. */
+   حتى لا يتكرر الفحص لكل عميل داخل الحلقات الجماعية.
+   إلا إذا أوقفه المستخدم يدوياً (`_arkkanStopRequested`) — حينها لا يعاد
+   تشغيله لأي عملية حتى يضغط «تشغيل الوكيل المحلي» بنفسه. */
 let _arkkanAgentCheckAt = 0;
 async function arkkanEnsureAgentReady() {
   if (typeof ARKKAN_IS_DESKTOP === 'undefined' || !ARKKAN_IS_DESKTOP) return;
   const now = Date.now();
   if (now - _arkkanAgentCheckAt < 3000) return;
   _arkkanAgentCheckAt = now;
+  if (_arkkanStopRequested) throw new Error('الوكيل موقوف يدوياً — اضغط «▶ تشغيل الوكيل المحلي» أولاً');
   const st = await arkkanCheckReady().catch(() => ({ ready: false }));
   if (st && st.ready) return;
   const r = await fetch('/arkkan-agent/start', { method: 'POST', signal: AbortSignal.timeout(15000) });
@@ -1495,6 +1530,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
+  if (e.target.closest('#btn-arkkan-stop-agent')) { arkkanStopAgent(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
