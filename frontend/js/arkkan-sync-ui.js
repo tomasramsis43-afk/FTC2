@@ -414,55 +414,8 @@ async function arkkanReceiptsCardButton(id, btn) {
   }
 }
 
-/* وضع جلب جماعي مستقل للإيصالات (لا يتعارض مع المزامنة ولا مع فحص النتائج) */
-const _arkkanReceiptsState = { running: false, stop: false };
-
-async function arkkanBulkReceipts() {
-  const st = _arkkanReceiptsState;
-  if (st.running) return;
-  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
-
-  st.running = true;
-  st.stop = false;
-
-  const startBtn = $('#btn-arkkan-receipts-start');
-  const stopBtn = $('#btn-arkkan-receipts-stop');
-  const counter = $('#arkkan-receipts-counter');
-  if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = '';
-
-  const rows = arkkanMissingClients().filter(c => !arkkanIsSkipped(c));
-  const total = rows.length;
-  let done = 0, okd = 0, failed = 0;
-  showToast(`بدأ تحميل إيصالات ${total} عميل — سيستغرق وقتاً حسب عدد العملاء`, 'info');
-
-  for (let i = 0; i < total; i++) {
-    if (st.stop) break;
-    const c = rows[i];
-    const statusEl = $(`#arkkan-status-${cssEscapeId(c.clientId)}`);
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري تحميل الإيصالات...</span>';
-    try {
-      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
-      const list = Array.isArray(data.receipts) ? data.receipts : [];
-      let n = 0;
-      for (const rc of list) {
-        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
-      }
-      if (n) { okd++; if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${n} إيصال</span>`; }
-      else if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا إيصالات</span>';
-    } catch (err) {
-      failed++;
-      if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
-    }
-    done++;
-    if (counter) counter.textContent = `✅ ${okd} · ❌ ${failed} · ${done}/${total}`;
-  }
-
-  st.running = false;
-  if (startBtn) startBtn.style.display = '';
-  if (stopBtn) stopBtn.style.display = 'none';
-  showToast(`انتهى تحميل الإيصالات: ${okd} عميل نجح، ${failed} فشل`, okd > 0 ? 'success' : 'info');
-}
+/* تحميل إيصالات (دورة + حقيبة) لعميل واحد — يستخدمه زر الإيصال في كل صف من
+   جدول المزامنة وفي كرت العميل، وأزرار "إيصالات للمحدد" في شيت العملاء. */
 
 /* ══════════════════════════════════════════════
    2) صفحة المزامنة الكاملة (Bulk Sync)
@@ -524,7 +477,6 @@ function renderArkkanSyncTable() {
 async function arkkanUpdateStatus() {
   const el = $('#arkkan-agent-status');
   const btn = $('#btn-arkkan-bulk-start');
-  const receiptsBtn = $('#btn-arkkan-receipts-start');
   if (!el) return;
   el.className = 'hint hint-info';
   el.innerHTML = '⏳ جاري التحقق من الوكيل المحلي...';
@@ -541,7 +493,6 @@ async function arkkanUpdateStatus() {
     }
     el.innerHTML = `✅ الوكيل المحلي جاهز — يجلب البيانات من أركان مباشرة عبر ${escapeHtml(ARKKAN_API_BASE)}.` + memTxt;
     if (btn) btn.disabled = false;
-    if (receiptsBtn) receiptsBtn.disabled = false;
   } else if (st.playwrightInstalled === false) {
     el.className = 'hint hint-error';
     el.innerHTML = '❌ وكيل أركان يعمل لكن مكتبة playwright غير مثبتة. شغّل في مجلد المشروع:<br>' +
@@ -554,7 +505,6 @@ async function arkkanUpdateStatus() {
       (ARKKAN_IS_DESKTOP ? ' — سيعمل فوراً من داخل البرنامج' : ' — يتوجب استخدام تطبيق سطح المكتب لتفعيل الوكيل') +
       ' — يفتح مزمن المتصفح للجلب. إن كان يعمل لكنه قيد التهيئة فانتظر لحظات ثم اضغط "فحص الاتصال".';
     if (btn) btn.disabled = false; // الجلب يهيّئ تلقائياً
-    if (receiptsBtn) receiptsBtn.disabled = !ARKKAN_IS_DESKTOP; // التحويل للجهاز متاح من التطبيق فقط
   }
 }
 
@@ -1547,8 +1497,6 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
   if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
-  if (e.target.closest('#btn-arkkan-receipts-start')) { arkkanBulkReceipts(); return; }
-  if (e.target.closest('#btn-arkkan-receipts-stop')) { _arkkanReceiptsState.stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
   if (e.target.closest('#btn-arkkan-exams-stop')) { examBulkState('exams').stop = true; return; }
   if (e.target.closest('#btn-arkkan-exams-failed-start')) { arkkanExamsFailedBulk(); return; }
