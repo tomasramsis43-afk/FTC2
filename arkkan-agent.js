@@ -1209,6 +1209,16 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ── Stop (إيقاف يدوي مباشر) ──
+    if (url === '/api/arkkan/stop' && req.method === 'POST') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ stopped: true }));
+      log.info('🛑 إيقاف يدوي — إغلاق المتصفح وإنهاء العملية');
+      try { await _browser?.close().catch(() => {}); } catch {}
+      setImmediate(() => process.exit(0));
+      return;
+    }
+
     // ── Fetch Client Data ──
     if (url === '/api/arkkan/fetch' && req.method === 'POST') {
       const body = await readJsonBody(req);

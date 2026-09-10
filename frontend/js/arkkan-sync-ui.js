@@ -556,9 +556,12 @@ async function arkkanStopAgent() {
   try {
     _arkkanStopRequested = true;
     if (ARKKAN_IS_DESKTOP) {
-      const r = await fetch('/arkkan-agent/stop', { method: 'POST', signal: AbortSignal.timeout(15000) });
+      // يوقف الوكيل مباشرة عبر منفذه (9955) — لا يعتمد على نسخة سطح المكتب المثبتة
+      const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/stop', { method: 'POST', signal: AbortSignal.timeout(15000) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+      // نسخة احتياطية: لو الوكيل المحدث لم يخرج تلقائياً، نخبر خادم سطح المكتب فيوقف العملية
+      try { await fetch('/arkkan-agent/stop', { method: 'POST', signal: AbortSignal.timeout(5000) }); } catch {}
       showToast('⏹ تم إيقاف الوكيل المحلي — لن يعمل تلقائياً حتى تشغيله يدوياً', 'info');
     } else {
       showToast('إيقاف الوكيل متاح من تطبيق سطح المكتب فقط', 'info');
