@@ -373,7 +373,7 @@ async function flushPendingRecordWrites(){
             res = await serverFetch(url + `?version=${delVersion}`, { method: 'DELETE' });
           }else{
             const knownVersion = isClient ? (_clientRecordVersions[item.id] || 0) : ((_recordVersions[item.collection] && _recordVersions[item.collection].get(item.id)) || 0);
-            const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '' } : { enc: item.enc, version: knownVersion };
+            const body = isClient ? { enc: item.enc, version: knownVersion, clientId: item.clientId || '', plain: item.plain } : { enc: item.enc, version: knownVersion };
             res = await serverFetch(url, { method: 'PUT', body: JSON.stringify(body) });
           }
           if(res.status === 409){
@@ -386,7 +386,7 @@ async function flushPendingRecordWrites(){
             const conflict = await res.json().catch(()=>({}));
             const safeToRetry = item.op === 'upsert' && await _safeToApplyOnConflict(conflict, item.collection, isClient, item.id);
             if(safeToRetry){
-              const retryBody = isClient ? { enc: item.enc, version: conflict.currentVersion, clientId: item.clientId || '' } : { enc: item.enc, version: conflict.currentVersion };
+              const retryBody = isClient ? { enc: item.enc, version: conflict.currentVersion, clientId: item.clientId || '', plain: item.plain } : { enc: item.enc, version: conflict.currentVersion };
               const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify(retryBody) });
               if(retryRes.status === 409){
                 // تغيّر حقيقي أثناء إعادة المحاولة — تعارض حقيقي (لا كتابة فوق)
@@ -1592,15 +1592,19 @@ async function saveOneClientRecord(client, plainJson){
     const enc = await encryptValue(plainJson);
     let res;
     try{
+      // plain: نفس نسخة JSON غير المشفّرة المُرسَلة أصلاً هنا كمُدخل (plainJson) — تُستخدم فى
+      // السيرفر فقط لمزامنة فهرس العرض/البحث clients_rows فوراً (راجع syncClientsRowFromPlain
+      // فى routes/records.js)، وهو نفس التنازل المقبول أصلاً لهذا الجدول تحديداً منذ إنشائه
+      // (بيانات العميل الأساسية enc تبقى مشفّرة كما هي فى client_records بلا أي تغيير).
       res = await serverFetch(`/api/client-records/${encodeURIComponent(client.id)}`, {
         method: 'PUT',
-        body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0, clientId: client.clientId || '' }),
+        body: JSON.stringify({ enc, version: _clientRecordVersions[client.id] || 0, clientId: client.clientId || '', plain: plainJson }),
       });
     }catch(e){
       // فشل اتصال فعلي (مش رفض من السيرفر) — نسجّل هذا العميل فى طابور "سجلات معلّقة" محلياً
       // بدل ما يضيع نهائياً، ويُعاد رفعه تلقائياً لاحقاً (راجع flushPendingRecordWrites) حتى
       // لو المستخدم عمل ريفرش أو قفل الصفحة قبل ما الاتصال يرجع.
-      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '' });
+      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson });
       return null;
     }
     if(res.status === 409){
@@ -1612,7 +1616,7 @@ async function saveOneClientRecord(client, plainJson){
     if(!res.ok){
       // رفض من السيرفر بسبب غير تعارض (مثال: 429 rate limit، أو خطأ خادم مؤقت) — نفس معاملة
       // فشل الاتصال: نسجّله معلّقاً بدل تجاهله.
-      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '' });
+      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson });
       return null;
     }
     const data = await res.json();
@@ -1738,7 +1742,8 @@ async function bulkUploadClientRecords(clientsList){
   for(let i=0;i<clientsList.length;i+=CHUNK){
     const chunk = clientsList.slice(i, i+CHUNK);
     const records = [];
-    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: _clientRecordVersions[c.id] || 0 });
+    // plain: نفس التبرير الموجود فى saveOneClientRecord — يُستخدم فقط لمزامنة فهرس العرض clients_rows فوراً.
+    for(const c of chunk){ const plain = JSON.stringify(c); records.push({ id: c.id, enc: await encryptValue(plain), clientId: c.clientId || '', plain, version: _clientRecordVersions[c.id] || 0 }); }
     for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير بيانات عميل — أُوقف الرفع حفاظاً على بياناتك (حدّث الصفحة وأعد المحاولة)'); }
     let res;
     try{
@@ -1749,11 +1754,11 @@ async function bulkUploadClientRecords(clientsList){
     }catch(e){
       // فشل اتصال فعلي أثناء رفع دفعة عملاء — نسجّل كل عميل فى الدفعة فى طابور المعلّقات فردياً
       // قبل رفع نفس الاستثناء، بدل الاعتماد فقط على نسخة احتياطية كاملة قد تُتجاهل لاحقاً.
-      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
       throw e;
     }
     if(!res.ok){
-      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
       throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
     }
     const data = await res.json().catch(()=>({}));
@@ -1780,7 +1785,7 @@ async function bulkUploadClientRecords(clientsList){
         const client = chunk.find(x=>x.id===c.id);
         if(!client) continue;
         if(await _safeToApplyOnConflict(c, 'clients', true, c.id)){
-          safeRetryRecords.push({ id: client.id, enc: client.enc, clientId: client.clientId || '', version: c.currentVersion || 0 });
+          safeRetryRecords.push({ id: client.id, enc: client.enc, clientId: client.clientId || '', plain: client.plain, version: c.currentVersion || 0 });
         }else{
           stillConflictIds.push(c.id);
           _clientRecordVersions[c.id] = c.currentVersion || 0;
@@ -1809,7 +1814,7 @@ async function bulkUploadClientRecords(clientsList){
             }
           }
         }else{
-          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId })));
+          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
         }
       }
     }
@@ -1911,7 +1916,7 @@ async function fastUploadClients(clientsList){
   for(let i=0;i<toUpload.length;i+=CHUNK){
     const chunk = toUpload.slice(i, i+CHUNK);
     const records = [];
-    for(const c of chunk) records.push({ id: c.id, enc: await encryptValue(JSON.stringify(c)), clientId: c.clientId || '', version: 0 });
+    for(const c of chunk){ const plain = JSON.stringify(c); records.push({ id: c.id, enc: await encryptValue(plain), clientId: c.clientId || '', plain, version: 0 }); }
     for(const r of records){ if(typeof r.enc !== 'string' || !r.enc || r.enc === 'undefined') throw new Error('تعذّر تشفير بيانات عميل — أُوقف الرفع حفاظاً على بياناتك'); }
     let res = null;
     for(let attempt=0; attempt<4; attempt++){

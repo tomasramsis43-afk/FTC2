@@ -327,6 +327,21 @@ router.get('/api/client-records/ids', requireAuth, async (req, res) => {
   }
 });
 
+// جلب نسخة plaintext من عميل (JSON كامل، غير مشفّر) من جسم الطلب لمزامنة clients_rows فوراً —
+// أفضل مجهود فقط: أي فشل تحليل/تناقض id لا يُفشل عملية الحفظ الأساسية نفسها (enc فى client_records
+// هو مصدر الحقيقة الوحيد، clients_rows مجرد فهرس عرض/بحث مشتق منه). راجع تعليق clients_rows فى
+// schema.sql: نفس التنازل (plaintext مقابل بحث/ترقيم سريع من السيرفر) المقبول أصلاً لهذا الجدول
+// تحديداً منذ إنشائه — هنا فقط نُبقيه متزامناً فعلياً مع كل حفظ بدل الاعتماد على مسار قديم متوقف.
+function syncClientsRowFromPlain(id, plain) {
+  if (typeof plain !== 'string' || !plain) return;
+  try {
+    const obj = JSON.parse(plain);
+    if (obj && typeof obj === 'object' && String(obj.id) === String(id)) {
+      clientsRowsRepo.upsertChunk([obj]).catch(() => {});
+    }
+  } catch (e) { /* تجاهل — لا يجوز أن يوقف حفظ العميل الفعلي */ }
+}
+
 router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   const { enc } = req.body || {};
   if (typeof enc !== 'string' || !enc) return res.status(400).json({ error: 'بيانات العميل المرسلة غير صحيحة' });
@@ -360,6 +375,9 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
       origin: newOrigin, status: newStatus, clientId: plainClientId,
     });
     if (upsert.updated) {
+      // مزامنة فورية لفهرس العرض (clients_rows) — راجع syncClientsRowFromPlain أعلاه. best-effort
+      // بعد تأكيد نجاح الحفظ الحقيقي فى client_records مباشرة.
+      syncClientsRowFromPlain(req.params.id, req.body?.plain);
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
       if (upsert.version === 1) {
         notifyChange(
@@ -450,6 +468,7 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
       }
     }
     await recordsRepo.clientDelete(req.params.id, null, []);
+    clientsRowsRepo.deleteIds([req.params.id]).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     notifyChange(
       `حذف بيانات عميل — ${req.params.id}`,
@@ -477,6 +496,7 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
     } else {
       await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed'", []);
     }
+    clientsRowsRepo.deleteIds(ids).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     notifyChange(
       `حذف جماعي لبيانات عملاء — ${ids.length} سجل`,
@@ -493,6 +513,7 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
 router.delete('/api/client-records', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     await recordsRepo.clientDeleteAll();
+    await clientsRowsRepo.deleteAll().catch(() => {}); // نفس نقطة إعادة الضبط يجب أن تفرّغ فهرس العرض أيضاً
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     res.json({ deleted: true });
   } catch (e) {
@@ -549,6 +570,18 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
       guardSql, guardParams, requestId: deriveRequestId(records, req.user.username),
     });
     if (result.migrated > 0) {
+      // مزامنة فورية لفهرس العرض لكل سجل نجح رفعه فعلياً (استبعاد ما تعارض) — best-effort، دفعة
+      // واحدة عبر upsertChunk بدل استعلام منفصل لكل عميل (نفس تحسين الأداء المطبَّق فى syncAll).
+      const conflictIdSet = new Set((result.conflicts || []).map(c => c.id));
+      const plainRows = [];
+      for (const r of records) {
+        if (conflictIdSet.has(r.id) || typeof r.plain !== 'string' || !r.plain) continue;
+        try {
+          const obj = JSON.parse(r.plain);
+          if (obj && typeof obj === 'object' && String(obj.id) === String(r.id)) plainRows.push(obj);
+        } catch (e) { /* تجاهل سجل واحد فاسد بدل إيقاف الدفعة كلها */ }
+      }
+      if (plainRows.length) clientsRowsRepo.upsertChunk(plainRows).catch(() => {});
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
       notifyChange(
         `ترحيل/استيراد جماعي لبيانات عملاء — ${result.migrated} سجل`,

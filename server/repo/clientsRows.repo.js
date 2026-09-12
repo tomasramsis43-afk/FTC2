@@ -106,6 +106,26 @@ async function count() {
   return Number(cnt.rows[0].count);
 }
 
+// حذف صفوف محدَّدة بالـ id (حذف/حذف جماعي لعميل عبر النظام الحديث client_records) — تحت نفس
+// قفل التزامن لمنع التداخل مع syncAll/upsertChunk جارية من مثيل آخر. يُستدعى best-effort من
+// routes/records.js فور نجاح الحذف الفعلي فى client_records، حتى لا يبقى العميل المحذوف ظاهراً
+// فى شاشة جدول العملاء المرقّمة (GET /api/clients) رغم حذفه فعلياً.
+async function deleteIds(ids) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock($1)', [SYNC_LOCK_KEY]);
+    await client.query('DELETE FROM clients_rows WHERE id = ANY($1)', [ids]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // حذف كل الصفوف (عند حذف مفتاح clients) — تحت نفس قفل التزامن لمنع التداخل مع
 // مزامنة syncAll جارية من مثيل آخر على نفس قاعدة البيانات (سباق DELETE مقابل INSERT).
 async function deleteAll() {
@@ -144,4 +164,4 @@ async function queryPage({ whereSql, params, sortCol, order, cursorSql, cursorPa
   return { rows: rowsR.rows, total: Number(totalR.rows[0].count) };
 }
 
-module.exports = { upsertChunk, syncAll, count, deleteAll, queryPage, CLIENTS_ROWS_CHUNK_SIZE };
+module.exports = { upsertChunk, syncAll, count, deleteAll, deleteIds, queryPage, CLIENTS_ROWS_CHUNK_SIZE };
