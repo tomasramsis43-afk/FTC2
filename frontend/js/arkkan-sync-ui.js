@@ -253,10 +253,23 @@ async function arkkanRefNumCardButton(id, btn) {
 
     const oldRef = String(c.referNum || '').trim();
     c.referNum = refNum;
-    if (typeof saveClients === 'function') {
-      try { await saveClients(); } catch (e) { throw new Error(`تم الجلب (${refNum}) لكن تعذّر الحفظ: ${String(e.message).slice(0, 50)}`); }
+    const cJson = JSON.stringify(c);
+    let saveOk = null;
+    // نحفظ هذا العميل مباشرة منفرداً لنقدر نتحقق من النتيجة الفعلية (نجاح/تعارض/فشل اتصال)
+    // بدل saveClients() العام الذي يبتلع فشل الرفع بصمت ويعرض نجاحاً زائفاً.
+    if (typeof saveOneClientRecord === 'function') {
+      saveOk = await saveOneClientRecord(c, cJson);
+    } else if (typeof saveClients === 'function') {
+      try { await saveClients(); saveOk = true; } catch (e) { saveOk = false; }
     }
-    showToast(`✅ الرقم المرجعي: ${refNum}${oldRef && oldRef !== refNum ? ` (كان ${oldRef})` : ''}`, 'success');
+    if (saveOk === true) {
+      if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
+      showToast(`✅ الرقم المرجعي: ${refNum}${oldRef && oldRef !== refNum ? ` (كان ${oldRef})` : ''}`, 'success');
+    } else if (saveOk === false) {
+      showToast(`تعذّر حفظ الرقم المرجعي (${refNum}): تعارض مع تعديل آخر — حدّث الصفحة وأعد المحاولة`, 'error');
+    } else {
+      showToast(`جُلب الرقم (${refNum}) لكن تعذّر الاتصال بالخادم — سيتم الرفع تلقائياً عند عودة الاتصال`, 'error');
+    }
     if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id);
   } catch (err) {
     showToast('خطأ جلب الرقم المرجعي: ' + String(err.message).slice(0, 100), 'error');
@@ -1910,15 +1923,35 @@ async function arkkanBulkRefNumSelected() {
       if (refNum) {
         const oldRef = String(c.referNum || '').trim();
         c.referNum = refNum;
-        okCount++;
         if (oldRef !== refNum) {
           try {
-            if (typeof saveClients === 'function') await saveClients();
-            savedCount++;
+            // حفظ منفرد مباشر لكل عميل لنعرف النتيجة الفعلية بدل saveClients() الذي يبتلع الفشل بصمت
+            const cJson = JSON.stringify(c);
+            let saveOk = null;
+            if (typeof saveOneClientRecord === 'function') {
+              saveOk = await saveOneClientRecord(c, cJson);
+            } else if (typeof saveClients === 'function') {
+              await saveClients();
+              saveOk = true;
+            }
+            if (saveOk === true) {
+              if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
+              savedCount++;
+            } else if (saveOk === false) {
+              failCount++;
+              failMsgs.push(`${c.name}: تعارض في حفظ الرقم المرجعي — يرجى تحديث الصفحة`);
+            } else {
+              failCount++;
+              failMsgs.push(`${c.name}: تعذّر اتصال الخادم عند حفظ الرقم المرجعي`);
+            }
           } catch (e) {
+            failCount++;
             failMsgs.push(`${c.name}: تم الجلب لكن تعذّر الحفظ (${String(e.message).slice(0, 50)})`);
           }
+        } else {
+          savedCount++;
         }
+        okCount++;
       } else {
         failCount++;
         failMsgs.push(`${c.name}: لا يوجد رقم مرجعي لهذه الهوية`);
