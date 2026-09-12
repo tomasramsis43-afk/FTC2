@@ -105,29 +105,32 @@ async function renderTable(){
       if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
       if(!res.ok) throw new Error('server pagination failed');
       const data = await res.json();
-      // حماية عامة: لو السيرفر رجّع 0 نتيجة لأي تركيبة فلاتر (بحث/نوع دورة/جنسية/تاريخ)، بينما
-      // نفس هذه الفلاتر مطبّقة محلياً على البيانات المحمّلة أصلاً بالمتصفح (clients) تُعطي نتائج
-      // فعلية — هذا يعني عدم تطابق بين clients_rows على السيرفر والبيانات الحقيقية (مثال: نوع
-      // دورة تمت إعادة تسميته، أو خلل مؤقت في مزامنة clients_rows)، فنتجاهل رد السيرفر المضلِّل
-      // ونكمل تلقائياً للمسار المحلي الكامل أدناه (فلترة دقيقة 100% من نفس البيانات) بدل عرض
-      // جدول فارغ خطأً للمستخدم رغم وجود بيانات فعلية مطابقة.
-      const localMatches = clients.filter(c=>{
-        if(q){
-          const hay = [c.name, c.clientId, c.referNum, c.invoice].map(v=>String(v||'').toLowerCase());
-          const qDigitsCheck = q.replace(/[^0-9]/g,'');
-          const phoneDigitsCheck = String(c.phone||'').replace(/[^0-9]/g,'');
-          const phoneMatch = qDigitsCheck && phoneDigitsCheck.includes(qDigitsCheck);
-          if(!phoneMatch && !hay.some(v=>v.includes(q.toLowerCase()))) return false;
+      if(data.total === 0){
+        // حماية عامة: لو السيرفر رجّع 0 نتيجة لأي تركيبة فلاتر (بحث/نوع دورة/جنسية/تاريخ)، بينما
+        // نفس هذه الفلاتر مطبّقة محلياً على البيانات المحمّلة أصلاً بالمتصفح (clients) تُعطي نتائج
+        // فعلية — هذا يعني عدم تطابق بين clients_rows على السيرفر والبيانات الحقيقية (مثال: نوع
+        // دورة تمت إعادة تسميته، أو خلل مؤقت في مزامنة clients_rows)، فنتجاهل رد السيرفر المضلِّل
+        // ونكمل تلقائياً للمسار المحلي الكامل أدناه (فلترة دقيقة 100% من نفس البيانات) بدل عرض
+        // جدول فارغ خطأً للمستخدم رغم وجود بيانات فعلية مطابقة.
+        // يُنفَّذ هذا المسح هنا فقط (عند صفر نتائج) بدل كل طلب نجاح — هو النقطة الوحيدة التي نحتاجه
+        // فيها، وإجراؤه دائماً كان يمسح آلاف العملاء محلياً مع كل صفحة/بحث.
+        const qLow = q ? q.toLowerCase() : '';
+        const qDigits = q ? q.replace(/[^0-9]/g,'') : '';
+        let hmm = false;
+        for(const c of clients){
+          if(q){
+            const hay = [c.name, c.clientId, c.referNum, c.invoice].map(v=>String(v||'').toLowerCase());
+            const phoneDigits = String(c.phone||'').replace(/[^0-9]/g,'');
+            if(!(qDigits && phoneDigits.includes(qDigits)) && !hay.some(v=>v.includes(qLow))) continue;
+          }
+          if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) continue; }
+          else if(fc && c.courseType!==fc) continue;
+          if(fn && c.nationality!==fn) continue;
+          if(dfrom && (!c.date || c.date<dfrom)) continue;
+          if(dto && (!c.date || c.date>dto)) continue;
+          hmm = true; break; // يكفي إثبات وجود نتيجة واحدة
         }
-        if(fc==='__unknown__'){ if(c.courseType && c.courseType.trim()) return false; }
-        else if(fc && c.courseType!==fc) return false;
-        if(fn && c.nationality!==fn) return false;
-        if(dfrom && (!c.date || c.date<dfrom)) return false;
-        if(dto && (!c.date || c.date>dto)) return false;
-        return true;
-      }).length;
-      if(data.total === 0 && localMatches > 0){
-        throw new Error('server returned suspicious empty result');
+        if(hmm) throw new Error('server returned suspicious empty result');
       }
       renderClientsTableRows(data.rows, data.total, data.total, pageSize);
       return;
@@ -150,6 +153,7 @@ async function renderTable(){
 // يرسم صفوف الجدول وشريط الترقيم فعلياً — يُستخدَم من كلا مساري renderTable (السيرفر والمحلي)
 // حتى لا يتكرر كود بناء HTML للصف في مكانين قد يختلفان عن بعض بمرور الوقت.
 let _filteredCache = { sig: '', rows: null };
+let _courseStatCacheSig = '';
 function getFilteredCached(filterSig){
   if(_filteredCache.sig === filterSig && _filteredCache.rows) return _filteredCache.rows;
   const rows = filteredClients();
@@ -164,8 +168,13 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
   const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
   // كروت فلتر الدورات: تُحسب من نفس بيانات العملاء لكن بتجاهل فلتر الدورة نفسه، كي يعكس
   // العدد داخل كل كرت "لو اخترت هذه الدورة" مع بقية الفلاتر الشغالة فعلاً، لا بعد تطبيقه هو نفسه.
+  // تُعاد فقط عند تغيّر العملاء/الفلاتر (وليس مع كل تنقّل صفحة/بحث) — كانت تمسح كل العملاء في كل مرة.
   if(typeof renderCourseStatCards==='function' && typeof filteredClients==='function'){
-    renderCourseStatCards(filteredClients({skipCourseFilter:true}));
+    const statSig = JSON.stringify([clients.length, $('#search')?.value, selectedFilterValues($('#filter-nat')), selectedFilterValues($('#filter-status')), selectedFilterValues($('#filter-company')), selectedFilterValues($('#filter-invoice')), selectedFilterValues($('#filter-coursenum')), selectedFilterValues($('#filter-refnum')), $('#cl-date-from')?.value, $('#cl-date-to')?.value, $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly, selectedFilterValues($('#filter-bag-source'))]);
+    if(statSig !== _courseStatCacheSig){
+      _courseStatCacheSig = statSig;
+      renderCourseStatCards(filteredClients({skipCourseFilter:true}));
+    }
   }
   // حساب الإجماليات في تمريرة واحدة بدل تمريرتين
   let paidSum = 0, remSum = 0;

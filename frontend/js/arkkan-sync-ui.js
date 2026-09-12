@@ -950,10 +950,12 @@ function arkkanExamExportBox(box, list) {
   showToast('تم تصدير ' + rows.length + ' سجل — ' + box.label, rows.length ? 'success' : 'info');
 }
 
-/* عند تغيير أي حقل فلترة نعيد رسم الصناديق الأربعة فقط (بدون إعادة جلب) */
+/* عند تغيير أي حقل فلترة نعيد رسم الصناديق الأربعة فقط (بدون إعادة جلب) — مع تأخير حقول
+   الكتابة (الاسم/الهوية/التاريخ) حتى توقف الكتابة بدل إعادة بناء 4 جداول مع كل حرف. */
+const _debouncedArkkanExamsRender = debounce(renderArkkanExamsTable);
 document.addEventListener('input', function (e) {
   if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(name|id|date-from|date-to)$/.test(e.target.id)) {
-    renderArkkanExamsTable();
+    _debouncedArkkanExamsRender();
   }
 });
 document.addEventListener('change', function (e) {

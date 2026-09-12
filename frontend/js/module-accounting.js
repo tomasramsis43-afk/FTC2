@@ -233,7 +233,9 @@ function renderJournalDEList(){
     $('#de-entries-empty').lastChild.textContent = journalDE.length ? 'لا توجد قيود يومية مطابقة للفلتر الحالي' : 'لا توجد قيود يومية مسجّلة بعد';
   }
 }
-['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=> $(sel)?.addEventListener('input', renderJournalDEList));
+// حقول فلترة وكتابة تبحث في كل القيود المالية: تأخير إعادة الرسم حتى توقف الكتابة بدل إعادة
+// بناء الجدول الكامل مع كل حرف (كانت أكبر سبب لبطء التنقل في شيت المحاسبة مع كثرة القيود).
+['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=> { const el=$(sel); if(el) el.addEventListener('input', debounce(renderJournalDEList)); });
 $('#de-filter-type')?.addEventListener('change', renderJournalDEList);
 $('#btn-de-filter-clear')?.addEventListener('click', ()=>{
   ['#de-filter-search','#de-filter-from','#de-filter-to'].forEach(sel=>{ if($(sel)) $(sel).value=''; });
@@ -914,7 +916,10 @@ document.addEventListener('keydown', e=>{
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openGlobalSearch(); }
   if(e.key==='Escape' && $('#global-search-overlay')?.classList.contains('show')) closeGlobalSearch();
 });
-$('#global-search-input')?.addEventListener('input', e=> renderGlobalSearchResults(e.target.value));
+// البحث العام يمسح كل قواعد البيانات الأربع مع كل حرف — نؤخّره حتى توقف الكتابة، عادة الشكوى
+// من "تعليق" أثناء البحث في شاشات كثيرة.
+const _debouncedGlobalSearch = debounce(v => renderGlobalSearchResults(v));
+$('#global-search-input')?.addEventListener('input', e=> _debouncedGlobalSearch(e.target.value));
 $('#global-search-input')?.addEventListener('keydown', e=>{
   const rows = $all('#global-search-results .gsr-item');
   if(!rows.length) return;

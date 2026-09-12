@@ -103,7 +103,10 @@ async function backgroundSyncCheck(){
       Object.keys(_collectionSyncBaseline).some(col => !_collectionSyncBaseline[col]);
     if(needsFullSync){
       await loadData(false);
-      await renderAllViewsAfterLoad();
+      // نرسم الشاشة الظاهرة فعلاً الآن فقط بدل كل الشاشات الـ14 المتسلسلة (كان يعطل المستخدم عن
+      // التنقل/الإدخال أثناء إعادة الرسم الكامل) — كل تبويب يُعاد رسمه لحظة فتحه بالضبط.
+      if(typeof renderActiveViewsAfterSync === 'function') await renderActiveViewsAfterSync();
+      else await renderAllViewsAfterLoad();
       return;
     }
     // نتحقق بالتوازي من: (أ) نسخ كل مفاتيح kv_store العادية، و(ب) رقم إصدار العملاء فى نظام
@@ -127,10 +130,12 @@ async function backgroundSyncCheck(){
     const changedKeys = Object.keys(serverVersions).filter(k => k !== 'clients' && !ALLOWED_COLLECTIONS_LOCAL.includes(k) && (_kvVersions[k] || 0) !== serverVersions[k]);
     if(changedKeys.length || clientsChanged || recordsChanged){
       // تحميل عادي عبر الشبكة: المفاتيح غير المتغيّرة ترجع 304 فوراً (بدون نقل بيانات)،
-      // والمفاتيح المتغيّرة فقط هي التي تُنقل فعلياً من السحابة — ثم نعيد رسم كل الشاشات
-      // لأننا لا نعرف مسبقاً أي شاشات تعتمد على المفاتيح التي تغيّرت تحديداً.
+      // والمفاتيح المتغيّرة فقط هي التي تُنقل فعلياً من السحابة — ثم نعيد رسم الشاشة الظاهرة
+      // فعلاً فقط (بدل كل الشاشات الـ14) لأن كل تبويب يُعاد رسمه لحظة فتحه، ولا حاجة لتحميل
+      // جهاز المستخدم بحساب شاشات مقفولة لا يراها — ذلك كان يُجمّد التنقل والإدخال مع كل حفظ.
       await loadData(false);
-      await renderAllViewsAfterLoad();
+      if(typeof renderActiveViewsAfterSync === 'function') await renderActiveViewsAfterSync();
+      else await renderAllViewsAfterLoad();
     }
   }catch(e){
     if(e && e.isDecryptFailure){ showFatalDecryptErrorScreen(e); }

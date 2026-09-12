@@ -127,8 +127,12 @@ function renderCourseInvoices(){
 }
 onSearchInput('#ci-search', renderCourseInvoices);
 bindGenericPagination('ci', ciPageState, renderCourseInvoices);
-$('#ci-date-from')?.addEventListener('input', renderCourseInvoices);
-$('#ci-date-to')?.addEventListener('input', renderCourseInvoices);
+// حقول تاريخ الفواتير تعيد بناء الجدول كاملاً — تأخير حتى اكتمال كتابة التاريخ بدل كل حرف
+const _debouncedCiDate = debounce(renderCourseInvoices);
+$('#ci-date-from')?.addEventListener('change', renderCourseInvoices);
+$('#ci-date-to')?.addEventListener('change', renderCourseInvoices);
+$('#ci-date-from')?.addEventListener('input', _debouncedCiDate);
+$('#ci-date-to')?.addEventListener('input', _debouncedCiDate);
 $('#ci-filter-diff')?.addEventListener('change', renderCourseInvoices);
 $('#btn-refresh-course-invoices')?.addEventListener('click', ()=>{ renderCourseInvoices(); showToast('تم تحديث شيت فواتير الدورات'); });
 $('#ci-table-body')?.addEventListener('change', async e=>{

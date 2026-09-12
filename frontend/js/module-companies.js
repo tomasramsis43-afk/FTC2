@@ -101,9 +101,12 @@ document.addEventListener('change', e=>{
     }
   }
 });
+// إعادة حساب ملخص الفئات مع كل ضغطة حرف كانت تجمد الكتابة مع وجود فئات كثيرة — نؤخّرها
+// حتى توقف المستخدم عن الكتابة مع بقاء تحديث الملخص ناتجاً بنفس القيم النهائية.
+const _debouncedRecomputeCtGroups = debounce(recomputeCtGroups);
 document.addEventListener('input', e=>{
   if(e.target.classList && (e.target.classList.contains('ctg-label-other')||e.target.classList.contains('ctg-count')||e.target.classList.contains('ctg-price'))){
-    recomputeCtGroups();
+    _debouncedRecomputeCtGroups();
   }
 });
 function resetCtGroups(){ ctGroups = []; renderCtGroups(); }

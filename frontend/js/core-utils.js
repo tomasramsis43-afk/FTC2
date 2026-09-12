@@ -67,6 +67,46 @@ function isViewActive(viewName){
   return !!(el && el.classList.contains('active'));
 }
 
+/* يرسم شاشة/تبويب واحد بالاسم — يُستدعى من معالج نقر التبويبات ومن المزامنة الخلفية معاً بدل
+   تكرار سلسلة if/else لكل منهما. ينتظر اكتمال تحميل الموديول المطلوب (لو كان من الموديولات
+   المؤجّلة) قبل الرسم، تماماً كسلوك الضغط الفعلي على التبويب. */
+async function renderViewSection(viewName){
+  if(typeof viewName !== 'string' || !viewName) return;
+  if(typeof window.ensureViewLoaded === 'function') await window.ensureViewLoaded(viewName);
+  switch(viewName){
+    case 'clients':       if(typeof renderTable==='function') renderTable(); break;
+    case 'dashboard':     if(typeof renderDashboard==='function') renderDashboard(); break;
+    case 'settings':      if(typeof renderSettings==='function') renderSettings(); break;
+    case 'bags':          if(typeof renderBags==='function') renderBags(); break;
+    case 'vault':         if(typeof renderVault==='function') renderVault(); break;
+    case 'courses':       if(typeof renderCourses==='function') renderCourses(); break;
+    case 'courseinvoices':if(typeof renderCourseInvoices==='function') renderCourseInvoices(); break;
+    case 'audit':         if(typeof renderAuditLog==='function') renderAuditLog(); break;
+    case 'reports':       if(typeof renderReports==='function') renderReports(); break;
+    case 'idsearch':      if(typeof renderIdSearch==='function') renderIdSearch(); break;
+    case 'companies':     if(typeof renderCompanies==='function') renderCompanies(); break;
+    case 'accounting':    if(typeof renderAccounting==='function') renderAccounting(); break;
+    case 'ledger':        if(typeof renderDoubleEntryModule==='function') renderDoubleEntryModule(); break;
+    case 'purchases':     if(typeof renderPurchases==='function') renderPurchases(); break;
+    case 'arkkan-sync':
+      if(typeof renderArkkanSyncTable==='function') renderArkkanSyncTable();
+      if(typeof arkkanUpdateStatus==='function') arkkanUpdateStatus();
+      break;
+  }
+}
+/* الشاشات الظاهرة فعلاً الآن فقط — تُستدعى من المزامنة الخلفية بعد تحميل البيانات بدل إعادة رسم
+   كل الشاشات الـ14 المتسلسلة (بعضها يقفل والمستخدم في تبويب آخر)، لأن كل تبويب يُعاد رسمه لحظة
+   فتحه بعينه. يرسم أيضاً الشريط المشترك (فلتر السنة، خيارات الفلاتر، إشعارات الاعتماد المعلّقة). */
+async function renderActiveViewsAfterSync(){
+  safeStep && safeStep(()=>initYearFilter(), 'initYearFilter');
+  safeStep && safeStep(()=>refreshFilterOptions(), 'refreshFilterOptions');
+  safeStep && safeStep(()=>{ if(typeof renderApprovalNoticesBanner==='function') renderApprovalNoticesBanner(); }, 'renderApprovalNoticesBanner');
+  const activeBtns = $all && $all('button[data-view].active') || [];
+  for(const btn of activeBtns){
+    try{ await renderViewSection(btn.dataset.view); }catch(e){ console.error('renderActiveViewsAfterSync: فشل رسم "'+btn.dataset.view+'"', e); }
+  }
+}
+
 const LICENSE_STORAGE_KEY = "appLicenseKeyV1";
 // نسخة محلية مخبّأة من آخر تفعيل ناجح (مفتاح التشفير + تاريخ الانتهاء)، تُستخدم فقط
 // عند تعذّر الوصول للسيرفر (انقطاع إنترنت) لتشغيل البرنامج بدل حجبه بالكامل، بشرط

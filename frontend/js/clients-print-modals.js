@@ -184,10 +184,17 @@ $('#filter-invoice').addEventListener('change', renderTable);
 $('#filter-coursenum').addEventListener('change', renderTable);
 $('#filter-refnum').addEventListener('change', renderTable);
 $('#filter-bag-source').addEventListener('change', renderTable);
-$('#cl-date-from').addEventListener('input', renderTable);
-$('#cl-date-to').addEventListener('input', renderTable);
-$('#cl-paid-min').addEventListener('input', renderTable);
-$('#cl-paid-max').addEventListener('input', renderTable);
+// حقول تاريخ/مبالغ الفلترة تعيد بناء جدول العملاء كاملاً (ويمسح آلاف العملاء) — نأخّر حتى
+// اكتمال الكتابة بدل كل حرف، مع بقاء التحديث النهائي فورياً عند الانتهاء من الكتابة.
+const _debouncedClDateFilter = debounce(renderTable);
+$('#cl-date-from').addEventListener('input', _debouncedClDateFilter);
+$('#cl-date-to').addEventListener('input', _debouncedClDateFilter);
+$('#cl-paid-min').addEventListener('input', _debouncedClDateFilter);
+$('#cl-paid-max').addEventListener('input', _debouncedClDateFilter);
+$('#cl-date-from').addEventListener('change', renderTable);
+$('#cl-date-to').addEventListener('change', renderTable);
+$('#cl-paid-min').addEventListener('change', renderTable);
+$('#cl-paid-max').addEventListener('change', renderTable);
 
 /* ---------------- طي/توسيع الفلاتر المتقدمة (جدول العملاء) ----------------
    الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
