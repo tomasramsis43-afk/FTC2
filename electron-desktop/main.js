@@ -62,7 +62,7 @@ const AGENT_REMOTE_BASE = 'https://raw.githubusercontent.com/tomasramsis43-afk/F
 const SYNCED_FILES = [
   'app.html', 'styles.css', 'sw.js', 'sw-register.js', 'js/arkkan-import.js',
   'js/arkkan-sync-ui.js',
-  'js/core-utils.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
+  'js/core-utils.js', 'js/lazy-modules.js', 'js/storage-sync.js', 'js/sse-client.js', 'js/auth-licensing.js',
   'js/shell.js', 'js/theme-settings.js', 'js/sidebar-collapse.js',
   'js/permissions-sound.js', 'js/accounting-core.js',
   'js/backup-restore.js', 'js/undo-redo.js', 'js/clients-alerts-overview.js',

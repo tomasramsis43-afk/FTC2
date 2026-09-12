@@ -941,6 +941,14 @@ $all('button[data-view]').forEach(btn=>{
       newView.classList.add('active');
     }
     const _view = btn.dataset.view;
+    // تحميل كسول (المرحلة 1 من خطة الأداء): لو الشاشة دي من ضمن الموديولات المؤجّلة
+    // (راجع lazy-modules.js)، ننتظر تحميل ملفها فعليًا قبل محاولة نداء دالة renderX
+    // بتاعتها، وإلا typeof هيرجع 'undefined' والشاشة تفضل فاضية. لباقي الشاشات (غير
+    // المؤجّلة) الدالة بترجع فورًا فمفيش أي تأخير أو تغيير في السلوك الحالي.
+    const _loadPromise = (typeof window.ensureViewLoaded === 'function')
+      ? window.ensureViewLoaded(_view)
+      : Promise.resolve();
+    _loadPromise.then(()=>{
     requestAnimationFrame(()=>{
       if(_view==='clients' && typeof renderTable==='function') renderTable();
       else if(_view==='dashboard' && typeof renderDashboard==='function') renderDashboard();
@@ -961,6 +969,7 @@ $all('button[data-view]').forEach(btn=>{
         if(typeof arkkanUpdateStatus==='function') arkkanUpdateStatus();
       }
     });
+    }).catch(()=>{ /* فشل تحميل الموديول: تم إعلام المستخدم بالفعل داخل ensureViewLoaded */ });
   });
 });
 /* إظهار/إخفاء التبويبات حسب صلاحية الدور الحالي (settings.rolePermissions القابلة للتعديل من الإعدادات) */
