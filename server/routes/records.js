@@ -35,7 +35,7 @@ router.get('/api/clients', requireAuth, async (req, res) => {
   if (req.user.role === 'reception') return res.status(403).json({ error: 'غير متاح لهذا الدور' });
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const pageSize = Math.min(500, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const pageSize = Math.min(1000, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
     const where = [];
     const params = [];
     let i = 1;
