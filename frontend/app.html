@@ -3416,7 +3416,11 @@
 <script defer src="js/module-accounting.js"></script>
 <!-- module-courses.js / module-companies.js / module-purchases.js: أُزيلت من هنا عمدًا —
      تُحمَّل الآن كسوليًا عند فتح الشاشة المرتبطة بها فقط (راجع js/lazy-modules.js
-     و js/undo-redo.js). لا تُعِد إضافتها هنا إلا لو ألغيت المرحلة 1 من خطة الأداء. -->
+     و js/undo-redo.js). لا تُعِد إضافتها هنا إلا لو ألغيت المرحلة 1 من خطة الأداء.
+     ملاحظة: منطق الإقلاع/الترخيص/تسجيل الدخول الذي كان مدمجاً تاريخياً داخل
+     module-purchases.js تم فصله إلى js/app-boot.js (يُحمَّل بشكل أساسي دائماً،
+     راجع الملف نفسه لتفاصيل سبب الفصل) — التحميل الكسول هنا يخص فعلياً شاشة
+     المشتريات فقط الآن. -->
 <script defer src="js/module-idsearch.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
 <script defer src="js/notification-center.js"></script>
@@ -3427,6 +3431,7 @@
 <script defer src="js/arkkan-sync-ui.js"></script>
 <script defer src="js/grid-enhancements.js"></script>
 <script defer src="js/onboarding.js"></script>
+<script defer src="js/app-boot.js"></script>
 <script defer src="js/boot.js"></script>
 
 
