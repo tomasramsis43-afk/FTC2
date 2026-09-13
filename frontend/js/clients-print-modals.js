@@ -228,6 +228,28 @@ $('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
       refreshMultiSelectFilterUI(el);
     } else el.value = '';
   });
+  // نفس دقة زر "مسح كل الفلاتر" العام: البقية لم تكن تُمسح في أيامها (بحث، حالة، موظف
+  // استقبال، تبديل الموقوفين/الحقائب غير المشتراة، وفلتر السنة العلوي) فيظل الجدول مفلتراً
+  // جزئياً رغم الضغط على "مسح"، فيُحسب أن الزر معطل.
+  const searchEl = document.getElementById('search'); if(searchEl) searchEl.value = '';
+  ['filter-status','filter-reception'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    Array.from(el.options).forEach(o=> o.selected = false);
+    refreshMultiSelectFilterUI(el);
+  });
+  showSuspendedOnly = false;
+  $('#btn-filter-suspended')?.classList.remove('btn-gold');
+  $('#btn-filter-suspended')?.classList.add('btn-ghost');
+  showUnpurchasedBagsOnly = false;
+  $('#btn-filter-unpurchased-bags')?.classList.remove('btn-gold');
+  $('#btn-filter-unpurchased-bags')?.classList.add('btn-ghost');
+  if(selectedYearFilter !== 'all'){
+    selectedYearFilter = 'all';
+    localStorage.setItem('selectedYearFilter','all');
+    // يعيد ضبط كل حقول تاريخ (من/إلى) في كل الشاشات ويرسم كل الشيتات — يشمل renderTable
+    if(typeof applyYearFilterToAllViews==='function') applyYearFilterToAllViews();
+  }
   updateAdvancedFiltersBadge();
   renderTable();
 });

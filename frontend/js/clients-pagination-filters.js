@@ -4,7 +4,7 @@
    #{prefix}-page-first/prev/next/last */
 function genericPageSize(prefix){
   const v = $(`#${prefix}-page-size`)?.value || '50';
-  if(v==='all') return 1000; // حماية أداء: was Infinity يرندر آلاف الصفوف دفعة واحدة ويجمد المتصفح
+  if(v==='all') return 1000; // حماية أداء للشيتات العامة الضخمة (شيت العملاء وحده يعرض الكل فعلياً عبر currentTablePageSize)
   return Number(v);
 }
 function applyGenericPagination(prefix, rows, state, filterSigParts){
@@ -38,7 +38,7 @@ function bindGenericPagination(prefix, state, renderFn){
 }
 function currentTablePageSize(){
   const v = $('#table-page-size')?.value || '100';
-  if(v==='all') return 1000; // حماية أداء: عرض الكل محدود بـ 1000 لتجنب تجميد المتصفح
+  if(v==='all') return Infinity; // "عرض الكل" = كل العملاء المطابقين دفعة واحدة (المسار المحلي الكامل)
   return Number(v);
 }
 let renderTableSeq = 0; // يمنع تعارض ردود طلبات متتالية سريعة (تغيير صفحة/فلتر قبل وصول رد الطلب السابق)
@@ -58,6 +58,7 @@ function clientsQueryIsSimple(){
   if(selectedFilterValues($('#filter-bag-source')).length) return false;
   if(($('#cl-paid-min')?.value||'') !== '' || ($('#cl-paid-max')?.value||'') !== '') return false;
   if(selectedFilterValues($('#filter-status')).length) return false; // مدين/مسدد يحتاج حساب المتبقي الكامل (خصومات، دفعات...)
+  if(selectedFilterValues($('#filter-reception')).length) return false; // السيرفر لا يدعم الفلترة بموظف الاستقبال (createdBy) — المسار المحلي فقط
   if(clientsSortState.key && !SERVER_SORTABLE_CLIENT_COLS[clientsSortState.key]) return false;
   // المسار السريع (السيرفر) يدعم قيمة واحدة فقط لنوع الدورة/الجنسية عبر الـ API — لو المستخدم
   // حدد أكتر من قيمة في الفلتر متعدد الاختيار الجديد، نجبر المسار المحلي الكامل (فلترة "أو"
@@ -98,13 +99,33 @@ async function renderTable(){
       const q = ($('#search')?.value||'').trim(); if(q) params.set('search', q);
       const fc = selectedFilterValues($('#filter-course'))[0] || ''; if(fc && fc!=='__unknown__') params.set('courseType', fc);
       const fn = selectedFilterValues($('#filter-nat'))[0] || ''; if(fn) params.set('nationality', fn);
-      const dfrom = $('#cl-date-from')?.value; if(dfrom) params.set('dateFrom', dfrom);
-      const dto = $('#cl-date-to')?.value; if(dto) params.set('dateTo', dto);
+      // فلاتر التاريخ/السنة تُعلّق أثناء البحث مثل المسار المحلي تماماً (البحث مقصود به إيجاد
+      // الشخص بغض النظر عن تاريخه) — كان المسار السريع يرسلها دائماً حتى مع البحث فيختفي
+      // عملاء يطابقهم البحث على السيرفر فقط لأنهم خارج نطاق السنة، بخلاف المسار المحلي.
+      const dfrom = !q ? ($('#cl-date-from')?.value) : '';
+      const dto = !q ? ($('#cl-date-to')?.value) : '';
+      if(dfrom) params.set('dateFrom', dfrom);
+      if(dto) params.set('dateTo', dto);
+      // الترتيب الافتراضي بلا أي اختيار عمود = تاريخ التسجيل تنازلياً كما في المسار المحلي
+      // (filteredClients يفرز بذلك افتراضياً) — كنا نترك السيرفر يبدأ بترتيب name تصاعدي
+      // فيختلف ترتيب الصفحة ونطاق "عرض X - Y" بين المسارين رغم امتلاك كلاهما نفس البيانات
       if(clientsSortState.key){ params.set('sort', clientsSortState.key); params.set('order', clientsSortState.dir===-1?'desc':'asc'); }
+      else{ params.set('sort', 'date'); params.set('order', 'desc'); }
       const res = await serverFetch('/api/clients?'+params.toString());
       if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
       if(!res.ok) throw new Error('server pagination failed');
       const data = await res.json();
+      // تصحيح رقم الصفحة ضمن النطاق الفعلي: زر "الأخيرة" يضبط tableCurrentPage = Infinity، وقد
+      // تتقلّص النتائج خلفياً (مزامنة/تحديث بيانات من مستخدم آخر) فتبقى جدول الصفحة الحالية خارج
+      // الحد — كان المسار السريع يرسل رقم الصفحة كما هو (وInfinity يتحول 50 على السيرفر) فيظهر
+      // جدول فارغ رغم وجود بيانات فعلية، بينما المسار المحلي يصححها تلقائياً. هنا نصحّح الرقم من
+      // total الفعلي ونعيد الطلب بالصفحة الصحيحة مرة واحدة فقط.
+      const totalPages = Number.isFinite(pageSize) ? Math.max(1, Math.ceil(data.total/pageSize)) : 1;
+      if(!Number.isFinite(tableCurrentPage) || tableCurrentPage > totalPages){
+        tableCurrentPage = totalPages;
+        renderTable();
+        return;
+      }
       // بدون أي فلتر (لا بحث ولا دورة ولا جنسية ولا تاريخ ولا فرز)، تعداد السيرفر لـ clients_rows
       // يجب أن يطابق عدد العملاء الفعلي بالذاكرة تماماً. أي فرق يعني أن الفهرس قديم/ناقص (مثال:
       // عميل أُضيف محلياً ولم تصل مزامنته بعد، أو صف مفهرس مكرر id)، وسيعرض الجدول عدداً أقل
