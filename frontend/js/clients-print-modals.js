@@ -841,7 +841,10 @@ async function revealDuplicateClient(clientIdValue, knownName){
   const textLikeIds = ['cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
   textLikeIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const selectIds = ['filter-course','filter-nat','filter-status','filter-company','filter-invoice','filter-coursenum','filter-refnum','filter-bag-source','filter-reception'];
-  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.selectedIndex = 0; });
+  // إلغاء تحديد كل الخيارات (يعادل "الكل") بدل selectedIndex=0 — بعض الفلاتر (مثل الجنسية)
+  // لها خيار خاص إضافي (بدون جنسية) يُضاف ديناميكياً في أول القائمة، فكان selectedIndex=0
+  // يحدّده هو خطأً بدل "الكل" (نفس إصلاح زر "مسح الفلاتر المتقدمة" أدناه).
+  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el){ Array.from(el.options).forEach(o=> o.selected=false); if(typeof refreshMultiSelectFilterUI==='function') refreshMultiSelectFilterUI(el); } });
   showSuspendedOnly = false;
   $('#btn-filter-suspended')?.classList.remove('btn-gold');
   $('#btn-filter-suspended')?.classList.add('btn-ghost');
