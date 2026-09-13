@@ -3402,11 +3402,35 @@ body.dark-theme .hint-warn {
 
 #view-clients .client-stats .stat.course-stat.active {
   border-color: var(--teal);
+  border-width: 2px;
   background: color-mix(in srgb, var(--teal) 16%, var(--surface-solid));
 }
 
 #view-clients .client-stats .stat.course-stat.active b {
   color: var(--teal);
+}
+
+/* علامة ✓ واضحة أعلى الكرت المُحدَّد — لا تعتمد على تلوين خفيف (border/background) قد لا
+   يُلاحَظ بسهولة حسب الثيم/الشاشة، بل شارة صريحة ثابتة اللون بمعزل عن أي متغيرات ثيم. */
+#view-clients .client-stats .stat.course-stat {
+  position: relative;
+}
+#view-clients .client-stats .stat.course-stat .course-check {
+  position: absolute;
+  top: -8px;
+  inset-inline-end: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  line-height: 1;
 }
 
 /* رأس جدول العملاء — خلفية مصمتة حتى لا تظهر خلايا الأعمدة الثابتة أثناء السكرول

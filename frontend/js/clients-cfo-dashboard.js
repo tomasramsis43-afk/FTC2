@@ -955,7 +955,9 @@ function renderCourseStatCards(rows){
   });
   wrap.innerHTML = Array.from(sel.options).filter(o=>o.value!=='').map(o=>{
     const key = o.value;
-    return `<div class="stat course-stat${selectedVals.includes(key)?' active':''}" data-course-key="${escapeHtml(key)}">
+    const isActive = selectedVals.includes(key);
+    return `<div class="stat course-stat${isActive?' active':''}" data-course-key="${escapeHtml(key)}">
+      ${isActive ? '<span class="course-check" title="مُحدَّد">✓</span>' : ''}
       <b class="mono">${counts[key]||0}</b><span>${escapeHtml(o.textContent)}</span>
     </div>`;
   }).join('');
