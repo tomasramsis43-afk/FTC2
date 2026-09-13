@@ -36,9 +36,14 @@ async function syncDirect(value) {
 /* ========================== فحص وإعادة مزامنة عند الإقلاع ========================== */
 
 /**
- * عند بدء التشغيل: لو عدد صفوف clients_rows لا يطابق عدد عملاء kv_store الفعلي
- * (يشمل الحالة القديمة: 0 صف رغم وجود آلاف العملاء)، نعيد المزامنة كاملة.
- * تُعيد معلومة عن ماذا حدث فقط لا ترمي خطأ.
+ * عند بدء التشغيل: نعيد مزامنة clients_rows بالكامل دائماً من kv_store (مصدر الحقيقة)،
+ * لا فقط عند اختلاف عدد الصفوف كما كان سابقاً. سبب التوسعة: فحص العدد وحده لا يكشف تعارض
+ * محتوى صف موجود فعلاً (مثال حقيقي: عمود course_type مفهرَس بقيمة قديمة/بحالة أحرف مختلفة
+ * بينما نفس الصف بالـ id موجود، فيتطابق العدد الكلي رغم أن الفلترة بهذا العمود ترجع نتيجة
+ * خاطئة من السيرفر — وهذا بالضبط ما كان يُظهر عدداً أقل من الصحيح عند فلترة نوع دورة + سنة
+ * معاً فى شاشة العملاء). UPSERT فى syncAll يصحح كل الأعمدة المفهرسة (بما فيها course_type)
+ * لأي صف id موجود بالفعل، لا يقتصر على الصفوف الجديدة فقط. التكلفة إضافية عند كل تشغيل
+ * (تُنفَّذ مرة واحدة فقط عند الإقلاع، لا مع كل طلب)، مقبولة مقابل ضمان تطابق الفهرس دائماً.
  */
 async function startupCheckAndSync() {
   try {
@@ -52,11 +57,6 @@ async function startupCheckAndSync() {
       if (Array.isArray(parsed)) expectedCount = parsed.filter(c => c && c.id).length;
     } catch (e) {
       console.error('[Sync] Failed to parse expectedCount from settings:', e);
-    }
-
-    const currentCount = await clientsRowsRepo.count();
-    if (Number(currentCount) === expectedCount) {
-      return { synced: false, reason: 'already_synced' };
     }
 
     const failedRows = await syncDirect(value);
