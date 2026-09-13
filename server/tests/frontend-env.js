@@ -106,6 +106,11 @@ function buildSandbox(){
     finishPrintDoc(){},
     CENTER_LOGO_B64: '',
     courseInvoiceClients: () => [],
+    // debounce معرَّفة فعلياً فى permissions-sound.js (غير مُحمَّل فى أغلب اختبارات هذا الملف
+    // المصغَّرة عمداً) — بعض ملفات الواجهة (module-accounting.js) بدأت تستخدمها على المستوى
+    // العام عند التحميل. تنفيذ مبسّط بلا تأخير فعلي كافٍ هنا لأن المنطق المُختبَر فى هذا الملف
+    // متزامن بحت ولا يعتمد على توقيت التأجيل نفسه (نفس فلسفة setTimeout/requestAnimationFrame أعلاه).
+    debounce: (fn) => fn,
   };
   sandbox.window = sandbox; // نفس نمط المتصفح: window === global scope
   sandbox.globalThis = sandbox;
