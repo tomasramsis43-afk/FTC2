@@ -987,6 +987,8 @@ function initMultiSelectFilters(root){
       const idx = Number(checkbox.dataset.msfIdx);
       const opt = sel.options[idx];
       const allOpt = allOption();
+      // قبل التغيير نلتقط القيم الفعلية المُفلترة (بدون خيار "الكل") لنعرف هل تغيّر شيء فعلياً
+      const before = selectedFilterValues(sel).join('\u0000');
       if(opt === allOpt){
         Array.from(sel.options).forEach(o=> o.selected = (o===allOpt));
       } else {
@@ -995,11 +997,14 @@ function initMultiSelectFilters(root){
         if(!Array.from(sel.selectedOptions).length && allOpt) allOpt.selected = true;
       }
       buildMenu();
-      updateBtn();
       // بعض أماكن الكود القديم تستمع لـ 'input' على عناصر select (بدل 'change') — نُطلق الاثنين
-      // معاً لضمان توافق كل أنماط الاستماع الموجودة في الكود الحالي بلا استثناء
-      sel.dispatchEvent(new Event('input', {bubbles:true}));
-      sel.dispatchEvent(new Event('change', {bubbles:true}));
+      // معاً لضمان توافق كل أنماط الاستماع الموجودة في الكود الحالي بلا استثناء، لكن فقط إذا
+      // تغيّر التحديد فعلياً (مثل النقر على "الكل" وهو محدد أصلاً) بدل استدعاء الرندر بلا داعٍ.
+      // تحديث نص الزر يتم عبر مستمع 'change' أدناه (يُطلق بشكل متزامن)، فلا داعي لاستدعائه مرتين.
+      if(before !== selectedFilterValues(sel).join('\u0000')){
+        sel.dispatchEvent(new Event('input', {bubbles:true}));
+        sel.dispatchEvent(new Event('change', {bubbles:true}));
+      }
     });
     document.addEventListener('click', closeMenu);
     window.addEventListener('resize', ()=>{ if(menu.classList.contains('open')) positionMenu(); });

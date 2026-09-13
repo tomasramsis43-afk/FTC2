@@ -1743,16 +1743,20 @@ $('#btn-export-vault').addEventListener('click', ()=>{
 function refreshAuditFilterOptions(){
   const sections = [...new Set(auditLog.map(a=>a.section))];
   repopulateFilterSelectPreserve($('#audit-filter-section'), sections, '—');
+  const usernames = [...new Set(auditLog.map(a=>a.user).filter(Boolean))];
+  repopulateFilterSelectPreserve($('#audit-filter-user'), usernames, 'كل المستخدمين');
 }
 function auditFilteredRows(){
   const q = $('#audit-search').value.trim().toLowerCase();
   const actionVals = selectedFilterValues($('#audit-filter-action'));
   const sectionVals = selectedFilterValues($('#audit-filter-section'));
+  const userVals = selectedFilterValues($('#audit-filter-user'));
   const dfrom = $('#audit-date-from').value;
   const dto = $('#audit-date-to').value;
   return auditLog.filter(a=>{
     if(actionVals.length && !actionVals.includes(a.action)) return false;
     if(sectionVals.length && !sectionVals.includes(a.section)) return false;
+    if(userVals.length && !userVals.includes(a.user)) return false;
     if(dfrom && a.ts < new Date(dfrom+'T00:00:00').getTime()) return false;
     if(dto && a.ts > new Date(dto+'T23:59:59').getTime()) return false;
     if(q){
@@ -1773,7 +1777,7 @@ function renderAuditLog(){
   const rows = auditFilteredRows();
   $('#audit-empty').style.display = rows.length ? 'none' : 'block';
   const pageRows = applyGenericPagination('audit', rows, auditPageState, [
-    $('#audit-search')?.value, selectedFilterValues($('#audit-filter-action')), selectedFilterValues($('#audit-filter-section')),
+    $('#audit-search')?.value, selectedFilterValues($('#audit-filter-action')), selectedFilterValues($('#audit-filter-section')), selectedFilterValues($('#audit-filter-user')),
     $('#audit-date-from')?.value, $('#audit-date-to')?.value
   ]);
   $('#audit-table-body').innerHTML = pageRows.map(a=>`
@@ -1786,7 +1790,7 @@ function renderAuditLog(){
     </tr>`).join('');
 }
 bindGenericPagination('audit', auditPageState, renderAuditLog);
-['#audit-filter-action','#audit-filter-section','#audit-date-from','#audit-date-to'].forEach(sel=>{
+['#audit-filter-action','#audit-filter-section','#audit-filter-user','#audit-date-from','#audit-date-to'].forEach(sel=>{
   $(sel).addEventListener('input', renderAuditLog);
 });
 onSearchInput('#audit-search', renderAuditLog);

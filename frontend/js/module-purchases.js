@@ -589,8 +589,10 @@ $('#btn-export-purchases')?.addEventListener('click', ()=>{
 });
 
 $('#supplier-search')?.addEventListener('input', renderSuppliersTable);
-['#purchase-search','#purchase-supplier-filter','#purchase-status-filter','#purchase-date-from','#purchase-date-to'].forEach(sel=>{
-  $(sel)?.addEventListener('input', renderPurchasesTable);
+$('#purchase-search')?.addEventListener('input', renderPurchasesTable);
+// فلاتر الـ multiselect و حقول التاريخ: 'change' فقط (الـ widget يطلق input+change معاً،
+// فكان الربط بالاثنين معاً يعيد الرندر مرتين لكل نقرة)
+['#purchase-supplier-filter','#purchase-status-filter','#purchase-date-from','#purchase-date-to'].forEach(sel=>{
   $(sel)?.addEventListener('change', renderPurchasesTable);
 });
 

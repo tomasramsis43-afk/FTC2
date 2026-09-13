@@ -191,10 +191,6 @@ $('#cl-date-from').addEventListener('input', _debouncedClDateFilter);
 $('#cl-date-to').addEventListener('input', _debouncedClDateFilter);
 $('#cl-paid-min').addEventListener('input', _debouncedClDateFilter);
 $('#cl-paid-max').addEventListener('input', _debouncedClDateFilter);
-$('#cl-date-from').addEventListener('change', renderTable);
-$('#cl-date-to').addEventListener('change', renderTable);
-$('#cl-paid-min').addEventListener('change', renderTable);
-$('#cl-paid-max').addEventListener('change', renderTable);
 
 /* ---------------- طي/توسيع الفلاتر المتقدمة (جدول العملاء) ----------------
    الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا

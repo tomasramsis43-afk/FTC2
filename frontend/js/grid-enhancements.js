@@ -163,8 +163,15 @@
         const el = $id(f);
         if(!el) return;
         writeFieldFromView(el, view.values[f]);
-        el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles:true}));
-        if(el.tagName === 'SELECT') el.dispatchEvent(new Event('change', {bubbles:true}));
+        // كان الكود يطلق 'change' مرتين على أي <select> (مرتين متتاليتين) فيُعاد الرندر مرتين لكل
+        // عنصر عند تطبيق عرض محفوظ. نطابق الآن سلوك الـ multiselect ذاته: 'input' ثم 'change'
+        // مرة واحدة لكل منهما.
+        if(el.tagName === 'SELECT'){
+          el.dispatchEvent(new Event('input', {bubbles:true}));
+          el.dispatchEvent(new Event('change', {bubbles:true}));
+        } else {
+          el.dispatchEvent(new Event('input', {bubbles:true}));
+        }
       });
       if(typeof showToast === 'function') showToast(`تم تطبيق العرض: ${view.name}`);
     }

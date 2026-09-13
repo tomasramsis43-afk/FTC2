@@ -851,7 +851,10 @@ function clearAllSheetFilters(){
     'cs-filter-num','cs-filter-clientid','cs-filter-from','cs-filter-to',
     'cs-missing-from','cs-missing-to','cs-missing-exp-from','cs-missing-exp-to',
     'bst-date-from','bst-date-to',
-    'ctf-date-from','ctf-date-to',
+    'bst-search',
+    'ctf-date-from','ctf-date-to','ctf-clientid',
+    'cpp-search','cpp-date-from','cpp-date-to',
+    'gl-from','gl-to',
     'rp-from','rp-to',
     'de-filter-search','de-filter-from','de-filter-to',
   ];
@@ -863,15 +866,36 @@ function clearAllSheetFilters(){
     'ci-filter-diff','v-filter-dest','v-filter-type','filter-reception','v-filter-reception',
     'cbp-year-filter','ownbag-year-filter',
     'purchase-supplier-filter','purchase-status-filter',
-    'audit-filter-action','audit-filter-section',
+    'audit-filter-action','audit-filter-section','audit-filter-user',
     'de-filter-type',
+    'ctf-company','ctf-channel',
+    'cpp-company','cpp-channel',
+    'cs-missing-course','gl-account',
   ];
   // إلغاء تحديد كل الخيارات (يعادل "الكل") بدل selectedIndex=0 — بعض الفلاتر (مثل الجنسية)
   // لها خيار خاص إضافي (بدون جنسية) يُضاف ديناميكياً فى أول القائمة، فكان selectedIndex=0
   // يحدّده هو خطأً بدل "الكل" (كان هذا سبب رجوع فلتر الجنسية لـ"بدون جنسية" بعد "إلغاء الفلتر").
   selectIds.forEach(id=>{ const el=document.getElementById(id); if(el){ Array.from(el.options).forEach(o=> o.selected=false); refreshMultiSelectFilterUI(el); } });
 
-  ['v-filter-dup','v-filter-nomethod'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
+  ['v-filter-dup','v-filter-nomethod','v-filter-anomaly'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
+
+  // نافذات امتحانات أركان (بحث/تواريخ/قوائم) — تُمسح ضمن المسح العام
+  ['','-needing','-passed','-failed'].forEach(sfx=>{
+    ['name','id','date-from','date-to'].forEach(k=>{ const el=document.getElementById('arkkan-exams'+sfx+'-filter-'+k); if(el) el.value=''; });
+    ['nat','course','company'].forEach(k=>{ const el=document.getElementById('arkkan-exams'+sfx+'-filter-'+k); if(el) el.value=''; });
+  });
+  // فلتر الجنسيات المتعدد لتبويب "من سجّل ولم يُحدَّد له رقم دورة بعد"
+  if(typeof missingNatSelected!=='undefined') missingNatSelected.clear();
+  if(typeof refreshMissingNatOptions==='function') refreshMissingNatOptions();
+  // حدود الفترة المحاسبية تُعاد لافتراضيها (السنة الحالية / الفترة السنوية)
+  const accYearEl = document.getElementById('acc-year');
+  if(accYearEl && accYearEl.options.length){
+    const thisYear = String(new Date().getFullYear());
+    const opt = Array.from(accYearEl.options).find(o=>o.value===thisYear) || accYearEl.options[0];
+    accYearEl.value = opt.value;
+  }
+  const accPeriodEl = document.getElementById('acc-period');
+  if(accPeriodEl) accPeriodEl.value = 'year';
 
   showSuspendedOnly = false;
   $('#btn-filter-suspended')?.classList.remove('btn-gold');
@@ -901,7 +925,9 @@ function clearAllSheetFilters(){
   if(typeof renderBudget==='function') renderBudget();
   if(typeof renderAccounting==='function') renderAccounting();
   if(typeof renderDoubleEntryModule==='function') renderDoubleEntryModule();
+  if(typeof renderGeneralLedgerDE==='function') renderGeneralLedgerDE();
   if(typeof renderAuditLog==='function') renderAuditLog();
+  if(typeof renderArkkanExamsTable==='function') renderArkkanExamsTable();
   showToast('تم إلغاء كل الفلاتر وخانات البحث');
 }
 $('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);

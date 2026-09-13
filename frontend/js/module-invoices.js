@@ -129,8 +129,7 @@ onSearchInput('#ci-search', renderCourseInvoices);
 bindGenericPagination('ci', ciPageState, renderCourseInvoices);
 // حقول تاريخ الفواتير تعيد بناء الجدول كاملاً — تأخير حتى اكتمال كتابة التاريخ بدل كل حرف
 const _debouncedCiDate = debounce(renderCourseInvoices);
-$('#ci-date-from')?.addEventListener('change', renderCourseInvoices);
-$('#ci-date-to')?.addEventListener('change', renderCourseInvoices);
+// 'input' فقط (مؤجل): 'change' كان يرسم فورياً ثم يعيد رسمه المؤجل — رندر مزدوج لكل اختيار تاريخ
 $('#ci-date-from')?.addEventListener('input', _debouncedCiDate);
 $('#ci-date-to')?.addEventListener('input', _debouncedCiDate);
 $('#ci-filter-diff')?.addEventListener('change', renderCourseInvoices);

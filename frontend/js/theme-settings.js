@@ -164,6 +164,15 @@ const YEAR_FILTER_DATE_PAIRS = [
   ['bst-date-from','bst-date-to'],
   ['rp-from','rp-to'],
   ['audit-date-from','audit-date-to'],
+  ['ci-date-from','ci-date-to'],
+  ['purchase-date-from','purchase-date-to'],
+  ['de-filter-from','de-filter-to'],
+  ['gl-from','gl-to'],
+  ['cpp-date-from','cpp-date-to'],
+  ['arkkan-exams-filter-date-from','arkkan-exams-filter-date-to'],
+  ['arkkan-exams-needing-filter-date-from','arkkan-exams-needing-filter-date-to'],
+  ['arkkan-exams-passed-filter-date-from','arkkan-exams-passed-filter-date-to'],
+  ['arkkan-exams-failed-filter-date-from','arkkan-exams-failed-filter-date-to'],
 ];
 /* هل يوافق هذا التاريخ السنة المختارة حالياً؟ (يُستخدم في الشاشات التي لا يوجد لها فلتر تاريخ خاص بها، مثل لوحة التحكم) */
 function matchYear(dateStr){
@@ -185,6 +194,7 @@ function collectAllYears(){
   const grab = (arr, key)=>{ (arr||[]).forEach(x=>{ const y = String((x&&x[key])||'').slice(0,4); if(/^\d{4}$/.test(y)) years.add(y); }); };
   grab(clients,'date'); grab(vaultTx,'date'); grab(courseSessions,'date'); grab(bagStock,'date');
   if(typeof companyTransfers!=='undefined') grab(companyTransfers,'date');
+  grab(purchases,'date'); grab(journalEntries,'date');
   return Array.from(years).sort((a,b)=>b.localeCompare(a));
 }
 function populateYearFilterSelect(){
@@ -218,9 +228,12 @@ function applyYearFilterToAllViews(){
   safeRender(typeof renderCourseInvoices!=='undefined' && renderCourseInvoices, 'renderCourseInvoices');
   safeRender(typeof renderMissingCourse!=='undefined' && renderMissingCourse, 'renderMissingCourse');
   safeRender(typeof renderCompanies!=='undefined' && renderCompanies, 'renderCompanies');
+  safeRender(typeof renderPurchases!=='undefined' && renderPurchases, 'renderPurchases');
   safeRender(typeof renderReports!=='undefined' && renderReports, 'renderReports');
   safeRender(typeof renderAccounting!=='undefined' && renderAccounting, 'renderAccounting');
+  safeRender(typeof renderGeneralLedgerDE!=='undefined' && renderGeneralLedgerDE, 'renderGeneralLedgerDE');
   safeRender(typeof renderAuditLog!=='undefined' && renderAuditLog, 'renderAuditLog');
+  safeRender(typeof renderArkkanExamsTable!=='undefined' && renderArkkanExamsTable, 'renderArkkanExamsTable');
 }
 let yearFilterListenerBound = false;
 function initYearFilter(){
