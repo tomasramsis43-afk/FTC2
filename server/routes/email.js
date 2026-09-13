@@ -56,6 +56,29 @@ function parseAttachment(body) {
   };
 }
 
+// يحوّل نتيجة sendEmail() الفاشلة إلى رسالة عربية مفهومة تعكس السبب الحقيقي، بدل رسالة
+// "تأكد من إعدادات SMTP" الثابتة القديمة التي كانت تظهر دائماً بغض النظر عن السبب الفعلي —
+// مضلِّلة خصوصاً أن المزوّد الافتراضي في هذا المشروع هو Resend (HTTPS API) وليس SMTP إطلاقاً
+// (راجع تعليق أعلى services/email.js). كل الأسباب الشائعة الموثَّقة فعلياً من لوجات الإنتاج:
+// حصة الإرسال اليومية لخطة Resend المجانية، وقيد "الوضع التجريبي" الذي يمنع الإرسال لأي عنوان
+// غير عنوان صاحب الحساب المُتحقَّق منه إلا بعد توثيق دومين مخصَّص.
+function friendlyEmailError(result) {
+  const raw = String(result.error || '');
+  if (result.reason === 'not_configured') {
+    return 'لم يتم إعداد أي وسيلة لإرسال الإيميلات على السيرفر بعد (لا Resend ولا SMTP) — راجع الإعدادات مع مدير النظام.';
+  }
+  if (result.reason === 'no_from_address') {
+    return 'عنوان "من" (RESEND_FROM/SMTP_FROM) غير مضبوط على السيرفر.';
+  }
+  if (raw.includes('daily_quota_exceeded')) {
+    return 'تم تجاوز الحد اليومي المجاني لإرسال الإيميلات (Resend) — حاول مرة أخرى غداً أو رقّي خطة الحساب.';
+  }
+  if (raw.includes('You can only send testing emails to your own email address')) {
+    return 'حساب الإرسال (Resend) لا يزال في الوضع التجريبي: مسموح الإرسال فقط لعنوان صاحب الحساب حتى تُوثَّق دومين مخصَّص من resend.com/domains.';
+  }
+  return `تعذّر إرسال الإيميل: ${raw || 'خطأ غير معروف من مزوّد الإرسال'}`;
+}
+
 // POST /api/email/invoice — إرسال فاتورة (يدوي من شاشة الفاتورة، أو تلقائي فوراً بعد
 // الحفظ/الدفع). body: { to, clientName, invoiceNo, amount, bodyHtml, attachmentBase64,
 // attachmentName }. الواجهة تبني bodyHtml أو تكتفي بالحقول الأساسية وتترك القالب الافتراضي.
@@ -80,7 +103,7 @@ router.post('/api/email/invoice', requireAuth, emailLimiter, async (req, res) =>
       html,
       attachments: attachment ? [attachment] : undefined,
     });
-    if (!result.ok) return res.status(502).json({ error: 'تعذّر إرسال الإيميل، تأكد من إعدادات SMTP على السيرفر' });
+    if (!result.ok) return res.status(502).json({ error: friendlyEmailError(result) });
     res.json({ ok: true });
   } catch (e) {
     console.error('فشل إرسال إيميل الفاتورة:', e);
@@ -116,7 +139,7 @@ router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => 
       html,
       attachments: attachment ? [attachment] : undefined,
     });
-    if (!result.ok) return res.status(502).json({ error: 'تعذّر إرسال الإيميل، تأكد من إعدادات SMTP على السيرفر' });
+    if (!result.ok) return res.status(502).json({ error: friendlyEmailError(result) });
     res.json({ ok: true });
   } catch (e) {
     console.error('فشل إرسال إيميل التقرير:', e);
