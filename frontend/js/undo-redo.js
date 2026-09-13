@@ -860,6 +860,24 @@ function clearAllSheetFilters(){
   ];
   textLikeIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
 
+  // إعادة مزامنة حقول "من/إلى" المرتبطة بفلتر السنة العلوي (YEAR_FILTER_DATE_PAIRS) بعد مسحها
+  // للتو أعلاه: فلتر السنة نفسه (selectedYearFilter) مقصود إبقاؤه كما هو ولا يُمس هنا (تعليق
+  // أعلى الدالة)، لكن حقول التاريخ اللي بترسم فعلياً بقيت فاضية الآن رغم إن فلتر سنة معيّنة
+  // (غير "كل السنوات") لسه مختار. هذا التعارض كان يُخرج نتائج غير متسقة مع السنة المختارة تحديداً
+  // فى المسار السريع من السيرفر لشيت العملاء (renderTable فى clients-pagination-filters.js)، لأنه
+  // يقرأ حدود التاريخ من هذين الحقلين مباشرة فقط ولا يعرف شيئاً عن selectedYearFilter نفسه — فكان
+  // "مسح كل الفلاتر" يُلغي فعلياً قيد السنة من المسار السريع بينما يبقيه شغالاً على المسار المحلي
+  // (matchYear)، فيختلف الاثنان. نعيد ضبط كل هذه الحقول على حدود نفس السنة المختارة هنا كي يبقى
+  // المساران متطابقين، بدل الاعتماد على أن يعيد المستخدم اختيار السنة يدوياً من القائمة.
+  if(typeof selectedYearFilter!=='undefined' && selectedYearFilter!=='all' && typeof YEAR_FILTER_DATE_PAIRS!=='undefined'){
+    const yfrom = `${selectedYearFilter}-01-01`, yto = `${selectedYearFilter}-12-31`;
+    YEAR_FILTER_DATE_PAIRS.forEach(([f,t])=>{
+      const fe=document.getElementById(f), te=document.getElementById(t);
+      if(fe) fe.value = yfrom;
+      if(te) te.value = yto;
+    });
+  }
+
   const selectIds = [
     'filter-course','filter-nat','filter-status','filter-company','filter-invoice','filter-coursenum','filter-refnum',
     'filter-bag-source',
