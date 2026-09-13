@@ -364,14 +364,19 @@ function arkkanDownloadBase64(base64, mime, fileName) {
 }
 
 /* ═══ سجل التحميلات المخفي (داخل البرنامج) + منع التكرار ═══
-   يُسجَّل كل إيصال نُزّل في مفتاح تخزين خاص بالبرنامج (receiptDownloadsLog) —
-   وهو نفسه نظام حفظ بيانات البرنامج (يُشفر ويُزامن مع السيرفر مثل بقية البيانات).
-   قاعدة المنع: الإيصال المسجَّل في السجل لا يُنزَّل مرة أخرى أبداً وبصمت تام
-   (لا يُسأل المستخدم). يعمل ذلك في المتصفح وتطبيق سطح المكتب معاً، وكامن
-   «داخل البرنامج» لا على الجهاز. التقنية: تحميل السجل قراءةً واحدة وحفظ
-   معدَّل على دفعات. */
+   يُسجَّل في مفتاح تخزين خاص بالبرنامج (receiptDownloadsLog) — نفس نظام حفظ
+   بيانات البرنامج (يُشفر ويُزامن مع السيرفر مثل بقية البيانات).
+   قواعد المنع:
+   - إيصال مسجَّل في السجل لا يُنزَّل مرة أخرى أبداً وبصمت تام (لا يُسأل المستخدم).
+   - عميل مسجَّل علامته «اكتمل تحميل إصالاته» (مفتاح _c:<id>) يُتخطَّى كلياً قبل الجلب
+     من الوكيل — ينتقل للعميل التالي فوراً.
+   حرج: كل التعديلات تُحفَظ عبر طابور وعود مسلسل (بدون ذلك تتصادم الطلبات السريعة
+   المتتالية بنظرة الأسبق-DOM 409 فيفقد السجل تسجيلاته وتُعاد التنزيلات). */
 const ARKKAN_RECEIPTS_LOG_KEY = 'receiptDownloadsLog';
+const ARKKAN_RECEIPTS_CLIENT_PREFIX = '_c:';
 let _receiptsLog = null;
+let _receiptsLogQueue = Promise.resolve();
+let _receiptsLogTimer = null;
 
 async function arkkanReceiptsLogLoad() {
   if (_receiptsLog) return _receiptsLog;
@@ -383,38 +388,76 @@ async function arkkanReceiptsLogLoad() {
   } catch (e) { _receiptsLog = {}; }
   return _receiptsLog;
 }
-function arkkanReceiptsLogHas(fileName) {
-  return !!(fileName && _receiptsLog && _receiptsLog[fileName]);
+
+/* موجود مسبقاً بأي شكل (إيصال فردي أو علامة عميل كاملة) */
+function arkkanReceiptsLogHas(name) {
+  return !!(name && _receiptsLog && _receiptsLog[String(name)]);
 }
-function arkkanReceiptsLogMark(fileName) {
-  if (!fileName) return;
+function arkkanReceiptsLogMark(name) {
+  if (!name) return;
   if (!_receiptsLog) _receiptsLog = {};
-  _receiptsLog[fileName] = { t: Date.now() };
-  arkkanReceiptsLogPersist();
+  _receiptsLog[String(name)] = { t: Date.now() };
+  arkkanReceiptsLogScheduleSave();
 }
+
+/* ── مستوى العميل: «اكتمل تحميل إصالاته» — يُتخطى قبل الجلب من الوكيل ── */
+function arkkanReceiptsClientKey(clientId) { return ARKKAN_RECEIPTS_CLIENT_PREFIX + clientId; }
+function arkkanReceiptsClientDone(clientId) {
+  return !!(clientId && _receiptsLog && _receiptsLog[arkkanReceiptsClientKey(clientId)]);
+}
+function arkkanReceiptsMarkClientDone(clientId) {
+  if (!clientId) return;
+  if (!_receiptsLog) _receiptsLog = {};
+  _receiptsLog[arkkanReceiptsClientKey(clientId)] = { t: Date.now() };
+  arkkanReceiptsLogScheduleSave();
+}
+
+/* ── الحفظ: debounce (تجميع التسجيلات في عملية واحدة) + طابور مسلسل ── */
+function arkkanReceiptsLogScheduleSave() {
+  if (_receiptsLogTimer) clearTimeout(_receiptsLogTimer);
+  _receiptsLogTimer = setTimeout(() => {
+    _receiptsLogTimer = null;
+    _arkkanReceiptsLogFlush();
+  }, 400);
+}
+/* يرجع promise الطابور نفسه لاحظ أن المُستدعيين ينتظرون الاكتمال الفعلي */
+function _arkkanReceiptsLogFlush() {
+  if (!_receiptsLog) return _receiptsLogQueue;
+  // حد أقصى: نحتفظ بأحدث 5000 إيصال فقط (باستثناء علامات العملاء المحمية دائماً)
+  const keys = Object.keys(_receiptsLog);
+  const clientKeys = new Set(keys.filter(k => k.startsWith(ARKKAN_RECEIPTS_CLIENT_PREFIX)));
+  if (keys.length > 5000 + clientKeys.size) {
+    const slim = {};
+    keys.filter(k => !clientKeys.has(k))
+      .sort((a, b) => (_receiptsLog[b].t || 0) - (_receiptsLog[a].t || 0))
+      .slice(0, 5000)
+      .forEach(k => { slim[k] = _receiptsLog[k]; });
+    clientKeys.forEach(k => { slim[k] = _receiptsLog[k]; });
+    _receiptsLog = slim;
+  }
+  const payload = JSON.stringify(_receiptsLog);
+  _receiptsLogQueue = _receiptsLogQueue.then(() => {
+    return window.storage.set(ARKKAN_RECEIPTS_LOG_KEY, payload, false);
+  }).catch(() => {});
+  return _receiptsLogQueue;
+}
+async function arkkanReceiptsLogFlushNow() {
+  if (_receiptsLogTimer) { clearTimeout(_receiptsLogTimer); _receiptsLogTimer = null; }
+  await _arkkanReceiptsLogFlush();
+}
+
 function arkkanReceiptsLogCount() {
-  return _receiptsLog ? Object.keys(_receiptsLog).length : 0;
+  if (!_receiptsLog) return 0;
+  return Object.keys(_receiptsLog).filter(k => !k.startsWith(ARKKAN_RECEIPTS_CLIENT_PREFIX)).length;
 }
 function arkkanReceiptsLogClear() {
   _receiptsLog = {};
-  arkkanReceiptsLogPersist();
-}
-function arkkanReceiptsLogPersist() {
-  if (!_receiptsLog) _receiptsLog = {};
-  const keys = Object.keys(_receiptsLog);
-  // حد أعلى للحجم: نحتفظ بأحدث 5000 إيصال فقط حتى لا يتضخم التخزين
-  if (keys.length > 5000) {
-    const slim = {};
-    keys.sort((a, b) => (_receiptsLog[b].t || 0) - (_receiptsLog[a].t || 0)).slice(0, 5000)
-      .forEach(k => { slim[k] = _receiptsLog[k]; });
-    _receiptsLog = slim;
-  }
-  try { window.storage.set(ARKKAN_RECEIPTS_LOG_KEY, JSON.stringify(_receiptsLog), false).catch(() => {}); } catch (e) {}
+  _arkkanReceiptsLogFlush(); // كتابة فورية (غير مؤجلة) لتفريغ السجل من السيرفر فوراً
 }
 
 /* تنزيل قائمة إيصالات مع منع التكرار الصامت — القيمة المُرجع منها:
-   { downloaded, existing } (existing = المسجَّل مسبقاً في السجل والمُتخطَّى تلقائياً) */
-async function arkkanDownloadReceiptsDedup(list) {
+   { downloaded, existing } (existing = المسجَّل مسبقاً والمُتخطَّى تلقائياً) */
+async function arkkanDownloadReceiptsDedup(list, clientId) {
   await arkkanReceiptsLogLoad();
   let downloaded = 0, existing = 0;
   for (const rc of list || []) {
@@ -428,6 +471,7 @@ async function arkkanDownloadReceiptsDedup(list) {
       downloaded++;
     }
   }
+  if (downloaded || existing) arkkanReceiptsMarkClientDone(clientId);
   return { downloaded, existing };
 }
 
@@ -437,6 +481,15 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
   if (!c) return;
   if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
   if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
+
+  // هذا العميل تم تحميل إصالاته مسبقاً وفق سجل البرنامج → تخطٍّ صامت بدون جلب
+  await arkkanReceiptsLogLoad();
+  if (arkkanReceiptsClientDone(clientId)) {
+    showToast(`تم تحميل إصالات هذا العميل (${clientId}) مسبقاً — امسح السجل من الإعدادات لإعادة تنزيلها`, 'info');
+    const st = $(`#arkkan-status-${cssEscapeId(clientId)}`);
+    if (st) st.innerHTML = '<span style="color:var(--text-muted);">📁 محمَّلة مسبقاً</span>';
+    return;
+  }
 
   const statusEl = $(`#arkkan-status-${cssEscapeId(clientId)}`);
   const oldLabel = btn.innerHTML;
@@ -452,7 +505,7 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
       showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info');
       return;
     }
-    const r = await arkkanDownloadReceiptsDedup(list);
+    const r = await arkkanDownloadReceiptsDedup(list, clientId);
     if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}</span>`;
     showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId} (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
   } catch (err) {
@@ -471,6 +524,13 @@ async function arkkanReceiptsCardButton(id, btn) {
   if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
   if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
 
+  // هذا العميل تم تحميل إصالاته مسبقاً وفق سجل البرنامج → تخطٍّ صامت بدون جلب
+  await arkkanReceiptsLogLoad();
+  if (arkkanReceiptsClientDone(c.clientId)) {
+    showToast('تم تحميل إصالات هذا العميل مسبقاً — امسح السجل من الإعدادات لإعادة تنزيلها', 'info');
+    return;
+  }
+
   btn.disabled = true;
   const oldLabel = btn.innerHTML;
   btn.textContent = '⏳ جاري التحميل...';
@@ -479,7 +539,7 @@ async function arkkanReceiptsCardButton(id, btn) {
     const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
     const list = Array.isArray(data.receipts) ? data.receipts : [];
     if (!list.length) { showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info'); return; }
-    const r = await arkkanDownloadReceiptsDedup(list);
+    const r = await arkkanDownloadReceiptsDedup(list, c.clientId);
     showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
   } catch (err) {
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
@@ -2079,6 +2139,14 @@ async function arkkanBulkReceiptsSelected() {
     const c = clients.find(x => x.id === id);
     if (!c) continue;
     if (!c.clientId) { failCount++; failMsgs.push(`${c.name}: لا يوجد رقم هوية`); done++; continue; }
+
+    // العميل الذي اكتمل تحميل إصالاته مسبقاً (سجل البرنامج) → تخطٍّ صامت، ينتقل فوراً للتالي
+    if (arkkanReceiptsClientDone(c.clientId)) {
+      existingCount++;
+      done++;
+      continue;
+    }
+
     try {
       const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
       const list = Array.isArray(data.receipts) ? data.receipts : [];
@@ -2095,9 +2163,14 @@ async function arkkanBulkReceiptsSelected() {
           n++;
         }
       }
-      if (n) okCount++;
-      else if (cExists) existingCount++;
-      else noCount++;
+      if (n || cExists) {
+        arkkanReceiptsMarkClientDone(c.clientId);
+        okCount++;
+        // رسالة نجاح لكل عميل تم تنزيل إيصالاته
+        showToast(`✅ تم تنزيل إيصالات ${c.name} (${n} إيصال)`, 'success');
+      } else {
+        noCount++;
+      }
     } catch (err) {
       failCount++;
       failMsgs.push(`${c.name}: ${String(err.message).slice(0, 80)}`);
@@ -2105,6 +2178,9 @@ async function arkkanBulkReceiptsSelected() {
     done++;
     if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
   }
+
+  // حفظ فوري للسجل بعد نهاية القائمة حتى يلتقطه الجهاز الآخر/الفتحة القادمة
+  await arkkanReceiptsLogFlushNow();
 
   if (statusEl) statusEl.style.display = 'none';
   if (btn) btn.style.display = '';
