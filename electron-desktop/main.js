@@ -103,9 +103,6 @@ function writeReceiptsFolder(folder) {
 
 // بادئة إيصالات أركان القديمة (التوافق) — تُستخدم في فحص التنزيلات ومسار الحفظ
 const ARKAN_RECEIPT_PREFIX = 'إيصال_';
-// أسماء إيصالات مرخَّص استبدالها «مرة واحدة» بعد موافقة المستخدم الصريحة على إعادة
-// التنزيل (يُضاف إليها من الواجهة قبل إعادة التنزيل، ويُستهلك كل اسم فور استخدامه)
-let _receiptOverwriteAllowlist = new Set();
 
 // يحدد المجلد الهدف لإيصال بحسب الاسم (يجب أن يطابق تماماً منطق will-download):
 // مجلد مخصص ← تقسيم إلى «الدورات»/«الحقائب»، وبدون مجلد مخصص ← مجلد التنزيلات مباشرة
@@ -840,11 +837,8 @@ function createWindow() {
     let dir = arkkanTargetDirFor(name);
     try { fs.mkdirSync(dir, { recursive: true }); }
     catch (e) { console.warn('[Arkkan Receipts] تعذّر إنشاء مجلد الحفظ، يُستخدم مجلد التنزيلات:', e); dir = app.getPath('downloads'); }
-    // إن كان اسم الإيصالمرخَّص استبداله (بموافقة المستخدم المسبقة) تُكتب فوقه نسخة
-    // جديدة بدون مكافئ «(1)» — وإلا يُختار اسم غير مكرر فلا تُحذف ملفات قديمة أبداً
-    const overwrite = _receiptOverwriteAllowlist.has(name);
-    if (overwrite) _receiptOverwriteAllowlist.delete(name);
-    const savePath = overwrite ? path.join(dir, name) : arkkanUniqueDownloadPath(dir, name);
+    // إيصال مسجل سابقاً أو موجود على القرص لا يُعاد تحميله (منع التكرار)
+    const savePath = arkkanUniqueDownloadPath(dir, name);
     item.setSavePath(savePath);
     item.on('done', (e, state) => {
       if (state === 'completed') {
@@ -908,27 +902,6 @@ if (!gotTheLock) {
     });
     ipcMain.handle('get-receipts-folder', () => ({ ok: true, folder: readReceiptsFolder() }));
     ipcMain.handle('clear-receipts-folder', () => ({ ok: writeReceiptsFolder(''), folder: '' }));
-
-    // ── منع تكرار تنزيل الإيصالات: يفحص أي الأسماء محفوظة مسبقاً في مجلدها الهدف ──
-    ipcMain.handle('check-receipts-exist', (_e, fileNames) => {
-      const existing = [];
-      const names = Array.isArray(fileNames) ? fileNames.map(n => String(n)) : [];
-      for (const name of names) {
-        if (!(name.startsWith(ARKAN_RECEIPT_PREFIX) || /^(دورة|حقيبة)_\d/.test(name))) continue;
-        try { if (fs.existsSync(path.join(arkkanTargetDirFor(name), name))) existing.push(name); } catch {}
-      }
-      return { ok: true, existing };
-    });
-    // ── ترخيص استبدال أسماء معينة (مرة واحدة) بعد موافقة المستخدم على إعادة التنزيل ──
-    ipcMain.handle('allow-receipts-overwrite', (_e, fileNames) => {
-      const names = Array.isArray(fileNames) ? fileNames.map(n => String(n)) : [];
-      for (const name of names) if (name) _receiptOverwriteAllowlist.add(name);
-      // حماية سقف الذاكرة: لا نحتفظ بأكثر من 1000 اسم مؤجل
-      while (_receiptOverwriteAllowlist.size > 1000) {
-        _receiptOverwriteAllowlist.delete(_receiptOverwriteAllowlist.values().next().value);
-      }
-      return { ok: true };
-    });
 
     createWindow();
 

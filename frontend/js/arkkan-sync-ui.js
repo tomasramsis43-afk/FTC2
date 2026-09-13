@@ -363,59 +363,72 @@ function arkkanDownloadBase64(base64, mime, fileName) {
   return true;
 }
 
-/* ═══ منع تكرار تنزيل إيصالات أركان (سطح المكتب فقط) ═══
-   - في المتصفح العادي (بدون desktopAPI) تعمل التنزيلات مباشرة كالمعتاد.
-   - في تطبيق سطح المكتب: يُفحص في Electron إن كان الإيصال محفوظاً مسبقاً في مجلده
-     الهدف (نفس مجلد will-download)، فيُستثنى ولا يُعاد. وبعد انتهاء القائمة تُعرض
-     رسالة واحدة مجمّعة بالأسماء الموجودة مع خيار الموافقة على إعادة تنزيلها
-     (استبدال الملفات القديمة) أو الرفض (تخطّيها). */
+/* ═══ سجل التحميلات المخفي (داخل البرنامج) + منع التكرار ═══
+   يُسجَّل كل إيصال نُزّل في مفتاح تخزين خاص بالبرنامج (receiptDownloadsLog) —
+   وهو نفسه نظام حفظ بيانات البرنامج (يُشفر ويُزامن مع السيرفر مثل بقية البيانات).
+   قاعدة المنع: الإيصال المسجَّل في السجل لا يُنزَّل مرة أخرى أبداً وبصمت تام
+   (لا يُسأل المستخدم). يعمل ذلك في المتصفح وتطبيق سطح المكتب معاً، وكامن
+   «داخل البرنامج» لا على الجهاز. التقنية: تحميل السجل قراءةً واحدة وحفظ
+   معدَّل على دفعات. */
+const ARKKAN_RECEIPTS_LOG_KEY = 'receiptDownloadsLog';
+let _receiptsLog = null;
 
-/* يرجع true إن كان الملف موجوداً مسبقاً في مجلده الهدف (ولم يتمكن من الفحص يرجع false) */
-async function arkkanReceiptFileExists(fileName) {
-  const api = window.desktopAPI;
-  if (!api || typeof api.checkReceiptsExist !== 'function' || !fileName) return false;
+async function arkkanReceiptsLogLoad() {
+  if (_receiptsLog) return _receiptsLog;
   try {
-    const res = await api.checkReceiptsExist([fileName]);
-    return !!(res && Array.isArray(res.existing) && res.existing.includes(fileName));
-  } catch (e) { return false; }
+    const r = await window.storage.get(ARKKAN_RECEIPTS_LOG_KEY, false, false);
+    const raw = r && r.value ? r.value : '{}';
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    _receiptsLog = obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : {};
+  } catch (e) { _receiptsLog = {}; }
+  return _receiptsLog;
+}
+function arkkanReceiptsLogHas(fileName) {
+  return !!(fileName && _receiptsLog && _receiptsLog[fileName]);
+}
+function arkkanReceiptsLogMark(fileName) {
+  if (!fileName) return;
+  if (!_receiptsLog) _receiptsLog = {};
+  _receiptsLog[fileName] = { t: Date.now() };
+  arkkanReceiptsLogPersist();
+}
+function arkkanReceiptsLogCount() {
+  return _receiptsLog ? Object.keys(_receiptsLog).length : 0;
+}
+function arkkanReceiptsLogClear() {
+  _receiptsLog = {};
+  arkkanReceiptsLogPersist();
+}
+function arkkanReceiptsLogPersist() {
+  if (!_receiptsLog) _receiptsLog = {};
+  const keys = Object.keys(_receiptsLog);
+  // حد أعلى للحجم: نحتفظ بأحدث 5000 إيصال فقط حتى لا يتضخم التخزين
+  if (keys.length > 5000) {
+    const slim = {};
+    keys.sort((a, b) => (_receiptsLog[b].t || 0) - (_receiptsLog[a].t || 0)).slice(0, 5000)
+      .forEach(k => { slim[k] = _receiptsLog[k]; });
+    _receiptsLog = slim;
+  }
+  try { window.storage.set(ARKKAN_RECEIPTS_LOG_KEY, JSON.stringify(_receiptsLog), false).catch(() => {}); } catch (e) {}
 }
 
-/* تنزيل قائمة إيصالات مع منع التكرار — تعرض رسالة مجمّعة بالموافقة أو الرفض.
-   القيم المُرجع منها: { downloaded, existing, reDownloaded } */
+/* تنزيل قائمة إيصالات مع منع التكرار الصامت — القيمة المُرجع منها:
+   { downloaded, existing } (existing = المسجَّل مسبقاً في السجل والمُتخطَّى تلقائياً) */
 async function arkkanDownloadReceiptsDedup(list) {
-  const api = window.desktopAPI;
-  const desktop = !!(api && typeof api.checkReceiptsExist === 'function' && typeof api.allowReceiptsOverwrite === 'function');
-  let downloaded = 0;
-  const dupes = [];
+  await arkkanReceiptsLogLoad();
+  let downloaded = 0, existing = 0;
   for (const rc of list || []) {
     if (!rc || !rc.base64) continue;
-    const fileName = rc.fileName;
-    if (!fileName) {
-      if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) downloaded++;
+    if (arkkanReceiptsLogHas(rc.fileName)) {
+      existing++;
       continue;
     }
-    if (desktop && await arkkanReceiptFileExists(fileName)) {
-      dupes.push(rc);
-      continue;
-    }
-    if (arkkanDownloadBase64(rc.base64, rc.mime, fileName)) downloaded++;
-  }
-  let reDownloaded = 0;
-  if (dupes.length) {
-    const names = dupes.map(r => r.fileName);
-    const shown = names.slice(0, 10).map(n => '• ' + n).join('\n');
-    const extra = names.length > 10 ? `\n… و ${names.length - 10} آخرون` : '';
-    const ok = await customConfirm(
-      `الإيصالات التالية محفوظة مسبقاً في مجلداتها (${names.length}):\n\n${shown}${extra}\n\nهل تريد إعادة تنزيلها (استبدال الملفات القديمة)؟`
-    );
-    if (ok) {
-      try { if (api && typeof api.allowReceiptsOverwrite === 'function') await api.allowReceiptsOverwrite(names); } catch {}
-      for (const rc of dupes) {
-        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) { downloaded++; reDownloaded++; }
-      }
+    if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) {
+      arkkanReceiptsLogMark(rc.fileName);
+      downloaded++;
     }
   }
-  return { downloaded, existing: dupes.length, reDownloaded };
+  return { downloaded, existing };
 }
 
 /* معالج زر «📥 إيصال» بجانب صف واحد: جلب إيصالات هذا العميل وتنزيلها */
@@ -441,7 +454,7 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
     }
     const r = await arkkanDownloadReceiptsDedup(list);
     if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}</span>`;
-    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId} (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً${r.reDownloaded ? ' (أعيد تنزيلها)' : ' (تخطّاها)'}` : ''}`, 'success');
+    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId} (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
   } catch (err) {
     if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
@@ -467,7 +480,7 @@ async function arkkanReceiptsCardButton(id, btn) {
     const list = Array.isArray(data.receipts) ? data.receipts : [];
     if (!list.length) { showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info'); return; }
     const r = await arkkanDownloadReceiptsDedup(list);
-    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً${r.reDownloaded ? ' (أعيد تنزيلها)' : ' (تخطّاها)'}` : ''}`, 'success');
+    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
   } catch (err) {
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
   } finally {
@@ -2059,9 +2072,7 @@ async function arkkanBulkReceiptsSelected() {
 
   let okCount = 0, failCount = 0, noCount = 0, existingCount = 0, done = 0;
   const failMsgs = [];
-  const dupes = [];
-  const api = window.desktopAPI;
-  const desktop = !!(api && typeof api.checkReceiptsExist === 'function' && typeof api.allowReceiptsOverwrite === 'function');
+  await arkkanReceiptsLogLoad();
 
   for (const id of ids) {
     if (!_bulkReceiptsRunning || _bulkReceiptsStop) break;
@@ -2072,14 +2083,17 @@ async function arkkanBulkReceiptsSelected() {
       const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
       const list = Array.isArray(data.receipts) ? data.receipts : [];
       let n = 0, cExists = 0;
+      // منع التكرار الصامت: الإيصال المسجَّل في سجل البرنامج يُتخطى ولا يُنزَّل
       for (const rc of list) {
         if (!rc || !rc.base64) continue;
-        if (desktop && rc.fileName && (await arkkanReceiptFileExists(rc.fileName))) {
-          dupes.push(rc);
+        if (arkkanReceiptsLogHas(rc.fileName)) {
           cExists++;
           continue;
         }
-        if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+        if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) {
+          arkkanReceiptsLogMark(rc.fileName);
+          n++;
+        }
       }
       if (n) okCount++;
       else if (cExists) existingCount++;
@@ -2090,23 +2104,6 @@ async function arkkanBulkReceiptsSelected() {
     }
     done++;
     if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
-  }
-
-  let reDownloaded = 0;
-  // رسالة مجمَّعة واحدة بقائمة كل الإيصالات المحفوظة مسبقاً — موافقة (استبدال) أو رفض (تخطي)
-  if (dupes.length) {
-    const names = dupes.map(r => r.fileName);
-    const shown = names.slice(0, 10).map(n => '• ' + n).join('\n');
-    const extra = names.length > 10 ? `\n… و ${names.length - 10} آخرون` : '';
-    const ok = await customConfirm(
-      `الإيصالات التالية محفوظة مسبقاً في مجلداتها (${names.length}):\n\n${shown}${extra}\n\nهل تريد إعادة تنزيلها جميعاً (استبدال الملفات القديمة)؟`
-    );
-    if (ok) {
-      try { if (api && typeof api.allowReceiptsOverwrite === 'function') await api.allowReceiptsOverwrite(names); } catch {}
-      for (const rc of dupes) {
-        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) { okCount++; reDownloaded++; }
-      }
-    }
   }
 
   if (statusEl) statusEl.style.display = 'none';
@@ -2122,8 +2119,45 @@ async function arkkanBulkReceiptsSelected() {
     setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
   }
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
-  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} محفوظ مسبقاً${reDownloaded ? ` · 🔁 أُعيد ${reDownloaded}` : ''} · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
+  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} مسجّل مسبقاً (تخطّي) · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
+
+/* ─────────── سجل تحميل الإيصالات المخفي — داخل بيانات البرنامج (كل البيئات) ───────────
+   لا يعتمد على سطح المكتب: يُظهر عدد المسجَّلات وزر المسح أينما كان البرنامج مفتوحاً. */
+function initArkkanReceiptsLogUI() {
+  function init() {
+    const panel = document.getElementById('panel-arkkan-receipts-log');
+    const btnClear = document.getElementById('btn-clear-receipts-log');
+    const status = document.getElementById('receipts-log-status');
+    if (!panel || !btnClear || !status) return;
+    if (!window.storage || typeof window.storage.get !== 'function') return;
+
+    panel.style.display = '';
+
+    async function refresh() {
+      try {
+        await arkkanReceiptsLogLoad();
+        const n = arkkanReceiptsLogCount();
+        status.textContent = n ? `الإيصالات المسجَّلة: ${n}` : 'لا توجد إيصالات مسجَّلة بعد';
+      } catch (e) { status.textContent = ''; }
+    }
+
+    btnClear.addEventListener('click', async () => {
+      const n = arkkanReceiptsLogCount();
+      if (!n) { showToast('سجل التحميلات فارغ أصلاً', 'info'); return; }
+      const ok = await customConfirm(`سيتم مسح سجل التحميلات المخفي بالكامل (${n} إيصال مسجَّل).\n\nلن يُمسح أي ملف من مجلداتك، لكن الإيصالات ستُعاد قابلية تنزيلها من جديد في المرات القادمة. متابعة؟`);
+      if (!ok) return;
+      arkkanReceiptsLogClear();
+      showToast('تم مسح سجل التحميلات — هذه الإيصالات يمكن تنزيلها مجدداً', 'success');
+      refresh();
+    });
+
+    refresh();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+}
+initArkkanReceiptsLogUI();
 
 /* ─────────── لوحة «مجلد حفظ إيصالات أركان» في شاشة الإعدادات (سطح المكتب فقط) ───────────
    تعتمد على desktopAPI الذي يحقنه electron-desktop/preload.js عبر contextBridge.

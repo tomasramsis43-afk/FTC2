@@ -10,8 +10,4 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getReceiptsFolder: () => ipcRenderer.invoke('get-receipts-folder'),
   // يلغي المجلد المختار ويعود لمجلد التنزيلات الافتراضي
   clearReceiptsFolder: () => ipcRenderer.invoke('clear-receipts-folder'),
-  // يفحص أي الأسماء محفوظة مسبقاً في مجلدها الهدف — يعيد { existing: [أسماء] }
-  checkReceiptsExist: (fileNames) => ipcRenderer.invoke('check-receipts-exist', fileNames),
-  // يسمح باستبدال (الكتابة فوق) هذه الأسماء عند التنزيل التالي لها — تُستهلك مرة واحدة
-  allowReceiptsOverwrite: (fileNames) => ipcRenderer.invoke('allow-receipts-overwrite', fileNames),
 });
