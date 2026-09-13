@@ -328,12 +328,12 @@ async function arkkanSyncOne(clientId, btn) {
       زر جماعي في شريط أدوات الصندوق الأول: ينزّل إيصالات كل العملاء. ──
    ══════════════════════════════════════════════ */
 
-async function arkkanReceiptsFetchOne(clientId, referNum = '') {
+async function arkkanReceiptsFetchOne(clientId, referNum = '', forceRefresh = false) {
   await arkkanEnsureAgentReady();
   const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/receipts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, referNum }),
+    body: JSON.stringify({ clientId, referNum, forceRefresh: !!forceRefresh }),
     signal: AbortSignal.timeout(165000)
   });
   if (!r.ok) {
@@ -476,7 +476,7 @@ async function arkkanDownloadReceiptsDedup(list, clientId) {
 }
 
 /* معالج زر «📥 إيصال» بجانب صف واحد: جلب إيصالات هذا العميل وتنزيلها */
-async function arkkanSyncReceiptsOne(clientId, btn) {
+async function arkkanSyncReceiptsOne(clientId, btn, forceRefresh = false) {
   const c = clients.find(x => x.clientId === clientId);
   if (!c) return;
   if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
@@ -498,7 +498,8 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري تحميل الإيصالات...</span>';
 
   try {
-    const data = await arkkanReceiptsFetchOne(clientId, c.referNum || '');
+    const data = await arkkanReceiptsFetchOne(clientId, c.referNum || '', forceRefresh);
+    if (data.servedFromCache && statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">📁 جاري التحميل من الكاش...</span>';
     const list = Array.isArray(data.receipts) ? data.receipts : [];
     if (!list.length) {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا إيصالات</span>';
@@ -506,8 +507,9 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
       return;
     }
     const r = await arkkanDownloadReceiptsDedup(list, clientId);
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}</span>`;
-    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId} (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
+    const fromCache = data.servedFromCache ? ' 📁' : '';
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}${fromCache}</span>`;
+    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId}${fromCache ? ' — من الكاش المحلي فوراً' : ''}${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
   } catch (err) {
     if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
@@ -604,7 +606,8 @@ function renderArkkanSyncTable() {
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد من الجلب (ألغِ تفشيكه من عمود «إيقاف»)' : 'جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>جلب</button></td>
-      <td style="text-align:center;"><button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt="${escapeHtml(c.clientId)}" style="padding:2px 10px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>📥 إيصال</button></td>
+      <td style="text-align:center;"><button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt="${escapeHtml(c.clientId)}" style="padding:2px 10px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز (من الكاش المحلي فوراً إن كان محمَّلاً مسبقاً)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>📥 إيصال</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt-fresh="${escapeHtml(c.clientId)}" style="padding:2px 8px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'فتح موقع أركان وإعادة تحديث إيصالات هذا العميل من مصدرها (يتجاوز الكاش المحلي)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>🔄</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}">${arkkanIsSkipped(c) ? '<span style="color:var(--text-muted);">⛔ مستبعد</span>' : '<span style="color:var(--text-muted);">في الانتظار</span>'}</td>
     </tr>`).join('');
 }
@@ -1666,7 +1669,8 @@ document.addEventListener('click', e => {
 
 document.addEventListener('click', e => {
   if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
-  if (e.target.closest('[data-arkkan-receipt]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt]').dataset.arkkanReceipt, e.target.closest('[data-arkkan-receipt]')); return; }
+  if (e.target.closest('[data-arkkan-receipt]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt]').dataset.arkkanReceipt, e.target.closest('[data-arkkan-receipt]'), false); return; }
+  if (e.target.closest('[data-arkkan-receipt-fresh]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt-fresh]').dataset.arkkanReceiptFresh, e.target.closest('[data-arkkan-receipt-fresh]'), true); return; }
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
@@ -2130,9 +2134,10 @@ async function arkkanBulkReceiptsSelected() {
   if (stopBtn) stopBtn.style.display = '';
   if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري تحميل الإيصالات...'; }
 
-  let okCount = 0, failCount = 0, noCount = 0, existingCount = 0, done = 0;
+  let okCount = 0, failCount = 0, noCount = 0, existingCount = 0, done = 0, cacheCount = 0;
   const failMsgs = [];
   await arkkanReceiptsLogLoad();
+  const forceRefresh = !!(document.getElementById('chk-arkkan-cache-refresh') || {}).checked;
 
   for (const id of ids) {
     if (!_bulkReceiptsRunning || _bulkReceiptsStop) break;
@@ -2148,7 +2153,8 @@ async function arkkanBulkReceiptsSelected() {
     }
 
     try {
-      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
+      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '', forceRefresh);
+      if (data.servedFromCache) cacheCount++;
       const list = Array.isArray(data.receipts) ? data.receipts : [];
       let n = 0, cExists = 0;
       // منع التكرار الصامت: الإيصال المسجَّل في سجل البرنامج يُتخطى ولا يُنزَّل
@@ -2167,7 +2173,7 @@ async function arkkanBulkReceiptsSelected() {
         arkkanReceiptsMarkClientDone(c.clientId);
         okCount++;
         // رسالة نجاح لكل عميل تم تنزيل إيصالاته
-        showToast(`✅ تم تنزيل إيصالات ${c.name} (${n} إيصال)`, 'success');
+        showToast(`✅ تم تنزيل إيصالات ${c.name} (${n} إيصال)${data.servedFromCache ? ' 📁 من الكاش' : ''}`, 'success');
       } else {
         noCount++;
       }
@@ -2195,7 +2201,7 @@ async function arkkanBulkReceiptsSelected() {
     setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
   }
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
-  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} مسجّل مسبقاً (تخطّي) · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
+  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح${cacheCount ? ` (منها ${cacheCount} من الكاش 📁)` : ''} · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} مسجّل مسبقاً (تخطّي) · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
 
 /* ─────────── سجل تحميل الإيصالات المخفي — داخل بيانات البرنامج (كل البيئات) ───────────
@@ -2227,6 +2233,23 @@ function initArkkanReceiptsLogUI() {
       showToast('تم مسح سجل التحميلات — هذه الإيصالات يمكن تنزيلها مجدداً', 'success');
       refresh();
     });
+
+    // مسح الكاش المحلي للإيصالات — يعمل فقط عندما يكون الوكيل المحلي على هذا الجهاز (سطح المكتب)
+    const btnCache = document.getElementById('btn-clear-receipts-cache');
+    if (btnCache && ARKKAN_IS_DESKTOP) {
+      btnCache.style.display = '';
+      btnCache.addEventListener('click', async () => {
+        const ok = await customConfirm('سيتم مسح الكاش المحلي للإيصالات بالكامل.\n\nلا يُمسح أي ملف أو سجل بأي مكان، لكن بعد ذلك سيُفتح موقع أركان من جديد عند طلب أي عميل (ولن يُقرأ من الكاش). متابعة؟');
+        if (!ok) return;
+        try {
+          const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/receipts/cache/clear', { method: 'POST' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          showToast('تم مسح كاش الإيصالات المحلي 🧹', 'success');
+        } catch (err) {
+          showToast('تعذّر مسح الكاش: ' + String(err.message).slice(0, 80), 'error');
+        }
+      });
+    }
 
     refresh();
   }

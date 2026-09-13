@@ -131,6 +131,16 @@ module.exports = {
     CAPTCHA_SIGNALS: ['captcha', 'unusual security challenge', 'access denied', 'block'],
   },
 
+  /* ── كاش إيصالات أركان (داخل جهاز المستخدم) ──
+     ARKKAN_CACHE_DIR: مسار مجلد الكاش (يُبت من arkkan-agent.js بشكل مطلق).
+     ARKKAN_CACHE_TTL_MS: مدة الصلاحية بالمللي ثانية (0 = لا انتهاء).
+     الكاش يحتفظ لكل عميل بآخر نتيجة جلب [base64] كملف JSON حتى لا يُعاد
+     تسلّق موقع أركان — تُعاد القراءة فوراً عند التكرار. */
+  CACHE: {
+    DIR:          process.env.ARKKAN_CACHE_DIR || '',
+    TTL_MS:       parseInt(process.env.ARKKAN_CACHE_TTL_MS || '0', 10),
+  },
+
   /* ── CORS (للوكيل المحلي) ── */
   CORS_ORIGIN: process.env.ARKKAN_CORS_ORIGIN || 'http://127.0.0.1:17532',
 };

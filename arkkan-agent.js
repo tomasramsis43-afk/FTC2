@@ -68,6 +68,46 @@ let playwright = null;
 try { playwright = require('playwright'); } catch { playwright = null; }
 
 /* ══════════════════════════════════════════════
+   Receipts Disk Cache — كاش الإيصالات على القرص
+   ── يخزّن لكل عميل آخر نتيجة جلب كملف JSON في مجلد ثابت
+      (%USERPROFILE%/.arkkan-receipts-cache/) حتى لا يُعاد تسلّق
+      موقع أركان عند كل طلب مكرر. يقرأ فوراً (< ثانية). ──
+   ══════════════════════════════════════════════ */
+const _receiptsCacheDir = cfg.CACHE.DIR
+  || path.join(os.homedir(), '.arkkan-receipts-cache');
+function ensureReceiptsCacheDir() {
+  try { fs.mkdirSync(_receiptsCacheDir, { recursive: true }); } catch {}
+}
+function _receiptsCachePath(clientId) {
+  return path.join(_receiptsCacheDir, String(clientId) + '.json');
+}
+function loadReceiptCache(clientId) {
+  try {
+    const raw = fs.readFileSync(_receiptsCachePath(clientId), 'utf8');
+    const data = JSON.parse(raw);
+    if (cfg.CACHE.TTL_MS > 0 && data.fetchedAt &&
+        (Date.now() - new Date(data.fetchedAt).getTime()) > cfg.CACHE.TTL_MS)
+      return null;
+    return data;
+  } catch { return null; }
+}
+function saveReceiptCache(clientId, data) {
+  try {
+    ensureReceiptsCacheDir();
+    fs.writeFileSync(_receiptsCachePath(clientId),
+      JSON.stringify({ ...data, cachedAt: new Date().toISOString() }), 'utf8');
+  } catch {}
+}
+function clearReceiptsCache() {
+  try {
+    const files = fs.readdirSync(_receiptsCacheDir);
+    for (const f of files) {
+      if (f.endsWith('.json')) fs.unlinkSync(path.join(_receiptsCacheDir, f));
+    }
+  } catch {}
+}
+
+/* ══════════════════════════════════════════════
    Browser State
    ══════════════════════════════════════════════ */
 let _browser = null;
@@ -1310,6 +1350,16 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const idResult = validateClientId(body.clientId);
       if (!idResult.valid) return sendJson(res, 400, { error: idResult.reason });
+      const forceRefresh = body.forceRefresh === true || String(body.forceRefresh) === 'true';
+
+      // ← كاش: بدون forceRefresh أعد النتيجة المحفوظة فوراً إن وُجدت (بلا متصفح ولا انتظار)
+      if (!forceRefresh) {
+        const cached = loadReceiptCache(idResult.value);
+        if (cached && Array.isArray(cached.receipts)) {
+          log.info(`receipts: كاش — ارجع فوراً لعميل ${maskId(idResult.value)} (${cached.receipts.length} إيصال)`);
+          return sendJson(res, 200, { ...cached, servedFromCache: true });
+        }
+      }
 
       if (isProtectionActive()) {
         return sendJson(res, 429, {
@@ -1336,6 +1386,16 @@ const server = http.createServer(async (req, res) => {
           ),
         });
 
+        // ← كاش: احفظ النتيجة فور نجاحها حتى تخدم الطلبات المتكررة فوراً
+        if (data && Array.isArray(data.receipts)) {
+          saveReceiptCache(idResult.value, {
+            clientId: idResult.value,
+            count: data.receipts.length,
+            receipts: data.receipts,
+            fetchedAt: data.fetchedAt || new Date().toISOString(),
+          });
+        }
+
         return sendJson(res, 200, data);
       } catch (e) {
         if (isProtectionError(e)) {
@@ -1344,6 +1404,10 @@ const server = http.createServer(async (req, res) => {
         const status = /playwright|chromium|متصفح/.test(e.message) ? 503 : 502;
         return sendJson(res, status, { error: e.message });
       }
+    }
+    if (url === '/api/arkkan/receipts/cache/clear' && req.method === 'POST') {
+      clearReceiptsCache();
+      return sendJson(res, 200, { ok: true });
     }
     if (url === '/api/arkkan/exams' && req.method === 'POST') {
       const body = await readJsonBody(req);
