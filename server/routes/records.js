@@ -385,10 +385,12 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
           `<p>قام المستخدم <b>${req.user.username}</b> بإضافة عميل جديد (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       } else {
-        notifyChange(
-          `تعديل بيانات عميل${plainClientId ? ' — ' + plainClientId : ''}`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل بيانات عميل (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الحالة: ${upsert.status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-        );
+        // تم تعطيل إيميل "تعديل بيانات عميل" بناءً على طلب صريح — الإيميل يبقى فقط على
+        // إضافة عميل جديد + الحركات المالية (vaultTx) + التقارير. لم يُحذف الكود، فقط عُطِّل.
+        // notifyChange(
+        //   `تعديل بيانات عميل${plainClientId ? ' — ' + plainClientId : ''}`,
+        //   `<p>قام المستخدم <b>${req.user.username}</b> بتعديل بيانات عميل (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الحالة: ${upsert.status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        // );
       }
       return res.json({ id: req.params.id, version: upsert.version, origin: upsert.origin, status: upsert.status });
     }
@@ -470,10 +472,11 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
     await recordsRepo.clientDelete(req.params.id, null, []);
     clientsRowsRepo.deleteIds([req.params.id]).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-    notifyChange(
-      `حذف بيانات عميل — ${req.params.id}`,
-      `<p>قام المستخدم <b>${req.user.username}</b> بحذف بيانات عميل (معرّف السجل: ${req.params.id}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-    );
+    // تم تعطيل إيميل "حذف بيانات عميل" بناءً على طلب صريح — لم يُحذف الكود، فقط عُطِّل.
+    // notifyChange(
+    //   `حذف بيانات عميل — ${req.params.id}`,
+    //   `<p>قام المستخدم <b>${req.user.username}</b> بحذف بيانات عميل (معرّف السجل: ${req.params.id}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+    // );
     res.json({ id: req.params.id, deleted: true });
   } catch (e) {
     console.error(e);
@@ -498,10 +501,11 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
     }
     clientsRowsRepo.deleteIds(ids).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-    notifyChange(
-      `حذف جماعي لبيانات عملاء — ${ids.length} سجل`,
-      `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> سجل عميل — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-    );
+    // تم تعطيل إيميل "حذف جماعي لبيانات عملاء" بناءً على طلب صريح — لم يُحذف الكود، فقط عُطِّل.
+    // notifyChange(
+    //   `حذف جماعي لبيانات عملاء — ${ids.length} سجل`,
+    //   `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> سجل عميل — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+    // );
     res.json({ deleted: ids.length });
   } catch (e) {
     console.error(e);
@@ -583,10 +587,11 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
       }
       if (plainRows.length) clientsRowsRepo.upsertChunk(plainRows).catch(() => {});
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
-      notifyChange(
-        `ترحيل/استيراد جماعي لبيانات عملاء — ${result.migrated} سجل`,
-        `<p>قام المستخدم <b>${req.user.username}</b> بترحيل جماعي لـ <b>${result.migrated}</b> سجل عميل${result.conflicts.length ? ` — تعارض: ${result.conflicts.length}` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-      );
+      // تم تعطيل إيميل "ترحيل/استيراد جماعي لبيانات عملاء" بناءً على طلب صريح — لم يُحذف الكود، فقط عُطِّل.
+      // notifyChange(
+      //   `ترحيل/استيراد جماعي لبيانات عملاء — ${result.migrated} سجل`,
+      //   `<p>قام المستخدم <b>${req.user.username}</b> بترحيل جماعي لـ <b>${result.migrated}</b> سجل عميل${result.conflicts.length ? ` — تعارض: ${result.conflicts.length}` : ''} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      // );
     }
     res.json(result);
   } catch (e) {
