@@ -780,8 +780,12 @@ function refreshFilterOptions(){
 
   const natFilterVals = selectedFilterValues($('#filter-nat'));
   populateSelect($('#filter-nat'), settings.nationalities, false);
-  $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="">كل الجنسيات</option>');
+  // ترتيب الإدراج مهم: "بدون جنسية" أولاً ثم "كل الجنسيات" بعدها (afterbegin) حتى تصبح
+  // "كل الجنسيات" هي index 0 الفعلي (نفس ترتيب فلتر الدورة أعلاه) — لا العكس، لأن أي كود
+  // يعتمد على selectedIndex=0 لتمثيل "الكل" (مثل زر "إلغاء الفلتر" العلوي) كان يحدد
+  // "بدون جنسية" خطأً بدل "الكل" بسبب الترتيب المعكوس القديم هنا.
   $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="__no_nationality__">🚫 بدون جنسية</option>');
+  $('#filter-nat').insertAdjacentHTML('afterbegin','<option value="">كل الجنسيات</option>');
   Array.from($('#filter-nat').options).forEach(o=> o.selected = natFilterVals.includes(o.value));
   refreshMultiSelectFilterUI($('#filter-nat'));
 
