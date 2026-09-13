@@ -24,6 +24,7 @@
                   "productName":  "FTC2",
                   "files":  [
                                 "main.js",
+                                "preload.js",
                                 "app-assets/**/*"
                             ],
                   "extraResources":  [

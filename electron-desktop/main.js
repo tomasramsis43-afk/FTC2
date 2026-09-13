@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('electron');
 // تعطيل تسريع الرسوميات (GPU) للنص: على بعض أجهزة ويندوز (خصوصاً كروت الشاشة
 // المدمجة/القديمة) بيحصل باگ معروف في Chromium/Electron بيخلي بعض الحروف
 // العربية (خصوصاً أشكال الحروف المتصلة زي "الم") تترسم كمربعات مكسورة (tofu)
@@ -80,6 +80,26 @@ const SYNCED_FILES = [
   'js/boot.js'
 ];
 let mainWindow;
+
+// ── مجلد حفظ إيصالات أركان (اختياري، يُضبط من واجهة البرنامج) ──
+// يختار المستخدم مجلداً من شاشة الإعدادات، فيُحفظ إيصال الدورة داخل مجلد فرعي
+// «الدورات» وإيصال الحقيبة داخل مجلد فرعي «الحقائب» في ذلك المجلد. بدون اختيار،
+// تذهب الإيصالات إلى مجلد التنزيلات الافتراضي كما كان الوضع قبل التعديل.
+// يُحفظ المسار في userData (وليس بجانب main.js) حتى لا يحتاج البرنامج صلاحيات
+// كتابة على مجلد التثبيت.
+function receiptsFolderFilePath() {
+  return path.join(app.getPath('userData'), 'receipts-folder.json');
+}
+function readReceiptsFolder() {
+  try { return String(JSON.parse(fs.readFileSync(receiptsFolderFilePath(), 'utf8')).folder || '').trim(); } catch (e) { return ''; }
+}
+function writeReceiptsFolder(folder) {
+  try {
+    fs.mkdirSync(path.dirname(receiptsFolderFilePath()), { recursive: true });
+    fs.writeFileSync(receiptsFolderFilePath(), JSON.stringify({ folder: String(folder || '') }), 'utf8');
+    return true;
+  } catch (e) { console.warn('[Receipts Folder] فشل حفظ المسار:', e); return false; }
+}
 let userAssetsDir;
 
 function fetchText(url) {
@@ -739,6 +759,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
       webviewTag: false,
       allowRunningInsecureContent: false,
       enableRemoteModule: false,
@@ -771,11 +792,16 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // ── حفظ إيصالات أركان تلقائياً في مجلد التنزيلات دون نافذة حفظ ──
+  // ── حفظ إيصالات أركان تلقائياً دون نافذة حفظ ──
   // زر «الإيصالات» في تبويب المزامنة وكرت العميل يولّد ملفات PDF باسم يبدأ بـ
-  // «إيصال_». نمسك التنزيلات قبل نافذة الحفظ ونوجهها مباشرة إلى مجلد التنزيلات
-  // الافتراضي للجهاز، ونضيف إذناً (تسلسلي) لو الاسم موجود مسبقاً فلا تتعرّض
-  // ملفات العهود السابقة للحذف. أي تنزيل آخر لا يبدأ بالمقدمة يبقى بسلوكه الافتراضي.
+  // «دورة_» (إيصال الدورة) أو «حقيبة_» (إيصال الحقيبة) ثم رقم الهوية (وإيصال_…
+  // من النسخ السابقة للتوافق). نمسك التنزيلات قبل نافذة الحفظ ونوجهها مباشرة
+  // إلى مجلد الحفظ، ونضيف إذناً (تسلسلياً) لو الاسم موجود مسبقاً فلا تتعرّض
+  // ملفات العهود السابقة للحذف. أي تنزيل آخر لا يطابق الأنماط يبقى بسلوكه الافتراضي.
+  // المسار الهدف: المجلد الذي يختاره المستخدم من الإعدادات إن وُجد، وإلا مجلد
+  // التنزيلات. عند اختيار مجلد مخصص: إيصالات الدورة داخل مجلد فرعي «الدورات»
+  // وإيصالات الحقيبة داخل مجلد فرعي «الحقائب» (دورة وحدها، وحقيبة وحدها) —
+  // بينما بدون مجلد مخصص تُحفظ في مجلد التنزيلات مباشرة كما كان سابقاً.
   const ARKAN_RECEIPT_PREFIX = 'إيصال_';
   function arkkanUniqueDownloadPath(dir, fileName) {
     const ext = path.extname(fileName);
@@ -793,7 +819,15 @@ function createWindow() {
     // إيصالات أركان تُسمَّى الآن باسم رقم الهوية: دورة_<هوية>.pdf / حقيبة_<هوية>.pdf
     // (وإيصال_… من النسخ السابقة للتوافق) — أي شيء آخر يبقى بسلوكه الافتراضي
     if (!(name.startsWith(ARKAN_RECEIPT_PREFIX) || /^(دورة|حقيبة)_\d/.test(name))) return;
-    const dir = app.getPath('downloads');
+    const baseFolder = readReceiptsFolder();
+    let dir = baseFolder ? baseFolder : app.getPath('downloads');
+    // التقسيم إلى مجلدين منفصلين (دورة / حقيبة) فقط عند وجود مجلد مخصص مختار
+    if (baseFolder) {
+      if (/^دورة_\d/.test(name)) dir = path.join(dir, 'الدورات');
+      else if (/^حقيبة_\d/.test(name)) dir = path.join(dir, 'الحقائب');
+    }
+    try { fs.mkdirSync(dir, { recursive: true }); }
+    catch (e) { console.warn('[Arkkan Receipts] تعذّر إنشاء مجلد الحفظ، يُستخدم مجلد التنزيلات:', e); dir = app.getPath('downloads'); }
     const savePath = arkkanUniqueDownloadPath(dir, name);
     item.setSavePath(savePath);
     item.on('done', (e, state) => {
@@ -836,6 +870,28 @@ if (!gotTheLock) {
     // جديد تفتح الصفحة مرة واحدة فقط بالملفات المحدّثة — وأي غياب للشبكة يُعالَج داخلياً
     // لكل ملف على حدة (يفشل بسرعة ولا يعطّل بدء التشغيل لأكثر من بضع ثوانٍ أقصاها).
     await checkForFrontendUpdate();
+
+    // ── واجهة اختيار مجلد حفظ إيصالات أركان (تُستدعى من preload.js) ──
+    ipcMain.handle('select-receipts-folder', async () => {
+      try {
+        const win = BrowserWindow.getFocusedWindow() || mainWindow;
+        const res = await dialog.showOpenDialog(win, {
+          title: 'اختر مجلد حفظ إيصالات أركان',
+          buttonLabel: 'اختيار هذا المجلد',
+          properties: ['openDirectory', 'createDirectory']
+        });
+        if (res.canceled || !res.filePaths || !res.filePaths[0]) {
+          return { ok: false, folder: readReceiptsFolder() };
+        }
+        const folder = res.filePaths[0];
+        return { ok: writeReceiptsFolder(folder), folder };
+      } catch (e) {
+        console.warn('[Receipts Folder] فشل فتح نافذة الاختيار:', e);
+        return { ok: false };
+      }
+    });
+    ipcMain.handle('get-receipts-folder', () => ({ ok: true, folder: readReceiptsFolder() }));
+    ipcMain.handle('clear-receipts-folder', () => ({ ok: writeReceiptsFolder(''), folder: '' }));
 
     createWindow();
 

@@ -2258,6 +2258,15 @@
         <div class="hint" style="margin:8px 0 0;">اختياري — بدون بيانات الحساب يُتخطى جلب الرقم المرجعي ويبقى الجلب العادي يعمل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل.</div>
       </div>
     </div>
+    <div class="panel" id="panel-arkkan-receipts-folder" style="display:none;">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span> مجلد حفظ إيصالات أركان</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر مجلداً على هذا الجهاز، وسيُحفظ إيصال الدورة تلقائياً داخل مجلد فرعي <b>«الدورات»</b> وإيصال الحقيبة داخل مجلد فرعي <b>«الحقائب»</b> في ذلك المجلد — كلٌّ منهما في مكان مستقل. هذا الخيار متاح في تطبيق سطح المكتب فقط؛ في المتصفح العادي تُحفظ الإيصالات في مجلد التنزيلات.</p>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-gold btn-sm" id="btn-choose-receipts-folder">📁 اختيار مجلد الإيصالات</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-receipts-folder">↩️ العودة لمجلد التنزيلات</button>
+        <span id="receipts-folder-status" style="font-size:12px; color:var(--text-muted);"></span>
+      </div>
+    </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"></path><path d="M7 4v6h9V4M7 14h10v6"></path></svg></span> النسخ الاحتياطي والاستعادة</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">نسخة احتياطية كاملة تشمل كل بيانات البرنامج في ملف واحد (العملاء، الدورات، الحقائب، الحركات المالية، الشركات، الإعدادات، المستخدمين، وسجل المراجعة) يمكن استخدامها لاستعادة البرنامج بالكامل عند الحاجة.</p>

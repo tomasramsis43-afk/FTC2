@@ -2048,3 +2048,66 @@ async function arkkanBulkReceiptsSelected() {
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
   showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
+
+/* ─────────── لوحة «مجلد حفظ إيصالات أركان» في شاشة الإعدادات (سطح المكتب فقط) ───────────
+   تعتمد على desktopAPI الذي يحقنه electron-desktop/preload.js عبر contextBridge.
+   في المتصفح العادي لا يوجد desktopAPI فتظل اللوحة مخفية (display:none). */
+(function initArkkanReceiptsFolderUI() {
+  function init() {
+    const panel = document.getElementById('panel-arkkan-receipts-folder');
+    const btnChoose = document.getElementById('btn-choose-receipts-folder');
+    const btnReset = document.getElementById('btn-reset-receipts-folder');
+    const status = document.getElementById('receipts-folder-status');
+    if (!panel || !btnChoose || !btnReset || !status) return;
+    const api = window.desktopAPI;
+    if (!api || typeof api.getReceiptsFolder !== 'function') return; // متصفح عادي — اللوحة تبقى مخفية
+
+    panel.style.display = '';
+
+    async function refresh() {
+      try {
+        const r = await api.getReceiptsFolder();
+        const folder = r && r.folder ? String(r.folder) : '';
+        if (folder) {
+          status.innerHTML = `📂 <b dir="ltr">${folder}</b> <span style="color:var(--gold, #FFB84C);">← الدورات «الدورات» · الحقائب «الحقائب»</span>`;
+          btnReset.style.display = '';
+        } else {
+          status.textContent = 'بدون مجلد مخصص حالياً — تُحفظ الإيصالات في مجلد التنزيلات الافتراضي';
+          btnReset.style.display = 'none';
+        }
+      } catch (e) {
+        status.textContent = '';
+      }
+    }
+
+    btnChoose.addEventListener('click', async () => {
+      try {
+        const r = await api.selectReceiptsFolder();
+        if (r && r.ok && r.folder) {
+          showToast('تم حفظ مجلد إيصالات أركان بنجاح 📁', 'success');
+          refresh();
+        } else {
+          showToast('لم يتم اختيار مجلد', 'error');
+        }
+      } catch (err) {
+        showToast('تعذّر فتح نافذة اختيار المجلد: ' + String(err.message).slice(0, 80), 'error');
+      }
+    });
+
+    btnReset.addEventListener('click', async () => {
+      try {
+        const r = await api.clearReceiptsFolder();
+        if (r && r.ok) {
+          showToast('تمت العودة لمجلد التنزيلات الافتراضي', 'success');
+          refresh();
+        }
+      } catch (err) {
+        showToast('تعذّر إلغاء المجلد: ' + String(err.message).slice(0, 80), 'error');
+      }
+    });
+
+    refresh();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
