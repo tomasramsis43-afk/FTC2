@@ -200,7 +200,7 @@ $('#cl-paid-max').addEventListener('change', renderTable);
    الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
    معالجات renderTable المرتبطة بها أعلاه — فقط نُخفي/نُظهر الحاوية الأم، ونضيف
    عدّاداً صغيراً يوضّح كم فلتراً متقدماً مفعّلاً حالياً حتى لو كانت القائمة مطوية. */
-const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','filter-bag-source','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
+const ADVANCED_FILTER_IDS = ['filter-course','filter-nat','filter-company','filter-invoice','filter-coursenum','filter-refnum','filter-bag-source','filter-reception','cl-date-from','cl-date-to','cl-paid-min','cl-paid-max'];
 function updateAdvancedFiltersBadge(){
   const badge = $('#advanced-filters-count');
   if(!badge) return;
@@ -230,14 +230,13 @@ $('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
   });
   // نفس دقة زر "مسح كل الفلاتر" العام: البقية لم تكن تُمسح في أيامها (بحث، حالة، موظف
   // استقبال، تبديل الموقوفين/الحقائب غير المشتراة، وفلتر السنة العلوي) فيظل الجدول مفلتراً
-  // جزئياً رغم الضغط على "مسح"، فيُحسب أن الزر معطل.
+  // جزئياً رغم الضغط على "مسح"، فيُحسب أن الزر معطل. filter-reception أصبح جزءاً من
+  // ADVANCED_FILTER_IDS أعلاه (كان داخل نفس اللوحة المطوية لكن غير محسوب فى عدّاد "فلاتر
+  // متقدمة" — فيبقى مفعَّلاً بصمت والعدّاد يقول 0)، فمسحه أصبح ضمن اللوب الرئيسي تلقائياً.
+  // filter-status يبقى هنا لوحده لأنه خارج اللوحة المطوية أصلاً (ظاهر دائماً فى الشريط الرئيسي).
   const searchEl = document.getElementById('search'); if(searchEl) searchEl.value = '';
-  ['filter-status','filter-reception'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(!el) return;
-    Array.from(el.options).forEach(o=> o.selected = false);
-    refreshMultiSelectFilterUI(el);
-  });
+  { const el = document.getElementById('filter-status');
+    if(el){ Array.from(el.options).forEach(o=> o.selected = false); refreshMultiSelectFilterUI(el); } }
   showSuspendedOnly = false;
   $('#btn-filter-suspended')?.classList.remove('btn-gold');
   $('#btn-filter-suspended')?.classList.add('btn-ghost');
