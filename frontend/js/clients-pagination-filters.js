@@ -199,7 +199,12 @@ function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, f
   // العدد داخل كل كرت "لو اخترت هذه الدورة" مع بقية الفلاتر الشغالة فعلاً، لا بعد تطبيقه هو نفسه.
   // تُعاد فقط عند تغيّر العملاء/الفلاتر (وليس مع كل تنقّل صفحة/بحث) — كانت تمسح كل العملاء في كل مرة.
   if(typeof renderCourseStatCards==='function' && typeof filteredClients==='function'){
-    const statSig = JSON.stringify([clients.length, $('#search')?.value, selectedFilterValues($('#filter-nat')), selectedFilterValues($('#filter-status')), selectedFilterValues($('#filter-company')), selectedFilterValues($('#filter-invoice')), selectedFilterValues($('#filter-coursenum')), selectedFilterValues($('#filter-refnum')), $('#cl-date-from')?.value, $('#cl-date-to')?.value, $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly, selectedFilterValues($('#filter-bag-source'))]);
+    // ملاحظة: selectedFilterValues($('#filter-course')) مُضافة هنا فقط لضمان إعادة رسم الكروت
+    // (وبالتالي تحديث حالة .active وعلامة ✓) عند الضغط على كرت — رغم إن الأرقام المعروضة داخل
+    // الكروت نفسها (filteredClients({skipCourseFilter:true})) بتتجاهل فلتر الدورة عمداً فتفضل
+    // صحيحة زي ما هي؛ من غير السطر ده كان تغيير تحديد الدورة وحده (بلا أي فلتر تاني) ما بيغيّرش
+    // statSig فتفضل الكروت القديمة معروضة زي ما هي بلا أي مؤشر تحديد ظاهر.
+    const statSig = JSON.stringify([clients.length, $('#search')?.value, selectedFilterValues($('#filter-nat')), selectedFilterValues($('#filter-status')), selectedFilterValues($('#filter-company')), selectedFilterValues($('#filter-invoice')), selectedFilterValues($('#filter-coursenum')), selectedFilterValues($('#filter-refnum')), $('#cl-date-from')?.value, $('#cl-date-to')?.value, $('#cl-paid-min')?.value, $('#cl-paid-max')?.value, showSuspendedOnly, showUnpurchasedBagsOnly, selectedFilterValues($('#filter-bag-source')), selectedFilterValues($('#filter-course'))]);
     if(statSig !== _courseStatCacheSig){
       _courseStatCacheSig = statSig;
       renderCourseStatCards(filteredClients({skipCourseFilter:true}));
