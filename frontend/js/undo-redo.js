@@ -866,7 +866,10 @@ function clearAllSheetFilters(){
     'audit-filter-action','audit-filter-section',
     'de-filter-type',
   ];
-  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el){ el.selectedIndex = 0; refreshMultiSelectFilterUI(el); } });
+  // إلغاء تحديد كل الخيارات (يعادل "الكل") بدل selectedIndex=0 — بعض الفلاتر (مثل الجنسية)
+  // لها خيار خاص إضافي (بدون جنسية) يُضاف ديناميكياً فى أول القائمة، فكان selectedIndex=0
+  // يحدّده هو خطأً بدل "الكل" (كان هذا سبب رجوع فلتر الجنسية لـ"بدون جنسية" بعد "إلغاء الفلتر").
+  selectIds.forEach(id=>{ const el=document.getElementById(id); if(el){ Array.from(el.options).forEach(o=> o.selected=false); refreshMultiSelectFilterUI(el); } });
 
   ['v-filter-dup','v-filter-nomethod'].forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
 
