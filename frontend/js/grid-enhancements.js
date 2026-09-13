@@ -101,6 +101,9 @@
     /* ========================================================
        2) العروض المحفوظة
        ======================================================== */
+    // بعض هذه الحقول أصبحت فلاتر متعددة الاختيار (select multiple يديره initMultiSelectFilters فى
+    // core-utils.js) بعد ترقية شاشة العملاء — قائمة أسماءها هنا فقط للتوافق مع أي عرض قديم محفوظ
+    // بصيغة نصية واحدة (raw .value)؛ يُحدَّد فعلياً وقت الحفظ/التطبيق أدناه عبر el.multiple.
     const VIEW_FIELDS = ['search','filter-course','filter-nat','filter-status','filter-company',
       'filter-invoice','filter-coursenum','filter-refnum','cl-date-from','cl-date-to',
       'cl-paid-min','cl-paid-max','filter-bag-source'];
@@ -113,8 +116,31 @@
       try { localStorage.setItem(VIEWS_KEY, JSON.stringify(v)); } catch(err) {}
     };
 
+    // ⚠️ إصلاح (٢٠٢٦-٠٩): الحقول دورة/جنسية/حالة السداد/شركة/فاتورة/رقم دورة/رقم مرجعي/مصدر
+    // الحقيبة كلها selects متعددة الاختيار حقيقية (checkbox dropdown) — قراءة/كتابة .value
+    // عليها (كما كان الكود القديم يفعل) تتعامل مع اختيار واحد فقط: الحفظ كان يلتقط أول قيمة
+    // مختارة فقط ويُفقِد أي اختيارات إضافية، والاستعادة كانت تُلغي كل الاختيارات وتُبقي واحداً
+    // فقط. اقرأ/اكتب عبر selectedFilterValues (مصفوفة) لأي select.multiple، والقيمة النصية
+    // العادية (.value) لبقية الحقول (بحث/تاريخ/رقم) كما كانت دائماً.
+    function readFieldForView(el){
+      return el.multiple ? selectedFilterValues(el) : (el.value || '');
+    }
+    function writeFieldFromView(el, v){
+      if(el.multiple){
+        const vals = Array.isArray(v) ? v : (v ? [v] : []); // توافق مع عرض قديم محفوظ كنص مفرد
+        Array.from(el.options).forEach(o => o.selected = vals.includes(o.value));
+      } else {
+        el.value = Array.isArray(v) ? (v[0] || '') : (v || '');
+      }
+    }
+
     function currentFiltersSignature(){
-      const parts = VIEW_FIELDS.map(f => $id(f)?.value || '').filter(Boolean);
+      const parts = VIEW_FIELDS.map(f => {
+        const el = $id(f);
+        if(!el) return '';
+        const v = readFieldForView(el);
+        return Array.isArray(v) ? v.join('،') : v;
+      }).filter(Boolean);
       return parts.length ? parts.join(' · ') : '';
     }
 
@@ -136,8 +162,9 @@
       VIEW_FIELDS.forEach(f => {
         const el = $id(f);
         if(!el) return;
-        el.value = view.values[f] || '';
-        el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input'));
+        writeFieldFromView(el, view.values[f]);
+        el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', {bubbles:true}));
+        if(el.tagName === 'SELECT') el.dispatchEvent(new Event('change', {bubbles:true}));
       });
       if(typeof showToast === 'function') showToast(`تم تطبيق العرض: ${view.name}`);
     }
@@ -152,7 +179,7 @@
       let name = sig.length > 26 ? sig.slice(0, 26) + '…' : sig;
       if(views.some(v => v.name === name)) name = `${name} (${views.length + 1})`;
       const values = {};
-      VIEW_FIELDS.forEach(f => values[f] = $id(f)?.value || '');
+      VIEW_FIELDS.forEach(f => { const el = $id(f); if(el) values[f] = readFieldForView(el); });
       views.push({ name, values });
       persistViews(views);
       renderSavedViews();
