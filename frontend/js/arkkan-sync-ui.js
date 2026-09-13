@@ -363,6 +363,61 @@ function arkkanDownloadBase64(base64, mime, fileName) {
   return true;
 }
 
+/* ═══ منع تكرار تنزيل إيصالات أركان (سطح المكتب فقط) ═══
+   - في المتصفح العادي (بدون desktopAPI) تعمل التنزيلات مباشرة كالمعتاد.
+   - في تطبيق سطح المكتب: يُفحص في Electron إن كان الإيصال محفوظاً مسبقاً في مجلده
+     الهدف (نفس مجلد will-download)، فيُستثنى ولا يُعاد. وبعد انتهاء القائمة تُعرض
+     رسالة واحدة مجمّعة بالأسماء الموجودة مع خيار الموافقة على إعادة تنزيلها
+     (استبدال الملفات القديمة) أو الرفض (تخطّيها). */
+
+/* يرجع true إن كان الملف موجوداً مسبقاً في مجلده الهدف (ولم يتمكن من الفحص يرجع false) */
+async function arkkanReceiptFileExists(fileName) {
+  const api = window.desktopAPI;
+  if (!api || typeof api.checkReceiptsExist !== 'function' || !fileName) return false;
+  try {
+    const res = await api.checkReceiptsExist([fileName]);
+    return !!(res && Array.isArray(res.existing) && res.existing.includes(fileName));
+  } catch (e) { return false; }
+}
+
+/* تنزيل قائمة إيصالات مع منع التكرار — تعرض رسالة مجمّعة بالموافقة أو الرفض.
+   القيم المُرجع منها: { downloaded, existing, reDownloaded } */
+async function arkkanDownloadReceiptsDedup(list) {
+  const api = window.desktopAPI;
+  const desktop = !!(api && typeof api.checkReceiptsExist === 'function' && typeof api.allowReceiptsOverwrite === 'function');
+  let downloaded = 0;
+  const dupes = [];
+  for (const rc of list || []) {
+    if (!rc || !rc.base64) continue;
+    const fileName = rc.fileName;
+    if (!fileName) {
+      if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) downloaded++;
+      continue;
+    }
+    if (desktop && await arkkanReceiptFileExists(fileName)) {
+      dupes.push(rc);
+      continue;
+    }
+    if (arkkanDownloadBase64(rc.base64, rc.mime, fileName)) downloaded++;
+  }
+  let reDownloaded = 0;
+  if (dupes.length) {
+    const names = dupes.map(r => r.fileName);
+    const shown = names.slice(0, 10).map(n => '• ' + n).join('\n');
+    const extra = names.length > 10 ? `\n… و ${names.length - 10} آخرون` : '';
+    const ok = await customConfirm(
+      `الإيصالات التالية محفوظة مسبقاً في مجلداتها (${names.length}):\n\n${shown}${extra}\n\nهل تريد إعادة تنزيلها (استبدال الملفات القديمة)؟`
+    );
+    if (ok) {
+      try { if (api && typeof api.allowReceiptsOverwrite === 'function') await api.allowReceiptsOverwrite(names); } catch {}
+      for (const rc of dupes) {
+        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) { downloaded++; reDownloaded++; }
+      }
+    }
+  }
+  return { downloaded, existing: dupes.length, reDownloaded };
+}
+
 /* معالج زر «📥 إيصال» بجانب صف واحد: جلب إيصالات هذا العميل وتنزيلها */
 async function arkkanSyncReceiptsOne(clientId, btn) {
   const c = clients.find(x => x.clientId === clientId);
@@ -384,12 +439,9 @@ async function arkkanSyncReceiptsOne(clientId, btn) {
       showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info');
       return;
     }
-    let n = 0;
-    for (const rc of list) {
-      if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
-    }
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${n} إيصال</span>`;
-    showToast(`✅ تم تنزيل ${n} إيصال للعميل ${clientId} (دورة وحقيبة)`, 'success');
+    const r = await arkkanDownloadReceiptsDedup(list);
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}</span>`;
+    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId} (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً${r.reDownloaded ? ' (أعيد تنزيلها)' : ' (تخطّاها)'}` : ''}`, 'success');
   } catch (err) {
     if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
@@ -414,11 +466,8 @@ async function arkkanReceiptsCardButton(id, btn) {
     const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
     const list = Array.isArray(data.receipts) ? data.receipts : [];
     if (!list.length) { showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info'); return; }
-    let n = 0;
-    for (const rc of list) {
-      if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
-    }
-    showToast(`✅ تم تنزيل ${n} إيصال للعميل (دورة وحقيبة)`, 'success');
+    const r = await arkkanDownloadReceiptsDedup(list);
+    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً${r.reDownloaded ? ' (أعيد تنزيلها)' : ' (تخطّاها)'}` : ''}`, 'success');
   } catch (err) {
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
   } finally {
@@ -2008,8 +2057,11 @@ async function arkkanBulkReceiptsSelected() {
   if (stopBtn) stopBtn.style.display = '';
   if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري تحميل الإيصالات...'; }
 
-  let okCount = 0, failCount = 0, noCount = 0, done = 0;
+  let okCount = 0, failCount = 0, noCount = 0, existingCount = 0, done = 0;
   const failMsgs = [];
+  const dupes = [];
+  const api = window.desktopAPI;
+  const desktop = !!(api && typeof api.checkReceiptsExist === 'function' && typeof api.allowReceiptsOverwrite === 'function');
 
   for (const id of ids) {
     if (!_bulkReceiptsRunning || _bulkReceiptsStop) break;
@@ -2019,11 +2071,18 @@ async function arkkanBulkReceiptsSelected() {
     try {
       const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
       const list = Array.isArray(data.receipts) ? data.receipts : [];
-      let n = 0;
+      let n = 0, cExists = 0;
       for (const rc of list) {
-        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
+        if (!rc || !rc.base64) continue;
+        if (desktop && rc.fileName && (await arkkanReceiptFileExists(rc.fileName))) {
+          dupes.push(rc);
+          cExists++;
+          continue;
+        }
+        if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) n++;
       }
       if (n) okCount++;
+      else if (cExists) existingCount++;
       else noCount++;
     } catch (err) {
       failCount++;
@@ -2031,6 +2090,23 @@ async function arkkanBulkReceiptsSelected() {
     }
     done++;
     if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
+  }
+
+  let reDownloaded = 0;
+  // رسالة مجمَّعة واحدة بقائمة كل الإيصالات المحفوظة مسبقاً — موافقة (استبدال) أو رفض (تخطي)
+  if (dupes.length) {
+    const names = dupes.map(r => r.fileName);
+    const shown = names.slice(0, 10).map(n => '• ' + n).join('\n');
+    const extra = names.length > 10 ? `\n… و ${names.length - 10} آخرون` : '';
+    const ok = await customConfirm(
+      `الإيصالات التالية محفوظة مسبقاً في مجلداتها (${names.length}):\n\n${shown}${extra}\n\nهل تريد إعادة تنزيلها جميعاً (استبدال الملفات القديمة)؟`
+    );
+    if (ok) {
+      try { if (api && typeof api.allowReceiptsOverwrite === 'function') await api.allowReceiptsOverwrite(names); } catch {}
+      for (const rc of dupes) {
+        if (rc && rc.base64 && arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) { okCount++; reDownloaded++; }
+      }
+    }
   }
 
   if (statusEl) statusEl.style.display = 'none';
@@ -2046,7 +2122,7 @@ async function arkkanBulkReceiptsSelected() {
     setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
   }
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
-  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
+  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} محفوظ مسبقاً${reDownloaded ? ` · 🔁 أُعيد ${reDownloaded}` : ''} · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
 
 /* ─────────── لوحة «مجلد حفظ إيصالات أركان» في شاشة الإعدادات (سطح المكتب فقط) ───────────
