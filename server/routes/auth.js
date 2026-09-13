@@ -228,12 +228,14 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
         isNewIp ? `<li>تسجيل دخول من عنوان IP جديد غير مسجّل لهذا الحساب (${loginIp || 'غير معروف'})</li>` : '',
         geoAlert ? `<li>تسجيل دخول من دولة غير معتادة (${geoAlert.country || 'غير معروفة'}) بينما المعتاد هو ${geoAlert.usualCountry}</li>` : '',
       ].filter(Boolean).join('');
-      alertAdmins(
-        `دخول غير متعارف عليه للحساب "${user.username}"`,
-        `<p>تم رصد دخول غير متعارف عليه للحساب <b>${user.username}</b> (${user.role || 'staff'}):</p>
-         <ul>${reasonLines}</ul>
-         <p style="color:#888; font-size:13px;">IP: ${loginIp || 'غير معروف'} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
-      ).catch(() => {});
+      // تم تعطيل إيميل "دخول غير متعارف عليه" بناءً على طلب صريح (تعطيل كل الإيميلات عدا
+      // إضافة عميل جديد + الحركات المالية + التقارير). لم يُحذف الكود، فقط عُطِّل.
+      // alertAdmins(
+      //   `دخول غير متعارف عليه للحساب "${user.username}"`,
+      //   `<p>تم رصد دخول غير متعارف عليه للحساب <b>${user.username}</b> (${user.role || 'staff'}):</p>
+      //    <ul>${reasonLines}</ul>
+      //    <p style="color:#888; font-size:13px;">IP: ${loginIp || 'غير معروف'} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+      // ).catch(() => {});
     }
     // تنبيه استباقي للأدمن: لو فيه نشاط مشبوه (محاولات دخول مشبوهة) حصل منذ آخر مرة راجع
     // فيها شاشة "سجل الدخول"، نُرجعه على شاشة الإعدادات — لا نُبطئ تسجيل الدخول بفحصه
@@ -247,10 +249,11 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
           .then(r => {
             // نُرسل إيميلاً فقط لو فيه صفوف جديدة فعلاً (تُكتشف أول مرة بعد هذا الدخول تحديداً)،
             // لتفادي إرسال نفس التنبيه بالإيميل مع كل دخول أدمن جديد طول ما نفس المحاولات قائمة.
-            if (r.length > 0) {
-              const rows = r.map(x => `<li>${x.username} من ${x.ip_address || 'IP غير معروف'} — ${x.failed_count} محاولة فاشلة</li>`).join('');
-              alertAdmins('محاولات دخول فاشلة متكررة', `<p>تم رصد محاولات دخول فاشلة متكررة:</p><ul>${rows}</ul>`).catch(() => {});
-            }
+            // تم تعطيل إيميل "محاولات دخول فاشلة متكررة" بناءً على طلب صريح. لم يُحذف الكود، فقط عُطِّل.
+            // if (r.length > 0) {
+            //   const rows = r.map(x => `<li>${x.username} من ${x.ip_address || 'IP غير معروف'} — ${x.failed_count} محاولة فاشلة</li>`).join('');
+            //   alertAdmins('محاولات دخول فاشلة متكررة', `<p>تم رصد محاولات دخول فاشلة متكررة:</p><ul>${rows}</ul>`).catch(() => {});
+            // }
           }).catch(e => console.error('تعذّر فحص النشاط المشبوه:', e));
       }
     });
