@@ -154,7 +154,9 @@ $('#import-bagown-input')?.addEventListener('change', async e=>{
 });
 
 function removeClientLedgerEntries(clientRecordId){
-  vaultTx = vaultTx.filter(t=>t.autoClientId!==clientRecordId); bumpVaultVersion();
+  const autoEntries = vaultTx.filter(t=>t.autoClientId===clientRecordId);
+  for(const t of autoEntries) softDeleteVaultTx(t.id, `حذف تلقائي مع حذف العميل ${clientRecordId}`);
+  bumpVaultVersion();
 }
 /* هل مستخدم (باسمه) هو صاحب دور "استقبال"؟ تُستخدم لتحديد هل دفعة العميل النقدية تحتاج
    "تسوية" (تأكيد استلام فعلي) أم لا — فقط عمليات التسجيل التي يقوم بها الاستقبال نفسه
@@ -1490,6 +1492,7 @@ $('#vault-form')?.addEventListener('submit', async e=>{
     const { history: _afterHistory, ...afterSnap } = vaultTx[idx];
     pushVaultTxHistory(vaultTx[idx], before, afterSnap);
     savedTx = vaultTx[idx];
+    bumpVaultVersion();
     showToast('تم تحديث الحركة');
   }else{
     savedTx = {id:uid(), seq: allocVaultSeq(data.destination), createdAt:Date.now(), ...data};

@@ -4,7 +4,7 @@
    #{prefix}-page-first/prev/next/last */
 function genericPageSize(prefix){
   const v = $(`#${prefix}-page-size`)?.value || '50';
-  if(v==='all') return 1000; // حماية أداء للشيتات العامة الضخمة (شيت العملاء وحده يعرض الكل فعلياً عبر currentTablePageSize)
+  if(v==='all') return Infinity;
   return Number(v);
 }
 function applyGenericPagination(prefix, rows, state, filterSigParts){

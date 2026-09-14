@@ -786,7 +786,7 @@ async function _saveClientsImpl(allowDrop){
         for(const id of removedIds){
           const ok = await deleteOneClientRecord(id);
           if(ok){ _clientsSyncBaseline.delete(id); syncedAny = true; }
-          else anyNetworkFailure = true;
+          else if(ok === null) anyNetworkFailure = true;
         }
       }
       if(anyNetworkFailure && !syncedAny){

@@ -64,7 +64,9 @@ router.get('/api/clients', requireAuth, async (req, res) => {
     let cursorSql = '';
     let cursorParams = [];
     if(cursor){
-      cursorSql = ` AND ((${sortCol} > $${i} ) OR (${sortCol} = $${i} AND id > $${i+1}))`;
+      // اتجاه keyset حسب الترتيب: لـ ASC الصفحة التالية قيمها أكبر من cursor (>)، ولـ DESC أصغر (<).
+      const gtOp = order === 'DESC' ? '<' : '>';
+      cursorSql = ` AND ((${sortCol} ${gtOp} $${i} ) OR (${sortCol} = $${i} AND id > $${i+1}))`;
       // للتبسيط: cursor يحمل قيمة sortCol + id مشفرة base64 — fallback لـ OFFSET لو فشل التحليل
       try{
         const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString());

@@ -1441,7 +1441,7 @@ async function saveCollectionGeneric(collection, arr){
         for(const id of removedIds){
           const ok = await deleteOneRecordGeneric(collection, id);
           if(ok) baseline.delete(id);
-          else anyNetworkFailure = true;
+          else if(ok === null) anyNetworkFailure = true;
         }
       }
       if(anyNetworkFailure){
