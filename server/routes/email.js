@@ -23,9 +23,17 @@ function escapeHtml(s) {
 const MAX_ATTACHMENT_BASE64_CHARS = 15 * 1024 * 1024; // ~15MB بعد الترميز، يكفي أي فاتورة/تقرير PDF بمساحة
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// عنوان الإيميل يأتي من بيانات واجهة غير موثوقة (رقم فاتورة/اسم) — نعقّمه من المحارف
+// الضابطة وطول غير معقول (وقف أي Header Injection لو نُقل إلى SMTP لاحقاً، ومن HTML غير مقصود).
+function sanitizeSubject(s) {
+  return String(s == null ? '' : s).replace(/[\r\n\t\x00-\x1f]/g, ' ').trim().slice(0, 200);
+}
+
 // تنظيف HTML المُرسَل من الواجهة — يزيل أي عناصر/سمات خطيرة قد تُستخدم في تصييد أو حقن محتوى
 function sanitizeEmailHtml(html) {
   if (typeof html !== 'string') return html;
+  // إزالة الوسوم القابلة للتنفيذ/الحقن أولاً (بما فيها وسوم الميتا/الرابط التي قد تحدّث
+  // الصفحة أو تجلب محتوى خارجياً داخل عارض البريد — نافذة تصييد محتملة),
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
@@ -33,11 +41,18 @@ function sanitizeEmailHtml(html) {
     .replace(/<embed[\s\S]*?\/?>/gi, '')
     .replace(/<form[\s\S]*?<\/form>/gi, '')
     .replace(/<base[\s\S]*?\/?>/gi, '')
+    .replace(/<meta[\s\S]*?>/gi, '')
+    .replace(/<link[\s\S]*?\/?>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+    // إسقاط معالجات الأحداث + البروتوكولات/الطرق القابلة للتنفيذ
     .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/javascript\s*:/gi, '')
     .replace(/data\s*:/gi, '')
     .replace(/vbscript\s*:/gi, '')
-    .replace(/expression\s*\(/gi, '');
+    .replace(/expression\s*\(/gi, '')
+    // تحييد تعابير CSS المنفّذة للجلب الخارجي (تسريب شاشات داخل عارضات قديمة)
+    .replace(/url\s*\(\s*['"]?(?:data|https?):/gi, 'url(none)');
 }
 
 function parseAttachment(body) {
@@ -99,7 +114,7 @@ router.post('/api/email/invoice', requireAuth, emailLimiter, async (req, res) =>
     `);
     const result = await sendEmail({
       to,
-      subject: `فاتورة${invoiceNo ? ` رقم ${invoiceNo}` : ''}`,
+      subject: sanitizeSubject(`فاتورة${invoiceNo ? ` رقم ${invoiceNo}` : ''}`),
       html,
       attachments: attachment ? [attachment] : undefined,
     });
@@ -135,7 +150,7 @@ router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => 
     const result = await sendEmail({
       to: recipients,
       cc: ccList,
-      subject: subject || 'تقرير من نظام إدارة المركز',
+      subject: sanitizeSubject(subject || 'تقرير من نظام إدارة المركز'),
       html,
       attachments: attachment ? [attachment] : undefined,
     });

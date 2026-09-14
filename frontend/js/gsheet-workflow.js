@@ -189,11 +189,7 @@
 
   function sanitizeText(val){
     var s = String(val||'');
-    s = s.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    s = s.replace(/on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-    s = s.replace(/javascript\s*:/gi, '');
-    s = s.replace(/vbscript\s*:/gi, '');
-    s = s.replace(/data\s*:[^,]*text\/html/gi, '');
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     return s;
   }
 

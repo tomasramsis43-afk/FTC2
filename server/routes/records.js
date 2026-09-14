@@ -444,40 +444,41 @@ router.post('/api/client-records/:id/reject', requireAuth, requireRole('admin'),
 
 router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
   try {
-    // حارس حذف بفحص النسخة (نفس منطق /api/records/:collection/:id): الواجهة ترسل رقم النسخة الذي
-    // رآه الجهاز، ولو تغيّر السجل من جهاز آخر بعد آخر مشاهدة نرفض الحذف بـ409 بدل حذف بيانات أحدث.
+    // حذف ذرّي (deleteAtomic): فحص النسخة + شرط العزل يتمان داخل معاملة واحدة FOR UPDATE —
+    // لا نافذة TOCTOU بين التحقق والحذف، ومستحيل أن يحذف طلبٌ سجلاً يستند لنسخة قديمة بينما
+    // يُحفظ تحديث أحدث من جهاز آخر في نفس اللحظة. نفس قواعد العزل السابقة تماماً:
+    //   · reception: يحذف سجلاته هو فقط (التي سجّلها بنفسه — origin='reception' + created_by)
+    //   · staff: يحذف المعتمد الذي أنشأه هو فقط (created_by — تطابق "الشيت لا يظهر له إلا سجلاته")
+    //   · accountant: يحذف المعتمد فقط
+    //   · admin: بلا قيود
     const wantVersionRaw = req.query.version;
-    if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
-      const wantVersion = Number(wantVersionRaw);
-      if (Number.isFinite(wantVersion)){
-        const cur = await recordsRepo.clientRecordMetaFor(req.params.id);
-        if (cur && cur.version !== wantVersion){
-          return res.status(409).json({
-            error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
-            currentVersion: cur.version,
-          });
-        }
-      }
+    const wantVersion = (wantVersionRaw !== undefined && wantVersionRaw !== '')
+      ? Number(wantVersionRaw)
+      : undefined;
+    const outcome = await recordsRepo.deleteAtomic({
+      isClient: true,
+      id: req.params.id,
+      expectedVersion: (Number.isFinite(wantVersion) ? wantVersion : undefined),
+      allowFor: (row) => {
+        if (req.user.role === 'reception') return row.origin === 'reception' && row.created_by === req.user.username;
+        if (req.user.role === 'admin') return true;
+        if (req.user.role === 'staff') return row.status === 'confirmed' && row.created_by === req.user.username;
+        return row.status === 'confirmed';
+      },
+    });
+    if (outcome.conflict) {
+      return res.status(409).json({
+        error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
+        currentVersion: outcome.currentVersion,
+      });
     }
-    // نفس حماية العزل: مستخدم الاستقبال يقدر يحذف فقط سجلاته هو شخصياً، وليس سجلات مستخدم استقبال آخر.
-    // أي دور آخر (staff/accountant) يحذف فقط السجلات المعتمدة status='confirmed' (نفس شرط الرؤية)،
-    // فلا يمس عبر طلب مباشر مسودات/سجلات الاستقبال المعلّقة التي لا يملك رؤيتها أصلاً.
-    if (req.user.role === 'reception') {
-      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
-      if (existing && (existing.origin !== 'reception' || existing.created_by !== req.user.username)) {
-        return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
-      }
-    } else if (req.user.role !== 'admin') {
-      const existing = await recordsRepo.clientRecordMetaFor(req.params.id);
-      if (existing && existing.status !== 'confirmed') {
-        return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
-      }
-      // الموظف العام: لا يحذف إلا سجلاته هو (المعتمدة) — المحاسب يبقى على كل المعتمد (يراهما الكل)
-      if (existing && req.user.role === 'staff' && existing.created_by !== req.user.username) {
-        return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
-      }
+    if (outcome.forbidden) {
+      return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
     }
-    await recordsRepo.clientDelete(req.params.id, null, []);
+    if (!outcome.deleted) {
+      // من غير الموجود أصلاً يُعامَل كنجاح (حذف متكرر آمن — idempotent)
+      return res.json({ id: req.params.id, deleted: true });
+    }
     clientsRowsRepo.deleteIds([req.params.id]).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
     // تم تعطيل إيميل "حذف بيانات عميل" بناءً على طلب صريح — لم يُحذف الكود، فقط عُطِّل.
@@ -796,31 +797,39 @@ router.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
 
 router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requireValidCollection, async (req, res) => {
   try {
-    // حارس حذف بفحص النسخة: الواجهة ترسل رقم النسخة الذي رآه الجهاز (version في query). لو تغيّر
-    // السجل على السيرفر من جهاز آخر بعد آخر مشاهدة لهذا الجهاز، نرفض الحذف بـ409 بدل حذف بيانات
-    // أحدث بصمت (نفس منطق تعارضات PUT). غياب المعامل = طلبات قديمة تتصرف كما كانت من قبل.
+    // حذف ذرّي (deleteAtomic): فحص النسخة + شرط العزل يتمان داخل معاملة واحدة FOR UPDATE،
+    // فلا توجد نافذة TOCTOU بين "التحقق من النسخة" و"الحذف" — مستحيل أن يحذف طلبٌ سجلاً
+    // استُند فيه لنسخة قديمة بينما يُحفظ تحديث أحدث من جهاز آخر في نفس اللحظة.
     const wantVersionRaw = req.query.version;
-    if (wantVersionRaw !== undefined && wantVersionRaw !== ''){
-      const wantVersion = Number(wantVersionRaw);
-      if (Number.isFinite(wantVersion)){
-        const cur = await recordsRepo.recordMetaFor(req.params.collection, req.params.id);
-        if (cur && cur.version !== wantVersion){
-          return res.status(409).json({
-            error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
-            currentVersion: cur.version,
-          });
-        }
-      }
+    const wantVersion = (wantVersionRaw !== undefined && wantVersionRaw !== '')
+      ? Number(wantVersionRaw)
+      : undefined;
+    // نفس حماية عزل الاستقبال في مسار الحذف: الاستقبال يحذف سجلاته هو فقط،
+    // staff/accountant يحذفون المعتمد فقط (يرون المعتمد كاملاً، فالمبدأ: "احذف ما تراه")،
+    // والأدمن بلا قيود.
+    const outcome = await recordsRepo.deleteAtomic({
+      isClient: false,
+      collection: req.params.collection,
+      id: req.params.id,
+      expectedVersion: (Number.isFinite(wantVersion) ? wantVersion : undefined),
+      allowFor: (row) => {
+        if (req.user.role === 'reception') return row.origin === 'reception' && row.created_by === req.user.username;
+        if (req.user.role === 'admin') return true;
+        return row.status === 'confirmed';
+      },
+    });
+    if (outcome.conflict) {
+      return res.status(409).json({
+        error: 'تعارض في الحذف: هذه البيانات عُدِّلت أو تغيّرت بعد آخر مشاهدة — يرجى تحديث الصفحة وإعادة الحذف',
+        currentVersion: outcome.currentVersion,
+      });
     }
-    // نفس حماية عزل الاستقبال في مسار الحذف (كان الحذف بلا أي فحص — أي مستخدم مصادق يقدر
-    // يحذف أي سجل يعرف معرّفه): الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون
-    // المعتمد فقط، والأدمن بلا قيود.
-    if (req.user.role === 'reception') {
-      await recordsRepo.recordDelete(req.params.collection, req.params.id, 'AND origin = $3 AND created_by = $4', ['reception', req.user.username]);
-    } else if (req.user.role === 'admin') {
-      await recordsRepo.recordDelete(req.params.collection, req.params.id, '', []);
-    } else {
-      await recordsRepo.recordDelete(req.params.collection, req.params.id, "AND status = 'confirmed'", []);
+    if (outcome.forbidden) {
+      return res.status(403).json({ error: 'ليست لديك صلاحية حذف هذا السجل' });
+    }
+    if (!outcome.deleted) {
+      // من غير الموجود أصلاً يُعامَل كنجاح (حذف متكرر آمن — idempotent)
+      return res.json({ id: req.params.id, deleted: true });
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     if (req.params.collection === 'vaultTx') {
@@ -918,12 +927,15 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
   try {
     // نفس حماية عزل الاستقبال في الحذف الفردي (كان الحذف المجمّع بلا أي فحص ملكية إطلاقاً):
     // الاستقبال يحذف سجلاته هو فقط، staff/accountant يحذفون المعتمد فقط، والأدمن بلا قيود.
+    // نُعيد العدد الحقيقي المحذوف (بعد تطبيق شرط العزل) بدل ids.length الذي كان مضللاً عند
+    // وجود معرّفات لا يملكها المرسل — فيكتشف العميل أن شيئاً لم يُحذف بدل إيهامه بالنجاح.
+    let deleted;
     if (req.user.role === 'reception') {
-      await recordsRepo.recordBulkDelete(req.params.collection, ids, 'AND origin = $3 AND created_by = $4', ['reception', req.user.username]);
+      deleted = await recordsRepo.recordBulkDelete(req.params.collection, ids, 'AND origin = $3 AND created_by = $4', ['reception', req.user.username]);
     } else if (req.user.role === 'admin') {
-      await recordsRepo.recordBulkDelete(req.params.collection, ids, '', []);
+      deleted = await recordsRepo.recordBulkDelete(req.params.collection, ids, '', []);
     } else {
-      await recordsRepo.recordBulkDelete(req.params.collection, ids, "AND status = 'confirmed'", []);
+      deleted = await recordsRepo.recordBulkDelete(req.params.collection, ids, "AND status = 'confirmed'", []);
     }
     broadcastRecordChanged({ collection: req.params.collection, actorUsername: req.user.username });
     if (req.params.collection === 'vaultTx') {
@@ -932,7 +944,7 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
         `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
       );
     }
-    res.json({ deleted: ids.length });
+    res.json({ deleted });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حذف السجلات' });

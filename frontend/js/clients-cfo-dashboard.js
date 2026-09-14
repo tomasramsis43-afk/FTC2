@@ -129,7 +129,7 @@ function renderCfoHero(){
   const todayCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'')===today).reduce((s,t)=>s+num(t.amount),0);
 
   /* مؤشرات الاتجاه: اليوم مقابل أمس لبطاقتي "اليوم"، وهذه السنة مقابل السنة الماضية لنسبة التحصيل */
-  const yesterday = (()=>{ const d=new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); })();
+  const yesterday = (()=>{ const d=new Date(); d.setDate(d.getDate()-1); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; })();
   const yestClients = activeClients.filter(c=>String(c.date||'')===yesterday);
   const yestRegCount = yestClients.length;
   const yestCollected = vaultTx.filter(t=>t.type==='in' && String(t.date||'')===yesterday).reduce((s,t)=>s+num(t.amount),0);

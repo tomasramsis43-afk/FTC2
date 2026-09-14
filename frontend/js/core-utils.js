@@ -416,14 +416,16 @@ function _openKvIdb(){
 // يخزّن/يحدّث تعديلاً فردياً معلّقاً. payload لعملية upsert: { op:'upsert', enc, clientId? }،
 // ولعملية حذف: { op:'delete' }. قيد واحد فقط لكل (collection,id) — آخر تعديل معلّق فقط يهمّ.
 function _recordCkey(collection, id){ return collection + '::' + id; }
-async function _pendingRecordPut(collection, id, payload){
+async function _pendingRecordPut(collection, id, payload, baselinePlain){
   try{
     const db = await _openKvIdb();
     if(!db) return;
+    const toStore = Object.assign({ ckey: _recordCkey(collection,id), collection, id, queuedAt: Date.now() }, payload);
+    if(typeof baselinePlain === 'string') toStore.baselinePlain = baselinePlain;
     await new Promise((resolve)=>{
       try{
         const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
-        tx.objectStore(RECORD_PENDING_STORE).put(Object.assign({ ckey: _recordCkey(collection,id), collection, id, queuedAt: Date.now() }, payload));
+        tx.objectStore(RECORD_PENDING_STORE).put(toStore);
         tx.oncomplete = ()=> resolve();
         tx.onerror = ()=> resolve();
       }catch(e){ resolve(); }

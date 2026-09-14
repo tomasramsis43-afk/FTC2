@@ -24,16 +24,29 @@ function stripSslModeFromConnectionString(url) {
   }
 }
 
+// إصلاح أمني (آمن افتراضياً): لا نقبل أي شهادة غير موثوقة إلا صراحةً.
+//   DATABASE_SSL=false        → بلا TLS إطلاقاً (للتطوير المحلي فقط — لا للاستضافة).
+//   DATABASE_SSL=verify       → تحقق صارم من الشهادة (rejectUnauthorized:true).
+//   DATABASE_SSL=verify + CA  → تحقق صارم بشهادة CA مخصصة (الاستضافة ذات الشهادة الذاتية).
+//   غير مضبوط / أي قيمة أخرى  → تحقق صارم بحزمة الشهادات النظامية — يساوي verify تماماً.
+// لا يوجد أي فرع "TLS بدون تحقق" (rejectUnauthorized:false) بعد الآن؛ من يحتاج ذلك
+// عليه تعطيل التحقق على مستوى البيئة صراحةً (NODE_TLS_REJECT_UNAUTHORIZED=0) بوازن الخطر.
+const databaseSslValue = (process.env.DATABASE_SSL || 'verify').toLowerCase();
+let sslConfig;
+if (databaseSslValue === 'false') {
+  sslConfig = false;
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('⚠️  تحذير: DATABASE_SSL=false مضبوط في بيئة إنتاج — الاتصال بقاعدة البيانات بدون TLS (غير آمن).');
+  }
+} else if (databaseSslValue === 'verify' && process.env.DATABASE_SSL_CA) {
+  sslConfig = { rejectUnauthorized: true, ca: process.env.DATABASE_SSL_CA };
+} else {
+  sslConfig = { rejectUnauthorized: true };
+}
+
 const pool = new Pool({
   connectionString: stripSslModeFromConnectionString(process.env.DATABASE_URL),
-  // إصلاح أمني: لا نقبل أي شهادة افتراضياً. استخدم DATABASE_SSL=false للتطوير المحلي فقط.
-  // للإنتاج مع شهادة موثوقة: اضبط DATABASE_SSL=verify و DATABASE_SSL_CA بمحتوى شهادة CA.
-  ssl: process.env.DATABASE_SSL === 'false' ? false
-    : process.env.DATABASE_SSL === 'verify' && process.env.DATABASE_SSL_CA
-    ? { rejectUnauthorized: true, ca: process.env.DATABASE_SSL_CA }
-    : process.env.DATABASE_SSL === 'verify'
-    ? { rejectUnauthorized: true }
-    : { rejectUnauthorized: false },
+  ssl: sslConfig,
   max: 20,
   min: 2,
   idleTimeoutMillis: 30000,
@@ -41,9 +54,6 @@ const pool = new Pool({
   statement_timeout: 15000,
   query_timeout: 15000,
 });
-if (process.env.DATABASE_SSL !== 'false' && process.env.DATABASE_SSL !== 'verify') {
-  console.warn('⚠️  تحذير أمني: DATABASE_SSL غير مُفعّل للتحقق الكامل (rejectUnauthorized:false). فعّل DATABASE_SSL=verify في الإنتاج مع شهادة CA موثوقة لتجنب هجمات MITM.');
-}
 
 // إصلاح حرج: قواعد Neon (serverless) تُنهي الاتصالات الخاملة في الـ pool من جهتها بين الحين
 // والآخر (connection reset / idle termination على مستوى الشبكة). مكتبة pg تُطلق حدث 'error' على

@@ -119,6 +119,52 @@ async function clientDelete(id, whereClause, params) {
   await pool.query(sql, allParams);
 }
 
+// حذف ذرّي بفحص نسخة لغير منفصل (check-then-act داخل معاملة واحدة FOR UPDATE):
+// يُقفَل صف السجل أولاً، يُقارَن رقمة النسخة المتوقَّعة (إن وُجدت) بنفس القفل، ثم يُختبر
+// شرط السماح (allowFor) على بيانات الصف المقفول — فتُحسم تعارضات PUT/DELETE المتزامنة
+// (TOCTOU) نهائياً: لا يمكن بعد الآن أن يحذف طلبٌ سجلاً "على أساس نسخة 5" بينما نسخة 6
+// تُحفظ من جهاز آخر في نفس اللحظة (كان الفرق بين الفحص والحذف نافذةً يضيع فيها التحديث الأخير).
+// النتائج:
+//   { deleted:true }                            → حُذف فعلياً
+//   { deleted:false, notFound:true }            → لا يوجد (يُعامَل كنجاح: حذف متكرر آمن)
+//   { deleted:false, conflict:true, currentVersion } → تغيّر بعد آخر مشاهدة (409)
+//   { deleted:false, forbidden:true }           → لا يملك المرسل حق حذفه (403)
+async function deleteAtomic({ isClient, id, collection, expectedVersion, allowFor }) {
+  const table = isClient ? 'client_records' : 'collection_records';
+  const whereId = isClient ? 'id = $1' : 'collection = $1 AND id = $2';
+  const idParams = isClient ? [id] : [collection, id];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sel = await client.query(
+      `SELECT origin, status, created_by, version, enc FROM ${table} WHERE ${whereId} FOR UPDATE`,
+      idParams
+    );
+    const row = sel.rows[0] || null;
+    if (!row) {
+      await client.query('COMMIT');
+      return { deleted: false, notFound: true, currentVersion: null, currentEnc: null };
+    }
+    const currentVersion = Number(row.version);
+    if (expectedVersion !== undefined && Number.isFinite(expectedVersion) && currentVersion !== expectedVersion) {
+      await client.query('COMMIT');
+      return { deleted: false, conflict: true, currentVersion, currentEnc: row.enc };
+    }
+    if (typeof allowFor === 'function' && !allowFor(row)) {
+      await client.query('COMMIT');
+      return { deleted: false, forbidden: true, currentVersion, currentEnc: row.enc };
+    }
+    await client.query(`DELETE FROM ${table} WHERE ${whereId}`, idParams);
+    await client.query('COMMIT');
+    return { deleted: true, currentVersion, currentEnc: row.enc };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // حذف عدة عملاء دفعة واحدة (مع شرط عزل) — يرجع عدد الصفوف المحذوفة فعلياً بعد تطبيق شرط العزل
 async function clientBulkDelete(ids, whereClause, params) {
   let sql = 'DELETE FROM client_records WHERE id = ANY($1::text[])';
@@ -233,12 +279,13 @@ async function recordDelete(collection, id, whereClause, params) {
   await pool.query(sql, allParams);
 }
 
-// حذف عدة سجلات عامة دفعة واحدة (مع شرط عزل)
+// حذف عدة سجلات عامة دفعة واحدة (مع شرط عزل) — يرجع عدد الصفوف المحذوفة فعلياً بعد تطبيق شرط العزل
 async function recordBulkDelete(collection, ids, whereClause, params) {
   let sql = 'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])';
   const allParams = [collection, ids];
   if (whereClause) { sql += ' ' + whereClause; allParams.push(...params); }
-  await pool.query(sql, allParams);
+  const r = await pool.query(sql, allParams);
+  return r.rowCount || 0;
 }
 
 // حذف كل سجلات تصنيف (إعادة ضبط مصنع)
@@ -388,5 +435,5 @@ module.exports = {
   recordsByCollection, recordVersionPairs, pendingRecordsAll, recordMetaFor,
   recordUpsert, recordApprove, recordDelete, recordBulkDelete, recordDeleteAll,
   recordPrune, recordPrunePreview, bulkMigrate, CLIENTS_TABLE_CONFIG, RECORDS_TABLE_CONFIG,
-  recordsVersions,
+  recordsVersions, deleteAtomic,
 };

@@ -239,6 +239,7 @@ async function flushPendingWrites(){
       // وتترك لآلية 409 العادية لتكتشف أي تعارض حقيقي كما كانت).
       const unknownKeys = pending.map(p => p.key).filter(k => !(k in _kvVersions));
       if(unknownKeys.length){
+        let versionsPrepared = false;
         try{
           const versionsRes = await serverFetch('/api/storage-versions');
           if(versionsRes.ok){
@@ -247,8 +248,16 @@ async function flushPendingWrites(){
             for(const k of unknownKeys){
               if(k in serverVersions) _kvVersions[k] = serverVersions[k];
             }
+            versionsPrepared = true;
           }
-        }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) — سيُكمل بالمنطق القديم أدناه كخط رجعة */ }
+        }catch(e){ /* تعذّر التحضير (لسه بدون اتصال فعلياً) */ }
+        // لو فشل جلب النسخ، إرسال version:0 لمفاتيح موجودة على السيرفر يسبّب 409 كاذباً فيسقط
+        // التعديل المعلّق بصمت (فقد بيانات). الأمان: نوقف الفلوش كاملاً ونُعدّ المحاولة لاحقاً
+        // عندما يعود الاتصال — كل العناصر تبقى في الطابور بأمان.
+        if(!versionsPrepared){
+          markOffline();
+          return;
+        }
       }
       // معالجة كل عنصر (نفس المنطق بالضبط كما كان تسلسلياً، ملفوف الآن فى دالة تُنفَّذ بالتوازي على
       // دفعات عبر _runWithConcurrency بدل حلقة for...of تسلسلية — راجع تعليقها لشرح الفرق).
@@ -267,7 +276,12 @@ async function flushPendingWrites(){
             showToast(`تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
             return;
           }
-          if(!res.ok) return; // السيرفر لا يزال غير متجاوب — نتركه في الطابور ونعيد المحاولة لاحقاً
+          if(!res.ok){
+            // رفض دائم (403/400/422): لا يُعاد إلى الطابور (لن يتغيّر النتيجة). 429/5xx مؤقت يبقى.
+            if(res.status === 429 || res.status >= 500) return;
+            await _pendingDelete(item.key);
+            return;
+          }
           const data = await res.json();
           _kvVersions[item.key] = data.version || 0;
           await _kvCacheWrite(item.key, data.version || 0, item.value);
@@ -323,14 +337,19 @@ async function _recordBasePlain(collection, isClient, id){
   }catch(e){ return null; }
 }
 // يرجع true فقط لو أمكن إثبات أن محتوى السيرفر الحالي مطابق لأساس تعديلنا (بعد فك التشفير).
-async function _safeToApplyOnConflict(conflict, collection, isClient, id){
+// storedBaseline: القيمة المخزّنة عند حفظ التعديل في الطابور — نستخدمها بدل baseline الحي
+// لمنع سباق "التعديل القديم يكتب فوق الأحدث" (data overwrite race):
+// لو تغيّر baseline الحي بسبب مزامنة خلفية同時 (حساب جميع التصنيفات مثلاً) بين
+// حفظ التعديل القديم وتشغيل Flush، المقارنة بال baseline الحي تظن أن محتوى السيرفر
+// "مطابق" فتعيد رفع التعديل القديم فوق الأحدث — فقدان بيانات صامت.
+async function _safeToApplyOnConflict(conflict, collection, isClient, id, storedBaseline){
   try{
     if(!conflict || typeof conflict.currentEnc !== 'string') return false;
     if(typeof conflict.currentVersion !== 'number') return false;
     let serverPlain = null;
     try{ serverPlain = await decryptValue(conflict.currentEnc); }catch(e){ serverPlain = null; }
     if(typeof serverPlain !== 'string') return false;
-    const basePlain = await _recordBasePlain(collection, isClient, id);
+    const basePlain = (typeof storedBaseline === 'string') ? storedBaseline : await _recordBasePlain(collection, isClient, id);
     if(typeof basePlain !== 'string') return false;
     return serverPlain === basePlain;
   }catch(e){ return false; }
@@ -383,8 +402,10 @@ async function flushPendingRecordWrites(){
             // نسخ محلي فقط) → نعيد الرفع مرة واحدة بالنسخة الحالية. لو مختلف أو تعذّر التحقق
             // (تعديل فعلي من جهاز آخر) → لا نكتب فوقه إطلاقاً: نتخلى عن التعديل المعلّق وننبّه
             // المستخدم — نفس معاملة تعارضات kv (flushPendingWrites) تماماً.
+            // basePlain المقارن: نستخدم القيمة المخزّنة وقت الطابور إن وُجدت (تمنع سباق التعديل القديم
+            // فوق الأحدث)، وإلا fallback للbaseline الحي (عناصر قديمة قبل هذا الإصلاح).
             const conflict = await res.json().catch(()=>({}));
-            const safeToRetry = item.op === 'upsert' && await _safeToApplyOnConflict(conflict, item.collection, isClient, item.id);
+            const safeToRetry = item.op === 'upsert' && await _safeToApplyOnConflict(conflict, item.collection, isClient, item.id, item.baselinePlain);
             if(safeToRetry){
               const retryBody = isClient ? { enc: item.enc, version: conflict.currentVersion, clientId: item.clientId || '', plain: item.plain } : { enc: item.enc, version: conflict.currentVersion };
               const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify(retryBody) });
@@ -411,7 +432,25 @@ async function flushPendingRecordWrites(){
             showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
             return;
           }
-          if(!res.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
+          // حذف فشل بـ404: السجل لم يعد موجوداً على السيرفر (حُذف من جهاز آخر أو لم يُرفع قط).
+          // نعامله كنجاح (حذف متكرر آمن) بدل البقاء في الطابور للأبد — نفس منطق deleteOneRecordGeneric.
+          if(item.op === 'delete' && res.status === 404){
+            if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
+            else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
+            await _pendingRecordDelete(item.collection, item.id);
+            return;
+          }
+          if(!res.ok){
+            // رفض دائم (403/400/422 — صلاحية/بيانات/تشفير): لا نعيده إرسالاً في الطابور للأبد.
+            // فقط نُسقط التعديل المعلّق ونُبلّغ المستخدم، لأن إعادة المحاولة لن تغيّر النتيجة أبداً.
+            if(res.status >= 400 && res.status < 500 && res.status !== 429){
+              await _pendingRecordDelete(item.collection, item.id);
+              showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}): رفض دائم من السيرفر (${res.status}) — تم تجاهل هذا التعديل المعلّق`);
+              return;
+            }
+            // أخطاء مؤقتة (429/5xx) — يبقى في الطابور لإعادة المحاولة
+            return;
+          }
           if(item.op === 'delete'){
             if(isClient){ delete _clientRecordVersions[item.id]; delete clientRecordMeta[item.id]; }
             else if(_recordVersions[item.collection]) _recordVersions[item.collection].delete(item.id);
@@ -1034,7 +1073,9 @@ async function saveOneRecordGeneric(collection, id, plainJson){
       });
     }catch(e){
       // فشل اتصال فعلي — نسجّله معلّقاً بدل ما يضيع صامتاً (نفس منطق saveOneClientRecord بالضبط).
-      await _pendingRecordPut(collection, id, { op:'upsert', enc });
+      // baselinePlain: آخر نسخة مؤكدة من السجل لمنع سباق التعديل القديم فوق الأحدث.
+      const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection].get(id) : undefined;
+      await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
       return null;
     }
     if(res.status === 409){
@@ -1044,7 +1085,11 @@ async function saveOneRecordGeneric(collection, id, plainJson){
       return false;
     }
     if(!res.ok){
-      await _pendingRecordPut(collection, id, { op:'upsert', enc });
+      // رفض دائم (403/400/422): لا يجوز إعادته في الطابور. فقط 429/5xx مؤقت يبقى معلّقاً.
+      if(res.status === 429 || res.status >= 500){
+        const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection].get(id) : undefined;
+        await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
+      }
       return null;
     }
     const data = await res.json();
@@ -1082,8 +1127,11 @@ async function deleteOneRecordGeneric(collection, id){
     // لازم نتحقق من res.ok: لو السيرفر رفض الحذف (مثال: 429 بسبب rate limiting، أو أي خطأ آخر)،
     // السجل لسه فعلياً موجود على السيرفر ولا يجوز اعتباره محذوفاً محلياً — وإلا سيرجع السجل
     // "المحذوف" فى المرة القادمة اللي يتحمّل فيها التصنيف من السيرفر، بينما البرنامج فاكر إنه اتمسح.
+    // فقط أخطاء مؤقتة (429/5xx) نُعيده في الطابور؛ الرفض الدائم (403/400/422) لا يُعاد.
     if(!res.ok){
-      await _pendingRecordPut(collection, id, { op:'delete' });
+      if(res.status === 429 || res.status >= 500){
+        await _pendingRecordPut(collection, id, { op:'delete' });
+      }
       return null;
     }
     if(_recordVersions[collection]) _recordVersions[collection].delete(id);
@@ -1109,9 +1157,10 @@ async function bulkDeleteRecordsGeneric(collection, ids){
       });
       if(!res.ok){
         failedIds.push(...chunk);
-        // نسجّل كل سطر فشل حذفه فى طابور المعلّقات أيضاً — خط رجعة إضافي حتى لو الاستدعاء لم
-        // يُعِد محاولة الحذف بنفسه لاحقاً (بعض الاستدعاءات القديمة كانت تكتفي بترك الـid فى baseline).
-        await Promise.all(chunk.map(id=> _pendingRecordPut(collection, id, { op:'delete' })));
+        // فقط أخطاء مؤقتة (429/5xx) نُعيده في الطابور: الرفض الدائم (403/400/422) لا يُعاد.
+        if(res.status === 429 || res.status >= 500){
+          await Promise.all(chunk.map(id=> _pendingRecordPut(collection, id, { op:'delete' })));
+        }
         continue;
       }
       for(const id of chunk){
@@ -1148,11 +1197,13 @@ async function bulkUploadRecordsGeneric(collection, list){
       // الاعتماد فقط على نسخة احتياطية كاملة للتصنيف قد يتم تجاهلها لاحقاً لو رجع النظام
       // الجديد بأي بيانات ولو ناقصة عند أول تحميل قادم)، ثم نرفع نفس الاستثناء كالسابق تماماً
       // ليتعامل معه المستدعي (saveCollectionGeneric) بخط رجعته المعتاد.
-      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection] : null;
+      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc }, bp && bp.get(r.id))));
       throw e;
     }
     if(!res.ok){
-      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+      const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection] : null;
+      await Promise.all(records.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc }, bp && bp.get(r.id))));
       throw new Error('تعذّر رفع دفعة من بيانات ' + collection);
     }
     const data = await res.json().catch(()=>({}));
@@ -1212,7 +1263,8 @@ async function bulkUploadRecordsGeneric(collection, list){
           }
         }else{
           // فشل الاتصال أثناء إعادة المحاولة — نسجّل السجلات معلّقة ليُعاد رفعها لاحقاً تلقائياً
-          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc })));
+          const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection] : null;
+          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut(collection, r.id, { op:'upsert', enc: r.enc }, bp && bp.get(r.id))));
         }
       }
     }
@@ -1610,8 +1662,10 @@ async function saveOneClientRecord(client, plainJson){
     }catch(e){
       // فشل اتصال فعلي (مش رفض من السيرفر) — نسجّل هذا العميل فى طابور "سجلات معلّقة" محلياً
       // بدل ما يضيع نهائياً، ويُعاد رفعه تلقائياً لاحقاً (راجع flushPendingRecordWrites) حتى
-      // لو المستخدم عمل ريفرش أو قفل الصفحة قبل ما الاتصال يرجع.
-      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson });
+      // لو المستخدم عمل ريفرش أو قفل الصفحة قبل ما الاتصال يرجع. baselinePlain: نحفظ
+      // آخر نسخة مؤكدة من السجل لمنع سباق "التعديل القديم يكتب فوق الأحدث" عند Flush.
+      const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline.get(client.id) : undefined;
+      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson }, bp);
       return null;
     }
     if(res.status === 409){
@@ -1621,9 +1675,12 @@ async function saveOneClientRecord(client, plainJson){
       return false;
     }
     if(!res.ok){
-      // رفض من السيرفر بسبب غير تعارض (مثال: 429 rate limit، أو خطأ خادم مؤقت) — نفس معاملة
-      // فشل الاتصال: نسجّله معلّقاً بدل تجاهله.
-      await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson });
+      // رفض دائم (403/400/422): لا يجوز إعادته في الطابور (لن يتغيّر 결과 أبداً) — نُسقط التعديل
+      // ونُبلّغ المستخدم. فقط الأخطاء المؤقتة (429/5xx) تبقى في الطابور لإعادة المحاولة.
+      if(res.status === 429 || res.status >= 500){
+        const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline.get(client.id) : undefined;
+        await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson }, bp);
+      }
       return null;
     }
     const data = await res.json();
@@ -1672,7 +1729,10 @@ async function deleteOneClientRecord(id){
     // نفس تصحيح deleteOneRecordGeneric: لازم نتحقق من res.ok قبل اعتبار الحذف ناجحاً محلياً،
     // وإلا عميل فشل حذفه فعلياً على السيرفر (429/خطأ) هيرجع يظهر تاني عند أي تحميل قادم.
     if(!res.ok){
-      await _pendingRecordPut('clients', id, { op:'delete' });
+      // فقط أخطاء مؤقتة (429/5xx) نعيد المحاولة: 403/400/422 رفض دائم لا ي ديسمبر بإعادة المحاولة.
+      if(res.status === 429 || res.status >= 500){
+        await _pendingRecordPut('clients', id, { op:'delete' });
+      }
       return null;
     }
     delete _clientRecordVersions[id];
@@ -1697,7 +1757,11 @@ async function bulkDeleteClientRecords(ids){
       });
       if(!res.ok){
         failedIds.push(...chunk);
-        await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' })));
+        // فقط أخطاء مؤقتة (429/5xx) نُعيده في الطابور: الرفض الدائم (403/400/422) لا يُعاد.
+        if(res.status === 429 || res.status >= 500){
+          const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline : null;
+          await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' }, bp && bp.get(id))));
+        }
         continue;
       }
       for(const id of chunk){
@@ -1706,7 +1770,8 @@ async function bulkDeleteClientRecords(ids){
       }
     }catch(e){
       failedIds.push(...chunk);
-      await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' })));
+      const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline : null;
+      await Promise.all(chunk.map(id=> _pendingRecordPut('clients', id, { op:'delete' }, bp && bp.get(id))));
     }
   }
   return failedIds;
@@ -1761,11 +1826,13 @@ async function bulkUploadClientRecords(clientsList){
     }catch(e){
       // فشل اتصال فعلي أثناء رفع دفعة عملاء — نسجّل كل عميل فى الدفعة فى طابور المعلّقات فردياً
       // قبل رفع نفس الاستثناء، بدل الاعتماد فقط على نسخة احتياطية كاملة قد تُتجاهل لاحقاً.
-      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
+      const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline : null;
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain }, bp && bp.get(r.id))));
       throw e;
     }
     if(!res.ok){
-      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
+      const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline : null;
+      await Promise.all(records.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain }, bp && bp.get(r.id))));
       throw new Error('تعذّر رفع دفعة من سجلات العملاء أثناء الترحيل');
     }
     const data = await res.json().catch(()=>({}));
@@ -1821,7 +1888,8 @@ async function bulkUploadClientRecords(clientsList){
             }
           }
         }else{
-          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain })));
+          const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline : null;
+          await Promise.all(safeRetryRecords.map(r=> _pendingRecordPut('clients', r.id, { op:'upsert', enc: r.enc, clientId: r.clientId, plain: r.plain }, bp && bp.get(r.id))));
         }
       }
     }

@@ -454,8 +454,18 @@ function startLocalServer() {
       }
       const targetUrl = 'https://arkkanapp2.net' + targetPath;
       const chunks = [];
-      req.on('data', c => chunks.push(c));
+      let bodySize = 0;
+      let abortedOnSize = false;
+      req.on('data', c => {
+        bodySize += c.length;
+        if (bodySize > 2 * 1024 * 1024) { abortedOnSize = true; req.destroy(); return; }
+        chunks.push(c);
+      });
       req.on('end', () => {
+        if (abortedOnSize || req.destroyed) {
+          if (!res.headersSent) return res.status(413).json({ error: 'حجم الطلب أكبر من المسموح (2MB)' });
+          return;
+        }
         const body = Buffer.concat(chunks);
         const headers = Object.assign({}, req.headers);
         delete headers.host;
@@ -466,7 +476,7 @@ function startLocalServer() {
         const proxyHeaders = Object.assign({}, headers);
     if (req.headers.cookie) proxyHeaders.cookie = req.headers.cookie;
     const proxyReq = https.request(
-          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders },
+          { hostname: u.hostname, port: 443, path: u.pathname + u.search, method: req.method, headers: proxyHeaders, timeout: 20000 },
           proxyRes => {
             const respHeaders = Object.assign({}, proxyRes.headers);
             const rawSetCookie = proxyRes.headers['set-cookie'];
@@ -477,10 +487,13 @@ function startLocalServer() {
             proxyRes.pipe(res);
           }
         );
+        proxyReq.on('timeout', () => proxyReq.destroy(new Error('Arkkan proxy timeout')));
         proxyReq.on('error', err => {
+          if (res.destroyed) return;
           if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
           res.end('Arkkan proxy error: ' + err.message);
         });
+        res.on('close', () => proxyReq.destroy());
         if (body.length) proxyReq.write(body);
         proxyReq.end();
       });

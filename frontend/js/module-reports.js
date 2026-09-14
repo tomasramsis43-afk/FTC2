@@ -1,7 +1,7 @@
 /* ---------------- Reports ---------------- */
 function allTimeTotals(){
   const income = vaultTx.filter(t=>t.type==='in' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0);
-  const expense = vaultTx.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);
+  const expense = vaultTx.filter(t=>t.type==='out' && vaultTxCountsTowardBalance(t)).reduce((s,t)=>s+num(t.amount),0);
   const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
   const {purchasedQty, spentBulk} = bagStockTotals();
   const purchasedBuy = clients.filter(c=>c.bagSource==='buy' && c.bagStatus==='purchased' && !c.suspended);
@@ -131,7 +131,7 @@ function lastCompleteMonthKey(){
 }
 function monthSummaryData(key){
   const income = vaultTx.filter(t=>t.type==='in' && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);
-  const expense = vaultTx.filter(t=>t.type==='out' && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);
+  const expense = vaultTx.filter(t=>t.type==='out' && vaultTxCountsTowardBalance(t) && (t.date||'').slice(0,7)===key).reduce((s,t)=>s+num(t.amount),0);
   const regCount = clients.filter(c=>!c.suspended && (c.date||'').slice(0,7)===key).length;
   const byType = {};
   clients.filter(c=>!c.cancelled && (c.date||'').slice(0,7)===key).forEach(c=>{
