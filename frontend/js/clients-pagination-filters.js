@@ -334,13 +334,14 @@ $('#btn-clear-selection').addEventListener('click', ()=>{
 $('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
   const allIds = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
   if(!allIds.length){ showToast('لا يوجد عملاء محددين'); return; }
-  const ids = allIds.filter(id=>canDeleteClientRecord(clients.find(c=>c.id===id)));
+  const ids = allIds.filter(id=>canDeleteClientForUser(clients.find(c=>c.id===id)));
   const blockedCount = allIds.length - ids.length;
-  if(!ids.length){ showToast(blockedCount ? `🔒 كل السجلات المحددة (${blockedCount}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك` : 'لا يوجد عملاء محددين'); return; }
-  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
+  if(!ids.length){ showToast(blockedCount ? `🔒 كل السجلات المحددة (${blockedCount}) خارج مهلة الحذف المسموح بها أو لا تملك صلاحية حذفها` : 'لا يوجد عملاء محددين'); return; }
+  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل لا تملك صلاحية حذفه (خارج مهلة/شروط الحذف أو سجل أنشأه غيرك)`);
   const namesPreview = clients.filter(c=>ids.includes(c.id)).slice(0,5).map(c=>c.name).join('، ');
   const extra = ids.length>5 ? ` وآخرين (${ids.length-5})` : '';
   if(!await customConfirm(`تأكيد حذف ${ids.length} عميل دفعة واحدة؟ (${namesPreview}${extra})\nسيُحذف أيضاً أي ترحيل مالي تلقائي مرتبط بكل عميل منهم. هذا الإجراء لا يمكن التراجع عنه.`)) return;
+  if(!(await waitForClientsFirstRealSync())){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   snapshotState(`حذف مجموعة عملاء دفعة واحدة (${ids.length} عميل)`);
   const removedNames = clients.filter(c=>ids.includes(c.id)).map(c=>c.name);
   clients = clients.filter(c=>!ids.includes(c.id));

@@ -367,6 +367,10 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
       if (existing && existing.status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
       }
+      // الموظف العام: لا يُعدِّل إلا سجلاته هو (المعتمدة) — المحاسب يبقى على كل المعتمد
+      if (existing && req.user.role === 'staff' && existing.created_by !== req.user.username) {
+        return res.status(403).json({ error: 'ليست لديك صلاحية تعديل بيانات هذا العميل' });
+      }
     }
     const newOrigin = req.user.role === 'reception' ? 'reception' : 'general';
     const newStatus = req.user.role === 'reception' ? 'pending' : 'confirmed';
@@ -468,6 +472,10 @@ router.delete('/api/client-records/:id', requireAuth, storageLimiter, async (req
       if (existing && existing.status !== 'confirmed') {
         return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
       }
+      // الموظف العام: لا يحذف إلا سجلاته هو (المعتمدة) — المحاسب يبقى على كل المعتمد (يراهما الكل)
+      if (existing && req.user.role === 'staff' && existing.created_by !== req.user.username) {
+        return res.status(403).json({ error: 'ليست لديك صلاحية حذف بيانات هذا العميل' });
+      }
     }
     await recordsRepo.clientDelete(req.params.id, null, []);
     clientsRowsRepo.deleteIds([req.params.id]).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
@@ -491,13 +499,20 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
   if (!ids.length || ids.length > 1000) return res.status(400).json({ error: 'عدد السجلات غير صحيح (الحد الأقصى 1000 لكل طلب)' });
   try {
     // نفس عزل مستخدم الاستقبال/الأدمن/الأدوار الأخرى فى مسار الحذف الفردي — يُنفَّذ بحارس SQL بدل
-    // ثلاث استعلامات منفصلة: الاستقبال يلمس سجلاته فقط، الأدمن بلا قيود، والباقي المعتمد فقط.
+    // ثلاث استعلامات منفصلة: الاستقبال يلمس سجلاته فقط، الأدمن بلا قيود، والمحاسب المعتمد فقط.
+    // الموظف العام مقيد أكثر من المحاسب: فقط السجلات المعتمدة التي أنشأها هو نفسه (created_by) —
+    // تطابق "الشيت لا يظهر له إلا سجلاته" (راجع filterOwnRecords)، فلا يمس عبر طلب مباشر سجلات غيره.
+    // نعيد العدد الحقيقي المحذوف (بعد تطبيق شرط العزل) بدل ids.length الذي كان مضللاً عند وجود
+    // مُعرّفات لا يملكها المرسل — فيكتشف العميل أن شيئاً لم يُحذف بدل إيهامه بالنجاح.
+    let deleted;
     if (req.user.role === 'reception') {
-      await recordsRepo.clientBulkDelete(ids, 'AND origin = $2 AND created_by = $3', [req.user.role, req.user.username]);
+      deleted = await recordsRepo.clientBulkDelete(ids, 'AND origin = $2 AND created_by = $3', [req.user.role, req.user.username]);
     } else if (req.user.role === 'admin') {
-      await recordsRepo.clientBulkDelete(ids, '', []);
+      deleted = await recordsRepo.clientBulkDelete(ids, '', []);
+    } else if (req.user.role === 'accountant') {
+      deleted = await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed'", []);
     } else {
-      await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed'", []);
+      deleted = await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed' AND created_by = $3", [req.user.username]);
     }
     clientsRowsRepo.deleteIds(ids).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
@@ -506,7 +521,7 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
     //   `حذف جماعي لبيانات عملاء — ${ids.length} سجل`,
     //   `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> سجل عميل — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
     // );
-    res.json({ deleted: ids.length });
+    res.json({ deleted });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حذف بيانات العملاء' });

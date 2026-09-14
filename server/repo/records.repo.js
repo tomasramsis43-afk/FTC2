@@ -119,12 +119,13 @@ async function clientDelete(id, whereClause, params) {
   await pool.query(sql, allParams);
 }
 
-// حذف عدة عملاء دفعة واحدة (مع شرط عزل)
+// حذف عدة عملاء دفعة واحدة (مع شرط عزل) — يرجع عدد الصفوف المحذوفة فعلياً بعد تطبيق شرط العزل
 async function clientBulkDelete(ids, whereClause, params) {
   let sql = 'DELETE FROM client_records WHERE id = ANY($1::text[])';
   const allParams = [ids];
   if (whereClause) { sql += ' ' + whereClause; allParams.push(...params); }
-  await pool.query(sql, allParams);
+  const r = await pool.query(sql, allParams);
+  return r.rowCount || 0;
 }
 
 // حذف كل سجلات العملاء (إعادة ضبط مصنع)

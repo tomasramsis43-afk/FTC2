@@ -39,7 +39,7 @@ function cfoDeltasRow(yearCur, yearPrev, monthCur, monthPrev){
 /* اتجاه شهري لصافي دخل المركز من الدورات (آخر n شهر، بمعزل عن فلتر السنة العام) */
 function monthlyCourseIncomeTrend(n=12){
   const keys = lastNMonthKeys(n);
-  const net = keys.map(k=> Math.round(clients.filter(c=>!c.cancelled && (c.date||'').slice(0,7)===k).reduce((s,c)=>s+centerIncome(c),0)*100)/100);
+  const net = keys.map(k=> Math.round(clients.filter(c=>!c.cancelled && isApprovedClient(c) && (c.date||'').slice(0,7)===k).reduce((s,c)=>s+centerIncome(c),0)*100)/100);
   return { labels: keys.map(monthLabelAr), series:[{name:'صافي دخل المركز', color:'var(--gold-dark)', values:net}] };
 }
 /* اتجاه شهري للمبالغ المحصّلة فعلياً (من الحركات المالية الداخلة) */
@@ -76,7 +76,7 @@ function supplierUnpaidTotals(){
 /* إجمالي المتبقي على العملاء مجمّعاً حسب نوع الدورة (لأعلى فئات المتبقي) */
 function remainingByCourseType(){
   const map = {};
-  clients.filter(c=>!c.suspended && !c.cancelled).forEach(c=>{
+  clients.filter(c=>!c.suspended && !c.cancelled && isApprovedClient(c)).forEach(c=>{
     const r = remaining(c);
     if(r>0){ const k = c.courseType || 'غير محدد'; map[k]=(map[k]||0)+r; }
   });
@@ -85,7 +85,7 @@ function remainingByCourseType(){
 /* أعلى أنواع الدورات ربحية (صافي دخل المركز) خلال السنة الحالية */
 function topCoursesByProfit(limit=6){
   const map = {};
-  clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(new Date().getFullYear())).forEach(c=>{
+  clients.filter(c=>!c.cancelled && isApprovedClient(c) && String(c.date||'').slice(0,4)===String(new Date().getFullYear())).forEach(c=>{
     const k = c.courseType || 'غير محدد';
     map[k] = (map[k]||0) + centerIncome(c);
   });
@@ -109,7 +109,7 @@ function forecastCurrentMonthIncome(){
   const dayOfMonth = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const soFar = clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,7)===thisMonthKey).reduce((s,c)=>s+centerIncome(c),0);
+  const soFar = clients.filter(c=>!c.cancelled && isApprovedClient(c) && String(c.date||'').slice(0,7)===thisMonthKey).reduce((s,c)=>s+centerIncome(c),0);
   if(dayOfMonth<=0) return {soFar:0, projected:0};
   const dailyAvg = soFar/dayOfMonth;
   return { soFar: Math.round(soFar*100)/100, projected: Math.round(dailyAvg*daysInMonth*100)/100 };
@@ -122,7 +122,7 @@ function renderCfoHero(){
   el.style.display = '';
 
   const today = todayISO();
-  const activeClients = clients.filter(c=>!c.cancelled);
+  const activeClients = clients.filter(c=>!c.cancelled && isApprovedClient(c));
   const todayClients = activeClients.filter(c=>String(c.date||'')===today);
   const todayRegCount = todayClients.length;
   const todayIncome = todayClients.reduce((s,c)=>s+centerIncome(c),0);
@@ -152,7 +152,7 @@ function renderCfoHero(){
   const prevCollectionRate = prevYearSales>0 ? Math.min(999, (prevYearCollected/prevYearSales)*100) : 0;
 
   const totalBalance = balanceOf('vault') + balanceOf('bank') + balanceOf('network') + balanceOf('network2');
-  const totalRemaining = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
+  const totalRemaining = clients.filter(c=>isApprovedClient(c) && !c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
 
   const fc = forecastCurrentMonthIncome();
 
@@ -247,13 +247,13 @@ function renderCfoDashboard(){
   /* نطاق الرسوم البيانية: يُقرأ من المحدد #cfo-range في لوحة التحكم (آخر 12/6/3 شهراً) */
   const rangeN = Math.min(Math.max(parseInt($('#cfo-range')?.value, 10) || 12, 1), 60);
 
-  const activeClients = clients.filter(c=>!c.cancelled);
+  const activeClients = clients.filter(c=>!c.cancelled && isApprovedClient(c));
   const sumWhere = (yearOrMonth, keyType) => activeClients
     .filter(c=> keyType==='year' ? String(c.date||'').slice(0,4)===String(yearOrMonth) : String(c.date||'').slice(0,7)===yearOrMonth)
     .reduce((s,c)=>s+centerIncome(c),0);
 
   // === لوحة 1: الدخل من الدورات ===
-  const salesYear = clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(thisYear)).reduce((s,c)=>s+num(c.coursePrice),0);
+  const salesYear = clients.filter(c=>!c.cancelled && isApprovedClient(c) && String(c.date||'').slice(0,4)===String(thisYear)).reduce((s,c)=>s+num(c.coursePrice),0);
   const netYear = sumWhere(thisYear,'year');
   const netLastYear = sumWhere(lastYear,'year');
   const netThisMonth = sumWhere(thisMonthKey,'month');
@@ -265,7 +265,7 @@ function renderCfoDashboard(){
   const collectedLastYear = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,4)===String(lastYear)).reduce((s,t)=>s+num(t.amount),0);
   const collectedThisMonth = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,7)===thisMonthKey).reduce((s,t)=>s+num(t.amount),0);
   const collectedLastMonth = vaultTx.filter(t=>t.type==='in' && String(t.date||'').slice(0,7)===lastMonthKey).reduce((s,t)=>s+num(t.amount),0);
-  const totalRemainingNow = clients.filter(c=>!c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
+  const totalRemainingNow = clients.filter(c=>isApprovedClient(c) && !c.suspended && !c.cancelled).reduce((s,c)=>s+remaining(c),0);
   const collectTrend = monthlyCollectedTrend(rangeN);
   const remainBars = remainingByCourseType();
 
@@ -308,7 +308,7 @@ function renderCfoDashboard(){
   const receptionPerf = receptionPerformance(8);
 
   // === لوحة 9: توزيع طريقة الدفع (كاش/شبكة/بنك) خلال السنة الحالية ===
-  const clientsThisYear = clients.filter(c=>!c.cancelled && String(c.date||'').slice(0,4)===String(thisYear));
+  const clientsThisYear = clients.filter(c=>isApprovedClient(c) && !c.cancelled && String(c.date||'').slice(0,4)===String(thisYear));
   const channelDist = groupChannelAmounts(clientsThisYear);
 
   el.innerHTML = `

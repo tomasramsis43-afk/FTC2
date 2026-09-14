@@ -80,6 +80,15 @@ function filterOwnRecords(arr){
   return arr.filter(r=> r && r.createdBy && r.createdBy===currentUser);
 }
 
+/* هل سجل هذا العميل معتمد فعلاً (ليس "قيد الاعتماد" الذي سجّله الاستقبال ولسه الأدمن ما اعتمده)؟
+   السجلات بدون حالة معروفة (قديمة/عامة) تُعتبر معتمدة. يُستخدم في تجميعات الـ CFO والدخل والمتبقيات
+   حتى لا يدخل عميل معلّق اعتماده أرقام الدخل/المتبقي قبل اعتماده فعلياً رغم أنه لا يُنشئ حركات مالية. */
+function isApprovedClient(c){
+  if(!c || !c.id) return false;
+  const m = clientRecordMeta && clientRecordMeta[c.id];
+  return !m || m.status !== 'pending';
+}
+
 /* ================= قيود خاصة بدور "الاستقبال" على شيت العملاء (قابلة للتعديل من الإعدادات) =================
    settings.receptionEditDeleteWindowHours: عدد الساعات المسموح بها للتعديل/الحذف بعد وقت تسجيل
    العميل (createdAt). settings.receptionAllowEdit / receptionAllowDelete: تفعيل/تعطيل كل ميزة
@@ -102,6 +111,20 @@ function canDeleteClientRecord(client){
   if(currentUserRole!=='reception') return true; // القيد خاص بدور الاستقبال فقط
   if(settings && settings.receptionAllowDelete===false) return false;
   return withinReceptionWindow(client);
+}
+// عزل الملكية في عمليات الحذف الدفعية: الأدمن/المحاسب يرى ويدير الكل، وأي دور آخر (استقبال/موظف
+// عام) لا يحذف إلا سجلاً يملكه بالفعل (createdBy === نفسه) وداخل قيود نافذة/تفعيل الحذف الخاصة بروله.
+// تُطبَّق على مسارات الحذف الجماعي لسد فجوة: كان الموظف العام يستطيع حذف سجلات عملاء أنشأها غيره
+// لا تظهر له أصلاً في الشيت (راجع filterOwnRecords) — الكود لصق أرقام هوية عن سجلات غير ظاهرة فتحذف.
+function canDeleteClientForUser(client){
+  if(canSeeAllData()) return canDeleteClientRecord(client);
+  return isOwnRecord(client) && canDeleteClientRecord(client);
+}
+// نفس منطق الحذف فوق لكن للحالة "تعديل": يُستخدم في جدول التحديث الدفعي حتى لا يعدّل الموظف سجلات
+// لا يملكها (راجع canReceptionEditClient لنافذة/تفعيل التعديل الخاصة بدور الاستقبال).
+function canEditClientForUser(client){
+  if(canSeeAllData()) return canReceptionEditClient(client);
+  return isOwnRecord(client) && canReceptionEditClient(client);
 }
 
 /* دالة تأخير التنفيذ (debounce) — تُستخدم مع حقول البحث النصي حتى لا يُعاد رسم الجداول الكبيرة

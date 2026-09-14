@@ -366,6 +366,10 @@ $('#btn-bulk-update-save').addEventListener('click', async ()=>{
     const existingIdx = clients.findIndex(c=>c.clientId===clientId);
     if(existingIdx>-1){
       const existing = clients[existingIdx];
+      if(!canEditClientForUser(existing)){
+        errors.push(`${rowLabel}: رقم ${clientId} سجل عميل أنشأه غيرك (أو خارج شروط التعديل) — لا تملك صلاحية تعديله`);
+        return;
+      }
       const patch = {};
       if(present(name)) patch.name = name;
       if(present(val('bu-refer'))) patch.referNum = val('bu-refer').trim();
@@ -547,14 +551,16 @@ $('#btn-bulk-delete-save').addEventListener('click', async ()=>{
   const matchedAll = clients.filter(c=>idsInBatch.includes(c.clientId));
   const notFoundCount = idsInBatch.filter(id=>!clients.some(c=>c.clientId===id)).length;
   if(!matchedAll.length){ showToast('لم يتم العثور على أي عميل بأرقام الهوية المدخلة'); return; }
-  const matched = matchedAll.filter(c=>canDeleteClientRecord(c));
+  const matched = matchedAll.filter(c=>canDeleteClientForUser(c));
   const blockedCount = matchedAll.length - matched.length;
-  if(!matched.length){ showToast(`كل السجلات المطابقة (${matchedAll.length}) خارج مهلة الحذف المسموح بها أو الحذف معطَّل لصلاحيتك`); return; }
-  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل خارج مهلة الحذف المسموح بها`);
+  if(!matched.length){ showToast(`كل السجلات المطابقة (${matchedAll.length}) لا تملك صلاحية حذفها (خارج مهلة الحذف/الشروط، أو سجل أنشأه غيرك لا يظهر لك)`); return; }
+  if(blockedCount) showToast(`تم استبعاد ${blockedCount} سجل لا تملك صلاحية حذفه (خارج مهلة/شروط الحذف أو سجل أنشأه غيرك)`);
   const namesPreview = matched.slice(0,5).map(c=>c.name).join('، ');
   const extra = matched.length>5 ? ` وآخرين (${matched.length-5})` : '';
   const notFoundMsg = notFoundCount ? `\n(تنبيه: ${notFoundCount} رقم هوية غير موجودين أصلاً بالنظام وسيتم تجاهلهم)` : '';
   if(!await customConfirm(`تم العثور على ${matched.length} عميل مطابق. تأكيد حذفهم دفعة واحدة؟ (${namesPreview}${extra})${notFoundMsg}\nسيُحذف أيضاً أي ترحيل مالي تلقائي مرتبط بكل عميل منهم. هذا الإجراء لا يمكن التراجع عنه.`)) return;
+  // نفس منع الحذف أثناء نافذة المزامنة الأولى — راجع التعليق فى submit handler الرئيسي فى بداية الملف
+  if(!(await waitForClientsFirstRealSync())){ showToast('⏳ لسه جارٍ التأكد من آخر نسخة محدَّثة من بيانات العملاء مع السيرفر — حاول تاني بعد ثانية واحدة'); return; }
   snapshotState(`حذف عملاء دفعة واحدة عبر جدول (${matched.length} عميل)`);
   const idsSet = new Set(matched.map(c=>c.id));
   const removedNames = matched.map(c=>c.name);
