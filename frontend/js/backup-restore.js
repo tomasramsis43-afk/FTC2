@@ -29,10 +29,17 @@ async function maybeRunAutoBackup(){
   const last = settings.lastAutoBackupAt ? new Date(settings.lastAutoBackupAt).getTime() : 0;
   if(Date.now() - last < intervalMs) return;
   downloadFullBackup(true);
-  await uploadBackupToServer('auto');
-  settings.lastAutoBackupAt = new Date().toISOString();
-  await saveSettings();
-  showToast('تم إنشاء نسخة احتياطية تلقائية (محلياً + على السيرفر)');
+  const uploaded = await uploadBackupToServer('auto');
+  // لا نُقدّم وقت آخر نسخة احتياطية إلا بعد نجاح الرفع الفعلي للسيرفر — لو فشل الرفع
+  // (انقطاع/403/سقف حجم)، تبقى آخر نسخة احتياطية كما هي حتى تتم المحاولة عند التشغيل
+  // القادم بدل تأجيل أسبوع كامل بلا نسخة سيرفر.
+  if(uploaded){
+    settings.lastAutoBackupAt = new Date().toISOString();
+    await saveSettings();
+    showToast('تم إنشاء نسخة احتياطية تلقائية (محلياً + على السيرفر)');
+  }else{
+    showToast('تم إنشاء نسخة احتياطية محلية، لكن تعذّر رفعها للسيرفر — ستُعاد المحاولة في التشغيل القادم');
+  }
 }
 // يرفع نسخة كاملة مشفّرة (بنفس مفتاح تشفير بيانات البرنامج) إلى السيرفر — أمان: السيرفر يخزّن
 // الكتلة المشفّرة فقط، فلن يقدر أي شخص يطّلع على البيانات دون مفتاح التشفير المحلي نفسه (تماماً
