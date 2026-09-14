@@ -159,40 +159,49 @@ function finishPrintDoc(win){
   }
 }
 
-onSearchInput('#search', renderTable);
-$('#table-page-size')?.addEventListener('change', ()=>{ tableCurrentPage = 1; renderTable(); });
-$('#table-page-first')?.addEventListener('click', ()=>{ tableCurrentPage = 1; renderTable(); });
-$('#table-page-prev')?.addEventListener('click', ()=>{ tableCurrentPage = Math.max(1, tableCurrentPage-1); renderTable(); });
-$('#table-page-next')?.addEventListener('click', ()=>{ tableCurrentPage = tableCurrentPage+1; renderTable(); });
-$('#table-page-last')?.addEventListener('click', ()=>{ tableCurrentPage = Infinity; renderTable(); });
-$('#filter-course').addEventListener('change', renderTable);
-$('#filter-nat').addEventListener('change', renderTable);
-$('#filter-reception')?.addEventListener('change', renderTable);
-$('#filter-status').addEventListener('change', renderTable);
-$('#btn-filter-suspended').addEventListener('click', ()=>{
+// كل ربط ابتدائي هنا محمي فردياً بـ try/catch: قبل هذا التعديل كان ربط زرّي
+// #filter-course/#filter-nat بلا "?." (بخلاف كل الأزرار المجاورة لهما) — فلو تأخر
+// وجود العنصر فى الـ DOM لأي سبب (فرق توقيت تحميل بسيط، مثلاً فى نسخة سطح المكتب)
+// كان الاستثناء الناتج (TypeError: Cannot read properties of null) يوقف تنفيذ باقي
+// السكريبت بالكامل من هذه النقطة فصاعداً — بما فيه كل الروابط اللاحقة فى نفس الملف
+// (نموذج حفظ العميل، إلخ)، بينما أزرار الترقيم فوقها كانت تفلت لأنها اتنفذت قبلها.
+// الحماية الفردية هنا تمنع فشل ربط واحد من إسقاط أي ربط آخر بعده.
+[
+  ()=> onSearchInput('#search', renderTable),
+  ()=> $('#table-page-size')?.addEventListener('change', ()=>{ tableCurrentPage = 1; renderTable(); }),
+  ()=> $('#table-page-first')?.addEventListener('click', ()=>{ tableCurrentPage = 1; renderTable(); }),
+  ()=> $('#table-page-prev')?.addEventListener('click', ()=>{ tableCurrentPage = Math.max(1, tableCurrentPage-1); renderTable(); }),
+  ()=> $('#table-page-next')?.addEventListener('click', ()=>{ tableCurrentPage = tableCurrentPage+1; renderTable(); }),
+  ()=> $('#table-page-last')?.addEventListener('click', ()=>{ tableCurrentPage = Infinity; renderTable(); }),
+  ()=> $('#filter-course')?.addEventListener('change', renderTable),
+  ()=> $('#filter-nat')?.addEventListener('change', renderTable),
+  ()=> $('#filter-reception')?.addEventListener('change', renderTable),
+].forEach(fn=>{ try{ fn(); }catch(e){ console.error('فشل فى ربط عنصر تحكم فى شيت العملاء عند التحميل:', e); } });
+$('#filter-status')?.addEventListener('change', renderTable);
+$('#btn-filter-suspended')?.addEventListener('click', ()=>{
   showSuspendedOnly = !showSuspendedOnly;
   $('#btn-filter-suspended').classList.toggle('btn-gold', showSuspendedOnly);
   $('#btn-filter-suspended').classList.toggle('btn-ghost', !showSuspendedOnly);
   renderTable();
 });
-$('#btn-filter-unpurchased-bags').addEventListener('click', ()=>{
+$('#btn-filter-unpurchased-bags')?.addEventListener('click', ()=>{
   showUnpurchasedBagsOnly = !showUnpurchasedBagsOnly;
   $('#btn-filter-unpurchased-bags').classList.toggle('btn-gold', showUnpurchasedBagsOnly);
   $('#btn-filter-unpurchased-bags').classList.toggle('btn-ghost', !showUnpurchasedBagsOnly);
   renderTable();
 });
-$('#filter-company').addEventListener('change', renderTable);
-$('#filter-invoice').addEventListener('change', renderTable);
-$('#filter-coursenum').addEventListener('change', renderTable);
-$('#filter-refnum').addEventListener('change', renderTable);
-$('#filter-bag-source').addEventListener('change', renderTable);
+$('#filter-company')?.addEventListener('change', renderTable);
+$('#filter-invoice')?.addEventListener('change', renderTable);
+$('#filter-coursenum')?.addEventListener('change', renderTable);
+$('#filter-refnum')?.addEventListener('change', renderTable);
+$('#filter-bag-source')?.addEventListener('change', renderTable);
 // حقول تاريخ/مبالغ الفلترة تعيد بناء جدول العملاء كاملاً (ويمسح آلاف العملاء) — نأخّر حتى
 // اكتمال الكتابة بدل كل حرف، مع بقاء التحديث النهائي فورياً عند الانتهاء من الكتابة.
 const _debouncedClDateFilter = debounce(renderTable);
-$('#cl-date-from').addEventListener('input', _debouncedClDateFilter);
-$('#cl-date-to').addEventListener('input', _debouncedClDateFilter);
-$('#cl-paid-min').addEventListener('input', _debouncedClDateFilter);
-$('#cl-paid-max').addEventListener('input', _debouncedClDateFilter);
+$('#cl-date-from')?.addEventListener('input', _debouncedClDateFilter);
+$('#cl-date-to')?.addEventListener('input', _debouncedClDateFilter);
+$('#cl-paid-min')?.addEventListener('input', _debouncedClDateFilter);
+$('#cl-paid-max')?.addEventListener('input', _debouncedClDateFilter);
 
 /* ---------------- طي/توسيع الفلاتر المتقدمة (جدول العملاء) ----------------
    الحقول نفسها (filter-course، filter-nat...) لم تتغيّر مكانها في الـ DOM ولا
@@ -607,8 +616,8 @@ function checkClientDuplicate(){
     box.style.display = 'none';
   }
 }
-$('#f-id').addEventListener('input', checkClientDuplicate);
-$('#f-phone').addEventListener('input', checkClientDuplicate);
+$('#f-id')?.addEventListener('input', checkClientDuplicate);
+$('#f-phone')?.addEventListener('input', checkClientDuplicate);
 function toggleClientTypeFields(){
   const isCompany = $('#f-clienttype').value === 'company';
   $('#wrap-f-company').style.display = isCompany ? '' : 'none';
@@ -617,7 +626,7 @@ function toggleClientTypeFields(){
   if(!isCompany) $('#f-ajal').value = '';
   else updateCompanyHint();
 }
-$('#f-clienttype').addEventListener('change', toggleClientTypeFields);
+$('#f-clienttype')?.addEventListener('change', toggleClientTypeFields);
 function populateClientCompanySelect(selectedValue){
   const sel = $('#f-company');
   const names = companies.map(c=>c.name);
@@ -657,12 +666,12 @@ function applyCompanyAgreedPricing(company){
   $('#f-company-hint').textContent = `المبلغ المتفق عليه لهذه الشركة (لكل متدرب بعد الخصم): ${fmt(agreed)} ﷼ — تم تعبئة الخصم تلقائياً (${fmt(neededDiscount)} ﷼) بحيث يصبح دخل المركز الصافي مساوياً لهذا المبلغ. يمكنك تعديل الخصم يدوياً إذا لزم الأمر.`;
   updateComputed();
 }
-$('#f-company').addEventListener('change', updateCompanyHint);
+$('#f-company')?.addEventListener('change', updateCompanyHint);
 function toggleClientNetInvoice(){
   const chan = settings.channels.find(c=>c.name===$('#f-channel').value);
   $('#wrap-f-netinvoice').style.display = (chan && (chan.dest==='network'||chan.dest==='network2')) ? '' : 'none';
 }
-$('#f-channel').addEventListener('change', toggleClientNetInvoice);
+$('#f-channel')?.addEventListener('change', toggleClientNetInvoice);
 function toggleSplitPayment(){
   const on = $('#f-split-payment').checked;
   $('#wrap-f-paid2').style.display = on ? '' : 'none';
@@ -675,9 +684,9 @@ function toggleClientNetInvoice2(){
   const chan2 = settings.channels.find(c=>c.name===$('#f-channel2').value);
   $('#wrap-f-netinvoice2').style.display = (on && chan2 && (chan2.dest==='network'||chan2.dest==='network2')) ? '' : 'none';
 }
-$('#f-split-payment').addEventListener('change', toggleSplitPayment);
-$('#f-channel2').addEventListener('change', toggleClientNetInvoice2);
-$('#f-paid2').addEventListener('input', updateComputed);
+$('#f-split-payment')?.addEventListener('change', toggleSplitPayment);
+$('#f-channel2')?.addEventListener('change', toggleClientNetInvoice2);
+$('#f-paid2')?.addEventListener('input', updateComputed);
 function toggleBagFields(){
   const isOwn = $('#f-bagsource').value === 'own';
   $('#wrap-bagprice').style.display = isOwn ? 'none' : '';
@@ -687,10 +696,10 @@ function toggleBagFields(){
   else if(num($('#f-bagprice').value)===0) $('#f-bagprice').value = settings.bagPrice;
   updateComputed();
 }
-$('#f-bagsource').addEventListener('change', toggleBagFields);
+$('#f-bagsource')?.addEventListener('change', toggleBagFields);
 function closeModal(){ $('#overlay').classList.remove('show'); editingId=null; editingPaymentTxId=null; addingClientPayment=false; }
-$('#btn-cancel').addEventListener('click', closeModal);
-$('#overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+$('#btn-cancel')?.addEventListener('click', closeModal);
+$('#overlay')?.addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 
 /* ---------------- سجل الدفعات المرتبطة بالعميل (عرض فقط) ----------------
    هذا السجل في شيت "العملاء" أصبح للعرض فقط — أي إضافة أو تعديل أو حذف لدفعات
@@ -768,10 +777,10 @@ function renderClientTimeline(){
 }
 
 
-$('#btn-add').addEventListener('click', ()=>openModal(null));
+$('#btn-add')?.addEventListener('click', ()=>openModal(null));
 /* زر تحديث لكامل شيت العملاء: يعيد مزامنة حركات الدفع التلقائية لكل عميل مع بياناته الحالية،
    ويعيد رسم كل الشاشات المرتبطة (الجدول، لوحة التحكم، الفلاتر، التقارير، الدورات، الخزنة) دفعة واحدة */
-$('#btn-refresh-clients').addEventListener('click', async ()=>{
+$('#btn-refresh-clients')?.addEventListener('click', async ()=>{
   snapshotState('تحديث شامل لشيت العملاء');
   clients.forEach(c=> syncClientLedgerEntry(c));
   await saveClients();
@@ -787,7 +796,7 @@ $('#btn-refresh-clients').addEventListener('click', async ()=>{
   showToast('تم تحديث الشيت بالكامل');
 });
 
-$('#f-course').addEventListener('change', ()=>{
+$('#f-course')?.addEventListener('change', ()=>{
   if(editingId) return; // don't override manual edits on existing record
   if($('#f-nat').value){
     $('#f-courseprice').value = nationalityCoursePrice($('#f-nat').value);
@@ -805,7 +814,7 @@ function reapplyCompanyPricingIfNeeded(){
   const c = companies.find(x=>x.name===$('#f-company').value.trim());
   if(c && !(c.categories && c.categories.length) && num(c.agreedAmount)>0) applyCompanyAgreedPricing(c);
 }
-$('#f-nat').addEventListener('change', ()=>{
+$('#f-nat')?.addEventListener('change', ()=>{
   if(editingId) return; // don't override manual edits على السجل
   if($('#f-nat').value) $('#f-courseprice').value = nationalityCoursePrice($('#f-nat').value);
   reapplyCompanyPricingIfNeeded();
@@ -829,7 +838,7 @@ function updateClientCourseStatus(){
     ? `<span class="stamp paid">تم أخذ الدورة (${escapeHtml(date)})</span>`
     : `<span class="stamp owe">لم يحن موعد الدورة بعد (${escapeHtml(date)})</span>`;
 }
-$('#f-coursenum').addEventListener('input', updateClientCourseStatus);
+$('#f-coursenum')?.addEventListener('input', updateClientCourseStatus);
 ['#f-courseprice','#f-bagprice','#f-discount','#f-paid'].forEach(sel=>{
   $(sel).addEventListener('input', updateComputed);
 });
@@ -879,7 +888,7 @@ async function revealDuplicateClient(clientIdValue, knownName){
     : `⚠️ رقم الهوية مستخدم بالفعل لعميل آخر فى النظام — تم مسح كل الفلاتر (بما فيها فلتر السنة) والبحث عنه أدناه`);
 }
 
-$('#client-form').addEventListener('submit', async e=>{
+$('#client-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   // (تحديث): أُزيل انتظار _clientsFirstRealSyncDone هنا عمداً بناءً على طلب صريح — بدل تعطيل
   // الشاشة وإجبار المستخدم على الانتظار لحد ما تتأكد نسخة العملاء من السيرفر (كان يمكن أن يمتد

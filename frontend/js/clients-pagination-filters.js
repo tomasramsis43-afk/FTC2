@@ -321,27 +321,27 @@ function renderBulkSelectionBar(filteredRows){
     selectAllBox.indeterminate = selectedOnPage>0 && selectedOnPage<pageIds.length;
   }
 }
-$('#table-body').addEventListener('change', e=>{
+$('#table-body')?.addEventListener('change', e=>{
   if(e.target.classList.contains('row-select-client')){
     const id = e.target.dataset.id;
     if(e.target.checked) selectedClientIds.add(id); else selectedClientIds.delete(id);
     renderBulkSelectionBar(filteredClients());
   }
 });
-$('#select-all-clients').addEventListener('change', e=>{
+$('#select-all-clients')?.addEventListener('change', e=>{
   if(e.target.checked) currentPageClientIds.forEach(id=>selectedClientIds.add(id));
   else currentPageClientIds.forEach(id=>selectedClientIds.delete(id));
   renderTable();
 });
-$('#btn-select-all-filtered').addEventListener('click', ()=>{
+$('#btn-select-all-filtered')?.addEventListener('click', ()=>{
   filteredClients().forEach(c=>selectedClientIds.add(c.id));
   renderTable();
 });
-$('#btn-clear-selection').addEventListener('click', ()=>{
+$('#btn-clear-selection')?.addEventListener('click', ()=>{
   selectedClientIds.clear();
   renderTable();
 });
-$('#btn-bulk-delete-selected').addEventListener('click', async ()=>{
+$('#btn-bulk-delete-selected')?.addEventListener('click', async ()=>{
   const allIds = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
   if(!allIds.length){ showToast('لا يوجد عملاء محددين'); return; }
   const ids = allIds.filter(id=>canDeleteClientForUser(clients.find(c=>c.id===id)));

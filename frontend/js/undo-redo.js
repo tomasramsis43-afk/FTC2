@@ -816,7 +816,7 @@ function refreshEverything(){
   if(isViewActive('settings') && typeof renderUsersList==='function') renderUsersList();
   if(typeof updateUndoRedoButtons==='function') updateUndoRedoButtons();
 }
-$('#btn-refresh-all').addEventListener('click', ()=>{
+$('#btn-refresh-all')?.addEventListener('click', ()=>{
   // زرار "تحديث الشيت بالكامل" فقط هو من يحتاج فعلاً حساب كل الشاشات (حتى المقفولة)، لأن الغرض
   // منه صراحة هو إعادة مزامنة كل شيء دفعة واحدة — بخلاف باقي نداءات refreshEverything() المنتشرة
   // بعد عمليات عادية (حذف فاتورة، إيقاف عميل...) واللي محتاجة بس الشاشة المفتوحة حالياً.
@@ -959,7 +959,7 @@ function clearAllSheetFilters(){
   if(typeof renderArkkanExamsTable==='function') renderArkkanExamsTable();
   showToast('تم إلغاء كل الفلاتر وخانات البحث');
 }
-$('#btn-clear-all-filters').addEventListener('click', clearAllSheetFilters);
+$('#btn-clear-all-filters')?.addEventListener('click', clearAllSheetFilters);
 
 /* ---------------- Nav ---------------- */
 const RESTRICTED_STAFF_VIEWS = ['settings','audit','accounting','ledger','budget'];

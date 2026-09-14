@@ -781,10 +781,10 @@ function _closeCustomDialog(result){
   _customDialogResolve = null;
   if(resolve) resolve(result);
 }
-$('#custom-dialog-cancel').addEventListener('click', ()=> _closeCustomDialog(null));
-$('#custom-dialog-overlay').addEventListener('click', e=>{ if(e.target.id==='custom-dialog-overlay') _closeCustomDialog(null); });
-$('#custom-dialog-input').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#custom-dialog-ok').click(); } });
-$('#custom-dialog-ok').addEventListener('click', ()=>{
+$('#custom-dialog-cancel')?.addEventListener('click', ()=> _closeCustomDialog(null));
+$('#custom-dialog-overlay')?.addEventListener('click', e=>{ if(e.target.id==='custom-dialog-overlay') _closeCustomDialog(null); });
+$('#custom-dialog-input')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#custom-dialog-ok').click(); } });
+$('#custom-dialog-ok')?.addEventListener('click', ()=>{
   const input = $('#custom-dialog-input');
   const errEl = $('#custom-dialog-error');
   if(input.style.display!=='none'){

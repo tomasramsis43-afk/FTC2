@@ -28,11 +28,11 @@ function openBulkAddModal(){
   $('#bulk-add-overlay').classList.add('show'); SoundFX.open();
 }
 function closeBulkAddModal(){ $('#bulk-add-overlay').classList.remove('show'); }
-$('#btn-bulk-add').addEventListener('click', openBulkAddModal);
-$('#btn-bulk-add-cancel').addEventListener('click', closeBulkAddModal);
-$('#bulk-add-overlay').addEventListener('click', e=>{ if(e.target.id==='bulk-add-overlay') closeBulkAddModal(); });
-$('#btn-bulk-add-row').addEventListener('click', addBulkAddRow);
-$('#bulk-add-table-body').addEventListener('click', e=>{
+$('#btn-bulk-add')?.addEventListener('click', openBulkAddModal);
+$('#btn-bulk-add-cancel')?.addEventListener('click', closeBulkAddModal);
+$('#bulk-add-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bulk-add-overlay') closeBulkAddModal(); });
+$('#btn-bulk-add-row')?.addEventListener('click', addBulkAddRow);
+$('#bulk-add-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('ba-remove-row')){
     const rows = $('#bulk-add-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
@@ -59,7 +59,7 @@ function setBulkSelectFuzzy(select, val){
 }
 // دعم لصق عمود (أو عدة أعمدة/صفوف) منسوخ من إكسل مباشرة: يوزَّع تلقائياً على الصفوف بدءاً من الخلية التي بدأ منها اللصق،
 // ويُضيف صفوفاً جديدة تلقائياً إن لم تكفِ الصفوف الحالية لعدد القيم الملصوقة
-$('#bulk-add-table-body').addEventListener('paste', e=>{
+$('#bulk-add-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -86,7 +86,7 @@ $('#bulk-add-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-bulk-add-save').addEventListener('click', async ()=>{
+$('#btn-bulk-add-save')?.addEventListener('click', async ()=>{
   const rows = [...$('#bulk-add-table-body').querySelectorAll('tr')];
   const toAdd = [];
   const errors = [];
@@ -269,11 +269,11 @@ function renderBulkMsgCurrent(){
   $('#btn-bulk-message-prev').disabled = bulkMsgIndex===0;
   $('#btn-bulk-message-next').textContent = (bulkMsgIndex===bulkMsgQueue.length-1) ? 'إنهاء ✓' : 'التالي ▶';
 }
-$('#btn-bulk-send-message').addEventListener('click', openBulkMessageModal);
-$('#btn-bulk-message-cancel').addEventListener('click', closeBulkMessageModal);
-$('#btn-bulk-message-close').addEventListener('click', closeBulkMessageModal);
-$('#bulk-message-overlay').addEventListener('click', e=>{ if(e.target.id==='bulk-message-overlay') closeBulkMessageModal(); });
-$('#btn-bulk-message-start').addEventListener('click', async ()=>{
+$('#btn-bulk-send-message')?.addEventListener('click', openBulkMessageModal);
+$('#btn-bulk-message-cancel')?.addEventListener('click', closeBulkMessageModal);
+$('#btn-bulk-message-close')?.addEventListener('click', closeBulkMessageModal);
+$('#bulk-message-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bulk-message-overlay') closeBulkMessageModal(); });
+$('#btn-bulk-message-start')?.addEventListener('click', async ()=>{
   const text = $('#bulk-msg-text').value.trim();
   if(!text){ showToast('اكتب نص الرسالة أولاً'); return; }
   const ids = [...selectedClientIds].filter(id=>clients.some(c=>c.id===id));
@@ -286,7 +286,7 @@ $('#btn-bulk-message-start').addEventListener('click', async ()=>{
   renderBulkMsgCurrent();
   await logAudit('other','العملاء', `بدء إرسال رسالة واتساب جماعية لعدد ${bulkMsgQueue.length} عميل`);
 });
-$('#btn-bulk-message-open-wa').addEventListener('click', ()=>{
+$('#btn-bulk-message-open-wa')?.addEventListener('click', ()=>{
   const c = bulkMsgQueue[bulkMsgIndex];
   const phone = normalizePhoneForWhatsapp(c.phone);
   if(!phone) return;
@@ -294,19 +294,19 @@ $('#btn-bulk-message-open-wa').addEventListener('click', ()=>{
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(personalized)}`;
   window.open(url, '_blank');
 });
-$('#btn-bulk-message-prev').addEventListener('click', ()=>{
+$('#btn-bulk-message-prev')?.addEventListener('click', ()=>{
   if(bulkMsgIndex>0){ bulkMsgIndex--; renderBulkMsgCurrent(); }
 });
-$('#btn-bulk-message-next').addEventListener('click', ()=>{
+$('#btn-bulk-message-next')?.addEventListener('click', ()=>{
   if(bulkMsgIndex < bulkMsgQueue.length-1){ bulkMsgIndex++; renderBulkMsgCurrent(); }
   else { showToast('تم الانتهاء من قائمة الإرسال'); closeBulkMessageModal(); }
 });
 
-$('#btn-bulk-update').addEventListener('click', openBulkUpdateModal);
-$('#btn-bulk-update-cancel').addEventListener('click', closeBulkUpdateModal);
-$('#bulk-update-overlay').addEventListener('click', e=>{ if(e.target.id==='bulk-update-overlay') closeBulkUpdateModal(); });
-$('#btn-bulk-update-row').addEventListener('click', addBulkUpdateRow);
-$('#bulk-update-table-body').addEventListener('click', e=>{
+$('#btn-bulk-update')?.addEventListener('click', openBulkUpdateModal);
+$('#btn-bulk-update-cancel')?.addEventListener('click', closeBulkUpdateModal);
+$('#bulk-update-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bulk-update-overlay') closeBulkUpdateModal(); });
+$('#btn-bulk-update-row')?.addEventListener('click', addBulkUpdateRow);
+$('#bulk-update-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('bu-remove-row')){
     const rows = $('#bulk-update-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
@@ -320,7 +320,7 @@ function setBulkSelectFuzzyAny(select, val){
   const opt = [...select.options].find(o=> o.value.trim().toLowerCase()===val.toLowerCase() || o.textContent.trim().toLowerCase()===val.toLowerCase());
   if(opt) select.value = opt.value;
 }
-$('#bulk-update-table-body').addEventListener('paste', e=>{
+$('#bulk-update-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -347,7 +347,7 @@ $('#bulk-update-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-bulk-update-save').addEventListener('click', async ()=>{
+$('#btn-bulk-update-save')?.addEventListener('click', async ()=>{
   const rows = [...$('#bulk-update-table-body').querySelectorAll('tr')];
   const present = v => !(v===undefined || v===null || String(v).trim()==='');
   const errors = [];
@@ -513,18 +513,18 @@ function openBulkDeleteModal(){
   $('#bulk-delete-overlay').classList.add('show'); SoundFX.open();
 }
 function closeBulkDeleteModal(){ $('#bulk-delete-overlay').classList.remove('show'); }
-$('#btn-bulk-delete-table').addEventListener('click', openBulkDeleteModal);
-$('#btn-bulk-delete-cancel').addEventListener('click', closeBulkDeleteModal);
-$('#bulk-delete-overlay').addEventListener('click', e=>{ if(e.target.id==='bulk-delete-overlay') closeBulkDeleteModal(); });
-$('#btn-bulk-delete-row').addEventListener('click', addBulkDeleteRow);
-$('#bulk-delete-table-body').addEventListener('click', e=>{
+$('#btn-bulk-delete-table')?.addEventListener('click', openBulkDeleteModal);
+$('#btn-bulk-delete-cancel')?.addEventListener('click', closeBulkDeleteModal);
+$('#bulk-delete-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bulk-delete-overlay') closeBulkDeleteModal(); });
+$('#btn-bulk-delete-row')?.addEventListener('click', addBulkDeleteRow);
+$('#bulk-delete-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('bd-remove-row')){
     const rows = $('#bulk-delete-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
     e.target.closest('tr').remove();
   }
 });
-$('#bulk-delete-table-body').addEventListener('paste', e=>{
+$('#bulk-delete-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -544,7 +544,7 @@ $('#bulk-delete-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-bulk-delete-save').addEventListener('click', async ()=>{
+$('#btn-bulk-delete-save')?.addEventListener('click', async ()=>{
   const rows = [...$('#bulk-delete-table-body').querySelectorAll('tr')];
   const idsInBatch = [...new Set(rows.map(r=>r.querySelector('.bd-id').value.trim()).filter(Boolean))];
   if(!idsInBatch.length){ showToast('لم تُدخل أي رقم هوية'); return; }

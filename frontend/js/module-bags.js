@@ -112,7 +112,7 @@ function renderBagFinanceLinkToggle(){
   btn.textContent = enabled ? 'إلغاء الربط' : 'تفعيل الربط';
   btn.className = enabled ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm';
 }
-$('#btn-toggle-bagfinancelink').addEventListener('click', async ()=>{
+$('#btn-toggle-bagfinancelink')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-toggle-bagfinancelink'), async ()=>{
   const enabled = settings.bagFinanceLinkEnabled!==false;
   settings.bagFinanceLinkEnabled = !enabled;
@@ -145,7 +145,7 @@ async function sendPowerAutomateEvent(eventType, payload){
     console.warn('تعذّر إرسال حدث Power Automate:', err);
   }
 }
-$('#btn-save-pa-webhook').addEventListener('click', async ()=>{
+$('#btn-save-pa-webhook')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-save-pa-webhook'), async ()=>{
   settings.powerAutomate = {
     webhookUrl: $('#set-pa-webhook-url').value.trim(),
@@ -157,7 +157,7 @@ $('#btn-save-pa-webhook').addEventListener('click', async ()=>{
   showToast('تم حفظ إعدادات Power Automate');
 
   });});
-$('#btn-test-pa-webhook').addEventListener('click', async ()=>{
+$('#btn-test-pa-webhook')?.addEventListener('click', async ()=>{
   const url = $('#set-pa-webhook-url').value.trim();
   if(!url){ showToast('أدخل رابط Webhook أولاً'); return; }
   try{
@@ -503,9 +503,9 @@ function cancelBagStockEdit(){
   $('#btn-add-stock').textContent = 'تسجيل العملية';
   $('#btn-cancel-edit-stock').style.display = 'none';
 }
-$('#btn-cancel-edit-stock').addEventListener('click', cancelBagStockEdit);
+$('#btn-cancel-edit-stock')?.addEventListener('click', cancelBagStockEdit);
 
-$('#btn-add-stock').addEventListener('click', async ()=>{
+$('#btn-add-stock')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-add-stock'), async ()=>{
   const type = $('#bs-type').value; // deposit | withdraw
   const amount = num($('#bs-amount').value);
@@ -651,18 +651,18 @@ function openBagfundBulkModal(){
   $('#bagfund-bulk-overlay').classList.add('show'); SoundFX.open();
 }
 function closeBagfundBulkModal(){ $('#bagfund-bulk-overlay').classList.remove('show'); }
-$('#btn-open-bagfund-bulk').addEventListener('click', openBagfundBulkModal);
-$('#bagfund-bulk-cancel').addEventListener('click', closeBagfundBulkModal);
-$('#bagfund-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='bagfund-bulk-overlay') closeBagfundBulkModal(); });
-$('#btn-bagfund-bulk-row').addEventListener('click', addBagfundBulkRow);
-$('#bagfund-bulk-table-body').addEventListener('click', e=>{
+$('#btn-open-bagfund-bulk')?.addEventListener('click', openBagfundBulkModal);
+$('#bagfund-bulk-cancel')?.addEventListener('click', closeBagfundBulkModal);
+$('#bagfund-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bagfund-bulk-overlay') closeBagfundBulkModal(); });
+$('#btn-bagfund-bulk-row')?.addEventListener('click', addBagfundBulkRow);
+$('#bagfund-bulk-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('bfb-remove-row')){
     const rows = $('#bagfund-bulk-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
     e.target.closest('tr').remove();
   }
 });
-$('#bagfund-bulk-table-body').addEventListener('paste', e=>{
+$('#bagfund-bulk-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -692,7 +692,7 @@ $('#bagfund-bulk-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-bagfund-bulk-save').addEventListener('click', async ()=>{
+$('#btn-bagfund-bulk-save')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-bagfund-bulk-save'), async ()=>{
   const defaultMethod = $('#bagfund-bulk-default-method').value;
   const rows = [...$('#bagfund-bulk-table-body').querySelectorAll('tr')];
@@ -1004,10 +1004,10 @@ document.addEventListener('click', async e=>{
     }
   }
 });
-$('#bp-cancel').addEventListener('click', ()=>{ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; });
-$('#bag-overlay').addEventListener('click', e=>{ if(e.target.id==='bag-overlay'){ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; } });
+$('#bp-cancel')?.addEventListener('click', ()=>{ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; });
+$('#bag-overlay')?.addEventListener('click', e=>{ if(e.target.id==='bag-overlay'){ $('#bag-overlay').classList.remove('show'); bagPurchaseTargetId=null; } });
 let _bagPurchaseFormBusy = false;
-$('#bag-purchase-form').addEventListener('submit', async e=>{
+$('#bag-purchase-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   if(_bagPurchaseFormBusy) return;
   _bagPurchaseFormBusy = true;
@@ -1085,14 +1085,14 @@ function txTypeLabelToValue(l){
   if(v==='صادر' || v==='صادر (مصروف)' || v.toLowerCase()==='out') return 'out';
   return '';
 }
-$('#btn-template-vault-expenses').addEventListener('click', ()=>{
+$('#btn-template-vault-expenses')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_حركات_مالية.xlsx', 'نموذج', [
     {'التاريخ':'2026-01-15', 'نوع الحركة':'وارد', 'المبلغ':1000, 'الحساب/الوجهة':'الخزنة (كاش)', 'طريقة الدفع':'كاش مباشر', 'رقم الهوية':'', 'البيان/الجهة':'دعم شركاء', 'التصنيف':'', 'اسم مستلم المبلغ':'', 'رقم فاتورة الشبكة':'', 'ملاحظات':''},
     {'التاريخ':'2026-01-16', 'نوع الحركة':'صادر', 'المبلغ':500, 'الحساب/الوجهة':'الخزنة (كاش)', 'طريقة الدفع':'كاش مباشر', 'رقم الهوية':'', 'البيان/الجهة':'', 'التصنيف':'إيجار', 'اسم مستلم المبلغ':'', 'رقم فاتورة الشبكة':'', 'ملاحظات':''}
   ]);
 });
-$('#btn-import-vault-expenses').addEventListener('click', ()=> $('#import-vaultexp-input').click());
-$('#import-vaultexp-input').addEventListener('change', async e=>{
+$('#btn-import-vault-expenses')?.addEventListener('click', ()=> $('#import-vaultexp-input').click());
+$('#import-vaultexp-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   try{

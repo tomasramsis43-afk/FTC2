@@ -105,10 +105,10 @@ function autoSignInLocalUser(){
   $('#current-user-label').textContent = currentUser;
   applyRolePermissions();
 }
-$('#btn-lang-toggle').addEventListener('click', ()=>{
+$('#btn-lang-toggle')?.addEventListener('click', ()=>{
   applyLanguage(currentLang==='ar' ? 'en' : 'ar');
 });
-$('#btn-logout').addEventListener('click', async ()=>{
+$('#btn-logout')?.addEventListener('click', async ()=>{
   const btn = $('#btn-logout');
   if(btn) btn.disabled = true;
   try{

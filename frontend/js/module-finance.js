@@ -6,13 +6,13 @@ let _anomalyCacheVersion = -1;
 let _dupCache = null;
 let _dupCacheVersion = -1;
 function bumpVaultVersion(){ try{ vaultTxVersion++; _balanceCacheVersion = -1; _anomalyCacheVersion = -1; _dupCacheVersion = -1; }catch(e){} }
-$('#btn-template-bag-invoices').addEventListener('click', ()=>{
+$('#btn-template-bag-invoices')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_فواتير_الحقائب.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890', 'رقم فاتورة الحقيبة':'INV-0001', 'تاريخ شراء الحقيبة':'2026-01-15'}
   ]);
 });
-$('#btn-import-bag-invoices').addEventListener('click', ()=> $('#import-baginv-input').click());
-$('#import-baginv-input').addEventListener('change', async e=>{
+$('#btn-import-bag-invoices')?.addEventListener('click', ()=> $('#import-baginv-input').click());
+$('#import-baginv-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   try{
@@ -66,13 +66,13 @@ $('#import-baginv-input').addEventListener('change', async e=>{
 });
 
 /* ---------------- حذف حقائب مجموعة عملاء دفعة واحدة عبر استيراد ملف Excel (بعمود "رقم الهوية") ---------------- */
-$('#btn-template-bag-delete-list').addEventListener('click', ()=>{
+$('#btn-template-bag-delete-list')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_قائمة_حذف_حقائب.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890'}, {'رقم الهوية':'0987654321'}
   ]);
 });
-$('#btn-import-bag-delete-list').addEventListener('click', ()=> $('#import-bagdelete-input').click());
-$('#import-bagdelete-input').addEventListener('change', async e=>{
+$('#btn-import-bag-delete-list')?.addEventListener('click', ()=> $('#import-bagdelete-input').click());
+$('#import-bagdelete-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   try{
@@ -110,13 +110,13 @@ $('#import-bagdelete-input').addEventListener('change', async e=>{
 });
 
 /* ---------------- تحديد مجموعة عملاء دفعة واحدة كـ"اشتروا حقيبتهم الخاصة" عبر استيراد ملف Excel (بعمود "رقم الهوية") ---------------- */
-$('#btn-template-bag-own-list').addEventListener('click', ()=>{
+$('#btn-template-bag-own-list')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_عملاء_حقيبتهم_الخاصة.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890'}, {'رقم الهوية':'0987654321'}
   ]);
 });
-$('#btn-import-bag-own-list').addEventListener('click', ()=> $('#import-bagown-input').click());
-$('#import-bagown-input').addEventListener('change', async e=>{
+$('#btn-import-bag-own-list')?.addEventListener('click', ()=> $('#import-bagown-input').click());
+$('#import-bagown-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   try{
@@ -458,7 +458,7 @@ function startVaultInlineEdit(td){
   });
   input.addEventListener('blur', commit, { once:true });
 }
-$('#vault-table-body').addEventListener('dblclick', e=>{
+$('#vault-table-body')?.addEventListener('dblclick', e=>{
   const td = e.target.closest('td[data-inline-field]');
   if(td) startVaultInlineEdit(td);
 });
@@ -1171,7 +1171,7 @@ function renderVaultBulkBar(filteredRows){
     selectAllBox.indeterminate = selectedOnPage>0 && selectedOnPage<pageIds.length;
   }
 }
-$('#vault-table-body').addEventListener('change', e=>{
+$('#vault-table-body')?.addEventListener('change', e=>{
   if(e.target.classList.contains('row-select-vault')){
     const id = e.target.dataset.id;
     if(e.target.checked) selectedVaultIds.add(id); else selectedVaultIds.delete(id);
@@ -1268,10 +1268,10 @@ function toggleVaultFields(){
   $('#wrap-netinvoice').style.display = ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? '' : 'none';
   $('#wrap-bagdeposit-qty').style.display = (isOut && $('#vf-category').value==='حقائب') ? '' : 'none';
 }
-$('#vf-type').addEventListener('change', toggleVaultFields);
-$('#vf-linked').addEventListener('change', toggleVaultFields);
-$('#vf-destination').addEventListener('change', toggleVaultFields);
-$('#vf-category').addEventListener('change', toggleVaultFields);
+$('#vf-type')?.addEventListener('change', toggleVaultFields);
+$('#vf-linked')?.addEventListener('change', toggleVaultFields);
+$('#vf-destination')?.addEventListener('change', toggleVaultFields);
+$('#vf-category')?.addEventListener('change', toggleVaultFields);
 
 /* ---------------- تصنيف تلقائي للمصروفات بالذكاء الاصطناعي ----------------
    يقرأ اسم مستلم المبلغ + الملاحظات + المبلغ، ويقترح أنسب تصنيف
@@ -1331,9 +1331,9 @@ async function aiClassifyExpense(){
     btn.textContent = originalLabel;
   }
 }
-$('#btn-ai-classify').addEventListener('click', aiClassifyExpense);
+$('#btn-ai-classify')?.addEventListener('click', aiClassifyExpense);
 
-$('#vf-clientid').addEventListener('input', ()=>{
+$('#vf-clientid')?.addEventListener('input', ()=>{
   const c = clients.find(x=>x.clientId===$('#vf-clientid').value.trim());
   $('#vf-clientname').value = c ? c.name : '';
   if(c){
@@ -1389,7 +1389,7 @@ $('#btn-nl-expense')?.addEventListener('click', ()=>{
   showToast('راجع الحقول المعبّأة تلقائياً ثم اضغط "اقتراح تصنيف بالذكاء الاصطناعي" وتأكد قبل الحفظ');
   $('#nl-expense-input').value = '';
 });
-$('#btn-add-vault').addEventListener('click', ()=>openVaultModal(null));
+$('#btn-add-vault')?.addEventListener('click', ()=>openVaultModal(null));
 // زرار عائم متاح من أي شاشة في البرنامج لفتح مودال "حركة خزنة جديدة" مباشرة بدون الحاجة للانتقال لشيت الحركات المالية أولاً
 $('#btn-fab-quickadd')?.addEventListener('click', ()=>openVaultModal(null));
 function openVaultModal(id){
@@ -1427,11 +1427,11 @@ function openVaultModal(id){
   toggleVaultFields();
   $('#vault-overlay').classList.add('show'); SoundFX.open();
 }
-$('#vf-cancel').addEventListener('click', ()=>{ $('#vault-overlay').classList.remove('show'); editingVaultId=null; });
-$('#vault-overlay').addEventListener('click', e=>{ if(e.target.id==='vault-overlay'){ $('#vault-overlay').classList.remove('show'); editingVaultId=null; } });
+$('#vf-cancel')?.addEventListener('click', ()=>{ $('#vault-overlay').classList.remove('show'); editingVaultId=null; });
+$('#vault-overlay')?.addEventListener('click', e=>{ if(e.target.id==='vault-overlay'){ $('#vault-overlay').classList.remove('show'); editingVaultId=null; } });
 
 let _vaultFormBusy = false;
-$('#vault-form').addEventListener('submit', async e=>{
+$('#vault-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   if(_vaultFormBusy) return; // منع الضغط المزدوج على "حفظ" أثناء عملية حفظ سابقة لم تنتهِ بعد
   _vaultFormBusy = true;
@@ -1662,7 +1662,7 @@ function renderVaultLockStatus(){
     ? `مُقفلة حتى ${settings.vaultLockedThrough} — لا يمكن إضافة/تعديل/حذف أي حركة بتاريخ يقع في هذه الفترة أو قبلها`
     : 'لا يوجد قفل حالياً — كل الفترات مفتوحة للتعديل';
 }
-$('#btn-vault-lock').addEventListener('click', async ()=>{
+$('#btn-vault-lock')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-vault-lock'), async ()=>{
   const d = $('#vault-lock-date').value;
   if(!d){ showToast('اختر تاريخاً أولاً'); return; }
@@ -1676,7 +1676,7 @@ $('#btn-vault-lock').addEventListener('click', async ()=>{
   showToast('تم قفل الفترة');
   });
 });
-$('#btn-vault-unlock').addEventListener('click', async ()=>{
+$('#btn-vault-unlock')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-vault-unlock'), async ()=>{
   if(!settings.vaultLockedThrough){ showToast('لا يوجد قفل حالياً'); return; }
   if(!await customConfirm('فتح القفل صلاحية استثنائية تتيح تعديل/حذف حركات فترة سبق اعتماد قوائمها المالية — تُستخدم فقط لتصحيح خطأ موثّق. هل أنت متأكد؟')) return;
@@ -1708,11 +1708,11 @@ function renderVoidedLog(){
     </tr>`).join('');
 }
 bindGenericPagination('voided', voidedPageState, renderVoidedLog);
-$('#btn-show-voided').addEventListener('click', ()=>{ renderVoidedLog(); $('#voided-overlay').classList.add('show'); SoundFX.open(); });
-$('#voided-close').addEventListener('click', ()=> $('#voided-overlay').classList.remove('show'));
-$('#voided-overlay').addEventListener('click', e=>{ if(e.target.id==='voided-overlay') $('#voided-overlay').classList.remove('show'); });
+$('#btn-show-voided')?.addEventListener('click', ()=>{ renderVoidedLog(); $('#voided-overlay').classList.add('show'); SoundFX.open(); });
+$('#voided-close')?.addEventListener('click', ()=> $('#voided-overlay').classList.remove('show'));
+$('#voided-overlay')?.addEventListener('click', e=>{ if(e.target.id==='voided-overlay') $('#voided-overlay').classList.remove('show'); });
 
-$('#btn-extract-nomethod').addEventListener('click', ()=>{
+$('#btn-extract-nomethod')?.addEventListener('click', ()=>{
   // تفعيل فلتر "بدون طريقة دفع" في الشاشة مع الإبقاء على بقية الفلاتر (التاريخ/الوجهة/النوع/البحث) كما هي
   $('#v-filter-nomethod').checked = true;
   renderVault();
@@ -1727,7 +1727,7 @@ $('#btn-extract-nomethod').addEventListener('click', ()=>{
   downloadXlsx(`حركات_بدون_طريقة_دفع_${stampNow()}.xlsx`, 'بدون طريقة دفع', reportRows);
   showToast(`تم استخراج ${rows.length} حركة بدون طريقة دفع`);
 });
-$('#btn-export-vault').addEventListener('click', ()=>{
+$('#btn-export-vault')?.addEventListener('click', ()=>{
   const rows = vaultFilteredRows();
   const headers = ['الرقم التسلسلي الرسمي','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
   const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
@@ -1794,7 +1794,7 @@ bindGenericPagination('audit', auditPageState, renderAuditLog);
   $(sel).addEventListener('input', renderAuditLog);
 });
 onSearchInput('#audit-search', renderAuditLog);
-$('#btn-export-audit').addEventListener('click', ()=>{
+$('#btn-export-audit')?.addEventListener('click', ()=>{
   const rows = auditFilteredRows();
   const headers = ['التاريخ والوقت','المستخدم','الشيت','العملية','التفاصيل'];
   const data = rows.map(a=>[fmtDateTime(a.ts), a.user, a.section, actionLabel(a.action), a.description]);

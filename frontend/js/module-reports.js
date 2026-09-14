@@ -616,7 +616,7 @@ $('#btn-export-monthly-summary')?.addEventListener('click', ()=>{
   a.download = 'الجدول_الشهري_للتسجيلات_والمدفوعات.csv';
   a.click();
 });
-$('#btn-export-report').addEventListener('click', ()=>{
+$('#btn-export-report')?.addEventListener('click', ()=>{
   const rows = periodFilteredVaultTx();
   const income = rows.filter(t=>t.type==='in').reduce((s,t)=>s+num(t.amount),0);
   const expense = rows.filter(t=>t.type==='out').reduce((s,t)=>s+num(t.amount),0);

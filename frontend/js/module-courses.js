@@ -187,18 +187,18 @@ bindGenericPagination('courses', coursesPageState, renderCourses);
 onSearchInput('#cs-filter-num', renderCourses);
 onSearchInput('#cs-filter-clientid', renderCourses);
 onSearchInput('#cs-filter-clientid', renderMissingCourse);
-$('#btn-filter-upcoming').addEventListener('click', ()=>{
+$('#btn-filter-upcoming')?.addEventListener('click', ()=>{
   $('#cs-filter-from').value = todayISO();
   $('#cs-filter-to').value = '';
   renderCourses();
 });
-$('#btn-filter-undefined').addEventListener('click', ()=>{
+$('#btn-filter-undefined')?.addEventListener('click', ()=>{
   csUndefinedOnly = !csUndefinedOnly;
   $('#btn-filter-undefined').classList.toggle('btn-primary', csUndefinedOnly);
   $('#btn-filter-undefined').classList.toggle('btn-ghost', !csUndefinedOnly);
   renderCourses();
 });
-$('#btn-export-courses').addEventListener('click', ()=>{
+$('#btn-export-courses')?.addEventListener('click', ()=>{
   const fcid = $('#cs-filter-clientid').value.trim().toLowerCase();
   const headers = ['رقم الدورة','نوع الدورة','تاريخ الدورة','اللغة','مدة الدورة (أيام)','السعة','عدد المسجّلين','مكتملة العدد؟',
     'اسم المتدرب','رقم الهوية','رقم المرجعي','الجوال','الجنسية','نوع العميل','اسم الشركة','تاريخ التسجيل','رقم الفاتورة',
@@ -232,7 +232,7 @@ $('#btn-export-courses').addEventListener('click', ()=>{
 });
 
 /* تقرير شامل قابل للطباعة يضم كل الدورات المطابقة للفلتر الحالي بكل تفاصيلها المتاحة (بيانات الدورة + كل متدرب فيها) */
-$('#btn-print-courses-report').addEventListener('click', ()=>{
+$('#btn-print-courses-report')?.addEventListener('click', ()=>{
   const fcid = $('#cs-filter-clientid').value.trim().toLowerCase();
   const sessions = coursesFilteredSessions();
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
@@ -358,7 +358,7 @@ function updateMissingNatButtonLabel(){
   const btn = $('#cs-missing-nat-btn');
   btn.textContent = missingNatSelected.size ? `${tr('nationalityLabelPrefix')}${missingNatSelected.size}${tr('nationalityLabelSuffix')}` : tr('nationalityAllLabel');
 }
-$('#cs-missing-nat-btn').addEventListener('click', e=>{
+$('#cs-missing-nat-btn')?.addEventListener('click', e=>{
   e.stopPropagation();
   const panel = $('#cs-missing-nat-panel');
   panel.style.display = panel.style.display==='none' ? 'block' : 'none';
@@ -367,20 +367,20 @@ document.addEventListener('click', e=>{
   const wrap = $('#cs-missing-nat-wrap');
   if(wrap && !wrap.contains(e.target)) $('#cs-missing-nat-panel').style.display = 'none';
 });
-$('#cs-missing-nat-panel').addEventListener('click', e=> e.stopPropagation());
-$('#cs-missing-nat-options').addEventListener('change', e=>{
+$('#cs-missing-nat-panel')?.addEventListener('click', e=> e.stopPropagation());
+$('#cs-missing-nat-options')?.addEventListener('change', e=>{
   if(!e.target.classList.contains('cs-missing-nat-cb')) return;
   if(e.target.checked) missingNatSelected.add(e.target.value);
   else missingNatSelected.delete(e.target.value);
   updateMissingNatButtonLabel();
   renderMissingCourse();
 });
-$('#cs-missing-nat-clear').addEventListener('click', ()=>{
+$('#cs-missing-nat-clear')?.addEventListener('click', ()=>{
   missingNatSelected.clear();
   refreshMissingNatOptions();
   renderMissingCourse();
 });
-$('#cs-missing-nat-all').addEventListener('click', ()=>{
+$('#cs-missing-nat-all')?.addEventListener('click', ()=>{
   missingNatSelected = new Set(settings.nationalities || []);
   refreshMissingNatOptions();
   renderMissingCourse();
@@ -445,7 +445,7 @@ function renderMissingCourse(){
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
-$('#cs-missing-course').addEventListener('change', renderMissingCourse);
+$('#cs-missing-course')?.addEventListener('change', renderMissingCourse);
 $('#btn-export-missing-course')?.addEventListener('click', ()=>{
   const missing = missingCourseFiltered();
   const headers = ['الاسم','تاريخ التسجيل','نوع الدورة','رقم الهوية','الجوال','الجنسية','اسم الشركة','حالة الحقيبة','تاريخ دورة متوقع'];
@@ -457,11 +457,11 @@ $('#btn-export-missing-course')?.addEventListener('click', ()=>{
   a.download = 'عملاء_لم_يحدد_لهم_رقم_دورة.csv';
   a.click();
 });
-$('#cs-missing-from').addEventListener('input', renderMissingCourse);
-$('#cs-missing-to').addEventListener('input', renderMissingCourse);
-$('#cs-missing-exp-from').addEventListener('input', renderMissingCourse);
-$('#cs-missing-exp-to').addEventListener('input', renderMissingCourse);
-$('#cs-missing-list').addEventListener('change', async e=>{
+$('#cs-missing-from')?.addEventListener('input', renderMissingCourse);
+$('#cs-missing-to')?.addEventListener('input', renderMissingCourse);
+$('#cs-missing-exp-from')?.addEventListener('input', renderMissingCourse);
+$('#cs-missing-exp-to')?.addEventListener('input', renderMissingCourse);
+$('#cs-missing-list')?.addEventListener('change', async e=>{
   if(!e.target.classList.contains('cs-expected-date')) return;
   const id = e.target.dataset.clientId;
   const client = clients.find(c=>c.id===id);
@@ -485,12 +485,12 @@ function openSessionModal(id){
   $('#session-overlay').classList.add('show'); SoundFX.open();
 }
 function closeSessionModal(){ $('#session-overlay').classList.remove('show'); editingSessionId=null; }
-$('#sf-cancel').addEventListener('click', closeSessionModal);
-$('#session-overlay').addEventListener('click', e=>{ if(e.target.id==='session-overlay') closeSessionModal(); });
-$('#btn-add-session').addEventListener('click', ()=>openSessionModal(null));
+$('#sf-cancel')?.addEventListener('click', closeSessionModal);
+$('#session-overlay')?.addEventListener('click', e=>{ if(e.target.id==='session-overlay') closeSessionModal(); });
+$('#btn-add-session')?.addEventListener('click', ()=>openSessionModal(null));
 
 let _sessionFormBusy = false;
-$('#session-form').addEventListener('submit', async e=>{
+$('#session-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   if(_sessionFormBusy) return;
   _sessionFormBusy = true;
@@ -532,7 +532,7 @@ $('#session-form').addEventListener('submit', async e=>{
   }
 });
 
-$('#courses-sessions-list').addEventListener('click', async e=>{
+$('#courses-sessions-list')?.addEventListener('click', async e=>{
   const editS = e.target.dataset.editSession;
   const delS = e.target.dataset.delSession;
   const printA = e.target.dataset.printAttendance;
@@ -698,13 +698,13 @@ function addMinimalClientForRefnumImport(clientId, referNum){
 }
 
 /* ---- Bulk import: course numbers & course invoice numbers, linked by رقم الهوية ---- */
-$('#btn-template-course-numbers').addEventListener('click', ()=>{
+$('#btn-template-course-numbers')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_أرقام_الدورات.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890', 'رقم الدورة':'CRS-1001', 'تاريخ الدورة':'2026-02-01'}
   ]);
 });
-$('#btn-import-course-numbers').addEventListener('click', ()=> $('#import-coursenum-input').click());
-$('#import-coursenum-input').addEventListener('change', async e=>{
+$('#btn-import-course-numbers')?.addEventListener('click', ()=> $('#import-coursenum-input').click());
+$('#import-coursenum-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file) return;
   try{
@@ -780,18 +780,18 @@ function openCsBulkModal(){
   $('#cs-bulk-overlay').classList.add('show'); SoundFX.open();
 }
 function closeCsBulkModal(){ $('#cs-bulk-overlay').classList.remove('show'); }
-$('#btn-cs-bulk').addEventListener('click', openCsBulkModal);
-$('#cs-bulk-cancel').addEventListener('click', closeCsBulkModal);
-$('#cs-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='cs-bulk-overlay') closeCsBulkModal(); });
-$('#btn-cs-bulk-row').addEventListener('click', addCsBulkRow);
-$('#cs-bulk-table-body').addEventListener('click', e=>{
+$('#btn-cs-bulk')?.addEventListener('click', openCsBulkModal);
+$('#cs-bulk-cancel')?.addEventListener('click', closeCsBulkModal);
+$('#cs-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='cs-bulk-overlay') closeCsBulkModal(); });
+$('#btn-cs-bulk-row')?.addEventListener('click', addCsBulkRow);
+$('#cs-bulk-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('csb-remove-row')){
     const rows = $('#cs-bulk-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
     e.target.closest('tr').remove();
   }
 });
-$('#cs-bulk-table-body').addEventListener('paste', e=>{
+$('#cs-bulk-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -816,7 +816,7 @@ $('#cs-bulk-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-cs-bulk-save').addEventListener('click', async ()=>{
+$('#btn-cs-bulk-save')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-cs-bulk-save'), async ()=>{
   const courseNumber = $('#cs-bulk-coursenum').value.trim();
   const courseDate = $('#cs-bulk-date').value.trim();
@@ -900,18 +900,18 @@ function openRefnumBulkModal(){
   $('#refnum-bulk-overlay').classList.add('show'); SoundFX.open();
 }
 function closeRefnumBulkModal(){ $('#refnum-bulk-overlay').classList.remove('show'); }
-$('#btn-refnum-bulk').addEventListener('click', openRefnumBulkModal);
-$('#refnum-bulk-cancel').addEventListener('click', closeRefnumBulkModal);
-$('#refnum-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='refnum-bulk-overlay') closeRefnumBulkModal(); });
-$('#btn-refnum-bulk-row').addEventListener('click', addRefnumBulkRow);
-$('#refnum-bulk-table-body').addEventListener('click', e=>{
+$('#btn-refnum-bulk')?.addEventListener('click', openRefnumBulkModal);
+$('#refnum-bulk-cancel')?.addEventListener('click', closeRefnumBulkModal);
+$('#refnum-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='refnum-bulk-overlay') closeRefnumBulkModal(); });
+$('#btn-refnum-bulk-row')?.addEventListener('click', addRefnumBulkRow);
+$('#refnum-bulk-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('rnb-remove-row')){
     const rows = $('#refnum-bulk-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
     e.target.closest('tr').remove();
   }
 });
-$('#refnum-bulk-table-body').addEventListener('paste', e=>{
+$('#refnum-bulk-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -936,7 +936,7 @@ $('#refnum-bulk-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-refnum-bulk-save').addEventListener('click', async ()=>{
+$('#btn-refnum-bulk-save')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-refnum-bulk-save'), async ()=>{
   const rows = [...$('#refnum-bulk-table-body').querySelectorAll('tr')];
   const errors = [];
@@ -1022,11 +1022,11 @@ function openCompWorkersBulkModal(){
   setTimeout(()=>$('#compworkers-bulk-company').focus(), 50);
 }
 function closeCompWorkersBulkModal(){ $('#compworkers-bulk-overlay').classList.remove('show'); }
-$('#btn-compworkers-bulk').addEventListener('click', openCompWorkersBulkModal);
-$('#compworkers-bulk-cancel').addEventListener('click', closeCompWorkersBulkModal);
-$('#compworkers-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='compworkers-bulk-overlay') closeCompWorkersBulkModal(); });
-$('#btn-compworkers-bulk-row').addEventListener('click', addCompWorkersBulkRow);
-$('#compworkers-bulk-table-body').addEventListener('click', e=>{
+$('#btn-compworkers-bulk')?.addEventListener('click', openCompWorkersBulkModal);
+$('#compworkers-bulk-cancel')?.addEventListener('click', closeCompWorkersBulkModal);
+$('#compworkers-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='compworkers-bulk-overlay') closeCompWorkersBulkModal(); });
+$('#btn-compworkers-bulk-row')?.addEventListener('click', addCompWorkersBulkRow);
+$('#compworkers-bulk-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('cwb-remove-row')){
     const rows = $('#compworkers-bulk-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
@@ -1034,7 +1034,7 @@ $('#compworkers-bulk-table-body').addEventListener('click', e=>{
   }
 });
 // دعم لصق عمود كامل (رقم هوية واحد في كل سطر) منسوخ من إكسل مباشرة داخل الجدول
-$('#compworkers-bulk-table-body').addEventListener('paste', e=>{
+$('#compworkers-bulk-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -1053,7 +1053,7 @@ $('#compworkers-bulk-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-compworkers-bulk-save').addEventListener('click', async ()=>{
+$('#btn-compworkers-bulk-save')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-compworkers-bulk-save'), async ()=>{
   const companyName = $('#compworkers-bulk-company').value.trim();
   if(!companyName){ showToast('اكتب اسم الشركة أعلى الجدول أولاً'); $('#compworkers-bulk-company').focus(); return; }
@@ -1111,18 +1111,18 @@ function openCiBulkModal(){
   $('#ci-bulk-overlay').classList.add('show'); SoundFX.open();
 }
 function closeCiBulkModal(){ $('#ci-bulk-overlay').classList.remove('show'); }
-$('#btn-ci-bulk').addEventListener('click', openCiBulkModal);
-$('#ci-bulk-cancel').addEventListener('click', closeCiBulkModal);
-$('#ci-bulk-overlay').addEventListener('click', e=>{ if(e.target.id==='ci-bulk-overlay') closeCiBulkModal(); });
-$('#btn-ci-bulk-row').addEventListener('click', addCiBulkRow);
-$('#ci-bulk-table-body').addEventListener('click', e=>{
+$('#btn-ci-bulk')?.addEventListener('click', openCiBulkModal);
+$('#ci-bulk-cancel')?.addEventListener('click', closeCiBulkModal);
+$('#ci-bulk-overlay')?.addEventListener('click', e=>{ if(e.target.id==='ci-bulk-overlay') closeCiBulkModal(); });
+$('#btn-ci-bulk-row')?.addEventListener('click', addCiBulkRow);
+$('#ci-bulk-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('cib-remove-row')){
     const rows = $('#ci-bulk-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
     e.target.closest('tr').remove();
   }
 });
-$('#ci-bulk-table-body').addEventListener('paste', e=>{
+$('#ci-bulk-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -1148,7 +1148,7 @@ $('#ci-bulk-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-ci-bulk-save').addEventListener('click', async ()=>{
+$('#btn-ci-bulk-save')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-ci-bulk-save'), async ()=>{
   const rows = [...$('#ci-bulk-table-body').querySelectorAll('tr')];
   const errors = [];

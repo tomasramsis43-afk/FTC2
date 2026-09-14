@@ -759,7 +759,7 @@ bindGenericPagination('ctransfers', ctransfersPageState, renderCompanies);
 ['#cpp-company','#cpp-date-from','#cpp-date-to','#cpp-channel'].forEach(sel=> $(sel)?.addEventListener('input', renderCompanyPersons));
 onSearchInput('#cpp-search', renderCompanyPersons);
 bindGenericPagination('cpersons', cpersonsPageState, renderCompanyPersons);
-$('#btn-export-companies').addEventListener('click', ()=>{
+$('#btn-export-companies')?.addEventListener('click', ()=>{
   const headers = ['اسم الشركة','تاريخ الحوالة','طريقة الدفع','رقم المرجع','قيمة الحوالة','عدد المتدربين المستهدف','نصيب الفرد','ملاحظات','رقم هوية المتدرب','اسم المتدرب','قيمة الدورة','قيمة الحقيبة','إجمالي المتدرب','الحالة'];
   const rows = [];
   companiesFilteredTransfers().forEach(t=>{
@@ -780,7 +780,7 @@ $('#btn-export-companies').addEventListener('click', ()=>{
   a.download = 'تحويلات_الشركات.csv';
   a.click();
 });
-$('#btn-export-companies-xlsx').addEventListener('click', ()=>{
+$('#btn-export-companies-xlsx')?.addEventListener('click', ()=>{
   const rows = [];
   companiesFilteredTransfers().forEach(t=>{
     const share = num(t.traineeCount)>0 ? num(t.amount)/num(t.traineeCount) : 0;
@@ -812,7 +812,7 @@ function resetCompanyForm(){
   $('#btn-cancel-edit-company').style.display = 'none';
 }
 
-$('#btn-add-company').addEventListener('click', async ()=>{
+$('#btn-add-company')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-add-company'), async ()=>{
   const name = $('#cm-name').value.trim();
   if(!name){ showToast('أدخل اسم الشركة'); return; }
@@ -862,12 +862,12 @@ $('#btn-add-company').addEventListener('click', async ()=>{
 
   });});
 
-$('#btn-cancel-edit-company').addEventListener('click', ()=>{
+$('#btn-cancel-edit-company')?.addEventListener('click', ()=>{
   resetCompanyForm();
   showToast(tr('cancelledEditToast'));
 });
 
-$('#btn-add-transfer').addEventListener('click', async ()=>{
+$('#btn-add-transfer')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-add-transfer'), async ()=>{
   const companyId = $('#ct-company').value;
   const company = companies.find(c=>c.id===companyId);
@@ -964,9 +964,9 @@ function cancelTransferEdit(){
   $('#btn-add-transfer').textContent = tr('btnSaveTransfer');
   $('#btn-cancel-edit-transfer').style.display = 'none';
 }
-$('#btn-cancel-edit-transfer').addEventListener('click', ()=>{ cancelTransferEdit(); showToast(tr('cancelledEditToast')); });
+$('#btn-cancel-edit-transfer')?.addEventListener('click', ()=>{ cancelTransferEdit(); showToast(tr('cancelledEditToast')); });
 
-$('#ctr-id').addEventListener('input', ()=>{
+$('#ctr-id')?.addEventListener('input', ()=>{
   const c = clients.find(x=>x.clientId===$('#ctr-id').value.trim());
   if(c){
     const alreadyPaid = num(c.paid)>0;
@@ -980,8 +980,8 @@ $('#ctr-id').addEventListener('input', ()=>{
     $('#wrap-ctr-newclient2').style.display = '';
   }
 });
-$('#ctr-cancel').addEventListener('click', ()=>{ $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null; ctEditingTraineeId=null; $('#ctr-id').readOnly=false; });
-$('#ctrainee-overlay').addEventListener('click', e=>{ if(e.target.id==='ctrainee-overlay'){ $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null; ctEditingTraineeId=null; $('#ctr-id').readOnly=false; } });
+$('#ctr-cancel')?.addEventListener('click', ()=>{ $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null; ctEditingTraineeId=null; $('#ctr-id').readOnly=false; });
+$('#ctrainee-overlay')?.addEventListener('click', e=>{ if(e.target.id==='ctrainee-overlay'){ $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null; ctEditingTraineeId=null; $('#ctr-id').readOnly=false; } });
 
 function recalcCtrSplit(){
   const total = num($('#ctr-total').value);
@@ -990,11 +990,11 @@ function recalcCtrSplit(){
   $('#ctr-bag').value = bagVal ? Math.round(bagVal*100)/100 : 0;
   $('#ctr-course').value = Math.round((total-bagVal)*100)/100;
 }
-$('#ctr-total').addEventListener('input', recalcCtrSplit);
-$('#ctr-bag-purchased').addEventListener('change', recalcCtrSplit);
+$('#ctr-total')?.addEventListener('input', recalcCtrSplit);
+$('#ctr-bag-purchased')?.addEventListener('change', recalcCtrSplit);
 
 let _ctraineeFormBusy = false;
-$('#ctrainee-form').addEventListener('submit', async e=>{
+$('#ctrainee-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   if(_ctraineeFormBusy) return;
   _ctraineeFormBusy = true;
@@ -1487,7 +1487,7 @@ async function linkAllUnlinkedTrainees(){
 }
 
 /* ---------------- استيراد متدربين مجمّع لحوالة شركة (Excel) ---------------- */
-$('#btn-template-trainees').addEventListener('click', ()=>{
+$('#btn-template-trainees')?.addEventListener('click', ()=>{
   downloadXlsx('نموذج_استيراد_متدربين_لحوالة_شركة.xlsx', 'نموذج', [
     {'رقم الهوية':'1234567890', 'الاسم':'محمد أحمد', 'الجنسية':'Yemeni', 'المبلغ الإجمالي':980, 'رقم الفاتورة':'', 'شراء الحقيبة':'نعم'},
     {'رقم الهوية':'2345678901', 'الاسم':'', 'الجنسية':'', 'المبلغ الإجمالي':'', 'رقم الفاتورة':'', 'شراء الحقيبة':''}
@@ -1614,7 +1614,7 @@ async function importTraineeRowsIntoCompany(companyId, json){
   }
   return {totalAdded, totalSkipped, overflowCount};
 }
-$('#import-company-trainees-input').addEventListener('change', async e=>{
+$('#import-company-trainees-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file || !ctImportCompanyTargetId){ e.target.value=''; return; }
   const company = companies.find(c=>c.id===ctImportCompanyTargetId);
@@ -1635,7 +1635,7 @@ $('#import-company-trainees-input').addEventListener('change', async e=>{
   }
 });
 
-$('#import-trainees-input').addEventListener('change', async e=>{
+$('#import-trainees-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
   if(!file || !ctImportTargetTransferId){ e.target.value=''; return; }
   const t = companyTransfers.find(x=>x.id===ctImportTargetTransferId);
@@ -1686,10 +1686,10 @@ function openCtitModal(){
   $('#ctimporttext-overlay').classList.add('show'); SoundFX.open();
 }
 function closeCtitModal(){ $('#ctimporttext-overlay').classList.remove('show'); ctImportTextTargetTransferId=null; }
-$('#ctit-cancel').addEventListener('click', closeCtitModal);
-$('#ctimporttext-overlay').addEventListener('click', e=>{ if(e.target.id==='ctimporttext-overlay') closeCtitModal(); });
-$('#btn-ctit-add-row').addEventListener('click', addCtitRow);
-$('#ctit-table-body').addEventListener('click', e=>{
+$('#ctit-cancel')?.addEventListener('click', closeCtitModal);
+$('#ctimporttext-overlay')?.addEventListener('click', e=>{ if(e.target.id==='ctimporttext-overlay') closeCtitModal(); });
+$('#btn-ctit-add-row')?.addEventListener('click', addCtitRow);
+$('#ctit-table-body')?.addEventListener('click', e=>{
   if(e.target.classList.contains('ctit-remove-row')){
     const rows = $('#ctit-table-body').querySelectorAll('tr');
     if(rows.length<=1){ showToast('يجب أن يبقى صف واحد على الأقل'); return; }
@@ -1697,7 +1697,7 @@ $('#ctit-table-body').addEventListener('click', e=>{
   }
 });
 // دعم لصق عمود (أو عدة أعمدة/صفوف) منسوخ من إكسل مباشرة داخل جدول استيراد المتدربين، بنفس منطق جدول "إضافة عدة عملاء"
-$('#ctit-table-body').addEventListener('paste', e=>{
+$('#ctit-table-body')?.addEventListener('paste', e=>{
   const target = e.target;
   if(!target || target.dataset.col===undefined) return;
   const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -1727,7 +1727,7 @@ $('#ctit-table-body').addEventListener('paste', e=>{
   });
   showToast(`تم لصق ${lines.length} صف`);
 });
-$('#btn-ctit-save').addEventListener('click', async ()=>{
+$('#btn-ctit-save')?.addEventListener('click', async ()=>{
   if(!ctImportTextTargetTransferId){ showToast('تعذّر تحديد الحوالة'); return; }
   const t = companyTransfers.find(x=>x.id===ctImportTextTargetTransferId);
   if(!t){ showToast('تعذّر تحديد الحوالة'); return; }

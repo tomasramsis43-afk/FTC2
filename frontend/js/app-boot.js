@@ -508,7 +508,7 @@ const REMEMBER_USERNAME_KEY = 'ftcRememberedUsername';
   }catch(e){ console.error('[Auth] Failed to load remembered username:', e); }
 })();
 
-$('#server-login-form').addEventListener('submit', async e=>{
+$('#server-login-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   const uname = $('#server-login-user').value.trim();
@@ -599,7 +599,7 @@ async function activateAndStart(encKeyRaw, expiryDate, clientId){
   await ensureServerLoginThenStart();
 }
 
-$('#license-form').addEventListener('submit', async e=>{
+$('#license-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   const input = $('#license-key-input').value.trim();
