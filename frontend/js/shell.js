@@ -92,17 +92,16 @@ document.addEventListener('keydown', function (e) {
     if (yearFilter) yearFilter.addEventListener('change', updatePeriodChip);
   }
 
-  /* ── 4) مؤشر حالة البث اللحظي (قراءة فقط — لا نعدل sse-client إطلاقاً) ── */
+  /* ── 4) مؤشر حالة البث اللحظي (يقرأ _sseReadyState من sse-client.js فقط) ── */
   var _sseTick = null;
   function updateSseStatus() {
     var wrap = $('#sse-status-wrap');
     if (!wrap) return;
     // وضع العمل من الجهاز فقط (بلا خادم): لا معنى لمؤشر بث
     if (typeof SERVER_AUTH_TOKEN === 'undefined' || !SERVER_AUTH_TOKEN) { wrap.style.display = 'none'; return; }
-    var conn = (typeof _sseConnection !== 'undefined') ? _sseConnection : null;
     var dot = $('#sse-status-dot'), label = $('#sse-status-label');
     if (!dot || !label) return;
-    var state = conn ? conn.readyState : -1; // -1 لا اتصال، 0 اتصال، 1 مفتوح، 2 مغلق
+    var state = (typeof _sseReadyState !== 'undefined') ? _sseReadyState : -1; // -1 لا اتصال، 0 اتصال، 1 مفتوح، 2 مغلق
     if (state === 1) {
       wrap.style.display = ''; dot.className = 'sse-dot live';
       label.textContent = 'مباشر';

@@ -13,6 +13,12 @@ let _visibilityDebounceTimer = null;
 let _sseRetryTimer = null;
 let _sseRetryDelay = 2000;
 let _sseActive = false;
+// حالة الاتصال لعرضها فى مؤشر شريط العنوان (shell.js يقرأها فقط، لا يعدّلها):
+// -1 لا اتصال، 0 جارٍ الاتصال، 1 متصل ومفتوح، 2 مغلق. كانت هذه الحالة تُقرأ سابقاً من
+// _sseConnection.readyState (كائن EventSource القديم)، وهو متغيّر حُذف تماماً عند التحوّل
+// إلى fetch() اليوم — فبقي مؤشر البث اللحظي فى الواجهة يقرأ متغيّراً غير معرّف أبداً، فيظهر
+// دائماً "مزامنة دورية" حتى لو كان الاتصال الفعلي شغّالاً ومتصلاً بنجاح.
+let _sseReadyState = -1;
 
 // تجميع عدة أحداث متقاربة (مثال: استيراد جماعي يولّد عشرات إشعارات التغيير خلال ثوانٍ) فى فحص
 // مزامنة واحد بدل فحص منفصل لكل حدث — فرق التأخير (300ms) لا يُلاحَظ من المستخدم إطلاقاً.
@@ -38,6 +44,7 @@ async function _openSseStream(){
   const ctrl = new AbortController();
   _sseAbort = ctrl;
   _sseActive = true;
+  _sseReadyState = 0; // جارٍ الاتصال
   try{
     const res = await fetch(API_BASE + '/api/events/stream', {
       headers: { 'Authorization': 'Bearer ' + SERVER_AUTH_TOKEN, 'Accept': 'text/event-stream' },
@@ -45,6 +52,7 @@ async function _openSseStream(){
     });
     if(!res.ok || !res.body) throw new Error('SSE handshake failed: ' + res.status);
     _sseRetryDelay = 2000; // اتصال ناجح — إعادة المحاولة القادمة (لو حصل انقطاع) تبدأ من البداية
+    _sseReadyState = 1; // متصل ومفتوح فعلاً
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -70,6 +78,7 @@ async function _openSseStream(){
   }
   _sseActive = false;
   _sseAbort = null;
+  _sseReadyState = -1;
   if(!ctrl.signal.aborted) _scheduleReconnect();
 }
 
@@ -86,6 +95,7 @@ function disconnectRealtimeEvents(){
   _sseRetryDelay = 2000;
   if(_sseAbort){ _sseAbort.abort(); _sseAbort = null; }
   _sseActive = false;
+  _sseReadyState = 2; // مغلق عمداً
 }
 
 // ثغرة كانت موجودة: لو تاب المستخدم فضل مفتوح بعيداً عن الشاشة لفترة (مثال: أدمن سايب الجهاز)
