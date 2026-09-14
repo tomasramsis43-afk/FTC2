@@ -809,7 +809,7 @@ async function _persistRecordsSnap(collection, list, baseline, versions, meta){
     if(versions) for(const [id, v] of versions) versionPairs.push([id, v]);
     const metaPairs = [];
     if(meta) for(const [id, m] of Object.entries(meta)) metaPairs.push([id, m]);
-    await _recordsSnapWrite(RECORDS_SNAP_PREFIX + collection, items, baselinePairs, versionPairs, metaPairs);
+    await _recordsSnapWrite(_recordsSnapKey(collection), items, baselinePairs, versionPairs, metaPairs);
   }catch(e){ console.error('[StorageSync] _persistRecordsSnap failed:', collection, e); }
 }
 // حفظ مؤجّل (debounce) للقطة — تُستدعى بعد الحفظ على السيرفر. تمرير الدوال بدل القيم المباشرة
@@ -823,6 +823,13 @@ function _scheduleRecordsSnapPersist(collection, getList, getBaseline, getVersio
     _snapPersistTimers[timerKey] = null;
     try{ _persistRecordsSnap(collection, getList(), getBaseline(), getVersions(), recordMeta[collection]); }catch(e){ console.error('[StorageSync] scheduled records snap persist failed:', collection, e); }
   }, 1200);
+}
+// اللقطات المحلية للتصنيفات كانت تُخزَّن تحت مفتاح ثابت (RECORDS_SNAP_PREFIX + collection) مشترك
+// بين كل مستخدمي نفس الجهاز — أي مستخدم يفك تشفير ويرى/يُسقِط لقطة المستخدم الآخر عند فتح لاحق
+// (cacheOnly)، وتتداخل baselines بين جلسات مختلفة على نفس الجهاز. نعملها per-user تماماً مثل لقطة
+// العملاء أدناه (المفتاح يحمل اسم المستخدم)، فيبقى كل مستخدم معزولاً لقطاتِه ويعيد جلب ما يخصه فقط.
+function _recordsSnapKey(collection){
+  return RECORDS_SNAP_PREFIX + (currentUser || SERVER_AUTH_USERNAME || 'غير معروف') + ':' + collection;
 }
 function _clientsSnapKey(){
   return CLIENTS_SNAP_PREFIX + (currentUser || SERVER_AUTH_USERNAME || 'غير معروف');
@@ -916,7 +923,7 @@ async function fetchAllRecordsGeneric(collection){
 async function _fetchDeltaRecords(collection){
   const known = _recordVersions[collection];
   if(!known || known.size === 0) throw new Error('لا توجد أرقام نسخ محلية — تحميل كامل');
-  const snap = await _recordsSnapRead(RECORDS_SNAP_PREFIX + collection);
+  const snap = await _recordsSnapRead(_recordsSnapKey(collection));
   if(!snap || !Array.isArray(snap.list) || snap.list.length === 0) throw new Error('لا توجد لقطة محلية — تحميل كامل');
 
   const vr = await serverFetch(`/api/records/${encodeURIComponent(collection)}/versions`);
@@ -1230,7 +1237,7 @@ async function loadCollectionGeneric(collection, cacheOnly){
     // قديمة" في kv_store (مخزن لا يُقرأ لاحقاً، وكان التعديل المبنى عليه يبدو وكأنه "فُقد" عند
     // أول تحميل حقيقي من السحابة بعد إعادة الفتح). لو لا توجد لقطة بعد (أول فتح على هذا الجهاز)
     // نبدأ فارغاً (baseline null) ونترك backgroundSyncCheck يملأ الشاشة بالبيانات الصحيحة فوراً.
-    const snap = await _recordsSnapRead(RECORDS_SNAP_PREFIX + collection);
+    const snap = await _recordsSnapRead(_recordsSnapKey(collection));
     if(snap){
       const list = Array.isArray(snap.list) ? snap.list : [];
       const baseline = new Map();

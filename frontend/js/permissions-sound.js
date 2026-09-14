@@ -728,7 +728,16 @@ async function notifyAdminAlert(subject, bodyHtml){
 // allowDrop=true تُستخدم فقط عند حذف عملاء دفعة واحدة عن قصد (بعد تأكيد المستخدم صراحة عبر
 // customConfirm)، لتخطّي حماية "رفض الحذف المفاجئ الكبير" على السيرفر (راجع PUT /api/storage/:key)
 // التي هدفها منع فقدان بيانات بسبب جهاز يحفظ نسخة قديمة من المصفوفة فوق نسخة السيرفر الحالية.
+let _saveClientsLock = Promise.resolve();
 async function saveClients(allowDrop){
+  // قفل تسلسل (mutex): استدعاءات متزامنة من مسارات مختلفة (زر حفظ/حفظ تلقائي/مزامنة خلفية/إغلاق)
+  // كانت تتداخل وتكرّر رفع نفس العميل أو تحدّث الـ baseline بترتيب غير مؤكّد عند تزامنها. الآن كل
+  // استدعاء ينتظر انتهاء الذي سبقه فيُنفَّذ على نسخة متسقة ويتزامن baseline مرة واحدة فقط.
+  const run = _saveClientsLock.then(()=>_saveClientsImpl(allowDrop));
+  _saveClientsLock = run.then(()=>{}, ()=>{});
+  return run;
+}
+async function _saveClientsImpl(allowDrop){
   try{
     // المسار السريع: لو المزامنة مع نظام "عملاء كسجلات مستقلة" متأكدة لهذه الجلسة (راجع loadData)،
     // نبعت بس العملاء اللي اتغيّروا فعلاً (سجل واحد لكل تغيير حقيقي، مقارنةً بآخر نسخة معروفة
@@ -746,6 +755,7 @@ async function saveClients(allowDrop){
       for(const id of _clientsSyncBaseline.keys()) if(!currentIds.has(id)) removedIds.push(id);
 
       let anyNetworkFailure = false;
+      let syncedAny = false; // نجح رفع/حذف واحد على الأقل هذا الدور — للتمييز بين فشل جزئي وشامل
       if(changed.length > 20){
         // تغييرات كثيرة دفعة واحدة (استيراد/تحديث شامل) — رفع مُجمَّع أخف وأسرع على السيرفر بدل
         // طلب منفصل لكل عميل، وبدون فحص تعارض (نفس منطق العمليات الجماعية الكبيرة الأخرى بالبرنامج).
@@ -756,31 +766,32 @@ async function saveClients(allowDrop){
           // تاني أبداً رغم بقاء بياناتهم غير متطابقة مع السيرفر (أو، لو تغيّرت بياناتهم بعد ذلك مرة
           // أخرى، يدخلون ويخرجون من نفس حلقة "تعذّر الرفع" كل مرة تُحفظ فيها البيانات من جديد).
           const conflictSet = new Set(conflictIds);
-          changed.forEach(x=> { if(!conflictSet.has(x.client.id)) _clientsSyncBaseline.set(x.client.id, x.json); });
+          changed.forEach(x=> { if(!conflictSet.has(x.client.id)){ _clientsSyncBaseline.set(x.client.id, x.json); syncedAny = true; } });
         }catch(e){ anyNetworkFailure = true; }
       }else{
         for(const {client, json} of changed){
           const ok = await saveOneClientRecord(client, json);
-          if(ok) _clientsSyncBaseline.set(client.id, json);
+          if(ok){ _clientsSyncBaseline.set(client.id, json); syncedAny = true; }
           else if(ok === null) anyNetworkFailure = true; // فشل اتصال فعلي (وليس تعارض — التعارض مُعالَج ومُبلَّغ بالفعل داخل saveOneClientRecord)
         }
       }
       if(removedIds.length > 20){
         const failedIds = await bulkDeleteClientRecords(removedIds);
-        for(const id of removedIds) if(!failedIds.includes(id)) _clientsSyncBaseline.delete(id);
+        for(const id of removedIds) if(!failedIds.includes(id)){ _clientsSyncBaseline.delete(id); syncedAny = true; }
         if(failedIds.length) anyNetworkFailure = true;
       }else{
         for(const id of removedIds){
           const ok = await deleteOneClientRecord(id);
-          if(ok) _clientsSyncBaseline.delete(id);
+          if(ok){ _clientsSyncBaseline.delete(id); syncedAny = true; }
           else anyNetworkFailure = true;
         }
       }
-      if(anyNetworkFailure){
-        // فشل اتصال فعلي أثناء رفع بعض العملاء — كل دالة حفظ عميل (فردية/مجمّعة) سجّلت ما فشل
-        // في طابور pendingRecords قبل إرجاع الفشل، فلا حاجة لأي "خط رجعة كتلة قديمة" في kv_store
-        // (مخزن لا يُقرأ من جديد — السبب الجذري لفقدان البيانات عند إعادة الفتح). نُبطل الـ
-        // baseline فقط لإعادة مزامنة كاملة آمنة عند أول اتصال ناجح.
+      if(anyNetworkFailure && !syncedAny){
+        // فشل اتصال فعلي شامل (لا عملية واحدة نجحت) — لا أساس مؤكد لأي تغيير هذا الدور، فنُبطل الـ
+        // baseline كاملاً لإعادة مزامنة كاملة آمنة عند أول اتصال ناجح. أما الفشل الجزئي (مثل عميل
+        // واحد وُجد خارج الشبكة بينما بقية العملاء رُفعوا بنجاح) فحساب الـ baseline هنا دقيق سطراً
+        // بسطر: كل ما نجح ثُبّت، وكل ما فشل لم يُثبَّت وسيُعاد تلقائياً (وسُجّل أصلاً في طابور
+        // pendingRecords) — كان الإبطال الكامل يفرض إعادة فحص/رفع كل العملاء عند أول فشل بسيط.
         _clientsSyncBaseline = null;
       }
       _scheduleClientsSnapPersist();

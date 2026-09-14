@@ -318,7 +318,18 @@ document.getElementById('btn-shortcuts-help')?.addEventListener('click', ()=> do
 document.getElementById('shortcuts-close')?.addEventListener('click', ()=> document.getElementById('shortcuts-overlay').classList.remove('show'));
 document.getElementById('shortcuts-overlay')?.addEventListener('click', e=>{ if(e.target.id==='shortcuts-overlay') document.getElementById('shortcuts-overlay').classList.remove('show'); });
 
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+// مولّد معرّفات فريد: كانت المسافة 5 أحرف عشوائية فقط (36^5 ≈ 60 مليون) فيمكن تصادم بين سجلات
+// تُنشأ في نفس المللي ثانية (مثال: تسويد دفعات أو بذرة الحسابات عند أول تشغيل تُنشئ عشرات السجلات
+// معاً). الآن: بصمة الزمن + عدّاد جلسة (يضمن التفرد المطلق داخل الجلسة عبر تكرار نفس اللحظة) + 4
+// أحرف عشوائية تزيد التفرد بين الأجهزة/الجلسات المختلفة — ولا يزال نصاً قصيراً صالحاً كمعرّف سجل.
+let _uidCounter = 0;
+function uid(){
+  const ts = Date.now().toString(36);
+  _uidCounter = (_uidCounter + 1) % 1296; // 36^2 تجسيد فريد لكل مللي ثانية داخل الجلسة
+  const c = _uidCounter.toString(36).padStart(2,'0');
+  const r = Math.random().toString(36).slice(2,6);
+  return ts + c + r;
+}
 function stampNow(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; }
 function downloadXlsx(filename, sheetName, rows){
   const safeRows = (rows && rows.length) ? rows : [{'—':'لا توجد بيانات'}];

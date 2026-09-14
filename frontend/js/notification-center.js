@@ -35,7 +35,22 @@
   function getItems() {
     if (typeof window.auditLog === 'undefined' || !Array.isArray(window.auditLog)) return [];
     if (typeof window.canAccessView === 'function' && !window.canAccessView('audit')) return [];
-    return window.auditLog.slice().sort(function (a, b) { return b.ts - a.ts; }).slice(0, 20);
+    // لا نمرّر sort() على سجل التدقيق كاملاً (قد يصل لآلاف الصفوف مع كل عملية حفظ) — نمسح خطياً
+    // مرة واحدة ونبقي أعلى 20 حدثاً فقط مرتبين تنازلياً (سقف عرض اللوحة)، وهي نفس النتيجة والترتيب
+    // الذي يحدده السجل نفسه غالباً (الطابع الزمني يتصاعد فتُدرج الأحدث في مكانها بلا عناء).
+    var arr = window.auditLog;
+    var items = [];
+    for (var i = 0; i < arr.length; i++) {
+      var it = arr[i];
+      if (!it) continue;
+      var pos = items.length;
+      while (pos > 0 && Number(items[pos - 1].ts) < Number(it.ts)) pos--;
+      if (pos < 20) {
+        items.splice(pos, 0, it);
+        if (items.length > 20) items.length = 20;
+      }
+    }
+    return items;
   }
 
   function metaFor(action) {

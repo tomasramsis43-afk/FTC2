@@ -201,9 +201,19 @@ function getFilteredCached(filterSig){
   return rows;
 }
 function renderClientsTableRows(pageRows, filteredTotal, grandTotal, pageSize, filteredRowsCache){
-  // استخدام كاش الفلترة لتجنب 3 مسوحات كاملة عند كل ترقيم
-  const filterSig = JSON.stringify([filteredTotal, grandTotal, pageSize]);
-  const filtered = filteredRowsCache || _filteredCache.rows || filteredClients();
+  // كاش مسح الفلترة المحلية لمنطق الإجماليات (المدفوع/المتبقي): كان توقيعه مبنيّاً على أرقام النتائج
+  // نفسها (filteredTotal/grandTotal/pageSize) فتُعاد صفوف قديمة من فلتر مختلف تماماً عند تنقّل الصفحات
+  // وتُحسب الإجماليات المعروضة على مجموعة عملاء لا تشبه الصفوف الظاهرة (خصوصاً في المسار السريع الذي
+  // لا يمرر rows محلية). الآن التوقيع = مدخلات الفلاتر الحقيقية (+ عدد العملاء ووضع الترقيم) فيُمسح
+  // مرة واحدة فقط عند تغيّر أي فلتر فعلياً ويُعاد استخدامه خلال التنقّل بلا إعادة مسح — متطابق مع
+  // الصفوف المعروضة دائماً مع الحفاظ على مكسب الأداء الذي وُجد الكاش من أجله.
+  const filterSig = JSON.stringify([
+    $('#search')?.value, selectedFilterValues($('#filter-course')), selectedFilterValues($('#filter-nat')), selectedFilterValues($('#filter-status')),
+    selectedFilterValues($('#filter-company')), selectedFilterValues($('#filter-invoice')), selectedFilterValues($('#filter-coursenum')), selectedFilterValues($('#filter-refnum')),
+    $('#cl-date-from')?.value, $('#cl-date-to')?.value, $('#cl-paid-min')?.value, $('#cl-paid-max')?.value,
+    showSuspendedOnly, showUnpurchasedBagsOnly, selectedFilterValues($('#filter-bag-source')), clients.length, pageSize
+  ]);
+  const filtered = filteredRowsCache || getFilteredCached(filterSig);
   const cfc = $('#clients-filtered-count'); if(cfc) cfc.textContent = filteredTotal;
   const ctc = $('#clients-total-count'); if(ctc) ctc.textContent = (canSeeAllData()||currentUserRole==='reception') ? clients.length : clients.filter(c=>isOwnRecord(c)).length;
   // كروت فلتر الدورات: تُحسب من نفس بيانات العملاء لكن بتجاهل فلتر الدورة نفسه، كي يعكس

@@ -82,6 +82,11 @@ function printDocFooterButton(){
 }
 
 function openPrintTarget(){
+  // منع تكرار معرّف الـ overlay عند فتح معاينة قبل إغلاق السابقة (طباعة سريعة لمستندين):
+  // يبقى id='print-preview-overlay' فريداً فعلاً في الدوم، وإلا كان getElementById في أماكن أخرى
+  // (undo-redo / module-invoices) يلتقط المثيل الأول فقط ويُزيح/يغلق المعاينة الخطأ.
+  const prevOverlay = document.getElementById('print-preview-overlay');
+  if(prevOverlay) prevOverlay.remove();
   const overlay = document.createElement('div');
   overlay.id = 'print-preview-overlay';
   overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,33,.6); z-index:99999; display:flex; flex-direction:column; align-items:center; padding:18px; box-sizing:border-box;';
@@ -152,9 +157,6 @@ function finishPrintDoc(win){
     // نافذة طباعة الويندوز من غير ما يطلب المستخدم ده). دلوقتي المعاينة بس تظهر، والطباعة
     // الفعلية متبقاش تحصل إلا لما المستخدم يدوس زر "طباعة / حفظ PDF" بنفسه.
   }
-  try{
-    if(win) win.addEventListener('afterprint', ()=>{ setTimeout(()=>{ const ov=document.getElementById('print-preview-overlay'); if(ov) ov.remove(); }, 400); });
-  }catch(e){}
 }
 
 onSearchInput('#search', renderTable);
