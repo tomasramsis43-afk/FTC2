@@ -987,7 +987,15 @@ $('#client-form').addEventListener('submit', async e=>{
   // دورة تلقائية: لو رقم الدورة جديد (مفيش دورة بنفس الرقم بعد فى شيت الدورات)، تُفتح دورة
   // حقيقية محفوظة فوراً باسم وتاريخ هذا العميل — بدل الاكتفاء بجلسة وهمية مؤقتة وقت العرض فقط.
   const _sessionCreatedOnSave = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(savedClient);
-  closeModal(); renderTable(); renderDashboard(); refreshFilterOptions(); renderCourses(); renderBags();
+  closeModal();
+  // كل استدعاءات إعادة الرسم هنا محمية فرداً بـ try/catch: فشل رسم شاشة واحدة (مثلاً لو ملف
+  // الوحدة الخاص بها لسه ما وصلش/اتحمّلش وقت التنفيذ) ما ينبغيش يوقف باقي الشاشات ولا الأهم —
+  // سلسلة الحفظ/المزامنة الفعلية تحت (IIFE غير المتزامن) — كان خطأ واحد هنا (مثلاً
+  // ReferenceError: renderCourses is not defined) يوقف تنفيذ الدالة كلها فيمنع وصول العميل
+  // المحفوظ فعلاً محلياً إلى خطوات الرفع/المزامنة مع السيرفر تماماً.
+  [renderTable, renderDashboard, refreshFilterOptions, renderCourses, renderBags].forEach(fn=>{
+    try{ if(typeof fn==='function') fn(); }catch(e){ console.error('فشل فى إعادة رسم شاشة بعد حفظ العميل:', e); }
+  });
   (async ()=>{
     if(_sessionCreatedOnSave && typeof saveCourseSessions==='function') await saveCourseSessions();
     if(!wasEdit && !_clientsSyncBaseline){
@@ -1056,7 +1064,11 @@ $('#client-form').addEventListener('submit', async e=>{
     }
     // إعادة رسم نهائية بعد اكتمال الحفظ الفعلي: تعكس أي تحديث وصل من السيرفر فى هذه الأثناء
     // (حالة الاعتماد status/origin، تصحيح مخزون الحقائب، قيود الخزنة التلقائية...).
-    renderTable(); renderDashboard(); refreshFilterOptions(); renderCourses(); renderBags();
+    // نفس الحماية الفردية بـ try/catch كأعلى الدالة: فشل رسم شاشة واحدة لا يمنع باقي خطوات
+    // ما بعد الحفظ (الإشعارات وغيرها) من الاستمرار.
+    [renderTable, renderDashboard, refreshFilterOptions, renderCourses, renderBags].forEach(fn=>{
+      try{ if(typeof fn==='function') fn(); }catch(e){ console.error('فشل فى إعادة رسم شاشة بعد حفظ العميل:', e); }
+    });
   })().catch(e=>console.error('فشل فى إكمال حفظ العميل فى الخلفية:', e));
 });
 
