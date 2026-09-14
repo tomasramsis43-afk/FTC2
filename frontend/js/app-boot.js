@@ -588,8 +588,12 @@ async function activateAndStart(encKeyRaw, expiryDate, clientId){
   ENC_KEY = await crypto.subtle.importKey('raw', base64ToBytes(encKeyRaw), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
   if(expiryDate) LICENSE_EXPIRY_DATE = expiryDate;
   try{
+    // المفتاح الفعلي (CryptoKey غير قابل للتصدير) يُخزَّن في IndexedDB فقط — لا يُخزَّن النص
+    // الخام (base64) في localStorage بعد الآن، فلا يمكن لأي كود XSS على نفس الأصل قراءته
+    // (قراءته في IndexedDB لن تُعطي إلا كائناً لا يمكن استخراج مادته). في localStorage نُبقي
+    // بيانات التعريف اللازمة لفحص انتهاء الترخيص عند عدم الاتصال.
+    await _persistEncryptionKey(ENC_KEY);
     localStorage.setItem(LICENSE_CACHE_KEY, JSON.stringify({
-      encKeyRaw,
       expiryDate: expiryDate ? new Date(expiryDate).toISOString() : null,
       clientId: clientId || null,
       cachedAt: new Date().toISOString(),
@@ -597,6 +601,17 @@ async function activateAndStart(encKeyRaw, expiryDate, clientId){
   }catch(e){ console.error('[Purchases] Failed to cache license:', e); }
   $('#license-screen').style.display = 'none';
   await ensureServerLoginThenStart();
+}
+// تشغيل البرنامج دون اتصال باستخدام المفتاح المخزَّن محلياً (CryptoKey في IndexedDB). القراءة
+// من IndexedDB مباشرة (بلا أي مفتاح خام من localStorage)؛ لو كان IndexedDB فارغاً (جهاز من نسخة
+// قديمة لم يُرحَّل بعد) يجرّب ترحيل encKeyRaw القديم لمرة واحدة تلقائياً. يرجع true عند النجاح.
+async function activateAndStartWithStoredKey(expiryDate, clientId){
+  let key = await _readStoredEncryptionKey();
+  if(!key) key = await _migrateLegacyEncKeyRaw();
+  if(!key) return false;
+  ENC_KEY = key;
+  if(expiryDate) LICENSE_EXPIRY_DATE = expiryDate;
+  return true;
 }
 
 $('#license-form')?.addEventListener('submit', async e=>{

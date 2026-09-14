@@ -364,6 +364,13 @@ const KV_IDB_PENDING_STORE = 'pending';
 // سبب وجود هذا المخزن: قبل إضافته، أي فشل رفع فردي (انقطاع نت لحظي، rate limit، إغلاق الصفحة أثناء
 // الحفظ) كان بيضيع نهائياً بمجرد أي ريفرش لاحق — راجع flushPendingRecordWrites فى storage-sync.js.
 const RECORD_PENDING_STORE = 'pendingRecords';
+// مخزن رابع (نفس قاعدة IndexedDB): مفتاح AES-GCM للترخيص (CryptoKey غير قابل للتصدير). التخزين
+// هنا بدلاً من localStorage يمنع أي كود XSS على نفس الأصل من قراءة المفتاح الخام — قراءةُ السجل
+// في IndexedDB تجلب CryptoKey فقط (exportKey عليه تفشل لأن extractable=false)، ولا يوجد أي نص
+// base64 للمفتاح في أي تخزين قابل للقراءة. سجل واحد ثابت تحت مفتاح 'main' (المفتاح مشترك بين
+// كل مستخدمي نفس الأصل).
+const ENC_KEY_IDB_STORE = 'encKey';
+const ENC_KEY_IDB_RECORD = 'main';
 // عدّاد متزامن (بلا await) لإجمالي عدد التعديلات فى طابوري IndexedDB (kv + records) معاً — يُحدَّث
 // فور اكتمال أي إضافة/حذف/مسح فعلي فى أي منهما (راجع _refreshPendingQueueSyncCount أدناه، ومواضع
 // استدعائها فى نهاية _pendingWrite/_pendingDelete/_pendingRecordPut/_pendingRecordDelete/
@@ -388,9 +395,9 @@ function _openKvIdb(){
   _kvIdbPromise = new Promise((resolve)=>{
     try{
       if(!window.indexedDB){ resolve(null); return; }
-      const req = indexedDB.open(KV_IDB_NAME, 3);
+      const req = indexedDB.open(KV_IDB_NAME, 4);
       // ثغرة "عزل مستخدم ثانٍ" كانت هنا: لو تاب قديم (مفتوح من قبل آخر تحديث للسيرفر) لسه شغّال
-      // ومتصل بقاعدة IndexedDB بنسخة أقدم، أي تاب جديد يطلب نسخة أحدث (3) يتوقف تماماً بلا أي
+      // ومتصل بقاعدة IndexedDB بنسخة أقدم، أي تاب جديد يطلب نسخة أحدث (4) يتوقف تماماً بلا أي
       // خطأ ظاهر — المتصفح "يحجب" (blocked) فتح الاتصال الجديد لحد ما كل الاتصالات القديمة تُغلَق،
       // ولأننا ما كناش نسمع لحدث versionchange لنغلق الاتصال القديم تلقائياً، كان المستخدم الثاني
       // يفضل عالقاً فعلياً (لا تحميل، لا خطأ) لحد ما المستخدم الأول يقفل تابه/متصفحه بنفسه.
@@ -409,6 +416,7 @@ function _openKvIdb(){
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_STORE)) req.result.createObjectStore(KV_IDB_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore kv failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore pending failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(RECORD_PENDING_STORE)) req.result.createObjectStore(RECORD_PENDING_STORE, { keyPath: 'ckey' }); }catch(e){ console.error('[Core] IDB createObjectStore pendingRecords failed:', e); }
+        try{ if(!req.result.objectStoreNames.contains(ENC_KEY_IDB_STORE)) req.result.createObjectStore(ENC_KEY_IDB_STORE); }catch(e){ console.error('[Core] IDB createObjectStore encKey failed:', e); }
       };
       req.onsuccess = ()=>{
         if(blockedTimer){ clearTimeout(blockedTimer); blockedTimer = null; }
@@ -422,6 +430,73 @@ function _openKvIdb(){
     }catch(e){ resolve(null); }
   });
   return _kvIdbPromise;
+}
+// ================= تخزين مفتاح التشفير (CryptoKey) في IndexedDB =================
+// يُخزَّن مفتاح AES-GCM ككائن CryptoKey (غير قابل للتصدير) في IndexedDB بدلاً من النص الخام
+// (encKeyRaw base64) في localStorage. كائنات CryptoKey "قابلة للنسخ البنيوي" (structured-clonable)
+// فيخزّنها IndexedDB أماناً؛ وأي محاولة exportKey عليها تفشل لأن extractable=false. فحتى لو نجح
+// XSS على نفس الأصل في قراءة سجل IndexedDB هذا، فلن يجد بايتات المفتاح ليُرسلها — يجد كائناً
+// لا يمكن استخراج مادته. كل الدوال هنا تتسامح مع غياب IndexedDB (ترجع false/null) — مسار السيرفر
+// يبقى هو الخيار الافتراضي، وهذه مجرد طبقة أفضل لتخزين المفتاح محلياً للاستخدام دون اتصال.
+async function _persistEncryptionKey(cryptoKey){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return false;
+    return await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(ENC_KEY_IDB_STORE, 'readwrite');
+        tx.objectStore(ENC_KEY_IDB_STORE).put(cryptoKey, ENC_KEY_IDB_RECORD);
+        tx.oncomplete = ()=> resolve(true);
+        tx.onerror = ()=>{ console.error('[Core] _persistEncryptionKey IDB tx failed'); resolve(false); };
+      }catch(e){ console.error('[Core] _persistEncryptionKey tx exception:', e); resolve(false); }
+    });
+  }catch(e){ console.error('[Core] _persistEncryptionKey failed:', e); return false; }
+}
+async function _readStoredEncryptionKey(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return null;
+    return await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(ENC_KEY_IDB_STORE, 'readonly');
+        const req = tx.objectStore(ENC_KEY_IDB_STORE).get(ENC_KEY_IDB_RECORD);
+        req.onsuccess = ()=> resolve(req.result || null);
+        req.onerror = ()=>{ resolve(null); };
+      }catch(e){ resolve(null); }
+    });
+  }catch(e){ console.error('[Core] _readStoredEncryptionKey failed:', e); return null; }
+}
+async function _clearStoredEncryptionKey(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(ENC_KEY_IDB_STORE, 'readwrite');
+        tx.objectStore(ENC_KEY_IDB_STORE).delete(ENC_KEY_IDB_RECORD);
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=>{ resolve(); };
+      }catch(e){ resolve(); }
+    });
+  }catch(e){ console.error('[Core] _clearStoredEncryptionKey failed:', e); }
+}
+// ترحيل لمرة واحدة للنسخ القديمة من البرنامج التي كانت تخزّن encKeyRaw (النص الخام base64) في
+// localStorage ضمن LICENSE_CACHE_KEY: نستورد المفتاح كـ CryptoKey غير قابل للتصدير ونخزّنه في
+// IndexedDB، ثم نُزيل النص الخام من سجل localStorage نهائياً. يرجع المفتاح المستورد عند النجاح،
+// وإلا null (لا يوجد سجل قديم، أو فشل الاستيراد).
+async function _migrateLegacyEncKeyRaw(){
+  try{
+    const raw = localStorage.getItem(LICENSE_CACHE_KEY);
+    if(!raw) return null;
+    const cached = JSON.parse(raw);
+    if(typeof cached !== 'object' || cached === null || typeof cached.encKeyRaw !== 'string' || !cached.encKeyRaw) return null;
+    const key = await crypto.subtle.importKey('raw', base64ToBytes(cached.encKeyRaw), {name:'AES-GCM'}, false, ['encrypt','decrypt']);
+    const ok = await _persistEncryptionKey(key);
+    if(ok){
+      try{ delete cached.encKeyRaw; localStorage.setItem(LICENSE_CACHE_KEY, JSON.stringify(cached)); }catch(e){}
+    }
+    return key;
+  }catch(e){ console.error('[Core] _migrateLegacyEncKeyRaw failed:', e); return null; }
 }
 // يخزّن/يحدّث تعديلاً فردياً معلّقاً. payload لعملية upsert: { op:'upsert', enc, clientId? }،
 // ولعملية حذف: { op:'delete' }. قيد واحد فقط لكل (collection,id) — آخر تعديل معلّق فقط يهمّ.

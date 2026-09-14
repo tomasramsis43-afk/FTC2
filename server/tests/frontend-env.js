@@ -119,8 +119,9 @@ function buildSandbox(){
 
 // يحمّل ملفاً أو أكثر (بالترتيب المُعطى) من frontend/js داخل نفس الـ context، ويرجع الـ context
 // نفسه (كائن يحمل كل الدوال/المتغيرات المعرَّفة في تلك الملفات كخصائص مباشرة عليه).
-function loadFrontendFiles(filenames){
+function loadFrontendFiles(filenames, overrides){
   const sandbox = buildSandbox();
+  if(overrides) Object.assign(sandbox, overrides);
   const context = vm.createContext(sandbox);
   const frontendDir = path.join(__dirname, '..', '..', 'frontend', 'js');
   for(const name of filenames){

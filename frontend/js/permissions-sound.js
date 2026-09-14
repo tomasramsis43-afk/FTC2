@@ -204,8 +204,9 @@ function showFatalDecryptErrorScreen(err){
       </div>`;
     document.body.appendChild(div);
     document.getElementById('fatal-decrypt-reload-btn').addEventListener('click', ()=> location.reload());
-    document.getElementById('fatal-decrypt-clear-btn').addEventListener('click', ()=>{
+    document.getElementById('fatal-decrypt-clear-btn').addEventListener('click', async ()=>{
       try{ localStorage.removeItem('appLicenseCacheV1'); localStorage.removeItem('appFallbackEncKeyV1'); }catch(e){}
+      try{ await _clearStoredEncryptionKey(); }catch(e){}
       location.reload();
     });
     document.getElementById('fatal-decrypt-license-btn').addEventListener('click', async ()=>{
@@ -217,7 +218,9 @@ function showFatalDecryptErrorScreen(err){
         if(data && data.valid && data.encKey){
           try{
             localStorage.setItem('appLicenseKeyV1', code.trim().replace(/[\s-]/g,'').toUpperCase());
-            localStorage.setItem('appLicenseCacheV1', JSON.stringify({encKeyRaw: data.encKey, expiryDate: data.expiryDate || null, clientId: data.clientId || null, cachedAt: new Date().toISOString()}));
+            // لا نُخزِّن encKeyRaw هنا إطلاقاً — تخزين المفتاح الخام في localStorage كان اساس
+            // المشكلة التي نعالجها. بمجرد إعادة التحميل، يتحقق boot.js من كود الترخيص المحفوظ
+            // مع السيرفر ثم يخزّن المفتاح كـ CryptoKey غير قابل للتصدير في IndexedDB مباشرة.
           }catch(e){}
           alert('تم حفظ كود الترخيص — سيُعاد تحميل الصفحة الآن');
           location.reload();

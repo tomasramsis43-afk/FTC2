@@ -72,14 +72,18 @@
       // مفيش أي تفعيل سابق محفوظ، تظهر شاشة الترخيص كالمعتاد.
       if(result.networkError){
         try{
-          const cachedRaw = localStorage.getItem(LICENSE_CACHE_KEY);
-          if(cachedRaw){
-            const cached = JSON.parse(cachedRaw);
-            const cachedExpiry = cached.expiryDate ? new Date(cached.expiryDate) : null;
-            if(cached.encKeyRaw && (!cachedExpiry || new Date() <= cachedExpiry)){
-              await activateAndStart(cached.encKeyRaw, cachedExpiry, cached.clientId);
-              showToast('تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
-              return;
+          const cacheMeta = JSON.parse(localStorage.getItem(LICENSE_CACHE_KEY) || 'null');
+          if(cacheMeta){
+            const cachedExpiry = cacheMeta.expiryDate ? new Date(cacheMeta.expiryDate) : null;
+            // لا نقرأ أي مفتاح خام من localStorage — المفتاح الحقيقي (CryptoKey غير قابل للتصدير)
+            // في IndexedDB، ويُجرَّب ترحيل encKeyRaw القديم تلقائياً لمرة واحدة داخل
+            // activateAndStartWithStoredKey لو كان IndexedDB فارغاً (نسخة قديمة لم تُرحَّل بعد).
+            if(!cachedExpiry || new Date() <= cachedExpiry){
+              const keyOK = await activateAndStartWithStoredKey(cachedExpiry, cacheMeta.clientId || null);
+              if(keyOK){
+                showToast('تعذّر الاتصال بالسيرفر — تم تشغيل البرنامج بآخر ترخيص مُفعَّل محفوظ على هذا الجهاز (وضع عدم اتصال)');
+                return;
+              }
             }
           }
         }catch(e){ console.error('[Boot] Failed to activate cached license:', e); }
