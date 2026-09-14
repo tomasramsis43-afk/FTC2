@@ -1,6 +1,7 @@
 const express = require('express');
 const https = require('https');
 const router = express.Router();
+const { requireAuth } = require('../auth');
 const { arkkanLimiter } = require('../rate-limiters');
 
 // بروكسي أركان (Arkkan) لمنصة الحقائب المصروفة — نسخة السيرفر (Render)
@@ -41,7 +42,7 @@ function pickForwardHeaders(reqHeaders) {
   return out;
 }
 
-router.use('/arkkan', arkkanLimiter, (req, res) => {
+router.use('/arkkan', requireAuth, arkkanLimiter, (req, res) => {
   if (!ALLOWED_ARKKAN_METHODS.has(req.method)) {
     return res.status(405).json({ error: 'الطريقة غير مسموح بها' });
   }

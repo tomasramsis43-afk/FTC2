@@ -10,6 +10,7 @@ const recordsRepo = require('./repo/records.repo');
 const authRepo = require('./repo/auth.repo');
 const syncService = require('./services/sync');
 const { centralErrorHandler } = require('./errors');
+const { requireAuth } = require('./auth');
 const { loadRolePermissionsCache } = require('./permissions');
 const backupsRouter = require('./routes/backups');
 const aiRouter = require('./routes/ai');
@@ -147,7 +148,7 @@ function isGsheetUrlSafe(rawUrl) {
   if (isPrivateOrReservedIp(parsed.hostname)) return { ok: false, reason: 'لا يُسمح بالوصول إلى عناوين خاصة' };
   return { ok: true, reason: '', url: parsed.toString() };
 }
-app.get('/gsheet-csv', (req, res) => {
+app.get('/gsheet-csv', requireAuth, (req, res) => {
   const target0 = String(req.query.url || '');
   const urlCheck = isGsheetUrlSafe(target0);
   if (!urlCheck.ok) return res.status(400).json({ error: 'رابط غير صالح — ' + urlCheck.reason });

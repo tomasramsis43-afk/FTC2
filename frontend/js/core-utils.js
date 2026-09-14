@@ -255,8 +255,14 @@ async function _decompressBytes(bytes) {
 // ENC2: = مضغوط (gzip) ثم مشفّر (AES-256-GCM) — أسرع بكثير للبيانات الكبيرة.
 // ENC1: = مشفّر فقط بدون ضغط — يُستخدم fallback لو CompressionStream غير متاح، ولا يزال
 //          مدعوماً للقراءة للتوافق مع البيانات القديمة المحفوظة قبل هذا التحديث.
+// ★ FAIL-CLOSED: لا نُرجع أبداً نصاً صريحاً (plaintext) عند فشل التشفير أو غياب المفتاح.
+// أي بيانات مخزّنة بدون تشفير هو خرق أمني (بيانات عملاء + مالية)، ولذلك يُرفع خطأ واضح
+// للمستخدم بدل الكتابة الصامتة بالنص العادي. decryptValue يبقى مدعوماً للقراءة القديمة فقط.
+function _encryptionError(detail){
+  return new Error('ENCRYPTION_BLOCKED: لا يمكن حفظ البيانات — ' + detail);
+}
 async function encryptValue(plaintext){
-  if(!ENC_KEY) return plaintext;
+  if(!ENC_KEY) throw _encryptionError('مفتاح التشفير غير متاح (_activateAndStart لم يُنفَّذ بعد، أو يعمل البرنامج عبر HTTP بدون تشفير). استخدم HTTPS وفعّل الترخيص.');
   try{
     const iv = crypto.getRandomValues(new Uint8Array(12));
     // محاولة ضغط قبل التشفير (ENC2) — يُقلّل الحجم المُرسَل 85-92%
@@ -273,7 +279,11 @@ async function encryptValue(plaintext){
     const combined = new Uint8Array(iv.length + cipherBuf.byteLength);
     combined.set(iv,0); combined.set(new Uint8Array(cipherBuf), iv.length);
     return 'ENC1:' + bytesToBase64(combined);
-  }catch(e){ return plaintext; }
+  }catch(e){
+    // لا نُعيد plaintext أبداً: الخطأ ينتقل لأعلى ليتبلّغ للمستخدم.
+    if(e && e.code === 'ENCRYPTION_BLOCKED') throw e;
+    throw _encryptionError('فشلت عملية التشفير: ' + (e && e.message ? e.message : 'خطأ غير معروف'));
+  }
 }
 async function decryptValue(stored){
   if(typeof stored !== 'string') return stored;
@@ -416,34 +426,43 @@ function _openKvIdb(){
 // يخزّن/يحدّث تعديلاً فردياً معلّقاً. payload لعملية upsert: { op:'upsert', enc, clientId? }،
 // ولعملية حذف: { op:'delete' }. قيد واحد فقط لكل (collection,id) — آخر تعديل معلّق فقط يهمّ.
 function _recordCkey(collection, id){ return collection + '::' + id; }
+// بادئة اسم مؤلف المعلّق لنطاق طابور المعلّقات لكل مستخدم: على جهاز مشترك (استقبال/أجهزة مكتب)،
+// لو سجّل المستخدم B دخوله بينما يملك المستخدم A تعديلاً معلّقاً لم يُرفع من انقطاع سابق، فبدون
+// هذا النطاق كان تدفّق A (مشفّر بمفتاح A) يُرفع تلقائياً أثناء جلسة B — نسب/تدقيق خاطئ واحتمال
+// فشل رفع بصلاحية خاطئة. الآن: كل معلّق يحمل user، والقراءة/الرفع تُفلتر بجلسة المستخدم الحالية.
+function _pendingQueueUser(){
+  return (typeof SERVER_AUTH_USERNAME === 'string' && SERVER_AUTH_USERNAME) || (typeof currentUser === 'string' && currentUser) || 'unknown';
+}
 async function _pendingRecordPut(collection, id, payload, baselinePlain){
   try{
     const db = await _openKvIdb();
-    if(!db) return;
-    const toStore = Object.assign({ ckey: _recordCkey(collection,id), collection, id, queuedAt: Date.now() }, payload);
+    if(!db){ _refreshPendingQueueSyncCount(); return false; }
+    const toStore = Object.assign({ ckey: _recordCkey(collection,id), collection, id, queuedAt: Date.now(), user: _pendingQueueUser() }, payload);
     if(typeof baselinePlain === 'string') toStore.baselinePlain = baselinePlain;
-    await new Promise((resolve)=>{
+    const ok = await new Promise((resolve)=>{
       try{
         const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
         tx.objectStore(RECORD_PENDING_STORE).put(toStore);
-        tx.oncomplete = ()=> resolve();
-        tx.onerror = ()=> resolve();
-      }catch(e){ resolve(); }
+        tx.oncomplete = ()=> resolve(true);
+        tx.onerror = ()=>{ console.error('[Core] _pendingRecordPut IDB tx error for', collection, id); resolve(false); };
+      }catch(e){ console.error('[Core] _pendingRecordPut tx exception:', e); resolve(false); }
     });
-  }catch(e){ console.error('[Core] _pendingRecordPut failed:', e); }
-  _refreshPendingQueueSyncCount();
+    if(!ok) showToast('تعذّر حفظ التعديل المعلّق في الذاكرة المحلية — قد تفقد هذا التعديل عند إغلاق الصفحة (orage IDB ممتلئ أو معطّل)');
+    _refreshPendingQueueSyncCount();
+    return ok;
+  }catch(e){ console.error('[Core] _pendingRecordPut failed:', e); _refreshPendingQueueSyncCount(); return false; }
 }
 async function _pendingRecordDelete(collection, id){
   try{
     const db = await _openKvIdb();
-    if(!db) return;
+    if(!db){ _refreshPendingQueueSyncCount(); return; }
     await new Promise((resolve)=>{
       try{
         const tx = db.transaction(RECORD_PENDING_STORE, 'readwrite');
         tx.objectStore(RECORD_PENDING_STORE).delete(_recordCkey(collection,id));
         tx.oncomplete = ()=> resolve();
-        tx.onerror = ()=> resolve();
-      }catch(e){ resolve(); }
+        tx.onerror = ()=>{ console.error('[Core] _pendingRecordDelete IDB tx error for', collection, id); resolve(); };
+      }catch(e){ console.error('[Core] _pendingRecordDelete tx exception:', e); resolve(); }
     });
   }catch(e){ console.error('[Core] _pendingRecordDelete failed:', e); }
   _refreshPendingQueueSyncCount();
@@ -452,11 +471,18 @@ async function _pendingRecordReadAll(){
   try{
     const db = await _openKvIdb();
     if(!db) return [];
+    const me = _pendingQueueUser();
     return await new Promise((resolve)=>{
       try{
         const tx = db.transaction(RECORD_PENDING_STORE, 'readonly');
         const req = tx.objectStore(RECORD_PENDING_STORE).getAll();
-        req.onsuccess = ()=> resolve(req.result || []);
+        req.onsuccess = ()=>{
+          const all = req.result || [];
+          // فلترة بجلسة المستخدم الحالية: تعديلات معلّقة لمستخدم آخر (جهاز مشترك) لا تُرفع في
+          // جلسة هذا المستخدم إطلاقاً — نسب/تدقيق خاطئ. العناصر القديمة (بلا user قبل هذا الإصلاح)
+          // تُعامل كمالكة للجلسة الحالية لتُرفع ولا تُهجر (توافق للخلف مع الحالة السابقة).
+          resolve(all.filter(it => !it.user || it.user === me));
+        };
         req.onerror = ()=> resolve([]);
       }catch(e){ resolve([]); }
     });

@@ -17,19 +17,22 @@ async function _runWithConcurrency(items, worker, concurrency = 6){
 // كل مفتاح (clients, vaultTx, settings...) له قيد واحد فقط بالطابور (آخر نسخة غير مرفوعة له)، لأن
 // المطلوب هو حفظ آخر تعديل محلياً وليس سجل تاريخي لكل تعديل بينما التطبيق نفسه لا يزال مفتوحاً بلا اتصال.
 async function _pendingWrite(key, encryptedValue){
+  let ok = false;
   try{
     const db = await _openKvIdb();
-    if(!db) return;
-    await new Promise((resolve)=>{
+    if(!db) return false;
+    ok = await new Promise((resolve)=>{
       try{
         const tx = db.transaction(KV_IDB_PENDING_STORE, 'readwrite');
         tx.objectStore(KV_IDB_PENDING_STORE).put({ key, value: encryptedValue, queuedAt: Date.now() });
-        tx.oncomplete = ()=> resolve();
-        tx.onerror = ()=> resolve();
-      }catch(e){ resolve(); }
+        tx.oncomplete = ()=> resolve(true);
+        tx.onerror = ()=>{ console.error('[StorageSync] _pendingWrite IDB tx error for', key); resolve(false); };
+      }catch(e){ console.error('[StorageSync] _pendingWrite tx exception:', e); resolve(false); }
     });
   }catch(e){ console.error('[StorageSync] _pendingWrite failed:', e); }
+  if(!ok) showToast('تعذّر حفظ "' + key + '" في الذاكرة المحلية أثناء انقطاع الاتصال — قد تفقد هذا التعديل عند إغلاق الصفحة');
   _refreshPendingQueueSyncCount();
+  return ok;
 }
 async function _pendingDelete(key){
   try{
@@ -40,8 +43,8 @@ async function _pendingDelete(key){
         const tx = db.transaction(KV_IDB_PENDING_STORE, 'readwrite');
         tx.objectStore(KV_IDB_PENDING_STORE).delete(key);
         tx.oncomplete = ()=> resolve();
-        tx.onerror = ()=> resolve();
-      }catch(e){ resolve(); }
+        tx.onerror = ()=>{ console.error('[StorageSync] _pendingDelete IDB tx error for', key); resolve(); };
+      }catch(e){ console.error('[StorageSync] _pendingDelete tx exception:', e); resolve(); }
     });
   }catch(e){ console.error('[StorageSync] _pendingDelete failed:', e); }
   _refreshPendingQueueSyncCount();
@@ -151,6 +154,12 @@ let _ftcSyncPromise = null; // وعد الفلاش الجاري (single-flight) 
 // ريفرش أو قفل الصفحة فى نفس اللحظة اللي طلب الحفظ لسه طاير فى الشبكة، مفيش أي وسيلة تمنعه أو
 // حتى تنبّهه — راجع beforeunload أسفل.
 let _activeRecordSaves = 0;
+// خريطة "حفظ قيد التنفيذ" لكل سجل (collection::id أو clients::id): تضمن أن أي ضغطتين سريعتين
+// على زر الحفظ لنفس السجل لا تُرسلان طلبين متوازيين بنفس رقم النسخة — لو ذهب الأول وسجل
+// version جديداً، كان الثاني يصطدم بـ409 "تعارض" كاذب (نفس المستخدم، نفس المحتوى) فيظهر
+// تنبيه تربيعي مخيف رغم أن التعديل نفسه حُفظ فعلياً من الطلب الأول.
+let _recordSaveInFlight = new Map();
+function _recordSaveKey(collection, id){ return collection + '__' + id; }
 // نفس الفكرة تماماً لطلبات الحفظ الكامل (window.storage.set) الجارية الآن فعلياً على الشبكة ولم
 // تُسجَّل بعد في طابور "التعديلات المعلّقة" (لأنها لم تفشل — نجاحها يُحسم فقط عند رد السيرفر).
 // لو أُغلق البرنامج في هذه اللحظة الضيقة قبل اكتمال الرد، يُفقد التعديل نهائياً دون أي أثر —
@@ -699,7 +708,16 @@ window.storage = {
       return { key, value, shared: !!shared };
     },
     async set(key, value, shared, meta){
-      const toStore = await encryptValue(value);
+      let toStore;
+      try{
+        toStore = await encryptValue(value);
+      }catch(encryptErr){
+        // Fail-closed: لا نُخزِّن أي شيء في طابور الانتظار أو الكاش بدون تشفير.
+        // البيانات التي لا يمكن تشفيرها لا تُمسَّ أبداً.
+        console.error('[Storage] encrypt failed for key', key, encryptErr);
+        showToast('تعذّر حفظ "' + key + '": ' + (encryptErr && encryptErr.message || 'التشفير غير متاح') + ' — تأكد من فتح البرنامج عبر HTTPS');
+        return null;
+      }
       _activeKvSaves++; // يُخفض دائماً في finally أدناه — يحمي من فقدان تعديل يُحسم فقط عند رد السيرفر
       updateOfflineIndicator(); // إظهار "جارٍ الرفع" فوراً فى مؤشّر الهيدر
       try{
@@ -1061,8 +1079,20 @@ async function _fetchDeltaRecords(collection){
 async function saveOneRecordGeneric(collection, id, plainJson){
   _activeRecordSaves++;
   updateOfflineIndicator();
+  const saveKey = _recordSaveKey(collection, id);
+  // لو عملية حفظ لنفس السجل لا تزال قيد التنفيذ (ضغطة مزدوجة على زر الحفظ)، نعيد نفس
+  // نتيجتها بدل إرسال طلب PUT ثانٍ بشبكة النسخة نفسها — يمنع 409 كاذباً وطلبات مكررة.
+  if(_recordSaveInFlight.has(saveKey)){ _activeRecordSaves--; return _recordSaveInFlight.get(saveKey); }
+  const inflightPromise = (async()=>{
   try{
-    const enc = await encryptValue(plainJson);
+    let enc;
+    try{
+      enc = await encryptValue(plainJson);
+    }catch(encryptErr){
+      console.error('[Storage] encrypt failed for record', collection, id, encryptErr);
+      showToast('تعذّر حفظ سجل في "' + collection + '": ' + (encryptErr && encryptErr.message || 'التشفير غير متاح') + ' — لم يُحفظ شيء بدون تشفير');
+      return null;
+    }
     if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
     const knownVersion = _recordVersions[collection].get(id) || 0;
     let res;
@@ -1101,12 +1131,21 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
+  finally{ _recordSaveInFlight.delete(saveKey); _activeRecordSaves--; updateOfflineIndicator(); }
+  })();
+  _recordSaveInFlight.set(saveKey, inflightPromise);
+  return inflightPromise;
 }
 
 async function deleteOneRecordGeneric(collection, id){
   _activeRecordSaves++;
   updateOfflineIndicator();
+  const saveKey = _recordSaveKey(collection, id);
+  // نفس الحارس الموجود في saveOneRecordGeneric: صفحة الحذف داخل نفس إطار الدالة تستضيف
+  // operation حفظ/حذف (مثال: Toggle بين حالات متعددة بنفس الضغطة أو نقر مزدوج) — لا نرسل
+  // طلبين متوازيين لنفس السجل بنفس النسخة، بل نعيد نتيجة الأول.
+  if(_recordSaveInFlight.has(saveKey)){ _activeRecordSaves--; return _recordSaveInFlight.get(saveKey); }
+  const inflightPromise = (async()=>{
   try{
     const knownVersion = (_recordVersions[collection] && _recordVersions[collection].get(id)) || 0;
     let res;
@@ -1139,7 +1178,10 @@ async function deleteOneRecordGeneric(collection, id){
     await _pendingRecordDelete(collection, id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
+  finally{ _recordSaveInFlight.delete(saveKey); _activeRecordSaves--; updateOfflineIndicator(); }
+  })();
+  _recordSaveInFlight.set(saveKey, inflightPromise);
+  return inflightPromise;
 }
 
 // حذف عدة سجلات دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل id — يُستخدم لو عدد السجلات
@@ -1647,8 +1689,18 @@ async function fetchAllClientRecords(){
 async function saveOneClientRecord(client, plainJson){
   _activeRecordSaves++;
   updateOfflineIndicator();
+  const saveKey = _recordSaveKey('clients', client.id);
+  if(_recordSaveInFlight.has(saveKey)){ _activeRecordSaves--; return _recordSaveInFlight.get(saveKey); }
+  const inflightPromise = (async()=>{
   try{
-    const enc = await encryptValue(plainJson);
+    let enc;
+    try{
+      enc = await encryptValue(plainJson);
+    }catch(encryptErr){
+      console.error('[Storage] encrypt failed for client', client.id, encryptErr);
+      showToast('تعذّر حفظ بيانات العميل "' + (client.name || client.id) + '": ' + (encryptErr && encryptErr.message || 'التشفير غير متاح') + ' — لم يُحفظ شيء بدون تشفير');
+      return null;
+    }
     let res;
     try{
       // plain: نفس نسخة JSON غير المشفّرة المُرسَلة أصلاً هنا كمُدخل (plainJson) — تُستخدم فى
@@ -1689,7 +1741,10 @@ async function saveOneClientRecord(client, plainJson){
     await _pendingRecordDelete('clients', client.id); // نجح الحفظ فعلياً — أي تعديل معلّق أقدم لنفس العميل لم يعد له داعٍ
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
+  finally{ _recordSaveInFlight.delete(saveKey); _activeRecordSaves--; updateOfflineIndicator(); }
+  })();
+  _recordSaveInFlight.set(saveKey, inflightPromise);
+  return inflightPromise;
 }
 
 // رفض "لطيف" للأدمن لعميل معلّق سجّله الاستقبال (pending -> rejected): بدل الحذف الفوري النهائي،
@@ -1710,6 +1765,9 @@ async function rejectClientRecordSoft(id){
 async function deleteOneClientRecord(id){
   _activeRecordSaves++;
   updateOfflineIndicator();
+  const saveKey = _recordSaveKey('clients', id);
+  if(_recordSaveInFlight.has(saveKey)){ _activeRecordSaves--; return _recordSaveInFlight.get(saveKey); }
+  const inflightPromise = (async()=>{
   try{
     const knownVersion = _clientRecordVersions[id] || 0;
     let res;
@@ -1740,7 +1798,10 @@ async function deleteOneClientRecord(id){
     await _pendingRecordDelete('clients', id);
     return true;
   }catch(e){ return null; }
-  finally{ _activeRecordSaves--; updateOfflineIndicator(); }
+  finally{ _recordSaveInFlight.delete(saveKey); _activeRecordSaves--; updateOfflineIndicator(); }
+  })();
+  _recordSaveInFlight.set(saveKey, inflightPromise);
+  return inflightPromise;
 }
 
 // حذف عدة عملاء دفعة واحدة (طلب واحد) بدل طلب DELETE منفصل لكل عميل — نفس فكرة

@@ -202,7 +202,9 @@
     if(!csvUrl) throw new Error('رابط غير صالح: يجب أن يكون رابط Google Docs Spreadsheet');
     // نمرر الطلب عبر بروكسي على نفس الأصل (يعمل من السيرفر/المتصفح وElectron)
     // لأن الجلب المباشر إلى docs.google.com يُحجب بـ CORS من المتصفح.
-    var res = await fetch('/gsheet-csv?url=' + encodeURIComponent(csvUrl), { cache:'no-store' });
+    var headers = { 'cache-control': 'no-store' };
+    if (window.SERVER_AUTH_TOKEN) headers['Authorization'] = 'Bearer ' + window.SERVER_AUTH_TOKEN;
+    var res = await fetch('/gsheet-csv?url=' + encodeURIComponent(csvUrl), { cache:'no-store', headers: headers });
     if(!res.ok){
       var body = '';
       try { body = await res.text(); } catch(e){}

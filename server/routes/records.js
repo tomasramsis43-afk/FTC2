@@ -513,7 +513,7 @@ router.post('/api/client-records/bulk-delete', requireAuth, storageLimiter, asyn
     } else if (req.user.role === 'accountant') {
       deleted = await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed'", []);
     } else {
-      deleted = await recordsRepo.clientBulkDelete(ids, "AND status = 'confirmed' AND created_by = $3", [req.user.username]);
+      deleted = await recordsRepo.clientBulkDelete(ids, 'AND status = $2 AND created_by = $3', ['confirmed', req.user.username]);
     }
     clientsRowsRepo.deleteIds(ids).catch(() => {}); // مزامنة فورية لفهرس العرض — best-effort
     broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });

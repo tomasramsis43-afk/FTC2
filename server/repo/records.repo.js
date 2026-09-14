@@ -8,6 +8,25 @@
 // ============================================================
 const { pool } = require('../db');
 
+// حارس أمان لاتساق SQL: يتأكد أن كل placeholder (مثل $2, $3) في whereClause له قيمة مقابلة
+// في params — أي أن عدد الـ placeholders المميزة يساوي عدد القيم الممررة. يمنع في مرحلة
+// التطوير (قبل ضرب قاعدة البيانات) الصنف كاملاً من الأخطاء التي كانت تتحول إلى خطأ PG خام
+// 500 — مثال حقيقي: حذف جماعي لموظف عام كان يمرر whereClause 'AND status = $2 AND
+// created_by = $3' مع `params` بقيمة واحدة فقط، فيفشل كل طلب بخطأ "مؤشر معامل خارج المدى".
+// نعدد المؤشرات المميزة (وليس الفهرس الأقصى) لأن $1 يستخدمه القائد الرئيسي في السؤال،
+// فيكتب whereClause عادة من $2 فصاعداً عبر مصفوفة فارغة/بسيطة.
+function validateWhereParams(whereClause, params) {
+  if (!whereClause) return;
+  const indices = whereClause.match(/\$([1-9]\d*)/g) || [];
+  const expectedCount = new Set(indices).size;
+  const given = Array.isArray(params) ? params.length : 0;
+  if (expectedCount !== given) {
+    throw new Error(
+      `تضارب في عدد مؤشرات SQL (${expectedCount}) مع عدد القيم الممررة (${given}) في whereClause: ${whereClause}`
+    );
+}
+}
+
 /* ========================== client_records ========================== */
 
 // جلب كل السجلات (مع فلترة رؤية + ترقيم اختياري + جلب فروق ids=)
@@ -169,7 +188,10 @@ async function deleteAtomic({ isClient, id, collection, expectedVersion, allowFo
 async function clientBulkDelete(ids, whereClause, params) {
   let sql = 'DELETE FROM client_records WHERE id = ANY($1::text[])';
   const allParams = [ids];
-  if (whereClause) { sql += ' ' + whereClause; allParams.push(...params); }
+  if (whereClause) {
+    validateWhereParams(whereClause, params);
+    sql += ' ' + whereClause; allParams.push(...params);
+  }
   const r = await pool.query(sql, allParams);
   return r.rowCount || 0;
 }
@@ -283,7 +305,10 @@ async function recordDelete(collection, id, whereClause, params) {
 async function recordBulkDelete(collection, ids, whereClause, params) {
   let sql = 'DELETE FROM collection_records WHERE collection = $1 AND id = ANY($2::text[])';
   const allParams = [collection, ids];
-  if (whereClause) { sql += ' ' + whereClause; allParams.push(...params); }
+  if (whereClause) {
+    validateWhereParams(whereClause, params);
+    sql += ' ' + whereClause; allParams.push(...params);
+  }
   const r = await pool.query(sql, allParams);
   return r.rowCount || 0;
 }
@@ -429,6 +454,7 @@ const RECORDS_TABLE_CONFIG = (collection) => ({
 });
 
 module.exports = {
+  validateWhereParams,
   clientRecords, clientVersionPairs, clientAggVersion, clientIdPairs,
   clientRecordMetaFor, clientUpsert, clientApprove, clientReject,
   clientDelete, clientBulkDelete, clientDeleteAll, cleanRejectedClientRecords,

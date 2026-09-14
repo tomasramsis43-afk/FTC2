@@ -23,11 +23,18 @@ function getTransporter() {
   if (!host || !user || !pass) return null;
   const key = `${host}|${user}|${process.env.SMTP_PORT || ''}`;
   if (cachedTransporter && cachedTransporterKey === key) return cachedTransporter;
+  // مهلات SMTP صريحة: بدونها تبقى قيم nodemailer الافتراضية (اتصال قد ينتظر دقيقتين،
+  // وبعض العمليات بلا حد زمني إطلاقاً) — فطلب إرسال إيميل قد يظل معلّقاً وقتاً طويلاً
+  // إذا كان خادم SMTP لا يستجيب، ويستهلك اتصالاً من pool الطلبات بلا داعٍ عند انقطاع
+  // شبكة SMTP. 15 ثانية للاتصال، 10 للتحية، 20 كحد أقصى لأي نقل فعلي.
   cachedTransporter = nodemailer.createTransport({
     host,
     port: Number(process.env.SMTP_PORT || 587),
     secure: Number(process.env.SMTP_PORT) === 465,
     auth: { user, pass },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
   });
   cachedTransporterKey = key;
   return cachedTransporter;
