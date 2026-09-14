@@ -278,17 +278,22 @@ router.post('/api/auth/logout', requireAuth, async (req, res) => {
 /* ---------------- بث الأحداث اللحظية (SSE) ----------------
    اتصال يبقى مفتوحاً طوال الجلسة، يُخطِر كل الأجهزة المتصلة (أي دور) فوراً بأي تعديل/حذف/اعتماد
    يحدث من مستخدم آخر — بدل انتظار الفحص الدوري كل دقيقتين فى الواجهة. لا نستخدم requireAuth
-   العادي هنا لأن EventSource فى المتصفح لا يدعم إرسال ترويسة Authorization إطلاقاً، فيصل نفس
-   التوكن المعتاد عبر query string بدلاً من ذلك (نفس آلية resolveUserFromToken المستخدمة داخلياً
-   فى requireAuth، فلا فرق فى قوة التحقق نفسها). خارج أي rate limiter لأنه اتصال واحد طويل لكل
-   جهاز وليس سلسلة طلبات متكررة.
-   ملاحظة: يظهر التوكن هنا فى الـ URL (سجلات الوصول المحتملة على السيرفر/الوسطاء) — تُقبَل هذه
-   نقطة الضعف الصغيرة لأن SSE لا يدعم ترويسات أصلاً، وتوكن الجلسة نفسه (30 يوماً صلاحية) لا
-   يتغيّر بذلك عن أي طلب GET آخر لو كان يُمرَّر بطريقة مشابهة. */
+   العادي هنا (نتحقق يدوياً بنفس resolveUserFromToken) لأن هذا المسار كان يحتاج قبول التوكن من
+   مصدرين مختلفين حسب نسخة الواجهة (راجع الملاحظة قبل الراوت مباشرة)، وخارج أي rate limiter لأنه
+   اتصال واحد طويل لكل جهاز وليس سلسلة طلبات متكررة. */
+/* ملاحظة: كانت هذه النقطة تقرأ التوكن حصراً من query string لأن EventSource فى المتصفح لا
+   يدعم إرسال ترويسة Authorization إطلاقاً. بعد التحول فى الواجهة اليوم من EventSource إلى
+   fetch() (لإرسال التوكن عبر ترويسة Authorization القياسية بدل ظهوره فى الرابط)، توقفت
+   الواجهة عن إرسال ?token= نهائياً — فكانت كل محاولة اتصال هنا تفشل بـ 401 لأن req.query.token
+   دايماً undefined الآن، رغم أن التوكن الحقيقي كان يصل فعلاً عبر الترويسة ولا أحد يقرأها هنا.
+   الحل: نقرأ من ترويسة Authorization أولاً (المسار الجديد)، ونحتفظ بـ query.token كخيار احتياطي
+   فقط لأي نسخة واجهة قديمة مؤقتاً متصلة (كاش متصفح لم يتحدّث بعد). */
 router.get('/api/events/stream', async (req, res) => {
   let user;
   try {
-    user = await resolveUserFromToken(req.query.token);
+    const authHeader = req.headers.authorization || '';
+    const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    user = await resolveUserFromToken(headerToken || req.query.token);
   } catch (e) {
     return res.status(e.status || 401).end();
   }
