@@ -247,3 +247,37 @@ test('B5: records.js cursor يستخدم gtOp حسب order ASC/DESC (لا يheim
   assert.ok(/\$\{gtOp\}/.test(cursorBlock[0]) || /\$\{gtOp\}/.test(src.substring(cursorBlock.index)),
     'cursorSql يستخدم ${gtOp} المتغير بدل > ثابت');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEAT: رقم إصدار Service Worker ظاهر في البار العلوي (شريحة SW)
+// ═══════════════════════════════════════════════════════════════════════════════
+const appHtmlPath = path.join(__dirname, '..', '..', 'frontend', 'app.html');
+
+test('FEAT: app.html يحتوي شريحة إصدار SW في البار العلوي (id="sw-version-chip")', () => {
+  const html = fs.readFileSync(appHtmlPath, 'utf8');
+  assert.ok(html.includes('id="sw-version-chip"'), 'عنصر sw-version-chip موجود في الشريط العلوي');
+  // يجب أن تكون داخل هيدر البار العلوي (قبل بداية المحتوى app) وبجوار شريحة الفترة المالية
+  const headerBlock = html.match(/<header class="top">[\s\S]*?<\/header>/);
+  assert.ok(headerBlock && headerBlock[0].includes('sw-version-chip'),
+    'شريحة SW داخل header.top');
+});
+
+test('FEAT: boot.js يستدعي updateSwVersionChip ويقرأ CACHE_VERSION من sw.js بجلب مكسَّر', () => {
+  const src = fs.readFileSync(path.join(frontendDir, 'boot.js'), 'utf8');
+  assert.ok(/function updateSwVersionChip\(\)/.test(src), 'دالة updateSwVersionChip معرَّفة في boot.js');
+  assert.ok(/fetch\('\/sw\.js\?v='\s*\+\s*Date\.now\(\)/.test(src),
+    'يجب جلب sw.js باستعلام فريد (Date.now) لتجاوز أي نسخة مخزّنة من SW');
+  assert.ok(/CACHE_VERSION\\s\*=\\s\*'\(\[\^'\]\+\)'/.test(src),
+    'regex يقرأ ثابت CACHE_VERSION من نص sw.js');
+  assert.ok(/updateSwVersionChip\(\);/.test(src), 'يُستدعى فور تحميل boot.js');
+});
+
+test('FEAT: sw.js يحمل ثوابت CACHE_VERSION و RUNTIME_CACHE بأعداد صحيحة متوازية', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'sw.js'), 'utf8');
+  const mCache = src.match(/CACHE_VERSION\s*=\s*'ftc-cache-v(\d+)'/);
+  const mRuntime = src.match(/RUNTIME_CACHE\s*=\s*'ftc-runtime-v(\d+)'/);
+  assert.ok(mCache, 'CACHE_VERSION معرفة بصيغة ftc-cache-vN');
+  assert.ok(mRuntime, 'RUNTIME_CACHE معرفة بصيغة ftc-runtime-vN');
+  assert.equal(Number(mRuntime[1]) + 1, Number(mCache[1]),
+    'RUNTIME_CACHE يجب أن يكون أقل بواحد من CACHE_VERSION (v30/v29)');
+});

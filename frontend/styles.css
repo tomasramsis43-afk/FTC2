@@ -4282,6 +4282,12 @@ body.dark-theme .brand-chip {
   border-color: color-mix(in srgb, var(--gold) 30%, transparent);
   color: color-mix(in srgb, var(--gold) 80%, #fff 20%);
 }
+.sw-chip {
+  font-family: 'Consolas', 'Menlo', 'DejaVu Sans Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  direction: ltr;
+}
 .sse-dot-wrap {
   display: inline-flex;
   align-items: center;

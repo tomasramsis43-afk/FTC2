@@ -145,3 +145,29 @@ $('#btn-logout')?.addEventListener('click', async ()=>{
     if(btn) btn.disabled = false;
   }
 });
+
+/* عرض رقم إصدار كاش Service Worker (sw.js) في البار العلوي — يُقرأ من نفس ملف
+   sw.js المنشور على السيرفر. الاستعلام الفريد (v=Date.now()) يعطي الرقم الأخير في كل
+   فتحة حتى لو كان SW القديم ما زال يخدم نسخة مخزّنة من sw.js (الكاش يُطابق الرابط كاملاً
+   مع الاستعلام، فيمر الطلب للشبكة دائماً). لو انقطع الاتصال يظهر 'SW: —'. */
+function updateSwVersionChip(){
+  const chip = document.getElementById('sw-version-chip');
+  if(!chip) return;
+  fetch('/sw.js?v=' + Date.now(), { cache: 'no-store' })
+    .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(txt => {
+      const m = txt.match(/CACHE_VERSION\s*=\s*'([^']+)'/);
+      if(m){
+        chip.textContent = 'SW ' + m[1].replace('ftc-cache-','');
+        chip.title = 'إصدار كاش Service Worker: ' + m[1];
+      }else{
+        chip.textContent = 'SW: ?';
+        chip.title = 'لم يُعثر على رقم إصدار داخل sw.js';
+      }
+    })
+    .catch(()=>{
+      chip.textContent = 'SW: —';
+      chip.title = 'تعذّر قراءة sw.js من السيرفر (غير متصل بالشبكة؟)';
+    });
+}
+updateSwVersionChip();
