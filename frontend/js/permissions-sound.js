@@ -857,7 +857,7 @@ async function _syncVersionsBeforeSave(collection){
 }
 
 async function saveBagStock(){
-  try{ await _syncVersionsBeforeSave('bagStock'); await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
+  try{ await _syncVersionsBeforeSave('bagStock'); return await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); return 'rejected'; }
 }
 async function saveVaultTx(){
   try{ await _syncVersionsBeforeSave('vaultTx'); return await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); return 'rejected'; }

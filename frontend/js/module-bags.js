@@ -447,10 +447,16 @@ $('#client-bag-purchases-body')?.addEventListener('change', async e=>{
   const newVal = inp.value.trim();
   if((clients[idx].bagInvoice||'') === newVal) return;
   snapshotState(`تعديل رقم فاتورة الحقيبة: ${clients[idx].name}`);
+  const oldInvoice = clients[idx].bagInvoice;
   clients[idx].bagInvoice = newVal;
-  await saveClients();
+  const invoiceSaved = await saveClients();
+  if(invoiceSaved !== true && invoiceSaved !== 'queued'){
+    clients[idx].bagInvoice = oldInvoice;
+    showToast('تعذّر حفظ رقم الفاتورة (رفض أو تعارض) — لم يُحفظ التعديل');
+    return;
+  }
   await logAudit('edit','سجل شراء الحقائب', `تم تحديث رقم فاتورة الحقيبة للعميل ${clients[idx].name} إلى "${newVal||'—'}"`);
-  showToast('تم حفظ رقم الفاتورة');
+  showToast(invoiceSaved==='queued' ? 'حُفظ رقم الفاتورة على هذا الجهاز فقط — سيرفع للسيرفر عند اتصال الشبكة' : 'تم حفظ رقم الفاتورة');
 });
 $('#bst-date-from')?.addEventListener('input', renderBags);
 $('#bst-date-to')?.addEventListener('input', renderBags);
@@ -536,21 +542,23 @@ $('#btn-add-stock')?.addEventListener('click', async ()=>{
   }
 
   let addedEntry;
+  const bagIdx = isEditing ? bagStock.findIndex(b=>b.id===editingBagStockId) : -1;
+  let prevBagStockEntry = null;
+  let oldLinkedTx = null;
   if(isEditing){
-    const idx = bagStock.findIndex(b=>b.id===editingBagStockId);
-    if(idx===-1){ showToast('تعذّر إيجاد العملية المطلوب تعديلها'); cancelBagStockEdit(); return; }
-    snapshotState(`تعديل عملية في سجل تمويل مخزون الحقائب: ${fmt(amount)} ﷼`);
-    // احذف أي حركة خزنة مرتبطة بالعملية القديمة قبل التعديل، وسيُعاد إنشاؤها بالقيم الجديدة أدناه إن لزم
-    const oldLinkedTx = vaultTx.find(t=>t.bagStockRef===bagStock[idx].id);
-    if(oldLinkedTx){
-      if(isDateLocked(oldLinkedTx.date)){ showToast('تعذّر التعديل: الحركة القديمة المرتبطة تقع ضمن فترة محاسبية مُقفلة'); return; }
-      const removedOld = softDeleteVaultTx(oldLinkedTx.id, 'استُبدلت تلقائياً بعد تعديل عملية تمويل مخزون الحقائب المرتبطة بها');
-      await saveVaultTx();
-      await saveDeletedVaultTx();
-      await logAudit('delete','الحركات المالية', `تم إلغاء (حذف منطقي) حركة خزنة قديمة رقم تسلسلي #${removedOld.seq||'—'} مرتبطة بعملية تمويل حقائب قبل تعديلها: ${fmt(num(removedOld.amount))} ﷼`);
+    if(bagIdx===-1){ showToast('تعذّر إيجاد العملية المطلوب تعديلها'); cancelBagStockEdit(); return; }
+    prevBagStockEntry = bagStock[bagIdx];
+    // نفحص قفل الحركة المالية القديمة المرتبطة قبل أي تعديل (وليس بعد الحفظ) حتى لا نُحفظ ثم نتراجع
+    oldLinkedTx = vaultTx.find(t=>t.bagStockRef===bagStock[bagIdx].id);
+    if(oldLinkedTx && isDateLocked(oldLinkedTx.date)){
+      showToast('تعذّر التعديل: الحركة القديمة المرتبطة تقع ضمن فترة محاسبية مُقفلة');
+      return;
     }
-    bagStock[idx] = { ...bagStock[idx], type, date, amount, method, notes, manualQty };
-    addedEntry = bagStock[idx];
+  }
+  if(isEditing){
+    snapshotState(`تعديل عملية في سجل تمويل مخزون الحقائب: ${fmt(amount)} ﷼`);
+    bagStock[bagIdx] = { ...bagStock[bagIdx], type, date, amount, method, notes, manualQty };
+    addedEntry = bagStock[bagIdx];
   }else{
     snapshotState(type==='withdraw' ? `سحب مبلغ من حساب الحقائب: ${fmt(amount)}` : `إيداع مبلغ في حساب الحقائب: ${fmt(amount)}`);
     bagStock.push({
@@ -566,9 +574,39 @@ $('#btn-add-stock')?.addEventListener('click', async ()=>{
     addedEntry = bagStock[bagStock.length-1];
   }
   recalcBagFundLedger();
-  await saveBagStock();
+  // الحفظ الفعلي أولاً ثم أي ترحيل/آثار جانبية: كان التوست يعرض النجاح دائماً ويرحّل حركة الخزنة
+  // المرتبطة حتى لو رُفض حفظ سجل التمويل نفسه — فتتكوّن حركة خزنة يتيمة بمبلغ حقيقي بلا عملية مقابل.
+  const bagStockSaved = await saveBagStock();
+  if(bagStockSaved !== true && bagStockSaved !== 'queued'){
+    if(isEditing){
+      bagStock[bagIdx] = prevBagStockEntry;
+    }else{
+      bagStock = bagStock.filter(b=>b.id!==addedEntry.id);
+    }
+    recalcBagFundLedger();
+    showToast('تعذّر حفظ العملية على السيرفر (رفض أو تعارض) — أُعيدت الحالة السابقة، لم تُسجَّل العملية');
+    return;
+  }
+  const bagStockQueued = (bagStockSaved === 'queued');
   await saveSettings();
+  // استبدال حركة الخزنة القديمة المرتبطة عند التعديل: يُنفَّذ فقط بعد نجاح حفظ العملية نفسها،
+  // ويُسترجَع في الذاكرة لو رفض حذفها (فلا تتكوّن حركة ملغاة باعتبارها أُستبدلت وهي ما زالت على السيرفر)
+  if(isEditing && oldLinkedTx){
+    const removedOld = softDeleteVaultTx(oldLinkedTx.id, 'استُبدلت تلقائياً بعد تعديل عملية تمويل مخزون الحقائب المرتبطة بها');
+    const oldVaultSaved = await saveVaultTx();
+    const oldDeletedSaved = await saveDeletedVaultTx();
+    const oldLinkResult = combinedSaveResult(oldVaultSaved, oldDeletedSaved);
+    if(oldLinkResult === 'rejected'){
+      deletedVaultTx = deletedVaultTx.filter(t=>t.id!==oldLinkedTx.id);
+      if(removedOld){ const {deletedAt, deletedBy, deletedReason, ...orig} = removedOld; vaultTx.push(orig); }
+      bumpVaultVersion();
+      showToast('حُفظ تعديل العملية، لكن تعذّر استبدال الحركة المالية القديمة المرتبطة بها (رفض أو تعارض) — راجعها في شيت الحركات المالية');
+    }else{
+      await logAudit('delete','الحركات المالية', `تم إلغاء (حذف منطقي) حركة خزنة قديمة رقم تسلسلي #${removedOld.seq||'—'} مرتبطة بعملية تمويل حقائب قبل تعديلها: ${fmt(num(removedOld.amount))} ﷼`);
+    }
+  }
 
+  let vaultLinkedResult = true;
   if(type==='withdraw'){
     await logAudit('edit','مخزون الحقائب', `${isEditing?'تم تعديل عملية سحب لتصبح':'تم سحب'} ${fmt(amount)} ﷼ من حساب تمويل الحقائب، ما أدى إلى خصم ${Math.abs(addedEntry.qty)} حقيبة من المخزون (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
     // تُرحَّل الحركة إلى "الحركات المالية" كإضافة (وارد) لرصيد الخزنة (كاش) فقط إذا كان السحب "سحب نقدي"
@@ -584,9 +622,15 @@ $('#btn-add-stock')?.addEventListener('click', async ()=>{
         bagStockRef: addedEntry.id
       };
       vaultTx.push(cashInTx);
-      await saveVaultTx();
+      const cashInSaved = await saveVaultTx();
       await saveSettings();
-      await logAudit('add','الحركات المالية', `تمت إضافة حركة وارد رقم تسلسلي #${cashInTx.seq}: إضافة ${fmt(amount)} ﷼ لرصيد الخزنة (كاش) من سحب نقدي من حساب تمويل مخزون الحقائب`);
+      if(cashInSaved === true || cashInSaved === 'queued'){
+        vaultLinkedResult = cashInSaved;
+        await logAudit('add','الحركات المالية', `تمت إضافة حركة وارد رقم تسلسلي #${cashInTx.seq}: إضافة ${fmt(amount)} ﷼ لرصيد الخزنة (كاش) من سحب نقدي من حساب تمويل مخزون الحقائب`);
+      }else{
+        vaultTx = vaultTx.filter(t=>t.id!==cashInTx.id); bumpVaultVersion();
+        vaultLinkedResult = 'rejected';
+      }
     }
   }else{
     if(addedEntry.qty>0){
@@ -607,15 +651,27 @@ $('#btn-add-stock')?.addEventListener('click', async ()=>{
         bagStockRef: addedEntry.id
       };
       vaultTx.push(cashOutTx);
-      await saveVaultTx();
+      const cashOutSaved = await saveVaultTx();
       await saveSettings();
-      await logAudit('add','الحركات المالية', `تمت إضافة حركة صادر رقم تسلسلي #${cashOutTx.seq}: خصم ${fmt(amount)} ﷼ من رصيد الخزنة (كاش) مقابل تمويل مخزون الحقائب (${method})`);
+      if(cashOutSaved === true || cashOutSaved === 'queued'){
+        vaultLinkedResult = cashOutSaved;
+        await logAudit('add','الحركات المالية', `تمت إضافة حركة صادر رقم تسلسلي #${cashOutTx.seq}: خصم ${fmt(amount)} ﷼ من رصيد الخزنة (كاش) مقابل تمويل مخزون الحقائب (${method})`);
+      }else{
+        vaultTx = vaultTx.filter(t=>t.id!==cashOutTx.id); bumpVaultVersion();
+        vaultLinkedResult = 'rejected';
+      }
     }
   }
   const wasEditing = isEditing;
   cancelBagStockEdit();
   renderBags();
-  showToast(wasEditing ? 'تم حفظ التعديل' : 'تم تسجيل العملية');
+  if(vaultLinkedResult === 'rejected'){
+    showToast((wasEditing ? 'تم حفظ تعديل العملية' : 'تم تسجيل العملية') + ' في سجل المخزون — لكن تعذّر ترحيل حركة الخزنة المرتبطة (رفض أو تعارض)؛ أُبطل الترحيل المؤقت وأضفها يدوياً من شيت الحركات المالية إن لزم');
+  }else if(vaultLinkedResult === 'queued' || bagStockQueued){
+    showToast((wasEditing ? 'تم حفظ تعديل العملية' : 'تم تسجيل العملية') + ' على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة');
+  }else{
+    showToast(wasEditing ? 'تم حفظ التعديل' : 'تم تسجيل العملية');
+  }
   });
 });
 
@@ -719,51 +775,83 @@ $('#btn-bagfund-bulk-save')?.addEventListener('click', async ()=>{
   if(errors.length){ showToast(errors[0] + (errors.length>1 ? ` (و${errors.length-1} خطأ آخر)` : '')); return; }
   if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
   snapshotState(`إضافة حركات تمويل مخزون الحقائب من جدول داخل البرنامج (${items.length} صف)`);
-  let added=0;
-  const changedRows = [];
-  for(const {date, type, amount, method, notes, manualQty} of items){
-    bagStock.push({ id: uid(), createdAt: Date.now(), createdBy: currentUser, type, date, amount, method, notes, manualQty });
-    recalcBagFundLedger();
-    await saveBagStock();
-    await saveSettings();
-    const addedEntry = bagStock[bagStock.length-1];
-
-    if(type==='withdraw'){
-      if(method==='سحب نقدي' && settings.bagFinanceLinkEnabled!==false){
-        const cashInTx = {
-          id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
-          type: 'in', date, amount, method,
-          notes: `سحب نقدي من حساب تمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
-          clientId: '', clientName: '', manual: 'سحب نقدي من مخزون الحقائب',
-          category: 'تمويل مخزون الحقائب (سحب نقدي)', destination: 'vault', networkInvoice: '',
-          bagStockRef: addedEntry.id
-        };
-        vaultTx.push(cashInTx);
-        await saveVaultTx();
-        await saveSettings();
-      }
+  // حارس النموذج الفردي نفسه: السحب الذي يتجاوز الرصيد المتاح حالياً لتمويل الحقائب يُنبَّه به
+  // (بجملة واحدة لكل الصفوف المخالفة بدل تجاهل الفحص في الدفعات — كان السجل الدُفعي يترك المخزون
+  // ينخفض بصمت بلا أي تحذير، والعدد اليدوي [manualQty] للسحب ينقصه مباشرةً بلا قيد)
+  const price = num(settings.bagPrice) || DEFAULT_SETTINGS.bagPrice;
+  let runningFundValue = bagStockTotals().purchasedQty*price + num(settings.bagFundBalance);
+  const overdrawn = [];
+  items.forEach((it, i)=>{
+    if(it.type!=='withdraw'){ runningFundValue += it.amount; return; }
+    if(it.amount > runningFundValue){
+      overdrawn.push(`الصف ${i+1} (سحب ${fmt(it.amount)} — المتاح ${fmt(runningFundValue)})`);
     }else{
-      if((method==='إيداع كاش في الحساب البنكي' || method==='كاش مباشر') && settings.bagFinanceLinkEnabled!==false){
-        const cashOutTx = {
-          id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
-          type: 'out', date, amount, method,
-          notes: `إيداع نقدي (${method}) لتمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
-          clientId: '', clientName: '', manual: '',
-          category: 'تمويل مخزون الحقائب (إيداع كاش بالبنك)', destination: 'vault', networkInvoice: '',
-          bagStockRef: addedEntry.id
-        };
-        vaultTx.push(cashOutTx);
-        await saveVaultTx();
-        await saveSettings();
-      }
+      runningFundValue -= it.amount;
     }
-    added++;
-    changedRows.push({'التاريخ':date, 'النوع':type==='withdraw'?'سحب':'إيداع', 'المبلغ':amount, 'طريقة الدفع':method, 'عدد الحقائب الفعلي (كما أُدخل)':manualQty||'', 'عدد الحقائب (+/-)':addedEntry.qty, 'الرصيد بعد العملية':addedEntry.balanceAfter, 'ملاحظات':notes});
+  });
+  if(overdrawn.length){
+    if(!await customConfirm(`إجمالي السحب في الصفوف التالية يتجاوز الرصيد المتاح لتمويل الحقائب: ${overdrawn.join('، ')}. سيؤدي هذا إلى عجز في مخزون الحقائب. هل تريد المتابعة؟`)) return;
   }
-  await logAudit('add','مخزون الحقائب', `إضافة حركات تمويل مخزون الحقائب من جدول داخل البرنامج: تمت إضافة ${added} حركة جديدة (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
+  const pushedBagIds = [];
+  const vaultLinkItems = [];
+  for(const {date, type, amount, method, notes, manualQty} of items){
+    const entry = { id: uid(), createdAt: Date.now(), createdBy: currentUser, type, date, amount, method, notes, manualQty };
+    bagStock.push(entry);
+    pushedBagIds.push(entry.id);
+    const needsVaultLink = (type==='withdraw' && method==='سحب نقدي')
+      || (type!=='withdraw' && (method==='إيداع كاش في الحساب البنكي' || method==='كاش مباشر'));
+    if(needsVaultLink && settings.bagFinanceLinkEnabled!==false) vaultLinkItems.push({entry, date, type, amount, method, notes});
+  }
+  recalcBagFundLedger();
+  // حفظ دفعة واحدة في النهاية بدل حفظ سطر-بسطر داخل الحلقة (N طلبات سابقة لكل صف على حدة)،
+  // مع فحص النتيجة والتراجع في الذاكرة لو رُفضت الدفعة كاملةً
+  const bulkBagSaved = await saveBagStock();
+  if(bulkBagSaved !== true && bulkBagSaved !== 'queued'){
+    bagStock = bagStock.filter(b=>!pushedBagIds.includes(b.id));
+    recalcBagFundLedger();
+    showToast('تعذّر حفظ حركات التمويل (رفض أو تعارض) — لم تُسجَّل أي حركة من هذه الدفعة، أعد المحاولة');
+    return;
+  }
+  const pushedVaultIds = [];
+  vaultLinkItems.forEach(({entry, date, type, amount, method, notes})=>{
+    if(type==='withdraw'){
+      const cashInTx = {
+        id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
+        type: 'in', date, amount, method,
+        notes: `سحب نقدي من حساب تمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
+        clientId: '', clientName: '', manual: 'سحب نقدي من مخزون الحقائب',
+        category: 'تمويل مخزون الحقائب (سحب نقدي)', destination: 'vault', networkInvoice: '',
+        bagStockRef: entry.id
+      };
+      vaultTx.push(cashInTx); pushedVaultIds.push(cashInTx.id);
+    }else{
+      const cashOutTx = {
+        id: uid(), seq: allocVaultSeq('vault'), createdAt: Date.now(),
+        type: 'out', date, amount, method,
+        notes: `إيداع نقدي (${method}) لتمويل مخزون الحقائب${notes ? ' — '+notes : ''}`,
+        clientId: '', clientName: '', manual: '',
+        category: 'تمويل مخزون الحقائب (إيداع كاش بالبنك)', destination: 'vault', networkInvoice: '',
+        bagStockRef: entry.id
+      };
+      vaultTx.push(cashOutTx); pushedVaultIds.push(cashOutTx.id);
+    }
+  });
+  const bulkVaultSaved = vaultLinkItems.length ? await saveVaultTx() : true;
+  if(bulkVaultSaved !== true && bulkVaultSaved !== 'queued'){
+    vaultTx = vaultTx.filter(t=>!pushedVaultIds.includes(t.id)); bumpVaultVersion();
+  }
+  await saveSettings();
+  const bulkCombined = combinedSaveResult(bulkBagSaved, bulkVaultSaved);
+  await logAudit('add','مخزون الحقائب', `إضافة حركات تمويل مخزون الحقائب من جدول داخل البرنامج: تمت إضافة ${items.length} حركة جديدة (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
   renderBags(); renderReports();
   closeBagfundBulkModal();
-  showToast(`تمت إضافة ${added} حركة جديدة`);
+  if(bulkCombined === 'rejected'){
+    showToast('حُفظت حركات التمويل، لكن تعذّر ترحيل حركات الخزنة المرتبطة (رفض أو تعارض) — أُبطل الترحيل المؤقت، أضفها يدوياً من شيت الحركات المالية إن لزم');
+  }else if(bulkCombined === 'queued'){
+    showToast(`تمت إضافة ${items.length} حركة على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة`);
+  }else{
+    showToast(`تمت إضافة ${items.length} حركة جديدة`);
+  }
 
   });});
 
@@ -844,9 +932,12 @@ $('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
   if(!items.length){ showToast('لم تُدخل بيانات أي صف'); return; }
   snapshotState(`تسجيل أرقام فواتير الحقائب من جدول داخل البرنامج (${items.length} صف)`);
   let updated=0, skipped=0, bagStockChanged=false;
+  const pushedIssueIds = [];
+  const prevClientStates = new Map(); // clientId -> {bagSource, bagStatus, bagInvoice, bagPurchaseDate}
   for(const {clientId, bagInvoice, bagDate} of items){
     const c = clients.find(x=>x.clientId===clientId);
     if(!c){ skipped++; continue; }
+    if(!prevClientStates.has(c.clientId)) prevClientStates.set(c.clientId, {bagSource:c.bagSource, bagStatus:c.bagStatus, bagInvoice:c.bagInvoice, bagPurchaseDate:c.bagPurchaseDate});
     const oldSource = c.bagSource;
     if(bagInvoice) c.bagInvoice = bagInvoice;
     if(bagDate) c.bagPurchaseDate = bagDate;
@@ -856,24 +947,41 @@ $('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
     c.bagSource = 'stock';
     c.bagStatus = 'purchased';
     if(oldSource!=='stock' || !bagStock.some(b=>b.type==='issue' && b.issuedClientId===c.id)){
-      bagStock.push({
-        id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
+      const issueEntry = { id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
         date: c.bagPurchaseDate, createdAt: Date.now(),
         issuedClientId: c.id, issuedClientName: c.name,
         notes: `تسليم من المخزون للعميل: ${c.name} (تسجيل فواتير/تواريخ الحقائب من جدول داخل البرنامج)`
-      });
+      };
+      bagStock.push(issueEntry);
+      pushedIssueIds.push(issueEntry.id);
       bagStockChanged = true;
     }
     updated++;
   }
   if(bagStockChanged) recalcBagFundLedger();
-  await saveClients();
-  if(bagStockChanged) await saveBagStock();
+  const invClientsSaved = await saveClients();
+  const invBagSaved = bagStockChanged ? await saveBagStock() : true;
+  const invCombined = combinedSaveResult(invClientsSaved, invBagSaved);
+  if(invCombined !== true && invCombined !== 'queued'){
+    // فشل كامل أو جزئي: نُعيد كل تعديلات العملاء المُعدّلة ونحذف سجلات التسليم المؤقتة
+    // (كانت تحاول محاكاة سلوك استيراد Excel لكنها لم تكن تتحقق من النتيجة)
+    prevClientStates.forEach((prev, cid)=>{ const c=clients.find(x=>x.clientId===cid); if(c){ c.bagSource=prev.bagSource; c.bagStatus=prev.bagStatus; c.bagInvoice=prev.bagInvoice; c.bagPurchaseDate=prev.bagPurchaseDate; }});
+    bagStock = bagStock.filter(b=>!pushedIssueIds.includes(b.id));
+    if(bagStockChanged) recalcBagFundLedger();
+    renderTable(); renderBags();
+    closeBaginvBulkModal();
+    showToast('تعذّر حفظ البيانات (رفض أو تعارض) — أُعيدت كل التعديلات، لم تُسجَّل أي عملية');
+    return;
+  }
   await saveSettings();
   await logAudit('edit','مخزون الحقائب', `تسجيل أرقام فواتير/تواريخ شراء الحقائب من جدول داخل البرنامج: تحديث ${updated} عميل${skipped?`، وتخطي ${skipped} صف (رقم هوية غير موجود)`:''}`);
   renderTable(); renderBags();
   closeBaginvBulkModal();
-  showToast(`تم تحديث ${updated} عميل${skipped?`، ${skipped} تم تخطيه (رقم هوية غير موجود)`:''}`);
+  if(invCombined === 'queued'){
+    showToast(`تم تحديث ${updated} عميل على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة${skipped?`، ${skipped} تم تخطيه`:''}`);
+  }else{
+    showToast(`تم تحديث ${updated} عميل${skipped?`، ${skipped} تم تخطيه (رقم هوية غير موجود)`:''}`);
+  }
 
   });});
 
@@ -904,25 +1012,39 @@ document.addEventListener('click', async e=>{
         if(!await customConfirm(`المخزون الحالي المتاح هو ${availableStock} — لا توجد حقائب كافية بالمخزون. هل تريد المتابعة وتسليم الحقيبة من المخزون على أي حال؟`)) return;
       }
       snapshotState(`تسليم حقيبة من المخزون للعميل: ${clients[idx].name}`);
+      const prevBagSource = clients[idx].bagSource;
+      const prevBagStatus = clients[idx].bagStatus;
+      const prevBagPurchaseDate = clients[idx].bagPurchaseDate;
       clients[idx].bagSource = 'stock';
       clients[idx].bagStatus = 'purchased';
       clients[idx].bagPurchaseDate = clients[idx].bagPurchaseDate || todayISO();
       // نسجّل عملية التسليم كسطر مستقل في سجل عمليات مخزون الحقائب (وليس فقط كحقل في شيت العملاء)،
       // حتى يبقى "المخزون الحالي" مبنياً بالكامل على سجل العمليات نفسه ويمكن تتبعه وحذفه بدقة عند الإلغاء
-      bagStock.push({
+      const issueEntry = {
         id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
         date: clients[idx].bagPurchaseDate,
         createdAt: Date.now(),
         issuedClientId: clients[idx].id, issuedClientName: clients[idx].name,
         notes: `تسليم من المخزون للعميل: ${clients[idx].name}`
-      });
+      };
+      bagStock.push(issueEntry);
       recalcBagFundLedger();
-      await saveClients();
-      await saveBagStock();
+      const fsClientsSaved = await saveClients();
+      const fsBagSaved = await saveBagStock();
+      const fsCombined = combinedSaveResult(fsClientsSaved, fsBagSaved);
+      if(fsCombined !== true && fsCombined !== 'queued'){
+        clients[idx].bagSource = prevBagSource;
+        clients[idx].bagStatus = prevBagStatus;
+        clients[idx].bagPurchaseDate = prevBagPurchaseDate;
+        bagStock = bagStock.filter(b=>b.id!==issueEntry.id);
+        recalcBagFundLedger();
+        showToast('تعذّر تسليم الحقيبة من المخزون (رفض أو تعارض) — أُعيدت الحالة السابقة');
+        return;
+      }
       await saveSettings();
       await logAudit('edit','مخزون الحقائب', `تم تسليم حقيبة من المخزون المتوفر للعميل: ${clients[idx].name} (بدلاً من شراء حقيبة جديدة)`);
       renderBags(); renderTable(); renderCourses(); renderMissingCourse();
-      showToast('تم تسليم الحقيبة من المخزون');
+      showToast(fsCombined==='queued' ? 'حُفظ تسليم الحقيبة على هذا الجهاز فقط — سيرفع للسيرفر عند اتصال الشبكة' : 'تم تسليم الحقيبة من المخزون');
     }
   }
   if(e.target.dataset.approvestock){
@@ -975,10 +1097,18 @@ document.addEventListener('click', async e=>{
       snapshotState(`حذف عملية من سجل تمويل مخزون الحقائب: ${removedDesc}`);
       bagStock = bagStock.filter(b=>b.id!==e.target.dataset.delstock);
       recalcBagFundLedger();
-      await saveBagStock();
+      const dsBagSaved = await saveBagStock();
+      if(dsBagSaved !== true && dsBagSaved !== 'queued'){
+        if(removed) bagStock.push(removed);
+        recalcBagFundLedger();
+        showToast('تعذّر حذف العملية (رفض أو تعارض) — أُعيدت العملية إلى سجل التمويل، لم يُحذف شيء');
+        return;
+      }
+      const dsBagQueued = (dsBagSaved === 'queued');
       await saveSettings();
       // إن كانت عملية "تسليم من المخزون"، تعود حالة حقيبة العميل المرتبط إلى "مطلوب شراء" تلقائياً حتى تبقى بيانات
       // شيت العملاء متسقة مع سجل عمليات المخزون بعد حذف عملية التسليم منه مباشرة
+      let delLinkedResult = true;
       if(removed && removed.type==='issue' && removed.issuedClientId){
         const linkedClient = clients.find(c=>c.id===removed.issuedClientId);
         if(linkedClient && linkedClient.bagSource==='stock'){
@@ -989,8 +1119,9 @@ document.addEventListener('click', async e=>{
           delete linkedClient.bagPurchaseDate;
           delete linkedClient.bagPaymentMethod;
           syncClientLedgerEntry(linkedClient);
-          await saveClients();
-          await saveVaultTx();
+          const delClientSaved = await saveClients();
+          const delVaultSaved = await saveVaultTx();
+          delLinkedResult = combinedSaveResult(delClientSaved, delVaultSaved);
         }
       }
       // إذا كانت هذه العملية قد رُحِّلت سابقاً كخصم من الخزنة (كاش) — لأنها كانت إيداعاً كاشاً في البنك —
@@ -998,11 +1129,24 @@ document.addEventListener('click', async e=>{
       const linkedTx = removed ? vaultTx.find(t=>t.bagStockRef===removed.id) : null;
       if(linkedTx){
         vaultTx = vaultTx.filter(t=>t.id!==linkedTx.id);
-        await saveVaultTx();
-        await logAudit('delete','الحركات المالية', `تم حذف حركة صادر مرتبطة بعملية تمويل محذوفة من مخزون الحقائب: خصم ${fmt(num(linkedTx.amount))} ﷼ من الخزنة (كاش)`);
+        const linkTxSaved = await saveVaultTx();
+        if(linkTxSaved !== true && linkTxSaved !== 'queued'){
+          vaultTx.push(linkedTx); bumpVaultVersion();
+          delLinkedResult = combinedSaveResult(delLinkedResult, 'rejected');
+        }else{
+          await logAudit('delete','الحركات المالية', `تم حذف حركة صادر مرتبطة بعملية تمويل محذوفة من مخزون الحقائب: خصم ${fmt(num(linkedTx.amount))} ﷼ من الخزنة (كاش)`);
+          delLinkedResult = combinedSaveResult(delLinkedResult, linkTxSaved);
+        }
       }
       await logAudit('delete','مخزون الحقائب', `تم حذف عملية من سجل التمويل بتاريخ ${removed?.date}: ${removedDesc} (تمت إعادة احتساب الرصيد والمخزون)`);
       renderBags(); renderTable(); renderCourses(); renderMissingCourse();
+      if(delLinkedResult === 'rejected'){
+        showToast('حُذفت العملية من السجل، لكن تعذّر مزامنة بعض الأطراف المرتبطة (رفض أو تعارض) — راجع بيانات العميل/حركات الخزنة وحدّث الصفحة');
+      }else if(dsBagQueued || delLinkedResult === 'queued'){
+        showToast('حُذفت العملية على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة');
+      }else{
+        showToast('تم حذف العملية');
+      }
     }
   }
 });
@@ -1019,18 +1163,34 @@ $('#bag-purchase-form')?.addEventListener('submit', async e=>{
   const idx = clients.findIndex(c=>c.id===bagPurchaseTargetId);
   if(idx>-1){
     snapshotState(`تسجيل شراء حقيبة للعميل: ${clients[idx].name}`);
+    const prevBpStatus = clients[idx].bagStatus;
+    const prevBpPurchaseDate = clients[idx].bagPurchaseDate;
+    const prevBpPaymentMethod = clients[idx].bagPaymentMethod;
+    const prevBpInvoice = clients[idx].bagInvoice;
     clients[idx].bagStatus = 'purchased';
     clients[idx].bagPurchaseDate = $('#bp-date').value;
     clients[idx].bagPaymentMethod = $('#bp-method').value;
     if($('#bp-invoice').value.trim()) clients[idx].bagInvoice = $('#bp-invoice').value.trim();
-    await saveClients();
+    const bpSaved = await saveClients();
+    if(bpSaved !== true && bpSaved !== 'queued'){
+      clients[idx].bagStatus = prevBpStatus;
+      clients[idx].bagPurchaseDate = prevBpPurchaseDate;
+      clients[idx].bagPaymentMethod = prevBpPaymentMethod;
+      clients[idx].bagInvoice = prevBpInvoice;
+      showToast('تعذّر تسجيل شراء الحقيبة (رفض أو تعارض) — أُعيدت الحالة السابقة، أعد المحاولة');
+      return;
+    }
     await logAudit('edit','مخزون الحقائب', `تم تسجيل شراء حقيبة للعميل: ${clients[idx].name}`);
     // ملحوظة: أُلغي تنبيه الإيميل هنا عمداً — راجع الملحوظة في module-purchases.js لنطاق تنبيهات الإيميل الحالي.
   }
   $('#bag-overlay').classList.remove('show');
   bagPurchaseTargetId = null;
   renderBags(); renderTable(); renderCourses(); renderMissingCourse();
-  showToast('تم تسجيل شراء الحقيبة');
+  if(bpSaved==='queued'){
+    showToast('حُفظ شراء الحقيبة على هذا الجهاز فقط — سيرفع للسيرفر عند اتصال الشبكة');
+  }else{
+    showToast('تم تسجيل شراء الحقيبة');
+  }
   }finally{
     _bagPurchaseFormBusy = false;
     if(_bpSubmitBtn) _bpSubmitBtn.classList.remove('is-loading');
@@ -1052,24 +1212,38 @@ document.addEventListener('change', async e=>{
     return;
   }
   snapshotState(`تسليم حقيبة من المخزون للعميل: ${clients[idx].name}`);
+  const prevBuyBagSource = clients[idx].bagSource;
+  const prevBuyBagStatus = clients[idx].bagStatus;
+  const prevBuyBagPurchaseDate = clients[idx].bagPurchaseDate;
   clients[idx].bagSource = 'stock';
   clients[idx].bagStatus = 'purchased';
   clients[idx].bagPurchaseDate = clients[idx].bagPurchaseDate || todayISO();
-  bagStock.push({
+  const quickIssue = {
     id: uid(), createdBy: currentUser, type:'issue', qty:-1, unitPrice:0,
     date: clients[idx].bagPurchaseDate,
     createdAt: Date.now(),
     issuedClientId: clients[idx].id, issuedClientName: clients[idx].name,
     notes: `تسليم من المخزون للعميل: ${clients[idx].name} (من خانة الشراء السريعة)`
-  });
+  };
+  bagStock.push(quickIssue);
   recalcBagFundLedger();
-  await saveClients();
-  await saveBagStock();
+  const quickClientsSaved = await saveClients();
+  const quickBagSaved = await saveBagStock();
+  const quickCombined = combinedSaveResult(quickClientsSaved, quickBagSaved);
+  if(quickCombined !== true && quickCombined !== 'queued'){
+    clients[idx].bagSource = prevBuyBagSource;
+    clients[idx].bagStatus = prevBuyBagStatus;
+    clients[idx].bagPurchaseDate = prevBuyBagPurchaseDate;
+    bagStock = bagStock.filter(b=>b.id!==quickIssue.id);
+    recalcBagFundLedger();
+    showToast('تعذّر تسليم الحقيبة من المخزون (رفض أو تعارض) — أُعيدت الحالة السابقة');
+    return;
+  }
   await saveSettings();
   await logAudit('edit','مخزون الحقائب', `تم تسليم حقيبة من المخزون المتوفر للعميل: ${clients[idx].name} (من خانة الشراء السريعة)`);
   // ملحوظة: أُلغي تنبيه الإيميل هنا عمداً — راجع الملحوظة في module-purchases.js لنطاق تنبيهات الإيميل الحالي.
   renderBags(); renderTable(); renderCourses(); renderMissingCourse();
-  showToast('تم تسليم الحقيبة من المخزون');
+  showToast(quickCombined==='queued' ? 'حُفظ تسليم الحقيبة على هذا الجهاز فقط — سيرفع للسيرفر عند اتصال الشبكة' : 'تم تسليم الحقيبة من المخزون');
 });
 
 /* ---------------- استيراد حركات وارد وصادر من Excel إلى الحركات المالية ---------------- */
@@ -1105,6 +1279,7 @@ $('#import-vaultexp-input')?.addEventListener('change', async e=>{
     snapshotState('استيراد حركات وارد وصادر من Excel');
     let addedIn=0, addedOut=0, skipped=0;
     const changedRows = [];
+    const fxImportedTx = []; // الحركات المؤلفة من الملف لاسترجاعها لو رفض الحفظ
     for(const row of json){
       const amount = num(row['المبلغ']);
       const date = normalizeExcelDate(row['التاريخ']) || todayISO();
@@ -1148,13 +1323,22 @@ $('#import-vaultexp-input')?.addEventListener('change', async e=>{
         changedRows.push({'التاريخ':date, 'نوع الحركة':'صادر', 'المبلغ':amount, 'الحساب/الوجهة':destLabel(destination), 'طريقة الدفع':method, 'التصنيف':category, 'اسم مستلم المبلغ':newTx.recipientName, 'رقم فاتورة الشبكة':networkInvoice, 'ملاحظات':notes});
       }
       vaultTx.push(newTx);
+      fxImportedTx.push(newTx);
     }
-    await saveVaultTx();
     await saveSettings();
+    const importedVaultSaved = await saveVaultTx();
     const added = addedIn + addedOut;
     await logAudit('add','الحركات المالية', `استيراد حركات وارد وصادر من Excel: تمت إضافة ${addedIn} حركة وارد و${addedOut} حركة صادر${skipped?`، وتخطي ${skipped} صف بدون مبلغ أو نوع حركة صحيح`:''}`);
     renderVault(); renderReports();
-    showToast(`تم الاستيراد: ${addedIn} حركة وارد، ${addedOut} حركة صادر${skipped?`، ${skipped} تم تخطيه`:''}`);
+    if(importedVaultSaved !== true && importedVaultSaved !== 'queued'){
+      vaultTx = vaultTx.filter(x=>!fxImportedTx.some(tx=>tx.id===x.id));
+      bumpVaultVersion();
+      showToast(`تعذّر حفظ الحركات المستوردة (رفض أو تعارض) — لم تُستورد أي حركة، أعد المحاولة بعد التأكد من البيانات`);
+    }else if(importedVaultSaved === 'queued'){
+      showToast(`حُفظ الاستيراد محلياً (${addedIn} وارد، ${addedOut} صادر) — سيرفع للسيرفر تلقائياً عند اتصال الشبكة${skipped?`، ${skipped} تم تخطيه`:''}`);
+    }else{
+      showToast(`تم الاستيراد: ${addedIn} حركة وارد، ${addedOut} حركة صادر${skipped?`، ${skipped} تم تخطيه`:''}`);
+    }
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد من وجود أعمدة "المبلغ" و"نوع الحركة" على الأقل وأنه بصيغة Excel صحيحة');
   }finally{
