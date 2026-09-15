@@ -113,10 +113,10 @@ function ensureCourseSessionForClient(c, preferredDate){
   return true;
 }
 async function saveCompanies(){
-  try{ await _syncVersionsBeforeSave('companies'); await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); }
+  try{ await _syncVersionsBeforeSave('companies'); return await saveCollectionGeneric('companies', companies); }catch(e){ showToast('تعذر حفظ بيانات الشركات'); return 'rejected'; }
 }
 async function saveCompanyTransfers(){
-  try{ await _syncVersionsBeforeSave('companyTransfers'); await saveCollectionGeneric('companyTransfers', companyTransfers); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); }
+  try{ await _syncVersionsBeforeSave('companyTransfers'); return await saveCollectionGeneric('companyTransfers', companyTransfers); }catch(e){ showToast('تعذر حفظ بيانات تحويلات الشركات'); return 'rejected'; }
 }
 /* ================= ترحيل تلقائي: توحيد القيود المالية لكل حوالة شركة في قيد واحد =================
    سابقاً: كل متدرب مسجَّل تحت حوالة شركة كان يُنشئ قيد خزنة منفصل (مرتبط عبر companyTransferAllocId).

@@ -2,6 +2,20 @@
 function transferAllocatedTotal(t){
   return (t.trainees||[]).reduce((s,tr)=>s+num(tr.courseValue)+num(tr.bagValue),0);
 }
+/* توست موحّد لنتائج حفظ الشركات/الحوالات — يفرّق بين: حفظ فعلي ناجح، حفظ محلي فقط
+   (قيد اتصال/رفض مؤقت سيرفع تلقائياً لاحقاً)، وتجاهل كامل للتعديل (رفض دائم أو تعارض حقيقي)
+   — حتى لا تُعرض "نجاح" صوري والحوالة/الشركة مختفية بعد الرفرش. */
+function companySaveToast(result, okMsg, extra){
+  if(result === true) showToast(okMsg);
+  else if(result === 'queued') showToast((okMsg || 'حُفظ') + ' — حُفظ على هذا الجهاز فقط وسترتفع تلقائيًا للسيرفر عند اتصال الشبكة');
+  else showToast('تعذّر حفظ التعديل على السيرفر: تم تجاهله (رفض أو تعارض)' + (extra||'') + ' — لن يظهر بعد تحديث الصفحة. راجع الرسائل السابقة وحدّث الصفحة إن لزم');
+}
+/* يجمع نتائج عدة حفظات (شركات/حوالات/خزنة...) في نتيجة واحدة: أي رفض دائم يُغلب، ثم أي تعليق في الطابور، ثم النجاح */
+function combinedSaveResult(...results){
+  if(results.some(r=>r==='rejected')) return 'rejected';
+  if(results.some(r=>r==='queued')) return 'queued';
+  return true;
+}
 function updateComputedShare(){
   const amount = num($('#ct-amount')?.value);
   const count = num($('#ct-count')?.value);
@@ -617,7 +631,7 @@ function renderCompanies(){
   renderCompaniesUnsettledPanel();
   renderCompanyPersons();
   // ملخص أعداد المتدربين حسب الشركة (إجمالي كل الحوالات، بغض النظر عن أي فلترة)
-  $('#company-transfers-summary').innerHTML = companiesTakenSummaryHtml();
+  $('#company-transfers-summary')?.innerHTML && ($('#company-transfers-summary').innerHTML = companiesTakenSummaryHtml());
 
   // طرق الدفع المتاحة لاختيار طريقة دفع الحوالة الجديدة (نفس طرق الدفع المُعرَّفة في الإعدادات)
   const ctChannelSel = $('#ct-channel');
@@ -628,10 +642,16 @@ function renderCompanies(){
     else { const bankCh = settings.channels.find(c=>c.dest==='bank'); if(bankCh) ctChannelSel.value = bankCh.name; }
   }
 
-  // قائمة الشركات لاختيارها عند إضافة حوالة جديدة
-  $('#ct-company').innerHTML = companies.length
-    ? companies.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
-    : `<option value="">— ${tr('addCompanyFirstShort')} —</option>`;
+  // قائمة الشركات لاختيارها عند إضافة حوالة جديدة — يُحافَظ على اختيار المستخدم الحالي عند إعادة البناء
+  // (كانت تُبنى من جديد بلا الحفاظ على القيمة، فتُعاد الحوالة بصمت لشركة أخرى عند أي إعادة رسم أثناء التعبئة)
+  const ctCompSel = $('#ct-company');
+  if(ctCompSel){
+    const ctCompVal = ctCompSel.value;
+    ctCompSel.innerHTML = companies.length
+      ? companies.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')
+      : `<option value="">— ${tr('addCompanyFirstShort')} —</option>`;
+    if(companies.some(c=>c.id===ctCompVal)) ctCompSel.value = ctCompVal;
+  }
 
   // datalist أرقام هويات العملاء (لو زار المستخدم هذا التبويب قبل تبويب الحركات المالية)
   const dlc = $('#dl-clients');
@@ -828,6 +848,7 @@ $('#btn-add-company')?.addEventListener('click', async ()=>{
     if(!c){ showToast('تعذّر إيجاد الشركة المطلوب تعديلها'); resetCompanyForm(); return; }
     snapshotState(`تعديل بيانات الشركة: ${c.name}`);
     const oldName = c.name;
+    let renameSaveOk = true;
     c.name = name;
     c.agreedAmount = agreedAmount;
     c.taxNumber = taxNumber;
@@ -837,15 +858,15 @@ $('#btn-add-company')?.addEventListener('click', async ()=>{
     if(oldName!==name){
       companyTransfers.forEach(t=>{ if(t.companyId===c.id) t.companyName = name; });
       clients.forEach(cl=>{ if(cl.clientType==='company' && cl.companyName===oldName) cl.companyName = name; });
-      await saveCompanyTransfers();
+      renameSaveOk = await saveCompanyTransfers();
       await saveClients();
     }
-    await saveCompanies();
+    const savedResult = (renameSaveOk !== undefined) ? combinedSaveResult(renameSaveOk, await saveCompanies()) : await saveCompanies();
     const catsNote = categoriesUsed.length ? ` — مبالغ حسب الفئة: ${companyCategoriesSummaryText(c.categories)}` : '';
     await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات الشركة: ${name} (المبلغ المتفق عليه للمتدرب: ${fmt(agreedAmount)}${taxNumber?` — الرقم الضريبي: ${taxNumber}`:''})${catsNote}`);
     resetCompanyForm();
     renderCompanies(); renderTable();
-    showToast('تم تحديث بيانات الشركة');
+    companySaveToast(savedResult, 'تم تحديث بيانات الشركة');
     return;
   }
 
@@ -853,12 +874,12 @@ $('#btn-add-company')?.addEventListener('click', async ()=>{
   const companyRecord = {id:uid(), name, agreedAmount, taxNumber, createdAt:Date.now(), createdBy: currentUser};
   if(categoriesUsed.length) companyRecord.categories = categoriesUsed.map(c=>({label:c.label, amount:num(c.amount)}));
   companies.push(companyRecord);
-  await saveCompanies();
+  const addResult = await saveCompanies();
   const catsNote = categoriesUsed.length ? ` — مبالغ حسب الفئة: ${companyCategoriesSummaryText(companyRecord.categories)}` : '';
   await logAudit('add','تحويلات الشركات', `تمت إضافة شركة جديدة: ${name} (المبلغ المتفق عليه للمتدرب: ${fmt(agreedAmount)}${taxNumber?` — الرقم الضريبي: ${taxNumber}`:''})${catsNote}`);
   resetCompanyForm();
   renderCompanies();
-  showToast('تمت إضافة الشركة');
+  companySaveToast(addResult, 'تمت إضافة الشركة');
 
   });});
 
@@ -888,6 +909,9 @@ $('#btn-add-transfer')?.addEventListener('click', async ()=>{
     const tExisting = companyTransfers[idx];
     const existingLump = vaultTx.find(v=>v.companyTransferId===tExisting.id);
     if(existingLump && isDateLocked(existingLump.date)){ showToast('تعذّر التعديل: الحركة المالية المرتبطة بهذه الحوالة ضمن فترة محاسبية مُقفلة'); return; }
+    // سد تجاوز القفل المحاسبي: التاريخ الجديد يُفحص أيضاً (كان يُفحص التاريخ القديم فقط، فيُكتب القيد
+    // المالي المرتبط بعدّته داخل فترة مقفلة بصمت من هذا المسار رغم أن مسار التعديل في شيت الماليات يمنعها)
+    if(isDateLocked(date)){ showToast('تعذّر التعديل: تاريخ الحوالة الجديد (' + date + ') ضمن فترة محاسبية مُقفلة — اختر تاريخاً آخر'); return; }
     snapshotState(`تعديل حوالة الشركة: ${company.name}`);
     const t = companyTransfers[idx];
     t.companyId = companyId; t.companyName = company.name; t.date = date; t.amount = amount;
@@ -905,14 +929,17 @@ $('#btn-add-transfer')?.addEventListener('click', async ()=>{
       existingLump.notes = `حوالة شركة "${company.name}"${refNum?` — مرجع: ${refNum}`:''} (مُعدَّلة)`;
       cascaded = true;
     }
-    if(cascaded) await saveVaultTx();
-    await saveCompanyTransfers();
+    let vaultSaveResult = true;
+    if(cascaded) vaultSaveResult = await saveVaultTx();
+    const transferSaveResult = await saveCompanyTransfers();
     await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات حوالة الشركة "${company.name}" بتاريخ ${date} — القيمة الآن ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel})${cascaded?' — وتمت مزامنة القيد المالي الواحد المرتبط بهذه الحوالة':''}`);
     cancelTransferEdit();
-    renderCompanies();
-    showToast('تم حفظ التعديل');
+    renderCompanies(); renderVault();
+    companySaveToast(combinedSaveResult(transferSaveResult, vaultSaveResult), 'تم حفظ التعديل');
     return;
   }
+  // سد تجاوز القفل المحاسبي عند الإضافة: لم يكن فحص التاريخ الجديد موجوداً في هذا المسار أبداً
+  if(isDateLocked(date)){ showToast('تعذّر الإضافة: تاريخ الحوالة (' + date + ') ضمن فترة محاسبية مُقفلة — اختر تاريخاً آخر'); return; }
   snapshotState(`إضافة حوالة جديدة للشركة: ${company.name}`);
   const transferRecord = {id:uid(), createdAt:Date.now(), createdBy: currentUser, companyId, companyName:company.name, date, amount, traineeCount:count, notes, channel, refNum, trainees:[]};
   if(groupsUsed.length) transferRecord.groups = groupsUsed.map(g=>({label:g.label, count:num(g.count), price:num(g.price)}));
@@ -927,14 +954,14 @@ $('#btn-add-transfer')?.addEventListener('click', async ()=>{
     notes: `حوالة شركة "${company.name}"${refNum?` — مرجع: ${refNum}`:''}`,
     companyTransferId: transferRecord.id
   });
-  await saveVaultTx();
-  await saveCompanyTransfers();
+  const vaultSaveResult0 = await saveVaultTx();
+  const transferSaveResult0 = await saveCompanyTransfers();
   const groupsNote = groupsUsed.length ? ` — مقسّمة حسب فئات: ${ctGroupsSummaryText(transferRecord.groups)}` : '';
   await logAudit('add','تحويلات الشركات', `تمت إضافة حوالة جديدة للشركة "${company.name}" بقيمة ${fmt(amount)} لعدد ${count} متدرب (طريقة الدفع: ${channel}) — وتم تسجيل قيد مالي فوري بكامل المبلغ${groupsNote}`);
   $('#ct-amount').value=''; $('#ct-count').value=''; $('#ct-notes').value=''; $('#ct-date').value=''; $('#ct-refnum').value='';
   resetCtGroups();
   renderCompanies(); renderVault();
-  showToast('تم حفظ الحوالة');
+  companySaveToast(combinedSaveResult(transferSaveResult0, vaultSaveResult0), 'تم حفظ الحوالة');
 
   });});
 
@@ -949,7 +976,13 @@ function openTransferEdit(id){
   $('#ct-notes').value = t.notes || '';
   $('#ct-refnum').value = t.refNum || '';
   ctGroups = (t.groups||[]).map(g=>({id:uid(), label:g.label, count:g.count, price:g.price}));
-  if(ctGroups.length){ renderCtGroups(); } else { $('#ct-amount').value = t.amount ?? ''; $('#ct-count').value = t.traineeCount ?? ''; resetCtGroups(); }
+  if(ctGroups.length){
+    renderCtGroups();
+    // لا نسمح لإعادة احتساب الحقول من مجموع الفئات (داخل renderCtGroups) بتغيير قيمة الحوالة/عددها
+    // المخزّنين بصمت أثناء التعديل لو اختلفا عن مجموع الفئات (بيانات قديمة/مُعدَّلة يدوياً)
+    $('#ct-amount').value = t.amount ?? '';
+    $('#ct-count').value = t.traineeCount ?? '';
+  } else { $('#ct-amount').value = t.amount ?? ''; $('#ct-count').value = t.traineeCount ?? ''; resetCtGroups(); }
   // إصلاح مهم: لو طريقة الدفع المحفوظة على الحوالة (t.channel) مش موجودة حالياً ضمن قائمة طرق
   // الدفع بالإعدادات (حوالة قديمة/مستوردة بلا قيمة محفوظة أصلاً، أو طريقة دفع اتغيّر اسمها لاحقاً)
   // لازم نحدد قيمة افتراضية آمنة وواضحة لقائمة #ct-channel صراحة — قبل هذا الإصلاح كانت القائمة
@@ -1074,11 +1107,12 @@ $('#ctrainee-form')?.addEventListener('submit', async e=>{
         await saveSettings();
       }
     }
-    if(client){ await saveClients(); await saveVaultTx(); }
+    let vaultSaveResultEdit = true;
+    if(client){ await saveClients(); vaultSaveResultEdit = await saveVaultTx(); }
 
     tr.courseValue = courseValue;
     tr.bagValue = bagValue;
-    await saveCompanyTransfers();
+    const transferSaveResultEdit = await saveCompanyTransfers();
     await logAudit('edit','تحويلات الشركات', `تم تعديل بيانات متدرب (${clientId}) في حوالة الشركة "${t.companyName}"`);
 
     $('#ctrainee-overlay').classList.remove('show');
@@ -1086,7 +1120,7 @@ $('#ctrainee-form')?.addEventListener('submit', async e=>{
     $('#ctr-id').readOnly = false;
     renderCompanies(); renderVault(); renderTable();
     if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
-    showToast('تم تحديث بيانات المتدرب');
+    companySaveToast(combinedSaveResult(transferSaveResultEdit, vaultSaveResultEdit), 'تم تحديث بيانات المتدرب');
     return;
   }
 
@@ -1102,6 +1136,7 @@ $('#ctrainee-form')?.addEventListener('submit', async e=>{
   const traineeId = uid();
   const payChannel0 = settings.channels.find(ch=>ch.name===t.channel);
   const payMethod0 = payChannel0 ? payChannel0.name : 'تحويل بنكي (شركة)';
+  let vaultSaveResultAdd1 = true;
 
   if(!client){
     // لا يوجد سجل عميل بهذا الرقم بعد — نُنشئ سجلاً كاملاً في شيت العملاء (عميل شركات) حتى يظهر عند الفلترة بالشركة
@@ -1148,18 +1183,18 @@ $('#ctrainee-form')?.addEventListener('submit', async e=>{
     if(invoiceNo) client.invoice = invoiceNo;
     syncClientValueFromTraineeAllocation(client, courseValue, bagValue, t);
     await saveClients();
-    await saveVaultTx();
+    vaultSaveResultAdd1 = await saveVaultTx();
   }
 
   t.trainees = t.trainees || [];
   t.trainees.push({id:traineeId, clientId, courseValue, bagValue, createdBy: currentUser});
-  await saveCompanyTransfers();
+  const transferSaveResultAdd = await saveCompanyTransfers();
   await logAudit('add','تحويلات الشركات', `تمت إضافة متدرب (${clientId}) لحوالة الشركة "${t.companyName}" بإجمالي ${fmt(courseValue+bagValue)} ﷼ (ضمن القيد المالي الواحد المسجَّل للحوالة)`);
 
   $('#ctrainee-overlay').classList.remove('show'); ctraineeTargetTransferId=null;
   renderCompanies(); renderVault(); renderTable();
   if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
-  showToast('تمت إضافة المتدرب');
+  companySaveToast(combinedSaveResult(transferSaveResultAdd, vaultSaveResultAdd1), 'تمت إضافة المتدرب');
   }finally{
     _ctraineeFormBusy = false;
     if(_ctSubmitBtn) _ctSubmitBtn.classList.remove('is-loading');
@@ -1189,11 +1224,14 @@ document.addEventListener('change', async e=>{
       if(client){ syncClientValueFromTraineeAllocation(client, tr.courseValue, tr.bagValue, t); clientsChanged = true; }
     }
   });
-  if(clientsChanged){ await saveClients(); await saveVaultTx(); }
-  await saveCompanyTransfers();
+  let vaultBagAllResult = true;
+  if(clientsChanged){ await saveClients(); vaultBagAllResult = await saveVaultTx(); }
+  const transferSaveBagAll = await saveCompanyTransfers();
   await logAudit('edit','تحويلات الشركات', `${checked?'تفعيل':'إلغاء'} تقسيم الحقيبة لكل متدربي حوالة الشركة "${t.companyName}" — تم تعديل ${changed} متدرب`);
   renderCompanies();
-  showToast(checked ? `تم تقسيم المبلغ لـ${changed} متدرب (قيمة الحقيبة ${fmt(bagPrice)} ﷼ لكل متدرب)` : `تم إلغاء تقسيم الحقيبة لـ${changed} متدرب`);
+  const bagAllOk = combinedSaveResult(transferSaveBagAll, vaultBagAllResult);
+  if(bagAllOk === true) showToast(checked ? `تم تقسيم المبلغ لـ${changed} متدرب (قيمة الحقيبة ${fmt(bagPrice)} ﷼ لكل متدرب)` : `تم إلغاء تقسيم الحقيبة لـ${changed} متدرب`);
+  else companySaveToast(bagAllOk, checked ? `عُدّل تقسيم الحقيبة لـ${changed} متدرب` : `أُلغي تقسيم الحقيبة لـ${changed} متدرب`);
 });
 
 document.addEventListener('click', async e=>{
@@ -1264,11 +1302,11 @@ document.addEventListener('click', async e=>{
       let unlinked = false;
       if(tr) unlinked = await unlinkClientFromCompanyTransferIfOrphaned(tr.clientId, t.id);
       if(unlinked) await saveClients();
-      await saveCompanyTransfers();
+      const transferDelSave = await saveCompanyTransfers();
       await logAudit('delete','تحويلات الشركات', `تم حذف متدرب (${tr?tr.clientId:''}) من حوالة الشركة "${t.companyName}"${unlinked?' — وتم تصفير قيمة تخصيصه في شيت العملاء لعدم ارتباطه بأي حوالة أخرى':''}`);
       renderCompanies();
       if($('#vault-company-transfer-overlay').classList.contains('show')) openVaultCompanyTransferDetail(t.id);
-      showToast('تم الحذف');
+      companySaveToast(transferDelSave, 'تم الحذف');
     }
   }
   if(e.target.dataset.linktrainee){
@@ -1290,11 +1328,11 @@ document.addEventListener('click', async e=>{
       if(unlinkedCount) await saveClients();
       vaultTx = vaultTx.filter(v=>v.companyTransferId!==transferId);
       companyTransfers = companyTransfers.filter(x=>x.id!==transferId);
-      await saveVaultTx();
-      await saveCompanyTransfers();
+      const vaultDelTransfer = await saveVaultTx();
+      const transferDelResult = await saveCompanyTransfers();
       await logAudit('delete','تحويلات الشركات', `تم حذف حوالة الشركة "${t.companyName}" بتاريخ ${t.date||''} بقيمة ${fmt(num(t.amount))}${unlinkedCount?` — وتم تصفير تخصيص ${unlinkedCount} متدرب في شيت العملاء لعدم ارتباطهم بأي حوالة أخرى`:''}`);
       renderCompanies(); renderVault();
-      showToast('تم حذف الحوالة');
+      companySaveToast(combinedSaveResult(transferDelResult, vaultDelTransfer), 'تم حذف الحوالة');
     }
   }
   if(e.target.dataset.edittransfer){
@@ -1308,11 +1346,11 @@ document.addEventListener('click', async e=>{
     if(c && await customConfirm(`حذف الشركة "${c.name}" من القائمة؟`)){
       snapshotState(`حذف شركة: ${c.name}`);
       companies = companies.filter(x=>x.id!==id);
-      await saveCompanies();
+      const companyDelSave = await saveCompanies();
       await logAudit('delete','تحويلات الشركات', `تم حذف الشركة: ${c.name}`);
       if(editingCompanyId===id) resetCompanyForm();
       renderCompanies();
-      showToast('تم الحذف');
+      companySaveToast(companyDelSave, 'تم الحذف');
     }
   }
   if(e.target.dataset.printcompany){
@@ -1356,13 +1394,14 @@ document.addEventListener('click', async e=>{
       });
     }
     companies = companies.filter(x=>x.id!==source.id);
-    await saveCompanyTransfers();
+    const mergeTransferSave = await saveCompanyTransfers();
     await saveClients();
-    await saveCompanies();
+    const mergeCompanySave = await saveCompanies();
     await logAudit('edit','تحويلات الشركات', `تم دمج الشركة "${source.name}" في "${target.name}" — نُقلت ${movedTransfers} حوالة و${movedClients} عميل، وحُذفت "${source.name}" نهائياً`);
     if(editingCompanyId===source.id) resetCompanyForm();
     renderCompanies(); renderTable();
-    showToast(`تم الدمج بنجاح: ${movedTransfers} حوالة و${movedClients} عميل انتقلوا لـ"${target.name}"`);
+    const mergeOk = combinedSaveResult(mergeTransferSave, mergeCompanySave);
+    companySaveToast(mergeOk, `تم الدمج بنجاح: ${movedTransfers} حوالة و${movedClients} عميل انتقلوا لـ"${target.name}"`);
     return;
   }
   if(e.target.dataset.editcompany){
@@ -1426,8 +1465,13 @@ async function unlinkClientFromCompanyTransferIfOrphaned(clientId, excludeTransf
   const client = clients.find(c=>c.clientId===clientId);
   if(!client || !client.companyTransferAllocated) return false;
   if(client.bagSource==='stock'){
-    const stIdx = bagStock.findIndex(b=>b.type==='issue' && b.issuedClientId===client.id);
-    if(stIdx>-1){ bagStock.splice(stIdx,1); recalcBagFundLedger(); await saveBagStock(); }
+    // تُحذف كل حركات تسليم الحقيبة المرتبطة بالعميل (كان `findIndex` يحذف الأولى فقط، فيختفي القيد
+    // ويبقى تكراره إن وُجد أثر قدامي يتيم يعيد خلط رصيد المخزون عند كل إعادة حساب)
+    const stEntries = bagStock.filter(b=>b.type==='issue' && b.issuedClientId===client.id);
+    if(stEntries.length){
+      bagStock = bagStock.filter(b=>!stEntries.includes(b));
+      recalcBagFundLedger(); await saveBagStock();
+    }
   }
   client.companyTransferAllocated = false;
   client.coursePrice = 0; client.bagPrice = 0; client.paid = 0;
@@ -1589,13 +1633,13 @@ async function importTraineeRowsIntoTransfer(t, json, snapshotLabel, auditLabel)
   }
   if(bagsIssuedFromStock>0) recalcBagFundLedger();
   await saveClients();
-  await saveVaultTx();
+  const vaultImportSave = await saveVaultTx();
   if(bagsIssuedFromStock>0) await saveBagStock();
   await saveSettings();
-  await saveCompanyTransfers();
+  const transferImportSave = await saveCompanyTransfers();
   await logAudit('add','تحويلات الشركات', `${auditLabel} لحوالة الشركة "${t.companyName}": إضافة ${added} متدرب (${newClients} منهم عملاء جدد في شيت العملاء، و${bagsIssuedFromStock} حقيبة سُلِّمت من المخزون) ضمن القيد المالي الواحد للحوالة${skipped?`، وتخطي ${skipped} صف`:''}`);
   renderCompanies(); renderVault(); renderTable(); renderBags();
-  return {added, skipped, changedRows};
+  return {added, skipped, changedRows, saveOk: combinedSaveResult(transferImportSave, vaultImportSave)};
 }
 
 /* ---------------- استيراد متدربين على مستوى الشركة كاملة (Excel) — يوزَّع كل صف تلقائياً على أقرب حوالة لديها شواغر (حسب الأقدم أولاً) ---------------- */
@@ -1617,18 +1661,19 @@ async function importTraineeRowsIntoCompany(companyId, json){
     counts[idx]++;
   });
 
-  let totalAdded=0, totalSkipped=0;
+  let totalAdded=0, totalSkipped=0, anySaveOk = true;
   for(let i=0;i<transfers.length;i++){
     if(!buckets[i].length) continue;
     const t = transfers[i];
-    const {added, skipped} = await importTraineeRowsIntoTransfer(
+    const {added, skipped, saveOk} = await importTraineeRowsIntoTransfer(
       t, buckets[i],
       `استيراد مجمّع لمتدربين لشركة "${company.name}" (حوالة بتاريخ ${t.date||'—'})`,
       `استيراد مجمّع على مستوى الشركة "${company.name}"`
     );
     totalAdded += added; totalSkipped += skipped;
+    if(saveOk !== true) anySaveOk = saveOk;
   }
-  return {totalAdded, totalSkipped, overflowCount};
+  return {totalAdded, totalSkipped, overflowCount, saveOk: anySaveOk};
 }
 $('#import-company-trainees-input')?.addEventListener('change', async e=>{
   const file = e.target.files[0];
@@ -1640,9 +1685,9 @@ $('#import-company-trainees-input')?.addEventListener('change', async e=>{
     const wb = XLSX.read(buf, {type:'array', cellDates:true});
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
-    const {totalAdded, totalSkipped, overflowCount, error} = await importTraineeRowsIntoCompany(company.id, json);
+    const {totalAdded, totalSkipped, overflowCount, error, saveOk} = await importTraineeRowsIntoCompany(company.id, json);
     if(error==='no-transfers'){ showToast('لا توجد حوالات مسجّلة لهذه الشركة'); }
-    else showToast(`تم استيراد ${totalAdded} متدرب ووُزِّعوا تلقائياً على حوالات "${company.name}"${totalSkipped?`، وتخطي ${totalSkipped} صف (مكرّر أو ناقص البيانات)`:''}${overflowCount?`، منهم ${overflowCount} أُضيفوا كتجاوز لأحدث حوالة لأن كل الحوالات وصلت لعددها المستهدف`:''}`);
+    else companySaveToast(saveOk, `تم استيراد ${totalAdded} متدرب ووُزِّعوا تلقائياً على حوالات "${company.name}"${totalSkipped?`، وتخطي ${totalSkipped} صف (مكرّر أو ناقص البيانات)`:''}${overflowCount?`، منهم ${overflowCount} أُضيفوا كتجاوز لأحدث حوالة لأن كل الحوالات وصلت لعددها المستهدف`:''}`);
   }catch(err){
     showToast('تعذّر قراءة الملف — تأكد من الصيغة (نفس نموذج استيراد المتدربين)');
   }finally{
@@ -1661,12 +1706,12 @@ $('#import-trainees-input')?.addEventListener('change', async e=>{
     const wb = XLSX.read(buf, {type:'array', cellDates:true});
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet, {defval:''});
-    const {added, skipped, changedRows} = await importTraineeRowsIntoTransfer(
+    const {added, skipped, changedRows, saveOk} = await importTraineeRowsIntoTransfer(
       t, json,
       `استيراد متدربين مجمّع لحوالة الشركة: ${t.companyName}`,
       'استيراد مجمّع لمتدربين (Excel)'
     );
-    showToast(`تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
+    companySaveToast(saveOk, `تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
   }catch(err){
     showToast('تعذّرت قراءة الملف — تأكد من وجود عمود "رقم الهوية" على الأقل وأنه بصيغة Excel صحيحة');
   }finally{
@@ -1764,14 +1809,14 @@ $('#btn-ctit-save')?.addEventListener('click', async ()=>{
   });
   if(!json.length){ showToast('أدخل رقم هوية واحداً على الأقل'); return; }
 
-  const {added, skipped} = await importTraineeRowsIntoTransfer(
+  const {added, skipped, saveOk} = await importTraineeRowsIntoTransfer(
     t, json,
     `استيراد متدربين (لصق نص) لحوالة الشركة: ${t.companyName}`,
     'استيراد مجمّع لمتدربين (لصق نص مباشرة)'
   );
 
   closeCtitModal();
-  showToast(`تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
+  companySaveToast(saveOk, `تم استيراد ${added} متدرب${skipped?`، وتخطي ${skipped} صف (مكرر أو بدون رقم هوية/مبلغ)`:''}`);
 });
 /* صوت نقر خفيف موحّد لكل أزرار الحفظ/الإضافة الرئيسية والتبويبات، عبر تفويض حدث واحد بدل ربط كل زر يدوياً */
 document.addEventListener('click', e=>{
