@@ -791,13 +791,26 @@ $('#schedule-form')?.addEventListener('submit', async e=>{
   };
   if(editingScheduleId){
     const idx = scheduledVaultTx.findIndex(x=>x.id===editingScheduleId);
+    const prevSchedule = scheduledVaultTx[idx];
     scheduledVaultTx[idx] = {...scheduledVaultTx[idx], ...data};
+    const scheduleSavedOk = await saveScheduledVaultTx();
+    if(scheduleSavedOk !== true && scheduleSavedOk !== 'queued'){
+      scheduledVaultTx[idx] = prevSchedule;
+      showToast('تعذّر حفظ القالب المجدول (رفض أو تعارض) — أُعيد القالب السابق ولم يُحفظ التعديل');
+      return;
+    }
     await logAudit('edit','الحركات المالية', `تعديل قالب حركة مجدولة: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }else{
-    scheduledVaultTx.push({ id:uid(), createdAt:Date.now(), lastRunMonth:null, ...data });
+    const newSchedule = { id:uid(), createdAt:Date.now(), lastRunMonth:null, ...data };
+    scheduledVaultTx.push(newSchedule);
+    const scheduleSavedOk = await saveScheduledVaultTx();
+    if(scheduleSavedOk !== true && scheduleSavedOk !== 'queued'){
+      scheduledVaultTx = scheduledVaultTx.filter(x=>x.id!==newSchedule.id);
+      showToast('تعذّر حفظ القالب المجدول (رفض أو تعارض) — لم يُحفظ القالب، أعد المحاولة');
+      return;
+    }
     await logAudit('add','الحركات المالية', `إضافة قالب حركة مجدولة جديد: ${recipientName} (${fmt(amount)} شهرياً يوم ${dayOfMonth})`);
   }
-  await saveScheduledVaultTx();
   $('#schedule-overlay').classList.remove('show'); editingScheduleId=null;
   renderScheduledVaultTable();
   renderRecurringSuggestions();
@@ -811,16 +824,32 @@ document.addEventListener('click', async e=>{
     const s = scheduledVaultTx.find(x=>x.id===toggleId);
     if(s && !e.target.disabled){
       e.target.disabled = true;
-      try{ s.active = s.active===false; await saveScheduledVaultTx(); renderScheduledVaultTable(); }
+      try{
+        const prevActive = s.active;
+        s.active = s.active===false;
+        const scheduleSavedOk = await saveScheduledVaultTx();
+        if(scheduleSavedOk !== true && scheduleSavedOk !== 'queued'){
+          s.active = prevActive;
+          showToast('تعذّر تحديث حالة القالب (رفض أو تعارض) — لم تتغير الحالة');
+        }
+        renderScheduledVaultTable();
+      }
       finally{ e.target.disabled = false; }
     }
   }
   if(editId) openScheduleModal(editId);
   if(delId){
     if(!await customConfirm('حذف هذا القالب المجدول نهائياً؟ لن يؤثر على أي حركات سابقة أُنشئت منه.')) return;
+    const removedSchedule = scheduledVaultTx.find(x=>x.id===delId);
     scheduledVaultTx = scheduledVaultTx.filter(x=>x.id!==delId);
-    await saveScheduledVaultTx();
-    await logAudit('delete','الحركات المالية', `حذف قالب حركة مجدولة`);
+    const scheduleSavedOk = await saveScheduledVaultTx();
+    if(scheduleSavedOk !== true && scheduleSavedOk !== 'queued'){
+      if(removedSchedule) scheduledVaultTx.push(removedSchedule);
+      showToast('تعذّر حذف القالب المجدول (رفض أو تعارض) — لم يُحذف القالب');
+      renderScheduledVaultTable();
+      return;
+    }
+    await logAudit('delete','الحركات المالية', `حذف قالب حركة مجدولة: ${removedSchedule ? removedSchedule.recipientName : ''}`);
     renderScheduledVaultTable();
   }
 });
@@ -842,7 +871,7 @@ async function runDueScheduledVaultTx(){
     const [ny, nm] = today.split('-');
     const currentMonthKey = `${ny}-${nm}`;
     const todayDay = parseInt(today.split('-')[2],10);
-    let anyRun = false;
+    const created = []; // {s, savedTx} — الحركات المؤلفة هذا الدور
     for(const s of scheduledVaultTx){
       if(s.active===false) continue;
       if(s.lastRunMonth===currentMonthKey) continue;
@@ -858,17 +887,28 @@ async function runDueScheduledVaultTx(){
         destination: s.destination||'vault', networkInvoice: ''
       };
       vaultTx.push(savedTx); bumpVaultVersion();
-      await saveSettings();
-      s.lastRunMonth = currentMonthKey;
-      anyRun = true;
-      await logAudit('add','الحركات المالية', `تنفيذ تلقائي لقالب مجدول رقم تسلسلي #${savedTx.seq||'—'}: ${s.recipientName} بمبلغ ${fmt(num(s.amount))}`);
+      await saveSettings(); // حفظ بادئة الرقم التسلسلي بعد allocVaultSeq (يزيد in-place داخل settings)
+      created.push({s, savedTx});
     }
-    if(anyRun){
-      await saveVaultTx();
+    if(created.length){
+      const vaultScheduledSaved = await saveVaultTx();
+      if(vaultScheduledSaved !== true && vaultScheduledSaved !== 'queued'){
+        // رفض دائم/تعارض: تُزال الحركات المركّبة من الذاكرة ولا يتقدم مؤقت `lastRunMonth` —
+        // فتظل مستحقة وتعاود التنفيذ تلقائياً. كان `lastRunMonth` يتقدم قبل الحفظ فيُفقد
+        // مبلغ الحركة المدفوعة صامتاً بعد الرفرش ولا تُعاد المحاولة أبداً.
+        vaultTx = vaultTx.filter(t=>!created.some(c=>c.savedTx.id===t.id));
+        bumpVaultVersion();
+        showToast('تعذّر تنفيذ الحركات المجدولة المستحقة (رفض أو تعارض مع السيرفر) — تبقى مستحقة وستُعاد المحاولة تلقائياً');
+        return false;
+      }
+      created.forEach(({s})=>{ s.lastRunMonth = currentMonthKey; });
       await saveScheduledVaultTx();
+      for(const {s, savedTx} of created){
+        await logAudit('add','الحركات المالية', `تنفيذ تلقائي لقالب مجدول رقم تسلسلي #${savedTx.seq||'—'}: ${s.recipientName} بمبلغ ${fmt(num(s.amount))}`);
+      }
       showToast('تم تنفيذ حركة/حركات مجدولة مستحقة تلقائياً — راجعها في الجدول أدناه');
     }
-    return anyRun;
+    return created.length>0;
   })().finally(()=>{ _dueScheduleRunPromise = null; });
   return _dueScheduleRunPromise;
 }
@@ -1088,12 +1128,19 @@ async function saveDenomTx(){
   const createdAt = Date.now();
   const summary = lines.map(l=>`${fmt(l.denom)}×${l.count}`).join('، ');
   let totalValue = 0;
+  const createdEntryIds = [];
   lines.forEach(l=>{
     const entry = { id: uid(), batchId, date, denom: l.denom, type, count: l.count, isAdjustment:false, notes, by, createdAt };
     vaultDenomTx.unshift(entry);
+    createdEntryIds.push(entry.id);
     totalValue += l.count * l.denom;
   });
-  await saveVaultDenomTx();
+  const denomSavedOk = await saveVaultDenomTx();
+  if(denomSavedOk !== true && denomSavedOk !== 'queued'){
+    vaultDenomTx = vaultDenomTx.filter(x=>!createdEntryIds.includes(x.id));
+    showToast('تعذّر تنفيذ الحركة (رفض أو تعارض) — لم تُسجَّل الفئات، أعد المحاولة');
+    return;
+  }
   await logAudit('add','الحركات المالية', `تصنيف الفئات: حركة ${type==='in'?'دخول':'خروج'} دفعة واحدة (${summary}) — إجمالي القيمة: ${fmt(totalValue)} ﷼${notes?` — ${notes}`:''}`);
   showToast('تم تنفيذ الحركة');
   CASH_DENOMINATIONS.forEach(d=>{
@@ -1154,8 +1201,13 @@ function renderDenomHistory(){
       const ids = btn.dataset.delDenomtx.split(',');
       const msg = ids.length>1 ? 'حذف كل حركات هذا الصف من سجل تصنيف الفئات؟ (لا يؤثر على أي رصيد محاسبي آخر)' : 'حذف هذه الحركة من سجل تصنيف الفئات؟ (لا يؤثر على أي رصيد محاسبي آخر)';
       if(!await customConfirm(msg)) return;
+      const removedRows = vaultDenomTx.filter(x=>ids.includes(x.id));
       vaultDenomTx = vaultDenomTx.filter(x=>!ids.includes(x.id));
-      await saveVaultDenomTx();
+      const denomSavedOk = await saveVaultDenomTx();
+      if(denomSavedOk !== true && denomSavedOk !== 'queued'){
+        vaultDenomTx = [...removedRows, ...vaultDenomTx];
+        showToast('تعذّر حذف الحركة (رفض أو تعارض) — لم يُحذف أي شيء');
+      }
       recalcDenomTable();
       renderDenomHistory();
     });
@@ -1265,14 +1317,18 @@ $('#btn-vault-bulk-delete')?.addEventListener('click', async ()=>{
   const bulkReason = reason.trim() || (isAdminBulk ? 'بدون سبب (مدير)' : '');
   snapshotState(`إلغاء جماعي (حذف منطقي) لـ ${deletableTargets.length} حركة مالية بإجمالي ${fmt(totalAmount)}`);
   const affectedClientIds = new Set();
+  const affectedClientPaidBefore = new Map(); // clientId -> {paid, paid2} لاسترجاعها لو فشل الحفظ
+  const removedItems = [];
   let removedCount = 0;
   deletableTargets.forEach(t=>{
     const removed = softDeleteVaultTx(t.id, bulkReason);
     if(removed){
       removedCount++;
+      removedItems.push(removed);
       if(removed.autoClientId){
         const c = clients.find(cl=>cl.id===removed.autoClientId);
         if(c){
+          if(!affectedClientPaidBefore.has(c.id)) affectedClientPaidBefore.set(c.id, {paid:c.paid, paid2:c.paid2});
           const isSecond = String(removed.id).startsWith('auto2_');
           if(isSecond){ c.paid2 = 0; } else { c.paid = 0; }
           affectedClientIds.add(c.id);
@@ -1280,8 +1336,26 @@ $('#btn-vault-bulk-delete')?.addEventListener('click', async ()=>{
       }
     }
   });
-  await saveVaultTx();
-  await saveDeletedVaultTx();
+  const vaultBulkSaved = await saveVaultTx();
+  const deletedBulkSaved = await saveDeletedVaultTx();
+  const bulkHasRejected = (vaultBulkSaved===false || vaultBulkSaved==='rejected' || deletedBulkSaved===false || deletedBulkSaved==='rejected');
+  const bulkCombined = bulkHasRejected ? 'rejected' : (vaultBulkSaved==='queued' || deletedBulkSaved==='queued') ? 'queued' : true;
+  if(bulkCombined === 'rejected'){
+    // الإلغاء لم يُحفظ على السيرفر (رفض/تعارض): نُعيد الحالة السابقة في الذاكرة بالملا بدل إبقاء
+    // إلغاء وهمي يختفي بعد الرفرش ويُلبّس المستخدم (وكان toast النجاح يُعرض دائماً بغض النظر).
+    deletedVaultTx = deletedVaultTx.filter(t=>!removedItems.some(r=>r.id===t.id));
+    removedItems.forEach(r=>{ const {deletedAt, deletedBy, deletedReason, ...orig} = r; vaultTx.push(orig); });
+    affectedClientPaidBefore.forEach((v,cid)=>{
+      const c = clients.find(cl=>cl.id===cid);
+      if(c){ c.paid = v.paid; c.paid2 = v.paid2; }
+    });
+    bumpVaultVersion();
+    selectedVaultIds.clear();
+    renderTable(); renderDashboard(); refreshFilterOptions(); renderReports();
+    renderVault();
+    showToast('تعذّر إلغاء الحركات المحددة (رفض أو تعارض) — أُعيدت الحالة السابقة، لم يُلغَ أي شيء');
+    return;
+  }
   await logAudit('delete','الحركات المالية', `إلغاء جماعي (حذف منطقي) لـ ${removedCount} حركة بإجمالي ${fmt(totalAmount)}${lockedTargets.length?` (تم تجاهل ${lockedTargets.length} حركة مُقفلة)`:''} — السبب: ${reason.trim()}`);
   if(affectedClientIds.size){
     await saveClients();
@@ -1291,7 +1365,11 @@ $('#btn-vault-bulk-delete')?.addEventListener('click', async ()=>{
   selectedVaultIds.clear();
   renderTable(); renderDashboard(); refreshFilterOptions(); renderReports();
   renderVault();
-  showToast(`تم إلغاء ${removedCount} حركة بنجاح${lockedTargets.length?`، وتجاهل ${lockedTargets.length} حركة مُقفلة`:''}`);
+  if(bulkCombined === true){
+    showToast(`تم إلغاء ${removedCount} حركة بنجاح${lockedTargets.length?`، وتجاهل ${lockedTargets.length} حركة مُقفلة`:''}`);
+  }else{
+    showToast(`حُفظ إلغاء ${removedCount} حركة على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة${lockedTargets.length?` (تم تجاهل ${lockedTargets.length} حركة مُقفلة)`:''}`);
+  }
 
   });});
 
@@ -1519,12 +1597,14 @@ $('#vault-form')?.addEventListener('submit', async e=>{
     networkInvoice: ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? $('#vf-netinvoice').value.trim() : ''
   };
   const wasVaultEdit = !!editingVaultId;
+  let originalTxRef = null;
   let prevLinkedClientId = '';
   snapshotState(wasVaultEdit ? 'تعديل حركة مالية' : 'إضافة حركة مالية');
   let savedTx;
   if(editingVaultId){
-    const idx = vaultTx.findIndex(x=>x.id===editingVaultId);
-    // إصلاح: نسخة "قبل" يجب أن تُستثني منها history (وإلا يبقى إشارة لنفس مصفوفة السجل الأصلية،
+const idx = vaultTx.findIndex(x=>x.id===editingVaultId);
+    originalTxRef = vaultTx[idx];
+    // إصلاح: نسخة "قبل" يجب أن تُستثنى منها history (وإلا يبقى إشارة لنفس مصفوفة السجل الأصلية،
     // فيتكوّن مرجع دائري عند أول عملية push لاحقة ويفشل JSON.stringify عند أي حفظ أو نسخة احتياطية لاحقاً)
     const { history: _prevHistory, ...before } = vaultTx[idx];
     prevLinkedClientId = before.clientId || '';
@@ -1548,15 +1628,32 @@ $('#vault-form')?.addEventListener('submit', async e=>{
   }else{
     showToast('تعذّر حفظ الحركة على السيرفر: تم تجاهل التعديل (تعارض أو رفض) — لن يُرفع تلقائيًا، راجع الرسائل السابقة وحدّث الصفحة إن لزم');
   }
+  const vaultPersistedOk = (vaultSavedOk === true || vaultSavedOk === 'queued');
+  if(!vaultPersistedOk){
+    if(wasVaultEdit){
+      const restoreIdx = vaultTx.findIndex(x=>x.id===editingVaultId);
+      if(restoreIdx!==-1){
+        // نحتفظ بأثر التعديل الفاشل كسجل تاريخي (ال bothering لاحقاً لا يتراكم إن فشل الحفظ)
+        if(!originalTxRef.history) originalTxRef.history=[];
+        originalTxRef.history.push({at:Date.now(), user:currentUser||'غير معروف', before:null, after:null, note:'محاولة تعديل فاشلة — الحفظ على السيرفر رُفض'});
+        vaultTx[restoreIdx] = originalTxRef;
+      }
+    }else{
+      vaultTx = vaultTx.filter(x=>x.id!==savedTx.id);
+    }
+    bumpVaultVersion();
+  }
   const txLabel = isReturn ? 'مردود مبيعات' : (savedTx.type==='in'?'وارد':'صادر');
   const txDesc = `${txLabel} بمبلغ ${fmt(num(savedTx.amount))} (${destLabel(savedTx.destination||'vault')}) - ${savedTx.clientName||savedTx.manual||savedTx.category||''}`;
-  await logAudit(wasVaultEdit ? 'edit' : 'add', 'الحركات المالية', `${wasVaultEdit ? 'تم تعديل حركة' : 'تمت إضافة حركة'} رقم تسلسلي #${savedTx.seq||'—'}: ${txDesc}`);
+  if(vaultPersistedOk){
+    await logAudit(wasVaultEdit ? 'edit' : 'add', 'الحركات المالية', `${wasVaultEdit ? 'تم تعديل حركة' : 'تمت إضافة حركة'} رقم تسلسلي #${savedTx.seq||'—'}: ${txDesc}`);
+  }
   // ملحوظة: أُلغي تنبيه الإيميل عند تسجيل مصروف عمداً — راجع الملحوظة في module-purchases.js لنطاق تنبيهات الإيميل الحالي.
 
   // عند تسجيل مرتجع (مردود مبيعات) لعميل، يُحوَّل تلقائياً إلى "ملغى" (بالإضافة إلى إيقافه كسابقاً)
   // فيختفي من شيت الدورات ومخزون الحقائب ولا يُحتسب ضمن إجمالي المتبقي على العملاء،
   // تماماً كما لو أُلغي وأُوقِف يدوياً من شيت العملاء
-  if(!wasVaultEdit && isReturn){
+  if(vaultPersistedOk && !wasVaultEdit && isReturn){
     const returnedClient = clients.find(x=>x.clientId===data.clientId);
     if(returnedClient && (!returnedClient.cancelled || !returnedClient.suspended)){
       returnedClient.cancelled = true;
@@ -1570,7 +1667,7 @@ $('#vault-form')?.addEventListener('submit', async e=>{
   // ويُحتسب عدد الحقائب المضافة تلقائياً حسب السعر الثابت للحقيبة (نفس منطق تمويل المخزون).
   // يعمل فقط عند الإضافة (!wasVaultEdit) وليس عند التعديل، لتفادي تكرار الإيداع في مخزون الحقائب
   // كل مرة تُعدَّل فيها نفس الحركة المحفوظة أصلاً بتصنيف "حقائب".
-  if(isOut && !wasVaultEdit && $('#vf-category').value==='حقائب'){
+  if(vaultPersistedOk && isOut && !wasVaultEdit && $('#vf-category').value==='حقائب'){
     snapshotState(`إيداع في حساب الحقائب عبر حركة مصروف: ${fmt(amount)}`);
     bagStock.push({
       id: uid(), createdBy: currentUser,
@@ -1608,11 +1705,11 @@ $('#vault-form')?.addEventListener('submit', async e=>{
   }
 
   // طباعة تلقائية عند إضافة حركة جديدة: فاتورة استرجاع للعميل عند المردودات، أو سند صرف عند المصروفات، أو سند قبض عند الواردات
-  if(!wasVaultEdit && isReturn){
+  if(vaultPersistedOk && !wasVaultEdit && isReturn){
     await printReturnInvoice(savedTx.id);
-  }else if(!wasVaultEdit && isOut){
+  }else if(vaultPersistedOk && !wasVaultEdit && isOut){
     await printExpenseVoucher(savedTx.id);
-  }else if(!wasVaultEdit && isIn && (data.destination||'vault')==='vault'){
+  }else if(vaultPersistedOk && !wasVaultEdit && isIn && (data.destination||'vault')==='vault'){
     await printReceiptVoucher(savedTx.id);
   }
   }finally{
@@ -1675,9 +1772,23 @@ document.addEventListener('click', async e=>{
     if(reason===null) return; // المستخدم ألغى العملية
     if(!isAdmin && !reason.trim()){ showToast('سبب الإلغاء إلزامي — لم يتم الحذف'); return; }
     snapshotState(`إلغاء (حذف منطقي) حركة مالية بمبلغ ${target?fmt(num(target.amount)):''}`);
+    const paidBefore = (linkedClient && target && target.autoClientId) ? {paid:linkedClient.paid, paid2:linkedClient.paid2} : null;
     const removed = softDeleteVaultTx(id, reason.trim() || (isAdmin ? 'بدون سبب (مدير)' : ''));
-    await saveVaultTx();
-    await saveDeletedVaultTx();
+    const vaultDlSaved = await saveVaultTx();
+    const deletedDlSaved = await saveDeletedVaultTx();
+    const dlHasRejected = (vaultDlSaved===false || vaultDlSaved==='rejected' || deletedDlSaved===false || deletedDlSaved==='rejected');
+    const dlCombined = dlHasRejected ? 'rejected' : (vaultDlSaved==='queued' || deletedDlSaved==='queued') ? 'queued' : true;
+    if(dlCombined === 'rejected'){
+      // الإلغاء لم يُحفظ (رفض/تعارض): نُعيد الحركة لجدول الفعّالة ونُزيلها من سجل الملغاة ونستعيد
+      // دفعة العميل المرتبطة — كان toast النجاح يُعرض دائماً وتختفي الحركة من السيرفر فقط بعد الرفرش.
+      deletedVaultTx = deletedVaultTx.filter(t=>t.id!==id);
+      if(removed){ const {deletedAt, deletedBy, deletedReason, ...orig} = removed; vaultTx.push(orig); }
+      if(linkedClient && paidBefore){ linkedClient.paid = paidBefore.paid; linkedClient.paid2 = paidBefore.paid2; }
+      bumpVaultVersion();
+      renderVault();
+      showToast('تعذّر إلغاء الحركة (رفض أو تعارض) — أُعيدت الحركة إلى الجدول، لم تُلغَ');
+      return;
+    }
     if(removed){
       const removedLabel = removed.isReturn ? 'مردود مبيعات' : (removed.type==='in'?'وارد':'صادر');
       const txDesc = `${removedLabel} بمبلغ ${fmt(num(removed.amount))} (${destLabel(removed.destination||'vault')}) بتاريخ ${removed.date||'—'} رقم تسلسلي #${removed.seq||'—'} - ${removed.clientName||removed.manual||removed.category||''}`;
@@ -1700,6 +1811,11 @@ document.addEventListener('click', async e=>{
     // فأي إلغاء لحركة مرتبطة بعميل (حتى لو لم تكن دفعة تسجيل تلقائية) يجب أن ينعكس فوراً هناك
     if(removed && removed.clientId && !removed.autoClientId){
       renderTable(); renderDashboard(); renderReports();
+    }
+    if(dlCombined === true){
+      showToast('تم إلغاء الحركة بنجاح — يُحتفظ بها في سجل الحركات الملغاة');
+    }else{
+      showToast('حُفظ إلغاء الحركة على هذا الجهاز فقط — سيرفع للسيرفر تلقائياً عند اتصال الشبكة');
     }
   }
 });

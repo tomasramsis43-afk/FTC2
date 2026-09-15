@@ -863,16 +863,16 @@ async function saveVaultTx(){
   try{ await _syncVersionsBeforeSave('vaultTx'); return await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); return 'rejected'; }
 }
 async function saveDeletedVaultTx(){
-  try{ await _syncVersionsBeforeSave('deletedVaultTx'); await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }
+  try{ await _syncVersionsBeforeSave('deletedVaultTx'); return await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); return 'rejected'; }
 }
 async function saveVaultDenomTx(){
-  try{ await _syncVersionsBeforeSave('vaultDenomTx'); await saveCollectionGeneric('vaultDenomTx', vaultDenomTx); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); }
+  try{ await _syncVersionsBeforeSave('vaultDenomTx'); return await saveCollectionGeneric('vaultDenomTx', vaultDenomTx); }catch(e){ showToast('تعذر حفظ سجل تصنيف الفئات النقدية'); return 'rejected'; }
 }
 async function saveBankStatementRows(){
   try{ await _syncVersionsBeforeSave('bankStatementRows'); await saveCollectionGeneric('bankStatementRows', bankStatementRows); }catch(e){ showToast('تعذر حفظ كشف الحساب البنكي'); }
 }
 async function saveScheduledVaultTx(){
-  try{ await _syncVersionsBeforeSave('scheduledVaultTx'); await saveCollectionGeneric('scheduledVaultTx', scheduledVaultTx); }catch(e){ showToast('تعذر حفظ قوالب الحركات المجدولة'); }
+  try{ await _syncVersionsBeforeSave('scheduledVaultTx'); return await saveCollectionGeneric('scheduledVaultTx', scheduledVaultTx); }catch(e){ showToast('تعذر حفظ قوالب الحركات المجدولة'); return 'rejected'; }
 }
 async function saveFollowUpTasks(){
   try{ await _syncVersionsBeforeSave('followUpTasks'); await saveCollectionGeneric('followUpTasks', followUpTasks); }catch(e){ showToast('تعذر حفظ التذكيرات'); }
