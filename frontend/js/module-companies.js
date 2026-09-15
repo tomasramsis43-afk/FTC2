@@ -950,8 +950,24 @@ function openTransferEdit(id){
   $('#ct-refnum').value = t.refNum || '';
   ctGroups = (t.groups||[]).map(g=>({id:uid(), label:g.label, count:g.count, price:g.price}));
   if(ctGroups.length){ renderCtGroups(); } else { $('#ct-amount').value = t.amount ?? ''; $('#ct-count').value = t.traineeCount ?? ''; resetCtGroups(); }
+  // إصلاح مهم: لو طريقة الدفع المحفوظة على الحوالة (t.channel) مش موجودة حالياً ضمن قائمة طرق
+  // الدفع بالإعدادات (حوالة قديمة/مستوردة بلا قيمة محفوظة أصلاً، أو طريقة دفع اتغيّر اسمها لاحقاً)
+  // لازم نحدد قيمة افتراضية آمنة وواضحة لقائمة #ct-channel صراحة — قبل هذا الإصلاح كانت القائمة
+  // بتفضل شايلة أي قيمة سابقة عشوائية من تعديل/إضافة سابقة في نفس الجلسة (ممكن تبقى "نقدي")، وبمجرد
+  // حفظ التعديل (حتى لو المستخدم غيّر حاجة تانية زي الملاحظات بس) كانت هذه القيمة العشوائية تتفرض
+  // بصمت على الحركة المالية المرتبطة (destination/method) — فتتحول حوالة "تحويل بنكي" لـ"نقدي" فجأة
+  // بدون أي قصد أو تنبيه للمستخدم.
   if(settings.channels.some(c=>c.name===t.channel)) $('#ct-channel').value = t.channel;
-  else { const fixed = canonicalizeChannelName(t.channel); if(settings.channels.some(c=>c.name===fixed)) $('#ct-channel').value = fixed; }
+  else {
+    const fixed = canonicalizeChannelName(t.channel);
+    if(settings.channels.some(c=>c.name===fixed)) $('#ct-channel').value = fixed;
+    else {
+      const bankCh = settings.channels.find(c=>c.dest==='bank');
+      const fallbackName = bankCh ? bankCh.name : (settings.channels[0]?.name || '');
+      if(fallbackName) $('#ct-channel').value = fallbackName;
+      showToast(`تنبيه: طريقة الدفع الأصلية المسجّلة لهذه الحوالة ("${t.channel||'غير محددة'}") لم تعد موجودة ضمن طرق الدفع بالإعدادات — تم اختيار "${fallbackName}" مؤقتاً كإجراء آمن، يُرجى مراجعة/تأكيد طريقة الدفع الصحيحة قبل الحفظ حتى لا تتغيّر الحركة المالية المرتبطة بالخطأ`);
+    }
+  }
   updateComputedShare();
   $('#btn-add-transfer').textContent = tr('btnSaveTransferEdit');
   $('#btn-cancel-edit-transfer').style.display = '';
