@@ -78,3 +78,48 @@ test('saveOneRecordGeneric: سجلان مختلفان في نفس اللحظة -
   assert.equal(a, true);
   assert.equal(b, true);
 });
+
+// ---- مسار قرار الـ 409 الجديد في saveOneRecordGeneric ----
+// البيئات الداخلية (_collectionSyncBaseline/_recordVersions) معرّفة كـ const على مستوى الملف
+// (global lexical) فلا يمكن زرعها من الخارچ — لكن _safeToApplyOnConflict دالة عامة بحيث يمكن
+// تجاوزها لتثبيت قرار "آمن/غير آمن" والتحقق من الأسلاك (كم PUT يُرسل وماذا يُرجع المتصل).
+
+test('saveOneRecordGeneric: 409 مع قرار "مطابق آمن" -> إعادة رفع واحدة ناجحة → true', async () => {
+  const c = setup();
+  c._safeToApplyOnConflict = async () => true; // قررنا أن محتوى الخادوم مطابق لأساسنا
+  let putCount = 0;
+  c.serverFetch = async () => {
+    putCount++;
+    if(putCount === 1) return { status: 409, ok: false, json: async () => ({ currentVersion: 6, currentEnc: 'ENC:{"x":1}' }) };
+    return { status: 200, ok: true, json: async () => ({ version: 7, origin: 'admin', status: 'confirmed' }) };
+  };
+  const ok = await c.saveOneRecordGeneric('journalDE', 'r1', '{"x":1}');
+  assert.equal(putCount, 2, 'PUT أول + إعادة رفع فور حدوث 409');
+  assert.equal(ok, true, 'مطابق = تعارض نسخ محلي فقط → يجب أن يُحل ويُرجع نجاحاً');
+});
+
+test('saveOneRecordGeneric: 409 مع قرار "تعارض حقيقي" -> لا إعادة رفع → false', async () => {
+  const c = setup();
+  c._safeToApplyOnConflict = async () => false;
+  let putCount = 0;
+  c.serverFetch = async () => {
+    putCount++;
+    return { status: 409, ok: false, json: async () => ({ currentVersion: 6, currentEnc: 'ENC:{"x":2}' }) };
+  };
+  const ok = await c.saveOneRecordGeneric('journalDE', 'r1', '{"x":1}');
+  assert.equal(putCount, 1, 'تعديل فعلي من جهاز آخر = لا يجوز إعادة رفع أو كتابة فوق');
+  assert.equal(ok, false, 'تعارض حقيقي = نتيجة false');
+});
+
+test('saveOneRecordGeneric: إعادة الرفع تواجه 409 ثانٍ -> إسقاط السجل المضطرب + false', async () => {
+  const c = setup();
+  c._safeToApplyOnConflict = async () => true; // أول الحسابات يقول آمن، لكن الخادوم ما زال 409
+  let putCount = 0;
+  c.serverFetch = async () => {
+    putCount++;
+    return { status: 409, ok: false, json: async () => ({ currentVersion: putCount + 5, currentEnc: 'ENC:{"x":' + putCount + '}' }) };
+  };
+  const ok = await c.saveOneRecordGeneric('journalDE', 'r1', '{"x":1}');
+  assert.equal(putCount, 2, 'محاولتان فقط: الأصلية ثم إعادة رفع واحدة')
+  assert.equal(ok, false, '409 متكرر = تعارض حقيقي يجب ألا يُعاد رفعه للأبد');
+});

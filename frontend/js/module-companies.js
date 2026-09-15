@@ -648,7 +648,7 @@ function renderCompanies(){
     if(!arr){ arr = []; transfersByCompanyId.set(t.companyId, arr); }
     arr.push(t);
   });
-  $('#companies-list-body').innerHTML = companies.length ? companies.map(c=>{
+  $('#companies-list-body').innerHTML = companies.length ? companies.slice().sort((a,b)=>((a.createdAt||0)-(b.createdAt||0)) || String(a.id||'').localeCompare(String(b.id||''))).map(c=>{
     const transfers = transfersByCompanyId.get(c.id) || [];
     const totalAmount = transfers.reduce((s,t)=>s+num(t.amount),0);
     return `<tr>
@@ -677,7 +677,7 @@ function renderCompanies(){
 
   // سجل الحوالات والمتدربين (مفلترة حسب الشركة وتاريخ الحوالة وطريقة الدفع والبحث برقم الهوية/الاسم)
   const filteredTransfers = companiesFilteredTransfers();
-  const sortedTransfers = filteredTransfers.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const sortedTransfers = filteredTransfers.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || String(a.id||'').localeCompare(String(b.id||'')));
   const ctPageRows = applyGenericPagination('ctransfers', sortedTransfers, ctransfersPageState, [
     selectedFilterValues($('#ctf-company')), $('#ctf-date-from')?.value, $('#ctf-date-to')?.value, $('#ctf-clientid')?.value, selectedFilterValues($('#ctf-channel'))
   ]);

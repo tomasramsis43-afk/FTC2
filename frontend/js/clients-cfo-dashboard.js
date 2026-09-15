@@ -890,7 +890,7 @@ function filteredClients(opts){
       }
     }
     return true;
-  }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+  }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0) || String(a.clientId||a.id||'').localeCompare(String(b.clientId||b.id||'')));
   return applyClientsColumnSort(rows);
 }
 /* ---------------- ترتيب بالنقر على رأس العمود (جدول العملاء) ----------------

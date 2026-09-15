@@ -915,7 +915,9 @@ function _scheduleClientsSnapPersist(){
 // من آخر حالة مؤكدة. القائمة في اللقطة تُبنى من الـ baseline (آخر ما تأكّد على السيرفر) وليس من
 // مصفوفة الذاكرة، حتى لا تُحفظ عناصر بلا id لا يمكن تتبّعها فعلياً.
 async function _persistAllSnapshotsAfterLoad(){
-  try{ await _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions, clientRecordMeta); }catch(e){}
+  // لقطة العملاء تُكتب فقط لو تحميله اكتمل فعلياً (baseline Map) — لو فشل التحميل وترك baseline
+  // null فلا يُكتب snapshot يعكس حالة ناقصة تُعرض في أول فتح تالٍ بدل البيانات الحقيقية.
+  try{ if(_clientsSyncBaseline instanceof Map) await _persistClientsSnap(clients, _clientsSyncBaseline, _clientRecordVersions, clientRecordMeta); }catch(e){}
   for(const c of ALLOWED_COLLECTIONS_LOCAL){
     const baseline = _collectionSyncBaseline[c];
     if(!baseline) continue;
@@ -1095,30 +1097,69 @@ async function saveOneRecordGeneric(collection, id, plainJson){
     }
     if(!_recordVersions[collection]) _recordVersions[collection] = new Map();
     const knownVersion = _recordVersions[collection].get(id) || 0;
+    // آخر نسخة مؤكدة من السجل — تُستخدم في مقارنة الأمان عند التعارض (منع سباق التعديل القديم فوق الأحدث)
+    const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection].get(id) : undefined;
+    const url = `/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`;
     let res;
     try{
-      res = await serverFetch(`/api/records/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+      res = await serverFetch(url, {
         method: 'PUT',
         body: JSON.stringify({ enc, version: knownVersion }),
       });
     }catch(e){
       // فشل اتصال فعلي — نسجّله معلّقاً بدل ما يضيع صامتاً (نفس منطق saveOneClientRecord بالضبط).
-      // baselinePlain: آخر نسخة مؤكدة من السجل لمنع سباق التعديل القديم فوق الأحدث.
-      const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection].get(id) : undefined;
       await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
       return null;
     }
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _recordVersions[collection].set(id, conflict.currentVersion || knownVersion);
+      // تعارض: لا نكتفي بإرجاع false وترك السجل عالقاً للأبد (يُعاد بنفس النتيجة كل حفظ، ويختفي
+      // بعد الرفرش من عند أي جهاز آخر). نحسمه بنفس مقارنة محتوى الأمان المستخدمة في الطابور
+      // (flushPendingRecordWrites): لو محتوى السيرفر الحالي مطابق لأساس تعديلنا (انحراف تتبع
+      // نسخ محلي فقط — لقطة قديمة/استعادة جزئية) نعيد الرفع مرة واحدة بالنسخة الحالية. لو فعلياً
+      // غيّر شخص آخر البيانات → تعارض حقيقي لا نجازف بالكتابة فوقه أبداً.
+      const safeToRetry = await _safeToApplyOnConflict(conflict, collection, false, id, bp);
+      if(safeToRetry){
+        try{
+          const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify({ enc, version: conflict.currentVersion }) });
+          if(retryRes.status === 409){
+            const c2 = await retryRes.json().catch(()=>({}));
+            await _dropRecordOnRealConflict(collection, false, id, c2);
+            showToast('تعارض حقيقي في حفظ السجل: عُدّلت هذه البيانات من جهاز آخر — يرجى تحديث الصفحة لمراجعتها');
+            return false;
+          }
+          if(!retryRes.ok){
+            if(retryRes.status === 429 || retryRes.status >= 500){
+              await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
+            }else{
+              showToast('تعذّر حفظ سجل في "' + collection + '": رفض دائم من السيرفر (' + retryRes.status + ') — تم تجاهل هذا التعديل');
+            }
+            return null;
+          }
+          const retryData = await retryRes.json().catch(()=>({}));
+          _recordVersions[collection].set(id, retryData.version || conflict.currentVersion);
+          if(retryData.origin && retryData.status){
+            if(!recordMeta[collection]) recordMeta[collection] = {};
+            recordMeta[collection][id] = { origin: retryData.origin, status: retryData.status };
+          }
+          await _pendingRecordDelete(collection, id);
+          return true;
+        }catch(e){
+          await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
+          return null;
+        }
+      }
       showToast('' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
       return false;
     }
     if(!res.ok){
-      // رفض دائم (403/400/422): لا يجوز إعادته في الطابور. فقط 429/5xx مؤقت يبقى معلّقاً.
+      // رفض دائم (403/400/422): لا يجوز إعادته في الطابور، لكن يجب ألا يبقى صامتاً — كان المستخدم
+      // يظن أن الحركة "حُفظت" وهي مختفية بعد الرفرش لأن السيفر رفضها نهائياً ولم يُنبهه أحد.
       if(res.status === 429 || res.status >= 500){
-        const bp = _collectionSyncBaseline[collection] instanceof Map ? _collectionSyncBaseline[collection].get(id) : undefined;
         await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
+      }else{
+        showToast('تعذّر حفظ سجل في "' + collection + '": رفض دائم من السيرفر (' + res.status + ') — تم تجاهل هذا التعديل');
       }
       return null;
     }
@@ -1416,12 +1457,14 @@ async function saveCollectionGeneric(collection, arr){
       for(const id of baseline.keys()) if(!currentIds.has(id)) removedIds.push(id);
 
       let anyNetworkFailure = false;
+      let anyRejected = false;
       // حدّ التجميع مُخفّض (5 بدل 20): التعديلات المتعددة تُرفع في طلب واحد مجمّع بدل طلب منفصل
       // لكل سجل — يقلّل عدد الـ round-trips وضغط الـ rate limiter، ويسرّع الحفظ الفعلي.
       if(changed.length > 5){
         try{
           const conflictIds = await bulkUploadRecordsGeneric(collection, changed.map(x=>x.item));
           const conflictSet = new Set(conflictIds);
+          if(conflictIds.length) anyRejected = true;
           changed.forEach(x=> { if(!conflictSet.has(x.item.id)) baseline.set(x.item.id, x.json); });
         }catch(e){ anyNetworkFailure = true; }
       }else{
@@ -1429,6 +1472,7 @@ async function saveCollectionGeneric(collection, arr){
           const ok = await saveOneRecordGeneric(collection, item.id, json);
           if(ok) baseline.set(item.id, json);
           else if(ok === null) anyNetworkFailure = true;
+          else anyRejected = true;
         }
       }
       if(removedIds.length > 5){
@@ -1442,6 +1486,7 @@ async function saveCollectionGeneric(collection, arr){
           const ok = await deleteOneRecordGeneric(collection, id);
           if(ok) baseline.delete(id);
           else if(ok === null) anyNetworkFailure = true;
+          else anyRejected = true;
         }
       }
       if(anyNetworkFailure){
@@ -1453,7 +1498,7 @@ async function saveCollectionGeneric(collection, arr){
         _collectionSyncBaseline[collection] = null;
       }
       _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
-      return;
+      return anyRejected ? 'rejected' : (anyNetworkFailure ? 'queued' : true);
     }
     // خط الرجعة: المزامنة مع نظام السجلات المستقلة لم تتأكد بعد هذه الجلسة (أول تحميل فاشل، أو
     // انقطاع أثناء آخر محاولة). قبل رفع أي حاجة، نراجع أولاً الحالة الحقيقية الموجودة فعلاً على
@@ -1483,13 +1528,16 @@ async function saveCollectionGeneric(collection, arr){
         if(!conflictSet.has(item.id)) newBaseline.set(item.id, json);
       }
       _collectionSyncBaseline[collection] = newBaseline;
+      _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
+      return (listAll.length && conflictIds.length) ? 'rejected' : true;
     }catch(e){
       // فشل اتصال فعلي — سجّلت السجلات في طابور pendingRecords داخل bulkUploadRecordsGeneric،
       // ويبقى الـ baseline null لتُعاد المزامنة الكاملة عند أول اتصال ناجح.
       _collectionSyncBaseline[collection] = null;
+      _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
+      return 'queued';
     }
-    _scheduleRecordsSnapPersist(collection, ()=> arr, ()=> _collectionSyncBaseline[collection], ()=> _recordVersions[collection]);
-  }catch(e){ showToast('تعذر حفظ البيانات'); }
+  }catch(e){ showToast('تعذر حفظ البيانات'); return 'rejected'; }
 }
 
 async function checkAllRecordsChanged(){

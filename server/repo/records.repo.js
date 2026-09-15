@@ -42,6 +42,11 @@ async function clientRecords({ where, params, page, pageSize, ids }) {
   if (Number.isInteger(page) && page >= 1) {
     sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
     sqlParams.push(pageSize, (page - 1) * pageSize);
+  } else {
+    // ترتيب ثابت ومحدد لكل جلبات الصفحات الكاملة وجلب الفروق ids= — بلا ORDER BY كان ترتيب
+    // الصفوف من قاعدة البيانات ترتيبًا فيزيائيًا (heap order) غير مضمون، فيتغير نفس السجل
+    // موقعه من جلسة لجلسة بعد أي UPDATE/DELETE/VACUUM — سبب "الترتيب بيتغيّر لوحده".
+    sql += ` ORDER BY id ASC`;
   }
   const r = await pool.query(sql, sqlParams);
   return r.rows;
@@ -49,7 +54,7 @@ async function clientRecords({ where, params, page, pageSize, ids }) {
 
 // أزواج (id, version) لكل عملاء — للتحقق الدوري الخفيف (delta)
 async function clientVersionPairs({ where, params }) {
-  const r = await pool.query(`SELECT id, version FROM client_records ${where}`, params);
+  const r = await pool.query(`SELECT id, version FROM client_records ${where} ORDER BY id ASC`, params);
   return r.rows.map(row => [row.id, Number(row.version)]);
 }
 
@@ -214,6 +219,9 @@ async function recordsByCollection({ collection, where, params, page, pageSize, 
   if (Number.isInteger(page) && page >= 1) {
     sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
     sqlParams.push(pageSize, (page - 1) * pageSize);
+  } else {
+    // نفس مبدأ الترتيب الثابت في clientRecords — راجع التعليق هناك
+    sql += ` ORDER BY id ASC`;
   }
   const r = await pool.query(sql, sqlParams);
   return r.rows;
@@ -221,7 +229,7 @@ async function recordsByCollection({ collection, where, params, page, pageSize, 
 
 // أزواج (id, version) لتصنيف — للتحقق الدوري (delta)
 async function recordVersionPairs(collection, where, params) {
-  const sql = `SELECT id, version FROM collection_records WHERE collection = $1 ${where}`;
+  const sql = `SELECT id, version FROM collection_records WHERE collection = $1 ${where} ORDER BY id ASC`;
   const allParams = [collection, ...params];
   const r = await pool.query(sql, allParams);
   return r.rows.map(row => [row.id, Number(row.version)]);

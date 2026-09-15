@@ -269,7 +269,7 @@ async function loadData(cacheOnly){
   // العملاء الموثّق أعلى الملف): نرمي خطأ موسوماً isDecryptFailure فيوقفه المتصلون
   // (backgroundSyncCheck/startApp) بالشاشة القاتلة. أي خطأ آخر (انقطاع اتصال عابر) يبقى
   // خط رجعة آمناً بإرجاع مصفوفة فارغة.
-  async function loadGeneric(collection){
+  async function loadGeneric(collection, fallback){
     try{
       const { list, baseline } = await loadCollectionGeneric(collection, cacheOnly);
       _collectionSyncBaseline[collection] = baseline;
@@ -283,7 +283,11 @@ async function loadData(cacheOnly){
         throw err;
       }
       _collectionSyncBaseline[collection] = null;
-      return [];
+      // فشل اتصال عابر أثناء التحميل: لا نفريغ المصفوفة التي لها بيانات قائمة فعلية (من لقطة
+      // الفتح السريع أو تحميل سابق ناجح) — كان إرجاع [] هنا يُبيّض الصفحة مؤقتاً رغم أن البيانات
+      // موجودة على السيرفر، ويُجبر أي حفظ تالٍ على إعادة مزامنة كاملة غير ضرورية. فقط عند أول
+      // تحميل فعلاً بلا بيانات سابقة نرجع [] كالسابق (يفرّغه تحميل ناجح لاحق إن رجعت الشبكة).
+      return Array.isArray(fallback) ? fallback : [];
     }
   }
 
@@ -532,7 +536,7 @@ async function loadData(cacheOnly){
     if(typeof settings.receptionAllowEdit!=='boolean') settings.receptionAllowEdit = DEFAULT_SETTINGS.receptionAllowEdit;
     if(typeof settings.receptionAllowDelete!=='boolean') settings.receptionAllowDelete = DEFAULT_SETTINGS.receptionAllowDelete;
   }catch(e){ settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)); await saveSettings(); }
-  bagStock = await loadGeneric('bagStock');
+  bagStock = await loadGeneric('bagStock', bagStock);
   // ترحيل/تصحيح تلقائي: أي عميل مصدر حقيبته "من المخزون" (bagSource==='stock') ولم يكن له عملية "تسليم"
   // مقابلة في سجل عمليات مخزون الحقائب — تُضاف له عملية بأثر رجعي، حتى يبقى "المخزون الحالي" مبنياً دائماً
   // على سجل عمليات المخزون نفسه ومتزامناً مع شيت العملاء. الدالة نفسها تُستدعى أيضاً بعد أي استيراد Excel
@@ -543,8 +547,8 @@ async function loadData(cacheOnly){
   // على السيرفر بناءً على صورة غير مؤكدة — قبل أن تُتِمّ المزامنة الخلفية (backgroundSyncCheck)
   // الصورة الصحيحة. تأجيلها لِما بعد التحميل المؤكد يمنع هذا التكرار/التعارض الزائف.
   if(!cacheOnly) await syncBagStockIssues();
-  vaultTx = await loadGeneric('vaultTx'); bumpVaultVersion();
-  deletedVaultTx = await loadGeneric('deletedVaultTx');
+  vaultTx = await loadGeneric('vaultTx', vaultTx); bumpVaultVersion();
+  deletedVaultTx = await loadGeneric('deletedVaultTx', deletedVaultTx);
   if(!cacheOnly){
     // نفس مبدأ syncBagStockIssues أعلاه: كل الترحيلات/الإصلاحات التلقائية هنا تكتب على السيرفر،
     // فلا تُنفَّذ في وضع الفتح السريع (cacheOnly) لأن الذاكرة فيها صورة محلية قديمة/ناقصة — أي
@@ -557,12 +561,12 @@ async function loadData(cacheOnly){
       await logAudit('edit','الحركات المالية', `ترحيل تلقائي لمرة واحدة: تم إعادة ترقيم الرقم التسلسلي لكل الحركات المالية (${renumberedCount} حركة) بشكل مستقل لكل حساب (الخزنة كاش / البنك / الشبكة / أخرى) حسب تاريخ كل حركة، بحيث تبدأ كل وجهة برقمها من 1`);
     }
   }
-  vaultDenomTx = await loadGeneric('vaultDenomTx');
-  bankStatementRows = await loadGeneric('bankStatementRows');
-  scheduledVaultTx = await loadGeneric('scheduledVaultTx');
-  followUpTasks = await loadGeneric('followUpTasks');
-  deletedInvoices = await loadGeneric('deletedInvoices');
-  courseSessions = await loadGeneric('courseSessions');
+  vaultDenomTx = await loadGeneric('vaultDenomTx', vaultDenomTx);
+  bankStatementRows = await loadGeneric('bankStatementRows', bankStatementRows);
+  scheduledVaultTx = await loadGeneric('scheduledVaultTx', scheduledVaultTx);
+  followUpTasks = await loadGeneric('followUpTasks', followUpTasks);
+  deletedInvoices = await loadGeneric('deletedInvoices', deletedInvoices);
+  courseSessions = await loadGeneric('courseSessions', courseSessions);
   try{
     const r = kv.appLang;
     currentLang = (r && r.value) ? r.value : 'ar';
@@ -601,10 +605,11 @@ async function loadData(cacheOnly){
       err.failedKeys = ['auditLog'];
       throw err;
     }
-    auditLog = []; _collectionSyncBaseline['auditLog'] = null;
+    // فشل اتصال عابر: نُبقي آخر نسخة قائمة بدل تفريغ الشاشة (نفس مبدأ loadGeneric)
+    auditLog = Array.isArray(auditLog) ? auditLog : []; _collectionSyncBaseline['auditLog'] = null;
   }
-  companies = await loadGeneric('companies');
-  companyTransfers = await loadGeneric('companyTransfers');
+  companies = await loadGeneric('companies', companies);
+  companyTransfers = await loadGeneric('companyTransfers', companyTransfers);
   if(!cacheOnly){
     // نفس المبدأ أعلاه: لا يُنفَّذ أي ترحيل/إصلاح تلقائي يكتب على السيرفر في وضع الفتح السريع من
     // الكاش المحلي (cacheOnly=true) — الذاكرة قد تكون صورة قديمة/ناقصة، فتنفيذها كان يرفع نتائج
@@ -635,18 +640,18 @@ async function loadData(cacheOnly){
       }
     }
   }
-  journalEntries = await loadGeneric('journalEntries');
-  chartOfAccounts = await loadGeneric('chartOfAccounts');
+  journalEntries = await loadGeneric('journalEntries', journalEntries);
+  chartOfAccounts = await loadGeneric('chartOfAccounts', chartOfAccounts);
   seedChartOfAccountsIfEmpty();
-  journalDE = await loadGeneric('journalDE');
-  budgetEntries = await loadGeneric('budgetEntries');
-  suppliers = await loadGeneric('suppliers');
-  purchases = await loadGeneric('purchases');
+  journalDE = await loadGeneric('journalDE', journalDE);
+  budgetEntries = await loadGeneric('budgetEntries', budgetEntries);
+  suppliers = await loadGeneric('suppliers', suppliers);
+  purchases = await loadGeneric('purchases', purchases);
   // عزل البيانات: نفس مبدأ شيت العملاء أعلاه — كل مستخدم مقيَّد يشوف فقط عمليات الشراء التي
   // سجّلها هو بنفسه.
   // نفس السبب الحرج الموضّح أعلى مصفوفة clients — أُزيل نفس الفلتر المُبتِر هنا لمصفوفة purchases.
   await migratePurchaseAttachmentsOut();
-  manualSalesInvoices = await loadGeneric('manualSalesInvoices');
+  manualSalesInvoices = await loadGeneric('manualSalesInvoices', manualSalesInvoices);
   // تنظيف القيود اليومية اليتيمة (قيد مُرحَّل تلقائياً لمصدر حُذف لاحقاً — فاتورة/قيد/مبيعات
   // يدوية): يُنفَّذ قبل الترحيل التلقائي الشامل أدناه حتى يعيد الأخير ترحيل أي وثيقة حية
   // فُقد قيدها (راجع cleanupOrphanedJournalDE في module-accounting.js). آمن للتكرار — يعمل
@@ -855,7 +860,7 @@ async function saveBagStock(){
   try{ await _syncVersionsBeforeSave('bagStock'); await saveCollectionGeneric('bagStock', bagStock); }catch(e){ showToast('تعذر حفظ سجل المخزون'); }
 }
 async function saveVaultTx(){
-  try{ await _syncVersionsBeforeSave('vaultTx'); await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); }
+  try{ await _syncVersionsBeforeSave('vaultTx'); return await saveCollectionGeneric('vaultTx', vaultTx); }catch(e){ showToast('تعذر حفظ حركات الخزنة'); return 'rejected'; }
 }
 async function saveDeletedVaultTx(){
   try{ await _syncVersionsBeforeSave('deletedVaultTx'); await saveCollectionGeneric('deletedVaultTx', deletedVaultTx); }catch(e){ showToast('تعذر حفظ سجل الحركات الملغاة'); }

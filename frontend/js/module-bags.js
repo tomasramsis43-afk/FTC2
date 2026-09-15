@@ -251,7 +251,9 @@ function renderBags(){
   const bagStockRows = bagStockFiltered().slice().sort((a,b)=>{
     const d = (b.date||'').localeCompare(a.date||'');
     if(d !== 0) return d;
-    return (b.createdAt||0)-(a.createdAt||0);
+    const c = (b.createdAt||0)-(a.createdAt||0);
+    if(c !== 0) return c;
+    return String(a.id||'').localeCompare(String(b.id||''));
   });
   if($('#bagstock-period-deposit-total')){
     const periodNetQty = bagStockFiltered().reduce((s,b)=> isBagStockRecordPending(b) ? s : s+num(b.qty), 0);

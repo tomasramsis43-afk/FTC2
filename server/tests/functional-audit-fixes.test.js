@@ -149,7 +149,7 @@ test('B2: storage-sync.js يميّز بين DELETE 409 (conflict) و فشل ات
   // الحلقة الفردية للحذف: for(const id of removedIds){ const ok = await deleteOneRecordGeneric(...)
   // يجب أن يتحقق فقط ok === null للاتصال: else if(ok === null) anyNetworkFailure = true;
   // لا يجب أن يheimer 'else anyNetworkFailure = true;' بدون فلتر null.
-  const deleteLoopMatch = src.match(/for\(const id of removedIds\)\{\s*const ok = await deleteOneRecordGeneric\([^)]+\);\s*if\(ok\)[^;]+;\s*(\S[\s\S]{0,80}?)\n\s*\}/);
+  const deleteLoopMatch = src.match(/for\(const id of removedIds\)\{\s*const ok = await deleteOneRecordGeneric\([^)]+\);\s*if\(ok\)[^;]+;\s*(\S[\s\S]{0,130}?)\n\s*\}/);
   assert.ok(deleteLoopMatch, 'يوجد حلقة حذف فردية في saveRecordsGeneric');
   assert.ok(/else\s+if\(ok\s*===\s*null\)\s+anyNetworkFailure\s*=\s*true/.test(deleteLoopMatch[1]),
     'الحلقة الفردية تتحقق من ok === null فقط (لا تheimer 409 كخطأ اتصال)');
@@ -181,9 +181,10 @@ test('B3: bumpVaultVersion يصفرّ ذاكرة التخزين المؤقت ل�
 test('B3: مسار تعديل الحركة المالية يستدعي bumpVaultVersion في module-finance.js', () => {
   const src = fs.readFileSync(path.join(frontendDir, 'module-finance.js'), 'utf8');
   // فرع التعديل: if(editingVaultId){ ... vaultTx[idx] = {...}; ... bumpVaultVersion();
-  // يجب أن يكون bumpVaultVersion() موجوداً داخل فرع if(editingVaultId) وليس فقط في فرع الإضافة
-  const editBranch = src.match(/if\(editingVaultId\)\{[\s\S]{0,2000}?bumpVaultVersion\(\)[\s\S]{0,200}?showToast\('تم تحديث الحركة'\)/);
-  assert.ok(editBranch, 'فرع التعديل في submit handler يستدعي bumpVaultVersion() قبل showToast("تم تحديث الحركة")');
+  // (منذ إصلاح "إظهار النجاح قبل اكتمال الحفظ" أصبح toast النجاح بعد saveVaultTx() خارج الفرع
+  // عمداً — يبقى الشرط الجوهري أن bumpVaultVersion() يُستدعى داخل فرع if(editingVaultId))
+  const editBranch = src.match(/if\(editingVaultId\)\{\s*const idx = vaultTx\.findIndex\(x=>x\.id===editingVaultId\);[\s\S]{0,2000}?bumpVaultVersion\(\)/);
+  assert.ok(editBranch, 'فرع التعديل في submit handler يستدعي bumpVaultVersion() لإبطال كاش الرصيد');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

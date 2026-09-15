@@ -357,7 +357,7 @@ function vaultFilteredRows(){
       if(!hay.includes(q)) return false;
     }
     return true;
-  }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0));
+  }).sort((a,b)=>(b.date||'').localeCompare(a.date||'') || (b.createdAt||0)-(a.createdAt||0) || String(a.id||'').localeCompare(String(b.id||'')));
 }
 /* ---------------- ترتيب بالنقر على رأس العمود (حركات الخزنة/البنك/الشبكة) ---------------- */
 let vaultSortState = { key: null, dir: 1 };
@@ -398,8 +398,24 @@ function vaultInlineEditable(t){
   return !t.autoClientId && !t.companyTransferId && !isDateLocked(t.date);
 }
 let _vaultInlineEditingCell = null;
+// حالة التعديل المباشر الحالي (td/input/commit) — تُستخدم لإنقاذ القيمة إذا أُعيد بناء الجدول
+// خلفياً أثناء التعديل (مزامنة دورية أو SSE)، فبدل أن يمسح الإدخال وتضيع الكتابة على كائن منفصل،
+// نضمن أن الـ commit يعيد العثور على الكائن الحي في المصفوفة الحالية فيحفظ فعلياً.
+let _vaultInlineEditState = null;
 function startVaultInlineEdit(td){
-  if(_vaultInlineEditingCell) return; // تعديل واحد فقط في نفس اللحظة
+  if(_vaultInlineEditingCell){
+    // خانة تعديل قديمة بقت خارج الصفحة فعلياً (أُعيد بناء الجدول ولم يُطلَق blur في بعض المتصفحات):
+    // نُنهيها أولاً حتى لا يظل التعديل محجوباً حتى الرفرش.
+    if(_vaultInlineEditingCell.isConnected === false){
+      const stale = _vaultInlineEditState;
+      try{
+        if(stale && typeof stale.commit==='function') stale.commit();
+        else _vaultInlineEditingCell = null;
+      }catch(e){ _vaultInlineEditingCell = null; }
+    }else{
+      return; // تعديل واحد فقط في نفس اللحظة
+    }
+  }
   const id = td.dataset.inlineId;
   const field = td.dataset.inlineField;
   const t = vaultTx.find(x=>x.id===id);
@@ -421,37 +437,61 @@ function startVaultInlineEdit(td){
   const commit = async ()=>{
     if(_vaultInlineEditingCell!==td) return;
     _vaultInlineEditingCell = null;
+    _vaultInlineEditState = null;
     const rawVal = input.value;
+    // الأهم: نعيد العثور على الكائن الحي في المصفوفة الحالية — قد تُستبدل المصفوفة بالكامل
+    // (مزامنة خلفية) بين فتح التعديل والإنهاء، وكان الـ commit يعدّل كائناً منفصلاً فتضيع
+    // الكتابة ويُسجل في التدقيق حركة لم تُحفظ فعلياً أبداً على السيرفر.
+    const live = vaultTx.find(x=>x.id===id);
+    const target = live || null;
     if(field==='amount'){
       const newAmount = num(rawVal);
       if(newAmount<=0){ showToast('أدخل مبلغاً صحيحاً أكبر من صفر'); renderVault(); return; }
-      if(newAmount===num(t.amount)){ renderVault(); return; }
+      if(!target) { renderVault(); return; }
+      if(newAmount===num(target.amount)){ renderVault(); return; }
       snapshotState('تعديل سريع لمبلغ حركة مالية');
-      const { history: _h, ...before } = t;
-      t.amount = newAmount;
-      const { history: _h2, ...after } = t;
-      pushVaultTxHistory(t, before, after);
-      await saveVaultTx();
-      await logAudit('edit','الحركات المالية', `تعديل سريع للمبلغ في حركة رقم تسلسلي #${t.seq||'—'} إلى ${fmt(newAmount)}`);
-      showToast('تم تحديث المبلغ');
+      const { history: _h, ...before } = target;
+      target.amount = newAmount;
+      const { history: _h2, ...after } = target;
+      pushVaultTxHistory(target, before, after);
+      bumpVaultVersion();
+      const savedOk = await saveVaultTx();
+      if(savedOk === true){
+        showToast('تم تحديث المبلغ');
+      }else if(savedOk === 'queued'){
+        showToast('حُفظ التعديل على هذا الجهاز فقط — سيرفع للسيرفر تلقائيًا عند اتصال الشبكة');
+      }else{
+        showToast('تعذّر حفظ التعديل على السيرفر: تم تجاهله (تعارض أو رفض) — راجع الرسائل السابقة وحدّث الصفحة إن لزم');
+      }
+      await logAudit('edit','الحركات المالية', `تعديل سريع للمبلغ في حركة رقم تسلسلي #${target.seq||'—'} إلى ${fmt(newAmount)}`);
     }else{
       const newNotes = rawVal.trim();
-      if(newNotes===(t.notes||'')){ renderVault(); return; }
+      if(!target) { renderVault(); return; }
+      if(newNotes===(target.notes||'')){ renderVault(); return; }
       snapshotState('تعديل سريع لملاحظة حركة مالية');
-      const { history: _h, ...before } = t;
-      t.notes = newNotes;
-      const { history: _h2, ...after } = t;
-      pushVaultTxHistory(t, before, after);
-      await saveVaultTx();
-      await logAudit('edit','الحركات المالية', `تعديل سريع لملاحظة حركة رقم تسلسلي #${t.seq||'—'}`);
-      showToast('تم تحديث الملاحظة');
+      const { history: _h, ...before } = target;
+      target.notes = newNotes;
+      const { history: _h2, ...after } = target;
+      pushVaultTxHistory(target, before, after);
+      bumpVaultVersion();
+      const savedOkNotes = await saveVaultTx();
+      if(savedOkNotes === true){
+        showToast('تم تحديث الملاحظة');
+      }else if(savedOkNotes === 'queued'){
+        showToast('حُفظ التعديل على هذا الجهاز فقط — سيرفع للسيرفر تلقائيًا عند اتصال الشبكة');
+      }else{
+        showToast('تعذّر حفظ التعديل على السيرفر: تم تجاهله (تعارض أو رفض) — راجع الرسائل السابقة وحدّث الصفحة إن لزم');
+      }
+      await logAudit('edit','الحركات المالية', `تعديل سريع لملاحظة حركة رقم تسلسلي #${target.seq||'—'}`);
     }
     renderVault();
     if(typeof renderDashboard==='function') renderDashboard();
   };
+  _vaultInlineEditState = { id, field, td, input, commit };
   const cancel = ()=>{
     if(_vaultInlineEditingCell!==td) return;
     _vaultInlineEditingCell = null;
+    _vaultInlineEditState = null;
     td.innerHTML = originalHtml;
   };
   input.addEventListener('keydown', e=>{
@@ -1493,14 +1533,21 @@ $('#vault-form')?.addEventListener('submit', async e=>{
     pushVaultTxHistory(vaultTx[idx], before, afterSnap);
     savedTx = vaultTx[idx];
     bumpVaultVersion();
-    showToast('تم تحديث الحركة');
   }else{
     savedTx = {id:uid(), seq: allocVaultSeq(data.destination), createdAt:Date.now(), ...data};
     vaultTx.push(savedTx); bumpVaultVersion();
     await saveSettings();
-    showToast('تمت إضافة الحركة');
   }
-  await saveVaultTx();
+  // الحفظ على السيرفر أولاً ثم إظهار "تمت الإضافة" — كان الـ toast يظهر قبل اكتمال الحفظ
+  // فعلياً، فتُعرض نجاحاً صُورياً وإن كانت الحركة مرفوضة/معلّقة وخارجة بعد أي ريفرش.
+  const vaultSavedOk = await saveVaultTx();
+  if(vaultSavedOk === true){
+    showToast(wasVaultEdit ? 'تم تحديث الحركة' : 'تمت إضافة الحركة');
+  }else if(vaultSavedOk === 'queued'){
+    showToast((wasVaultEdit ? 'تم تحديث الحركة محليًا' : 'حُفظت الحركة على هذا الجهاز فقط') + ' — سترفع للسيرفر تلقائيًا عند اتصال الشبكة');
+  }else{
+    showToast('تعذّر حفظ الحركة على السيرفر: تم تجاهل التعديل (تعارض أو رفض) — لن يُرفع تلقائيًا، راجع الرسائل السابقة وحدّث الصفحة إن لزم');
+  }
   const txLabel = isReturn ? 'مردود مبيعات' : (savedTx.type==='in'?'وارد':'صادر');
   const txDesc = `${txLabel} بمبلغ ${fmt(num(savedTx.amount))} (${destLabel(savedTx.destination||'vault')}) - ${savedTx.clientName||savedTx.manual||savedTx.category||''}`;
   await logAudit(wasVaultEdit ? 'edit' : 'add', 'الحركات المالية', `${wasVaultEdit ? 'تم تعديل حركة' : 'تمت إضافة حركة'} رقم تسلسلي #${savedTx.seq||'—'}: ${txDesc}`);
