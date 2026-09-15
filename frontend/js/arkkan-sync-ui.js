@@ -264,6 +264,10 @@ async function arkkanRefNumCardButton(id, btn) {
     }
     if (saveOk === true) {
       if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
+      // حفظ اللقطة المحلية فوراً — بدون هذا، saveOneClientRecord ينجح على السيرفر لكن يترك
+      // اللقطة المحلية (المستخدمة عند أي تحديث/فتح لاحق للصفحة قبل اكتمال المزامنة الخلفية)
+      // بالقيمة القديمة، فيظهر الرقم المرجعي فارغاً بعد تحديث الصفحة رغم نجاح الحفظ فعلياً.
+      if (typeof _scheduleClientsSnapPersist === 'function') _scheduleClientsSnapPersist();
       showToast(`✅ الرقم المرجعي: ${refNum}${oldRef && oldRef !== refNum ? ` (كان ${oldRef})` : ''}`, 'success');
     } else if (saveOk === false) {
       showToast(`تعذّر حفظ الرقم المرجعي (${refNum}): تعارض مع تعديل آخر — حدّث الصفحة وأعد المحاولة`, 'error');
@@ -2064,6 +2068,9 @@ async function arkkanBulkRefNumSelected() {
             }
             if (saveOk === true) {
               if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
+              // مؤجَّلة (debounced) أصلاً — استدعاؤها هنا لكل عميل ناجح آمن تماماً، وتُنفَّذ فعلياً
+              // مرة واحدة فقط بعد توقف الحلقة (نفس سبب الإصلاح في arkkanRefNumCardButton أعلاه).
+              if (typeof _scheduleClientsSnapPersist === 'function') _scheduleClientsSnapPersist();
               savedCount++;
             } else if (saveOk === false) {
               failCount++;
