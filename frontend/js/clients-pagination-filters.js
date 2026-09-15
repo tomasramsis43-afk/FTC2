@@ -111,7 +111,13 @@ async function renderTable(){
       // فيختلف ترتيب الصفحة ونطاق "عرض X - Y" بين المسارين رغم امتلاك كلاهما نفس البيانات
       if(clientsSortState.key){ params.set('sort', clientsSortState.key); params.set('order', clientsSortState.dir===-1?'desc':'asc'); }
       else{ params.set('sort', 'date'); params.set('order', 'desc'); }
-      const res = await serverFetch('/api/clients?'+params.toString());
+      // مهلة قصيرة للطلب المسرَّع (ثانيتان) بدل مهلة serverFetch الافتراضية (60 ثانية):
+      // هذا المسار مجرد تحسين أداء — بيانات الصفحة المطلوبة موجودة أصلاً محلياً في الذاكرة،
+      // فالمسار المحلي الكامل أدناه فوري. كان تنقُّل الصفحات يعتمد على الشبكة بمهلة 60 ثانية،
+      // فعلى اتصال بطيء (يستجيب السيرفر لكن ببطء) تبقى الأزرار "ميتة" ظاهرياً حتى انتهاء المهلة
+      // — والمستخدم على الحقل الضعيف يجرّب الأزرار ثم يظنها معطلة. الآن السيرفر البطيء/النائم
+      // يُتخلَّى عنه خلال ثانيتين ويُكمل العرض فوراً من البيانات المحلية (نفس النتيجة تماماً، فوراً).
+      const res = await serverFetch('/api/clients?'+params.toString(), { timeout: 2000 });
       if(mySeq !== renderTableSeq) return; // وصل رد لطلب قديم تجاوزه المستخدم فعلاً (غيّر الصفحة/الفلتر) — نتجاهله
       if(!res.ok) throw new Error('server pagination failed');
       const data = await res.json();
