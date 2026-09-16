@@ -567,7 +567,7 @@ let _arkkanBulkStop = false;
 /* عملاء ناقصي البيانات المؤهلون — مرتبين من الأحدث تسجيلاً (c.date) إلى الأقدم */
 function arkkanMissingClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkan(c) && clientIsMissingArkkanData(c))
+    .filter(c => clientEligibleForArkkan(c) && !c.noCourseNumber && clientIsMissingArkkanData(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 

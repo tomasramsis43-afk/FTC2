@@ -12,6 +12,7 @@ function courseInvoiceClients(){
   return clients.filter(c=>{
     const hasCourseNumber = String(c.courseNumber||'').trim();
     const hasInvoice = String(c.invoice||'').trim();
+    if(c.noCourseNumber && !hasInvoice) return false; // عميل موسوم "بدون رقم دورة" ولم يُدخَل له رقم فاتورة فعلي — يُستبعد
     if(c.cancelled || c.suspended) return !!hasInvoice;
     return !!hasCourseNumber;
   });

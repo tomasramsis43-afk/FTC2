@@ -403,7 +403,7 @@ function missingCourseFiltered(){
   const eto = $('#cs-missing-exp-to').value;
   const fcid = $('#cs-filter-clientid').value.trim().toLowerCase();
   return clients
-    .filter(c=> !c.cancelled && !c.suspended && !String(c.courseNumber||'').trim())
+    .filter(c=> !c.cancelled && !c.suspended && !c.noCourseNumber && !String(c.courseNumber||'').trim())
     .filter(c=> !typeVals.length || typeVals.includes(c.courseType))
     .filter(c=> !missingNatSelected.size || missingNatSelected.has(c.nationality))
     .filter(c=> !ffrom || (c.date && c.date>=ffrom))
@@ -431,7 +431,7 @@ function renderMissingCourse(){
     return;
   }
   box.innerHTML = `<div class="table-scroll cards-mobile"><table>
-    <thead><tr><th>${tr('thName')}</th><th>${tr('thRegDate')}</th><th>${tr('thCourse')}</th><th>${tr('thId')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('bagStatusCol')}</th><th>${tr('expectedCourseDateCol')}</th></tr></thead>
+    <thead><tr><th>${tr('thName')}</th><th>${tr('thRegDate')}</th><th>${tr('thCourse')}</th><th>${tr('thId')}</th><th>${tr('thPhone')}</th><th>${tr('thNat')}</th><th>${tr('compFieldName')}</th><th>${tr('bagStatusCol')}</th><th>${tr('expectedCourseDateCol')}</th><th>${tr('noCourseNumberCol')}</th></tr></thead>
     <tbody>${missing.map(c=>`<tr>
       <td data-label="${tr('thName')}">${escapeHtml(c.name||'—')}</td>
       <td data-label="${tr('thRegDate')}">${registrationAgeLabel(c.date)}</td>
@@ -442,6 +442,7 @@ function renderMissingCourse(){
       <td data-label="${tr('compFieldName')}">${escapeHtml(c.companyName||'—')}</td>
       <td data-label="${tr('bagStatusCol')}"><span class="stamp ${c.bagSource==='buy' && c.bagStatus!=='purchased' ? 'owe':'paid'}">${bagSourceLabel(c)}</span>${bagBuyCheckboxHtml(c)}</td>
       <td class="card-full" data-label="${tr('expectedCourseDateCol')}"><input type="date" class="cs-expected-date" data-client-id="${escapeHtml(c.id)}" value="${escapeHtml(effectiveExpectedDate(c))}" title="${tr('expectedDateTitle')}"></td>
+      <td data-label="${tr('noCourseNumberCol')}"><input type="checkbox" class="cs-no-course-number" data-client-id="${escapeHtml(c.id)}" title="${tr('noCourseNumberTitle')}"></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -462,13 +463,25 @@ $('#cs-missing-to')?.addEventListener('input', renderMissingCourse);
 $('#cs-missing-exp-from')?.addEventListener('input', renderMissingCourse);
 $('#cs-missing-exp-to')?.addEventListener('input', renderMissingCourse);
 $('#cs-missing-list')?.addEventListener('change', async e=>{
-  if(!e.target.classList.contains('cs-expected-date')) return;
-  const id = e.target.dataset.clientId;
-  const client = clients.find(c=>c.id===id);
-  if(!client) return;
-  client.expectedCourseDate = e.target.value;
-  await saveClients();
-  await logAudit('edit','الدورات', `تم تحديد تاريخ دورة متوقع للعميل ${client.name}: ${client.expectedCourseDate || '—'}`);
+  if(e.target.classList.contains('cs-expected-date')){
+    const id = e.target.dataset.clientId;
+    const client = clients.find(c=>c.id===id);
+    if(!client) return;
+    client.expectedCourseDate = e.target.value;
+    await saveClients();
+    await logAudit('edit','الدورات', `تم تحديد تاريخ دورة متوقع للعميل ${client.name}: ${client.expectedCourseDate || '—'}`);
+    return;
+  }
+  if(e.target.classList.contains('cs-no-course-number')){
+    const id = e.target.dataset.clientId;
+    const client = clients.find(c=>c.id===id);
+    if(!client) return;
+    if(!e.target.checked) return; // ما فيش سبب يتفكّك إلا بتحديد رقم دورة فعلي لاحقاً
+    client.noCourseNumber = true;
+    await saveClients();
+    await logAudit('edit','الدورات', `تم توسيم العميل ${client.name} (${client.clientId||''}) بـ"بدون رقم دورة" — استُبعد من هذه القائمة ومن مزامنة أركان وشيت فواتير الدورات`);
+    renderMissingCourse();
+  }
 });
 
 function openSessionModal(id){
@@ -725,6 +738,7 @@ $('#import-coursenum-input')?.addEventListener('change', async e=>{
       if(!c){ c = addMinimalClientForCourseImport(clientId, courseNumber, courseDate); isNew = true; added++; }
       const oldCourseNumber = isNew ? '' : (c.courseNumber||'');
       c.courseNumber = courseNumber;
+      c.noCourseNumber = false;
       c.absent = false;
       updated++;
       let sessionNote = '';
@@ -850,6 +864,7 @@ $('#btn-cs-bulk-save')?.addEventListener('click', async ()=>{
     let sessionNote = '';
     if(courseNumber){
       c.courseNumber = courseNumber;
+      c.noCourseNumber = false;
       c.absent = false;
       if(courseDate){
         const sess = courseSessions.find(s=>s.courseNumber===courseNumber);

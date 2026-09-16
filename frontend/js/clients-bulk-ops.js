@@ -379,7 +379,7 @@ $('#btn-bulk-update-save')?.addEventListener('click', async ()=>{
       if(present(val('bu-company'))) patch.companyName = val('bu-company').trim();
       if(present(val('bu-credit'))) patch.creditDays = num(val('bu-credit'));
       if(present(val('bu-course'))) patch.courseType = val('bu-course');
-      if(present(val('bu-coursenum'))) patch.courseNumber = val('bu-coursenum').trim();
+      if(present(val('bu-coursenum'))){ patch.courseNumber = val('bu-coursenum').trim(); if(patch.courseNumber) patch.noCourseNumber = false; }
       if(present(val('bu-invoice'))) patch.invoice = val('bu-invoice').trim();
       if(present(val('bu-date'))) patch.date = val('bu-date');
       if(present(val('bu-price'))) patch.coursePrice = num(val('bu-price'));
