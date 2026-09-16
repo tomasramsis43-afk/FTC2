@@ -340,6 +340,7 @@ $('#btn-print-courses-report')?.addEventListener('click', ()=>{
 function refreshMissingCourseOptions(){
   const sel = $('#cs-missing-course');
   repopulateFilterSelectPreserve(sel, settings.courses.map(c=>c.name), 'كل أنواع الدورات');
+  repopulateFilterSelectPreserve($('#cs-missing-company'), companies.map(c=>c.name), tr('allCompanies'));
   refreshMissingNatOptions();
 }
 /* ---- فلتر متعدد الجنسيات لتبويب "من سجّل ولم يُحدَّد له رقم دورة بعد" ---- */
@@ -397,6 +398,7 @@ function registrationAgeLabel(dateStr){
 function effectiveExpectedDate(c){ return c.expectedCourseDate || addDaysISO(c.date, 7); }
 function missingCourseFiltered(){
   const typeVals = selectedFilterValues($('#cs-missing-course'));
+  const companyVals = selectedFilterValues($('#cs-missing-company'));
   const ffrom = $('#cs-missing-from').value;
   const fto = $('#cs-missing-to').value;
   const efrom = $('#cs-missing-exp-from').value;
@@ -405,6 +407,7 @@ function missingCourseFiltered(){
   return clients
     .filter(c=> !c.cancelled && !c.suspended && !c.noCourseNumber && !String(c.courseNumber||'').trim())
     .filter(c=> !typeVals.length || typeVals.includes(c.courseType))
+    .filter(c=> !companyVals.length || companyVals.includes(c.companyName))
     .filter(c=> !missingNatSelected.size || missingNatSelected.has(c.nationality))
     .filter(c=> !ffrom || (c.date && c.date>=ffrom))
     .filter(c=> !fto || (c.date && c.date<=fto))
@@ -479,6 +482,7 @@ function renderMissingCourse(){
   </table></div>`;
 }
 $('#cs-missing-course')?.addEventListener('change', renderMissingCourse);
+$('#cs-missing-company')?.addEventListener('change', renderMissingCourse);
 $('#btn-export-missing-course')?.addEventListener('click', ()=>{
   const missing = missingCourseFiltered();
   const headers = ['الاسم','تاريخ التسجيل','نوع الدورة','رقم الهوية','الجوال','الجنسية','اسم الشركة','حالة الحقيبة','تاريخ دورة متوقع'];
