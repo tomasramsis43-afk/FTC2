@@ -195,22 +195,46 @@ body.dark-theme textarea {
 
 
 /* native <select> popup lists follow OS rendering by default;
-   force theme colors so dropdowns (year filters, etc.) stay on-brand */
+   force theme colors so dropdowns (year filters, etc.) stay on-brand.
+   ملاحظة مهمة: قائمة <select> المنبثقة (popup) عنصر أصلي (native) بيرسمه
+   المتصفح/نظام التشغيل خارج شجرة الـ DOM العادية، وChromium لا يحلّ CSS
+   custom properties (var(--x)) بشكل موثوق داخلها — لما ده يتزامن مع تبديل
+   color-scheme بين dark/light عبر JS (applyTheme)، بتظهر القائمة كمربع
+   أسود غير مقروء (خلفية داكنة native + نص أسود من var() غير محلول).
+   الحل: قيم لونية حرفية (literal) لكل ثيم بدل var()، لأن الـ selectors
+   بتتقيّم بشكل صحيح مع القائمة المنبثقة حتى لو المتغيرات نفسها مش بتتحل. */
 select {
-  background-color: var(--surface-solid);
-  color: var(--text);
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 select option {
-  background-color: var(--surface-solid);
-  color: var(--text);
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 select option:checked,
 select option:hover,
 select option:focus {
-  background-color: var(--navy) !important;
-  color: var(--on-accent-text) !important;
+  background-color: #ff6a47 !important;
+  color: #ffffff !important;
+}
+
+body.dark-theme select {
+  background-color: #171b24;
+  color: #f5f6f9;
+}
+
+body.dark-theme select option {
+  background-color: #171b24;
+  color: #f5f6f9;
+}
+
+body.dark-theme select option:checked,
+body.dark-theme select option:hover,
+body.dark-theme select option:focus {
+  background-color: #ff7f5c !important;
+  color: #0b0d12 !important;
 }
 
 /* ============= GLOBAL STYLES ============= */
