@@ -926,6 +926,7 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
 }
 
 .notif-panel {
+  will-change: transform, opacity;
   display: none;
   position: absolute;
   z-index: 55;
@@ -1020,6 +1021,7 @@ nav.tabs.collapsed button[data-view]:not(.active):hover svg {
 }
 
 .user-menu-dropdown {
+  will-change: transform, opacity;
   display: none;
   position: absolute;
   z-index: 55;
@@ -1686,6 +1688,7 @@ section.view.active {
 }
 
 .overflow-menu {
+  will-change: transform, opacity;
   position: absolute;
   top: calc(100% + 8px);
   inset-inline-start: 0;
@@ -2086,6 +2089,7 @@ tbody tr:hover {
 }
 
 .row-menu-panel {
+  will-change: transform, opacity;
   display: none;
   position: fixed;
   z-index: 55;
@@ -4906,6 +4910,7 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
 
 .cols-wrap { position: relative; }
 .cols-panel {
+  will-change: transform, opacity;
   display: none;
   position: absolute;
   top: calc(100% + 6px);
@@ -5016,6 +5021,7 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
 }
 .msf-toggle .msf-caret { color: var(--text-muted); font-size: 11px; flex: none; }
 .msf-menu {
+  will-change: transform, opacity;
   display: none;
   z-index: 3000;
   background: var(--surface-solid);
