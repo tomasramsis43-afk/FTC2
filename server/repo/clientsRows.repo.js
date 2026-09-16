@@ -157,7 +157,7 @@ async function queryPage({ whereSql, params, sortCol, order, cursorSql, cursorPa
     );
   } else {
     rowsR = await pool.query(
-      `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST LIMIT $${i} OFFSET $${i + 1}`,
+      `SELECT data FROM clients_rows ${whereSql} ORDER BY ${sortCol} ${order} NULLS LAST, id ASC LIMIT $${i} OFFSET $${i + 1}`,
       [...params, pageSize, offset]
     );
   }
