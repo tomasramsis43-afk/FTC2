@@ -413,7 +413,39 @@ function missingCourseFiltered(){
     .filter(c=> !fcid || String(c.clientId||'').toLowerCase().includes(fcid))
     .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 }
+function noCourseNumberClients(){
+  return clients.filter(c=> c.noCourseNumber).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+function renderNoCourseNumberBox(){
+  const panel = $('#no-course-number-panel');
+  const box = $('#no-course-number-list');
+  if(!panel || !box) return;
+  const list = noCourseNumberClients();
+  panel.style.display = list.length ? '' : 'none';
+  if(!list.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="table-scroll cards-mobile"><table>
+    <thead><tr><th>${tr('thName')}</th><th>${tr('thId')}</th><th>${tr('thPhone')}</th><th>${tr('thRegDate')}</th><th></th></tr></thead>
+    <tbody>${list.map(c=>`<tr>
+      <td data-label="${tr('thName')}">${escapeHtml(c.name||'—')}</td>
+      <td class="mono" data-label="${tr('thId')}">${escapeHtml(c.clientId||'—')}</td>
+      <td class="mono" data-label="${tr('thPhone')}">${escapeHtml(c.phone||'—')}</td>
+      <td data-label="${tr('thRegDate')}">${escapeHtml(formatDateDisplay(c.date)||'—')}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm cs-unmark-no-course" data-client-id="${escapeHtml(c.id)}">${tr('unmarkBtnLabel')}</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+$('#no-course-number-list')?.addEventListener('click', async e=>{
+  const btn = e.target.closest('.cs-unmark-no-course');
+  if(!btn) return;
+  const client = clients.find(c=>c.id===btn.dataset.clientId);
+  if(!client) return;
+  client.noCourseNumber = false;
+  await saveClients();
+  await logAudit('edit','الدورات', `تم إلغاء توسيم "بدون رقم دورة" عن العميل ${client.name} (${client.clientId||''})`);
+  renderMissingCourse();
+});
 function renderMissingCourse(){
+  renderNoCourseNumberBox();
   const sel = $('#cs-missing-course');
   if(!sel) return;
   const typeVals = selectedFilterValues(sel);
