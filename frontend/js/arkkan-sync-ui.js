@@ -1033,8 +1033,9 @@ function arkkanExamApplyFilters(list, prefix) {
       var comp = String(c.companyName || '').trim() || '(بدون شركة)';
       if (comp !== f.company) return false;
     }
-    if (f.dateFrom && (!c.examLastDate || c.examLastDate < f.dateFrom)) return false;
-    if (f.dateTo && (!c.examLastDate || c.examLastDate > f.dateTo)) return false;
+    var cdate = c.startDate || arkkanCourseDate(c) || '';
+    if (f.dateFrom && (!cdate || cdate < f.dateFrom)) return false;
+    if (f.dateTo && (!cdate || cdate > f.dateTo)) return false;
     return true;
   });
 }
@@ -1156,6 +1157,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.clientId)}</td>
       <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       <td>${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
@@ -1170,6 +1172,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.clientId)}</td>
       <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       <td>${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
@@ -1184,6 +1187,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.clientId)}</td>
       <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       <td>${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
@@ -1197,6 +1201,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.clientId)}</td>
       <td class="col-examnat">${escapeHtml(c.nationality || '—')}</td>
       <td>${escapeHtml(c.courseNumber || '—')}</td>
+      <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
       <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
@@ -1339,7 +1344,7 @@ function examBulkState(name) {
 
 /* مشغّل صندوق عام — جلب (fetch) أو مقارنة (compare) — كل صندوق بعناصره وصفوفه.
    المقارنة: تراجع كل عميل من أركان، توازن المخزَّن بالمستخرج، وتحفظ أي اختلاف تلقائياً */
-async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel, counterSel, doneMsg, mode }) {
+async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, progressSel, counterSel, doneMsg, mode }) {
   const compare = mode === 'compare';
   const st = examBulkState(name);
   if (st.running) return;
@@ -1366,7 +1371,11 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   /* استئناف حقيقي: نستبعد المفحوصين حديثاً *قبل* بدء اللوب (نفس نمط arkkanBulkSync) —
      فلو وقّفت الصندوق وشغّلته تاني، العدّاد وشريط التقدّم يعكسان المتبقي الفعلي فقط،
      بدل ما يعيدا عرض/عدّ كل الصفوف من الأول وهو بيتخطاها بسرعة من جوه اللوب. */
-  const rowsAll = getRows();
+  const rowsAll = prefix ? arkkanExamApplyFilters(getRows(), prefix) : getRows();
+  const ff = prefix ? arkkanExamFilterState(prefix) : null;
+  const filterNote = ff && (ff.name || ff.id || ff.nat || ff.course || ff.company || ff.dateFrom || ff.dateTo)
+    ? '، على الصفوف المطابقة للفلتر الحالي'
+    : '';
   const rows = rowsAll.filter(c => {
     const k = String(c.clientId);
     const cur = (clients || []).find(x => String(x.clientId) === k) || c;
@@ -1384,7 +1393,7 @@ async function arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel,
   let done = 0, updated = 0, same = 0, failed = 0, skipped = 0;
 
   showToast((compare ? `بدأت المقارنة مع أركان: ${rowsTotal} عميل` : `بدأ الجلب: ${rowsTotal} عميل`)
-    + (skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''), 'info');
+    + (skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : '') + filterNote, 'info');
 
   const diffText = (cur, srcResult) => {
     const os = arkkanExamStatusOf(cur);
@@ -1554,6 +1563,7 @@ function arkkanExamBulkRun(opts) { return arkkanExamBoxRun(Object.assign({ mode:
 function arkkanExamsBulk() {
   return arkkanExamBulkRun({
     name: 'exams',
+    prefix: 'arkkan-exams',
     getRows: arkkanExamClients,
     startSel: '#btn-arkkan-exams-start',
     stopSel: '#btn-arkkan-exams-stop',
@@ -1567,6 +1577,7 @@ function arkkanExamsBulk() {
 function arkkanExamsFailedBulk() {
   return arkkanExamBulkRun({
     name: 'failed',
+    prefix: 'arkkan-exams-failed',
     getRows: arkkanExamFailedClients,
     startSel: '#btn-arkkan-exams-failed-start',
     stopSel: '#btn-arkkan-exams-failed-stop',
@@ -1580,6 +1591,7 @@ function arkkanExamsFailedBulk() {
 function arkkanExamsNeedingBulk() {
   return arkkanExamBulkRun({
     name: 'needing',
+    prefix: 'arkkan-exams-needing',
     getRows: arkkanExamNeedingClients,
     startSel: '#btn-arkkan-exams-needing-start',
     stopSel: '#btn-arkkan-exams-needing-stop',
@@ -1590,12 +1602,12 @@ function arkkanExamsNeedingBulk() {
 }
 
 /* ═══════ مقارنة كل صندوق مع أركان: يراجع البيانات ويحفظ الاختلافات تلقائياً ═══════ */
-function arkkanExamCompareRun({ name, getRows, startSel, stopSel, progressSel, counterSel, doneMsg }) {
-  return arkkanExamBoxRun({ name, getRows, startSel, stopSel, progressSel, counterSel, doneMsg, mode: 'compare' });
+function arkkanExamCompareRun({ name, prefix, getRows, startSel, stopSel, progressSel, counterSel, doneMsg }) {
+  return arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, progressSel, counterSel, doneMsg, mode: 'compare' });
 }
 function arkkanExamsCompare() {
   return arkkanExamCompareRun({
-    name: 'exams', getRows: arkkanExamClients,
+    name: 'exams', prefix: 'arkkan-exams', getRows: arkkanExamClients,
     startSel: '#btn-arkkan-exams-compare', stopSel: '#btn-arkkan-exams-stop',
     progressSel: '#arkkan-exams-progress', counterSel: '#arkkan-exams-counter',
     doneMsg: 'اكتملت مقارنة نتائج الاختبارات مع أركان'
@@ -1603,7 +1615,7 @@ function arkkanExamsCompare() {
 }
 function arkkanExamsNeedingCompare() {
   return arkkanExamCompareRun({
-    name: 'needing', getRows: arkkanExamNeedingClients,
+    name: 'needing', prefix: 'arkkan-exams-needing', getRows: arkkanExamNeedingClients,
     startSel: '#btn-arkkan-exams-needing-compare', stopSel: '#btn-arkkan-exams-needing-stop',
     progressSel: '#arkkan-exams-needing-progress', counterSel: '#arkkan-exams-needing-counter',
     doneMsg: 'اكتملت مقارنة المحتاجين للاختبار'
@@ -1611,7 +1623,7 @@ function arkkanExamsNeedingCompare() {
 }
 function arkkanExamsPassedCompare() {
   return arkkanExamCompareRun({
-    name: 'passed', getRows: arkkanExamPassedClients,
+    name: 'passed', prefix: 'arkkan-exams-passed', getRows: arkkanExamPassedClients,
     startSel: '#btn-arkkan-exams-passed-compare', stopSel: '#btn-arkkan-exams-passed-stop',
     progressSel: '#arkkan-exams-passed-progress', counterSel: '#arkkan-exams-passed-counter',
     doneMsg: 'اكتملت مقارنة الناجحين'
@@ -1619,7 +1631,7 @@ function arkkanExamsPassedCompare() {
 }
 function arkkanExamsFailedCompare() {
   return arkkanExamCompareRun({
-    name: 'failed', getRows: arkkanExamFailedClients,
+    name: 'failed', prefix: 'arkkan-exams-failed', getRows: arkkanExamFailedClients,
     startSel: '#btn-arkkan-exams-failed-compare', stopSel: '#btn-arkkan-exams-failed-stop',
     progressSel: '#arkkan-exams-failed-progress', counterSel: '#arkkan-exams-failed-counter',
     doneMsg: 'اكتملت مقارنة الراسبين'
