@@ -1303,6 +1303,27 @@ section.view.active {
   display: none !important;
 }
 
+/* شارة إشعار الإضافات الجديدة على صندوق شيتات جوجل وقت الطي */
+.gsheet-new-badge {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  animation: gsheetBadgePop .25s ease;
+}
+@keyframes gsheetBadgePop {
+  0% { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* صندوق أيقونة موحّد لعناوين البانلز — يلف الإيموجي الموجود أصلاً بنفس شكل صناديق
    الأيقونات المستخدمة في بطاقات KPI وشريط الإحصائيات، بدل ما يفضل الإيموجي عاري */
 .panel-icon {
