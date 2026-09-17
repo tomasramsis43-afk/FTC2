@@ -374,6 +374,7 @@
       added++;
     }
     if(added) await persistWf();
+    if(added) bumpNewBadge(added);
     return {added:added, total:rows.length, sheet:sheet.name};
   }
 
@@ -1062,6 +1063,59 @@
     if(el3) el3.textContent = w.approved.length;
   }
 
+  /* ===================== New-Arrivals Badge (when panel is collapsed) ===================== */
+  // رقم إشعار صغير جنب عنوان صندوق شيتات جوجل يظهر بس والصندوق مطويّ، ويعبّر
+  // عن عدد الصفوف الجديدة اللي وصلت من الشيتات وانت مش شايف الصندوق. أول ما
+  // تفتح الصندوق (يتشال class="panel-collapsed") الرقم يتصفّر ويختفي فوراً.
+  // العدّاد بيتخزّن في localStorage (زي حالة الطي بالظبط) عشان يفضل موجود لو
+  // عملت refresh والصندوق لسه مقفول.
+
+  var GSHEET_BADGE_KEY = 'gsheetNewBadgeCount';
+
+  function readBadgeCount(){
+    try{ return Number(localStorage.getItem(GSHEET_BADGE_KEY)) || 0; }catch(e){ return 0; }
+  }
+
+  function writeBadgeCount(n){
+    try{ localStorage.setItem(GSHEET_BADGE_KEY, String(n)); }catch(e){}
+  }
+
+  function isGsheetPanelCollapsed(){
+    var el = document.getElementById('gsheet-workflow-panels');
+    return !!(el && el.classList.contains('panel-collapsed'));
+  }
+
+  function renderNewBadge(){
+    var el = document.getElementById('gsheet-new-badge');
+    if(!el) return;
+    var n = readBadgeCount();
+    if(n > 0){ el.textContent = String(n); el.style.display = 'inline-flex'; }
+    else { el.textContent = ''; el.style.display = 'none'; }
+  }
+
+  // بيزيد رقم الإشعار بس لو الصندوق مقفول وقت وصول الإضافة — لو مفتوح مفيش
+  // داعي لرقم لأن المستخدم شايف الصف الجديد على طول في الجدول.
+  function bumpNewBadge(addedCount){
+    if(!addedCount || !isGsheetPanelCollapsed()) return;
+    writeBadgeCount(readBadgeCount() + addedCount);
+    renderNewBadge();
+  }
+
+  // يراقب لحظة فتح الصندوق (اختفاء class="panel-collapsed") عشان يصفّر الرقم
+  // فوراً، من غير ما نلمس panel-collapse.js الأصلي خالص.
+  function watchGsheetPanelOpen(){
+    var panel = document.getElementById('gsheet-workflow-panels');
+    if(!panel || panel.dataset.badgeWatch) return;
+    panel.dataset.badgeWatch = '1';
+    var mo = new MutationObserver(function(){
+      if(!panel.classList.contains('panel-collapsed')){
+        writeBadgeCount(0);
+        renderNewBadge();
+      }
+    });
+    mo.observe(panel, {attributes:true, attributeFilter:['class']});
+  }
+
   /* ===================== Config UI ===================== */
 
   function renderConfigRows(){
@@ -1092,6 +1146,8 @@
   /* ===================== Event Binding ===================== */
 
   function bind(){
+    watchGsheetPanelOpen();
+    renderNewBadge();
     document.querySelectorAll('.gsheet-tab-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         document.querySelectorAll('.gsheet-tab-btn').forEach(function(b){ b.classList.remove('active'); });
