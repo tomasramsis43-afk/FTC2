@@ -376,6 +376,7 @@
       <div style="display:flex; gap:8px; margin-bottom:10px; border-bottom:1px solid var(--border,#ddd);">
         <button type="button" class="btn btn-ghost btn-sm gsheet-tab-btn active" data-gsheet-tab="pending" id="gsheet-tab-pending">📥 بانتظار الاعتماد <span class="mono" id="gsheet-pending-count" style="background:var(--badge-bg,#eee);border-radius:20px;padding:0 8px;"></span></button>
         <button type="button" class="btn btn-ghost btn-sm gsheet-tab-btn" data-gsheet-tab="rejected" id="gsheet-tab-rejected">🗄️ مرفوض الشيتات <span class="mono" id="gsheet-rejected-count" style="background:var(--badge-bg,#eee);border-radius:20px;padding:0 8px;"></span></button>
+        <button type="button" class="btn btn-ghost btn-sm gsheet-tab-btn" data-gsheet-tab="approved" id="gsheet-tab-approved">✅ سجل المعتمدين <span class="mono" id="gsheet-approved-count" style="background:var(--badge-bg,#eee);border-radius:20px;padding:0 8px;"></span></button>
       </div>
       <div class="gsheet-tab-pane" data-gsheet-pane="pending">
         <div class="hint hint-info" style="margin-bottom:10px;">الصفوف الجديدة المُجلَبة من شيتات جوجل تظهر هنا. اضغط «اعتماد» لنقل العميل تلقائياً إلى شيت العملاء مع ترحيل المدفوع إلى شيت الحركات المالية، أو «رفض» لتحريكه إلى تبويب المرفوض (لا يُحذف من الشيت ولا يعود تلقائياً). يمكنك تعديل بيانات أي صف قبل الاعتماد.</div>
@@ -405,6 +406,26 @@
         <div class="empty-state" id="gsheet-rejected-empty" style="display:none;">
           <div class="big">🗄️</div>
           <span>لا توجد صفوف مرفوضة حالياً.</span>
+        </div>
+      </div>
+      <div class="gsheet-tab-pane" data-gsheet-pane="approved" style="display:none;">
+        <div class="hint hint-info" style="margin-bottom:10px;">سجل دائم بكل شخص تم اعتماده من أي شيت جوجل — يبقى مسجّلاً هنا حتى لو تعدّل أو أُلغي العميل لاحقاً من شيت العملاء.</div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+          <select id="gsheet-approved-sheet-filter" style="max-width:200px;"><option value="">كل الشيتات</option></select>
+          <input type="date" id="gsheet-approved-from" title="من تاريخ الاعتماد">
+          <input type="date" id="gsheet-approved-to" title="إلى تاريخ الاعتماد">
+        </div>
+        <div class="table-scroll" style="max-height:48vh;">
+          <table>
+            <thead><tr>
+              <th>اسم الشيت</th><th>رقم الهوية</th><th>الاسم</th><th>الجوال</th><th>الدورة</th><th>تاريخ الاعتماد</th><th>اعتمده</th>
+            </tr></thead>
+            <tbody id="gsheet-approved-body"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="gsheet-approved-empty" style="display:none;">
+          <div class="big">✅</div>
+          <span>لا يوجد أحد مُعتمَد من الشيتات حتى الآن.</span>
         </div>
       </div>
     </div>

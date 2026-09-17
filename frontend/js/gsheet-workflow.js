@@ -31,13 +31,14 @@
   /* ===================== Workflow Data Layer ===================== */
 
   function wfData(){
-    if(!settings) return { sheets:[], pending:[], rejected:[], auditLog:[] };
+    if(!settings) return { sheets:[], pending:[], rejected:[], approved:[], auditLog:[] };
     if(!settings.gsheetWorkflow || typeof settings.gsheetWorkflow !== 'object')
-      settings.gsheetWorkflow = { sheets:[], pending:[], rejected:[], auditLog:[] };
+      settings.gsheetWorkflow = { sheets:[], pending:[], rejected:[], approved:[], auditLog:[] };
     const w = settings.gsheetWorkflow;
     if(!Array.isArray(w.sheets)) w.sheets = [];
     if(!Array.isArray(w.pending)) w.pending = [];
     if(!Array.isArray(w.rejected)) w.rejected = [];
+    if(!Array.isArray(w.approved)) w.approved = [];
     if(!Array.isArray(w.auditLog)) w.auditLog = [];
     return w;
   }
@@ -614,6 +615,19 @@
       } else {
         w.pending.splice(pendingIdx,1);
       }
+      w.approved.push({
+        id: safeUid(),
+        workflowId: p.workflowId,
+        sheetName: p.sheetName || '',
+        clientId: clientId,
+        clientRecordId: client.id,
+        name: client.name,
+        phone: client.phone,
+        courseType: client.courseType,
+        approvedAt: Date.now(),
+        approvedBy: (typeof currentUser!=='undefined' && currentUser) ? currentUser : '',
+        wasRejected: !!fromRejected
+      });
       await persistWf();
 
       auditLog('APPROVE', {
@@ -804,6 +818,7 @@
     var w = wfData();
     renderPending(w);
     renderRejected(w);
+    renderApproved(w);
     updateCounts(w);
   }
 
@@ -990,12 +1005,61 @@
     });
   }
 
+  function renderApproved(w){
+    var tbody = document.getElementById('gsheet-approved-body');
+    var empty = document.getElementById('gsheet-approved-empty');
+    if(!tbody) return;
+
+    var sheetSel = document.getElementById('gsheet-approved-sheet-filter');
+    if(sheetSel && !sheetSel.dataset.filled){
+      var names = w.sheets.map(function(s){ return s.name; }).filter(Boolean);
+      // ضيف أسماء أي شيتات اتشالت من الإعدادات بعدين لكن لسه ليها سجل اعتماد قديم
+      w.approved.forEach(function(a){ if(a.sheetName && names.indexOf(a.sheetName)<0) names.push(a.sheetName); });
+      sheetSel.innerHTML = '<option value="">كل الشيتات</option>' + names.map(function(n){
+        return '<option value="'+escHtml(n)+'">'+escHtml(n)+'</option>';
+      }).join('');
+      sheetSel.dataset.filled = '1';
+    }
+
+    var sheetVal = sheetSel ? sheetSel.value : '';
+    var fromVal = (document.getElementById('gsheet-approved-from')||{}).value || '';
+    var toVal = (document.getElementById('gsheet-approved-to')||{}).value || '';
+
+    var list = w.approved.slice().sort(function(a,b){ return (b.approvedAt||0)-(a.approvedAt||0); }).filter(function(a){
+      if(sheetVal && a.sheetName !== sheetVal) return false;
+      if(fromVal || toVal){
+        var d = a.approvedAt ? new Date(a.approvedAt).toISOString().slice(0,10) : '';
+        if(fromVal && d < fromVal) return false;
+        if(toVal && d > toVal) return false;
+      }
+      return true;
+    });
+
+    tbody.innerHTML = '';
+    if(!list.length){ if(empty) empty.style.display=''; return; }
+    if(empty) empty.style.display='none';
+    list.forEach(function(a){
+      var tr=document.createElement('tr');
+      var when = a.approvedAt ? new Date(a.approvedAt).toLocaleString('ar-EG') : '—';
+      tr.innerHTML = '<td>'+escHtml(a.sheetName||'')+'</td>'+
+        '<td class="mono">'+escHtml(a.clientId||'')+'</td>'+
+        '<td>'+escHtml(a.name||'')+'</td>'+
+        '<td class="mono">'+escHtml(a.phone||'')+'</td>'+
+        '<td>'+escHtml(a.courseType||'')+'</td>'+
+        '<td class="mono">'+escHtml(when)+'</td>'+
+        '<td>'+escHtml(a.approvedBy||'—')+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
   function updateCounts(w){
     var pendingVisible = w.pending.filter(function(p){ return p.status!=='APPROVED' && p.status!=='REJECTED'; }).length;
     var el1 = document.getElementById('gsheet-pending-count');
     var el2 = document.getElementById('gsheet-rejected-count');
+    var el3 = document.getElementById('gsheet-approved-count');
     if(el1) el1.textContent = pendingVisible;
     if(el2) el2.textContent = w.rejected.length;
+    if(el3) el3.textContent = w.approved.length;
   }
 
   /* ===================== Config UI ===================== */
@@ -1044,6 +1108,11 @@
     var openCfg = function(){ renderConfigRows(); var el=document.getElementById('gsheet-config-overlay'); if(el) el.classList.add('show'); if(typeof SoundFX!=='undefined'&&SoundFX&&SoundFX.open) SoundFX.open(); };
     if(cfgBtn) cfgBtn.addEventListener('click', openCfg);
     if(cfgMenu) cfgMenu.addEventListener('click', openCfg);
+
+    ['gsheet-approved-sheet-filter','gsheet-approved-from','gsheet-approved-to'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.addEventListener('change', function(){ renderApproved(wfData()); });
+    });
 
     var cancelBtn = document.getElementById('btn-gsheet-config-cancel');
     if(cancelBtn) cancelBtn.addEventListener('click', function(){ var el=document.getElementById('gsheet-config-overlay'); if(el) el.classList.remove('show'); });
