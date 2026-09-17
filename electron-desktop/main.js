@@ -74,7 +74,7 @@ const SYNCED_FILES = [
   'js/module-idsearch.js',
   'js/cockpit-pulse.js', 'js/notification-center.js', 'js/module-followups.js',
   'js/client-workspace.js', 'js/vault-workspace.js', 'js/report-studio.js',
-  'js/grid-enhancements.js', 'js/onboarding.js',
+  'js/grid-enhancements.js', 'js/panel-collapse.js', 'js/onboarding.js',
   'js/health-education-validity.js', 'js/health-education-ui.js', 'js/bag-workflow.js',
   'js/app-boot.js',
   'js/boot.js'
