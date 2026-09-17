@@ -6,6 +6,14 @@ const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('e
 // الحل القياسي: تعطيل التسريع بالكامل فيرجع الرسم للمعالج (CPU) فيثبت شكل
 // الحروف دائماً — الفرق في الأداء غير محسوس في تطبيق جداول/نماذج زي ده.
 app.disableHardwareAcceleration();
+// disableHardwareAcceleration() لوحده مش كافي في كل الحالات — بعض إصدارات Chromium
+// لسه بتستخدم مسارات GPU جزئية (rasterization/compositing) حتى بعد تعطيلها، وده
+// بيسيب فرصة لنفس باگ فساد كاش الخط يظهر تقطّع في رسم الحروف العربية المتصلة. الأعلام
+// دول بتقفل كل مسارات GPU صراحةً فيرجع الرسم بالكامل للـ CPU.
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -882,6 +890,11 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
+    // مسح أي كاش GPU قديم محفوظ على القرص من تشغيلات سابقة (قبل تفعيل أعلام تعطيل
+    // GPU أعلاه، أو من نسخة قديمة). إعادة تشغيل التطبيق العادية وحدها لا تكفي لحل
+    // مشكلة الحروف المتقطّعة لو كان الفساد محفوظاً في ملفات الكاش على القرص نفسه —
+    // بعكس ذاكرة التشغيل اللي بتُصفّر أوتوماتيك عند أي إغلاق/فتح.
+    try { fs.rmSync(path.join(app.getPath('userData'), 'GPUCache'), { recursive: true, force: true }); } catch (e) {}
     await prepareAssets();
     await startLocalServer();
 
