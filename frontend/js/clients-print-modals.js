@@ -250,12 +250,11 @@ $('#btn-clear-advanced-filters')?.addEventListener('click', ()=>{
   showUnpurchasedBagsOnly = false;
   $('#btn-filter-unpurchased-bags')?.classList.remove('btn-gold');
   $('#btn-filter-unpurchased-bags')?.classList.add('btn-ghost');
-  if(selectedYearFilter !== 'all'){
-    selectedYearFilter = 'all';
-    localStorage.setItem('selectedYearFilter','all');
-    // يعيد ضبط كل حقول تاريخ (من/إلى) في كل الشاشات ويرسم كل الشيتات — يشمل renderTable
-    if(typeof applyYearFilterToAllViews==='function') applyYearFilterToAllViews();
-  }
+  // ملاحظة: فلتر السنة العلوي (selectedYearFilter، بجانب زر تسجيل الخروج) مقصود عدم لمسه هنا —
+  // كان مسح الفلاتر المتقدمة يعيده إلى "all" ويستدعي applyYearFilterToAllViews التي تعيد رسم كل
+  // شيتات البرنامج (الداشبورد، الخزنة، الدورات...) لا شيت العملاء فقط. الزر الآن يقتصر أثره على
+  // شيت العملاء وحده كما هو مقصود منه؛ حقلا cl-date-from/cl-date-to أعلاه يُمسحان محلياً فقط
+  // (ضمن ADVANCED_FILTER_IDS) دون المساس بفلتر السنة نفسه أو بأي شيت آخر.
   updateAdvancedFiltersBadge();
   renderTable();
 });
