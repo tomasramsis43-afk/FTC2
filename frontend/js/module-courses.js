@@ -446,6 +446,9 @@ $('#no-course-number-list')?.addEventListener('click', async e=>{
   await saveClients();
   await logAudit('edit','الدورات', `تم إلغاء توسيم "بدون رقم دورة" عن العميل ${client.name} (${client.clientId||''})`);
   renderMissingCourse();
+  // العميل بقى مؤهلاً لمزامنة أركان (والحقل لم يعد يستبعده) — نحدّث جدول المزامنة فوراً
+  // حتى لو تبويبه مقفول حالياً، عشان يظهر صح أول ما يُفتح بدل ما يفضل يعتمد على render قديم
+  if(typeof renderArkkanSyncTable === 'function') renderArkkanSyncTable();
 });
 function renderMissingCourse(){
   renderNoCourseNumberBox();
@@ -517,6 +520,7 @@ $('#cs-missing-list')?.addEventListener('change', async e=>{
     await saveClients();
     await logAudit('edit','الدورات', `تم توسيم العميل ${client.name} (${client.clientId||''}) بـ"بدون رقم دورة" — استُبعد من هذه القائمة ومن مزامنة أركان وشيت فواتير الدورات`);
     renderMissingCourse();
+    if(typeof renderArkkanSyncTable === 'function') renderArkkanSyncTable();
   }
 });
 
