@@ -90,6 +90,7 @@ async function renderViewSection(viewName){
     case 'purchases':     if(typeof renderPurchases==='function') renderPurchases(); break;
     case 'arkkan-sync':
       if(typeof renderArkkanSyncTable==='function') renderArkkanSyncTable();
+      if(typeof renderArkkanExamsTable==='function') renderArkkanExamsTable(); // صناديق نتائج الاختبار — كانت لا تُعاد رسمها عند فتح التبويب، فيبقى عميل مؤهَّل حديثاً غائباً حتى حدث آخر يجبرها على إعادة الرسم
       if(typeof arkkanUpdateStatus==='function') arkkanUpdateStatus();
       break;
   }

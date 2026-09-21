@@ -643,6 +643,19 @@
       if(typeof renderDashboard === 'function') renderDashboard();
       if(typeof refreshFilterOptions === 'function') refreshFilterOptions();
       if(typeof renderCourses === 'function') renderCourses();
+
+      // إشعار شيت جوجل المصدر بأن العميل اتعمد — best-effort فقط، فشلها لا يوقف
+      // عملية الاعتماد المحلية (العميل بالفعل اتعمد ودخل حسابات البرنامج بنجاح)
+      try {
+        var headers2 = { 'Content-Type': 'application/json' };
+        if (window.SERVER_AUTH_TOKEN) headers2['Authorization'] = 'Bearer ' + window.SERVER_AUTH_TOKEN;
+        fetch('/gsheet-approve-notify', {
+          method: 'POST',
+          headers: headers2,
+          body: JSON.stringify({ clientId: clientId, sheetName: p.sheetName || '' })
+        }).catch(function(){ /* صامت — مجرد إشعار، لا يؤثر على الاعتماد نفسه */ });
+      } catch(e) { /* صامت */ }
+
       showToast(gsServerConfirmed
         ? 'تم اعتماد «'+client.name+'» وترحيل المدفوع للحركات المالية'
         : 'تم اعتماد «'+client.name+'» وترحيل المدفوع للحركات المالية — لكنه سيُكمل عرض "قيد الاعتماد" حتى يعتمده الأدمن (حساب الاستقبال بحاجة لموافقة الأدمن)');

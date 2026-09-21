@@ -195,6 +195,57 @@ app.get('/gsheet-csv', requireAuth, (req, res) => {
   fetchCsv(target0);
 });
 
+/* ===================== إشعار اعتماد شيت جوجل (Apps Script Web App) =====================
+   عند اعتماد عميل مستورد من شيت جوجل، نبعت إشعار لسكربت Apps Script منشور على الشيت
+   نفسه عشان يكتب "معتمد" في عمود الحالة بجانب صف العميل. الرابط والـ secret يفضلوا هنا
+   فقط على السيرفر (env vars لو موجودة، وإلا القيم الافتراضية اللي جهزها المستخدم) —
+   الواجهة الأمامية بتنادي /gsheet-approve-notify بس، من غير ما تعرف السر أو الرابط. */
+const GSHEET_APPROVE_WEBHOOK_URL = process.env.GSHEET_APPROVE_WEBHOOK_URL ||
+  'https://script.google.com/macros/s/AKfycbz6njPoEHfq5J5ZyiznpnkixL2hCsgRoEY96c0dkJXa_TVp3DdYP69HZO3MGZ23xLngmA/exec';
+const GSHEET_APPROVE_SECRET = process.env.GSHEET_APPROVE_SECRET || 'GHAYYER_DI_TOKEN_SERI_TAWEEL';
+
+app.post('/gsheet-approve-notify', requireAuth, express.json(), (req, res) => {
+  const clientId = String((req.body && req.body.clientId) || '').trim();
+  const sheetName = String((req.body && req.body.sheetName) || '').trim();
+  if (!clientId) return res.status(400).json({ ok: false, error: 'clientId مطلوب' });
+  if (!GSHEET_APPROVE_WEBHOOK_URL) return res.status(400).json({ ok: false, error: 'GSHEET_APPROVE_WEBHOOK_URL غير مُعدّ' });
+
+  let target;
+  try { target = new URL(GSHEET_APPROVE_WEBHOOK_URL); } catch (e) {
+    return res.status(500).json({ ok: false, error: 'رابط Apps Script غير صالح' });
+  }
+  const payload = JSON.stringify({ secret: GSHEET_APPROVE_SECRET, clientId, sheetName, statusText: 'معتمد' });
+
+  function callScript(url, hops) {
+    let u; try { u = new URL(url); } catch (e) { return res.status(500).json({ ok: false, error: 'رابط إعادة توجيه غير صالح' }); }
+    const reqOut = https.request(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      timeout: 15000
+    }, remoteRes => {
+      if (remoteRes.statusCode >= 300 && remoteRes.statusCode < 400 && remoteRes.headers.location && hops < 5) {
+        remoteRes.resume();
+        return callScript(new URL(remoteRes.headers.location, u).toString(), hops + 1);
+      }
+      let chunks = '';
+      remoteRes.on('data', c => chunks += c);
+      remoteRes.on('end', () => {
+        if (!res.headersSent) {
+          res.writeHead(remoteRes.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(chunks || JSON.stringify({ ok: remoteRes.statusCode < 400 }));
+        }
+      });
+    });
+    reqOut.on('error', err => {
+      if (!res.headersSent) res.status(502).json({ ok: false, error: 'تعذّر الاتصال بسكربت جوجل: ' + err.message });
+    });
+    reqOut.on('timeout', function () { this.destroy(new Error('timeout')); });
+    reqOut.write(payload);
+    reqOut.end();
+  }
+  callScript(target.toString(), 0);
+});
+
 app.use(arkkanRouter);
 // arkkanSyncRouter (جلب أركان عبر Playwright جوّه السيرفر) اتشال نهائياً —
 // الجلب بقى بيتم عبر arkkan-agent.js محلياً على جهاز المستخدم (localhost:9955)
