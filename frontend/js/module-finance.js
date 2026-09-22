@@ -322,6 +322,7 @@ function vaultFilteredRows(){
   const to = $('#v-to').value;
   const typeVals = selectedFilterValues($('#v-filter-type'));
   const destVals = selectedFilterValues($('#v-filter-dest'));
+  const methodVals = selectedFilterValues($('#v-filter-method'));
   const q = $('#v-search').value.trim().toLowerCase();
   const dupOnly = $('#v-filter-dup')?.checked;
   const dupIds = dupOnly ? vaultDuplicateClientIds() : null;
@@ -339,6 +340,7 @@ function vaultFilteredRows(){
     if(to && t.date > to) return false;
     if(typeVals.length && !typeVals.includes(t.type)) return false;
     if(destVals.length && !destVals.includes(t.destination||'vault')) return false;
+    if(methodVals.length && !methodVals.includes(t.method||'')) return false;
     if(dupOnly && !(t.clientId && dupIds.has(t.clientId))) return false;
     if(noMethodOnly && String(t.method||'').trim()) return false;
     if(q){
@@ -931,6 +933,7 @@ function renderVault(){
   renderVaultLockStatus();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
+  repopulateFilterSelectPreserve($('#v-filter-method'), settings.channels.map(c=>c.name), 'كل طرق الدفع');
   runDueScheduledVaultTx().then(ran=>{ if(ran) renderVault(); });
   renderRecurringSuggestions();
   renderScheduledVaultTable();
@@ -957,7 +960,7 @@ function renderVault(){
 
   // إعادة الصفحة إلى الأولى تلقائياً كلما تغيّر البحث أو أي فلتر (وليس عند التنقّل بين الصفحات فقط)
   const vaultFilterSig = JSON.stringify([
-    $('#v-from')?.value, $('#v-to')?.value, selectedFilterValues($('#v-filter-type')), selectedFilterValues($('#v-filter-dest')),
+    $('#v-from')?.value, $('#v-to')?.value, selectedFilterValues($('#v-filter-type')), selectedFilterValues($('#v-filter-dest')), selectedFilterValues($('#v-filter-method')),
     $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked, $('#v-filter-anomaly')?.checked, selectedFilterValues($('#v-filter-reception'))
   ]);
   if(vaultFilterSig !== vaultLastFilterSig){ vaultCurrentPage = 1; vaultLastFilterSig = vaultFilterSig; }
@@ -1225,7 +1228,7 @@ function renderDenomHistory(){
 // الاثنين معاً لكل عنصر كان يستدعي renderVault مرتين لبعض العناصر (input ثم change) فيُعاد رسم
 // الجدول الكبير مرتين لكل تفاعل، ويزيد بشكل ملحوظ مع كثرة البيانات.
 ['#v-from','#v-to'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); });
-['#v-filter-type','#v-filter-dest','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
+['#v-filter-type','#v-filter-dest','#v-filter-method','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
 // تبويبات الصناديق (الكل/الخزنة/البنك/الشبكة): تضبط فلتر الوجهة الموجود أصلاً وتُطلق change
 // عليه لإعادة استخدام نفس مسار renderVault والفرز والصفحات دون أي تكرار لأي منطق.
 $('#vault-fund-tabs')?.addEventListener('click', e=>{
