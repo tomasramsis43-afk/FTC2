@@ -1030,7 +1030,18 @@ function renderVault(){
   }).join('');
 
 
-  // رسوم ثقيلة تُؤجل للـ idle حتى يظهر الجدول فوراً
+  // جدول تصنيف الفئات النقدية (الجرد) وسجله: أرقام نصية بسيطة رخيصة الحساب (10 فئات فقط) —
+  // كانت مُجمَّعة سابقاً مع رسم الرسوم البيانية الثقيلة (كانفاس) داخل _deferCharts أدناه، فتُؤجَّل
+  // معها لدورة idle قد تتأخر أو (لو isViewActive('vault') رجعت false للحظة أثناء عملية أخرى
+  // متزامنة كإضافة/تعديل حركة) لا تُنفَّذ إطلاقاً فى تلك المرة — فتبقى أرقام الجرد قديمة ظاهرياً
+  // حتى تُعاد renderVault() من جديد بنفسها (كالخروج من التبويب والعودة إليه) بينما بقية أرقام
+  // الخزنة (بطاقات الأعلى) محدَّثة فوراً دائماً لأنها متزامنة. نحسبها ونرسمها هنا مباشرة (متزامنة)
+  // بدل التأجيل، فتبقى مطابقة تماماً لبقية أرقام الشاشة فى كل مرة.
+  ensureDenomUiBuilt();
+  recalcDenomTable();
+  renderDenomHistory();
+
+  // رسوم ثقيلة (كانفاس) تبقى مؤجَّلة للـ idle حتى يظهر الجدول فوراً
   const _deferCharts = (cb)=>{
     if(typeof isViewActive==='function' && !isViewActive('vault')) return;
     if(typeof requestIdleCallback==='function') requestIdleCallback(cb, {timeout:400});
@@ -1043,9 +1054,6 @@ function renderVault(){
     const dailyTrend = vaultFilteredDailyTrend(rows);
     drawLineChart('#chart-vault-daily', dailyTrend.labels, dailyTrend.series);
     drawBars('#chart-vault-method', vaultFilteredMethodTotals(rows));
-    ensureDenomUiBuilt();
-    recalcDenomTable();
-    renderDenomHistory();
     renderCashFlowForecastChart('vault');
     renderVaultBudgetGlance();
   });
