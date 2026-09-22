@@ -334,14 +334,22 @@ router.get('/api/client-records/ids', requireAuth, async (req, res) => {
 // هو مصدر الحقيقة الوحيد، clients_rows مجرد فهرس عرض/بحث مشتق منه). راجع تعليق clients_rows فى
 // schema.sql: نفس التنازل (plaintext مقابل بحث/ترقيم سريع من السيرفر) المقبول أصلاً لهذا الجدول
 // تحديداً منذ إنشائه — هنا فقط نُبقيه متزامناً فعلياً مع كل حفظ بدل الاعتماد على مسار قديم متوقف.
-function syncClientsRowFromPlain(id, plain) {
+async function syncClientsRowFromPlain(id, plain) {
   if (typeof plain !== 'string' || !plain) return;
   try {
     const obj = JSON.parse(plain);
     if (obj && typeof obj === 'object' && String(obj.id) === String(id)) {
-      clientsRowsRepo.upsertChunk([obj]).catch(() => {});
+      // ننتظر هذا الآن (بعد أن كان fire-and-forget بلا await): كان أي قراءة سريعة تالية لجدول
+      // clients_rows (GET /api/clients — المسار السريع المستخدم فى renderTable) قد تسبق اكتمال
+      // هذا الكتابة، فترجع الصف بقيمته القديمة (مثال حقيقي: الرقم المرجعي يظهر فارغاً لثانية أو
+      // ثانتين بعد نجاح جلبه وحفظه فعلياً، لأن renderTable() تُستدعى فوراً بعد كل حفظ فى حلقة
+      // الجلب الجماعي وتقرأ هذا الفهرس مباشرة). الانتظار هنا يضمن أن الفهرس السريع مُحدَّث فعلياً
+      // قبل أن يعود رد PUT الناجح للمتصفح، فأي قراءة تالية للمسار السريع تكون متسقة دائماً.
+      await clientsRowsRepo.upsertChunk([obj]).catch(e => {
+        console.error('[records] syncClientsRowFromPlain: فشل تحديث فهرس clients_rows للعميل', id, e);
+      });
     }
-  } catch (e) { /* تجاهل — لا يجوز أن يوقف حفظ العميل الفعلي */ }
+  } catch (e) { console.error('[records] syncClientsRowFromPlain: فشل تحليل plain للعميل', id, e); }
 }
 
 router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, res) => {
@@ -381,9 +389,10 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
       origin: newOrigin, status: newStatus, clientId: plainClientId,
     });
     if (upsert.updated) {
-      // مزامنة فورية لفهرس العرض (clients_rows) — راجع syncClientsRowFromPlain أعلاه. best-effort
-      // بعد تأكيد نجاح الحفظ الحقيقي فى client_records مباشرة.
-      syncClientsRowFromPlain(req.params.id, req.body?.plain);
+      // مزامنة فهرس العرض (clients_rows) — راجع syncClientsRowFromPlain أعلاه. تُنتظَر الآن (بعد
+      // تأكيد نجاح الحفظ الحقيقي فى client_records مباشرة) قبل الرد/البث، حتى لا تسبقها أي قراءة
+      // تالية للمسار السريع (GET /api/clients) فترى قيمة قديمة.
+      await syncClientsRowFromPlain(req.params.id, req.body?.plain);
       broadcastRecordChanged({ collection: 'clients', actorUsername: req.user.username });
       if (upsert.version === 1) {
         notifyChange(
