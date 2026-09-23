@@ -282,6 +282,18 @@ function vaultFilteredMethodTotals(rows){
   rows.forEach(t=>{ const k = t.method || 'غير محدد'; map[k] = (map[k]||0) + num(t.amount); });
   return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k, Math.round(v*100)/100]);
 }
+/* خيارات فلتر "طريقة الدفع": طرق الدفع المُعرَّفة حالياً في الإعدادات + أي نص طريقة دفع
+   موجود فعلياً في حركات قديمة ولم يعد مُعرَّفاً في الإعدادات (تم حذفه/إعادة تسميته لاحقاً، أو
+   خطأ إملائي قديم مثلاً). بدون هذا الاتحاد، أي حركة بطريقة دفع "يتيمة" كهذه تظهر كبند منفصل فى
+   شارت "توزيع الحركات حسب طريقة الدفع" لكن لا يمكن اختيارها من هذا الفلتر إطلاقاً — لأن الفلتر
+   كان يُبنى من settings.channels فقط. */
+function vaultKnownMethodOptions(){
+  const defined = settings.channels.map(c=>c.name);
+  const definedSet = new Set(defined);
+  const extra = new Set();
+  vaultTx.forEach(t=>{ if(t.method && !definedSet.has(t.method)) extra.add(t.method); });
+  return defined.concat(Array.from(extra).sort((a,b)=>a.localeCompare(b,'ar')));
+}
 /* أرقام الهوية التي تتكرر أكثر من مرة ضمن كل حركات الخزنة/البنك/الشبكة (بغض النظر عن الفلتر الحالي) */
 function vaultDuplicateClientIds(){
   if(_dupCacheVersion===vaultTxVersion && _dupCache) return _dupCache;
@@ -933,7 +945,7 @@ function renderVault(){
   renderVaultLockStatus();
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
-  repopulateFilterSelectPreserve($('#v-filter-method'), settings.channels.map(c=>c.name), 'كل طرق الدفع');
+  repopulateFilterSelectPreserve($('#v-filter-method'), vaultKnownMethodOptions(), 'كل طرق الدفع');
   runDueScheduledVaultTx().then(ran=>{ if(ran) renderVault(); });
   renderRecurringSuggestions();
   renderScheduledVaultTable();
