@@ -409,6 +409,11 @@ header.top {
   margin-bottom: 14px;
   flex-wrap: wrap;
   gap: 16px;
+  /* الهيدر يمتد بعرض الشاشة الكامل بإلغاء الحشوة اليسرى الموروثة من .app (36px عادةً،
+     4vw فوق 1600px، 10px تحت 600px — القيم المقابلة أدناه في الميديا كويريز) بدل ما يفضل
+     محصور جوه نفس عرض باقي المحتوى وسايب فجوة على الشمال بين حافة الشاشة والبار. */
+  margin-left: -36px;
+  width: calc(100% + 36px);
 }
 
 header.top::after {
@@ -539,6 +544,8 @@ header.top p {
     padding: 12px 14px;
     gap: 10px;
     top: 0;
+    margin-left: -10px;
+    width: calc(100% + 10px);
   }
 
   header.top h1 {
@@ -583,6 +590,10 @@ header.top p {
 @media(min-width: 1600px) {
   .app {
     padding: 0 0 60px 4vw;
+  }
+  header.top {
+    margin-left: -4vw;
+    width: calc(100% + 4vw);
   }
 }
 
