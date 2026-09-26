@@ -129,9 +129,15 @@ function fetchText(url) {
   return new Promise((resolve, reject) => {
     https.get(url, { timeout: 8000 }, (res) => {
       if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => resolve(data));
+      // مهم: نجمع الأجزاء كـ Buffer خام ونحوّلها لنص UTF-8 مرة واحدة فى النهاية بعد التجميع الكامل.
+      // التجميع بـ (data += chunk) كان بيحوّل كل chunk لنص UTF-8 على حدة — فأي محرف عربي (كل حروف
+      // العربي 2 بايت فى UTF-8) يقع بالصدفة على حدّ فاصل بين طلبين/حزمتين شبكة ينقسم نصفه لكل
+      // جانب، فيتحوّل كل نصف بمفرده لمحرف "�" (U+FFFD) بدل المحرف الصحيح — وهو بالضبط سبب ظهور
+      // حروف عربي مفقودة/محارف "�" غريبة وسط نصوص الواجهة (مثال: زرار "تحديد غياب") بعد مزامنة
+      // ملفات الواجهة من السيرفر لتطبيق سطح المكتب.
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     }).on('error', reject).on('timeout', function(){ this.destroy(new Error('timeout')); });
   });
 }
@@ -363,9 +369,12 @@ function startLocalServer() {
 
     // ---- استيراد أركان عبر نافذة مخفية (يتغلب على تحميل JavaScript) ----
     srv.post('/arkkan-scrape', (req, res) => {
-      let rawBody = '';
-      req.on('data', c => rawBody += c);
+      const rawChunks = [];
+      req.on('data', c => rawChunks.push(c));
       req.on('end', async () => {
+        // نجمع Buffer خام ونفكّه لنص UTF-8 مرة واحدة فى النهاية — تفادياً لتقطيع محارف عربي
+        // متعددة البايت لو وقعت على حد فاصل بين حزم الشبكة (نفس إصلاح fetchText بالأعلى)
+        const rawBody = Buffer.concat(rawChunks).toString('utf8');
         let username, password;
         try { const j = JSON.parse(rawBody); username = j.username; password = j.password; } catch(e) {}
         if (!username || !password) { res.status(400).json({ error: 'يوزر وباسورد مطلوبين' }); return; }

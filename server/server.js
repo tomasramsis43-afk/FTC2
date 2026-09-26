@@ -227,9 +227,12 @@ app.post('/gsheet-approve-notify', requireAuth, express.json(), (req, res) => {
         remoteRes.resume();
         return callScript(new URL(remoteRes.headers.location, u).toString(), hops + 1);
       }
-      let chunks = '';
-      remoteRes.on('data', c => chunks += c);
+      const chunkBufs = [];
+      remoteRes.on('data', c => chunkBufs.push(c));
       remoteRes.on('end', () => {
+        // نجمع Buffer خام ونفكّه لنص UTF-8 مرة واحدة فى النهاية بدل تجميع نصي لكل حزمة على حدة
+        // (نفس إصلاح fetchText/readJsonBody أعلاه — يمنع تقطيع محارف عربي متعددة البايت)
+        const chunks = Buffer.concat(chunkBufs).toString('utf8');
         if (!res.headersSent) {
           res.writeHead(remoteRes.statusCode || 200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(chunks || JSON.stringify({ ok: remoteRes.statusCode < 400 }));

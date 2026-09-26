@@ -280,7 +280,7 @@ function validateReferNum(referNum) {
 
 function readJsonBody(req, maxSize = cfg.TIMEOUT.HTTP_BODY) {
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks = [];
     let size = 0;
     req.on('data', chunk => {
       size += chunk.length;
@@ -289,9 +289,13 @@ function readJsonBody(req, maxSize = cfg.TIMEOUT.HTTP_BODY) {
         req.destroy();
         return;
       }
-      body += chunk;
+      chunks.push(chunk);
     });
     req.on('end', () => {
+      // نجمع Buffer خام ونفكّه لنص UTF-8 مرة واحدة فى النهاية بدل تجميع نصي لكل حزمة على حدة —
+      // التجميع النصي (body += chunk) كان يقطّع أي محرف عربي متعدد البايت يقع على حد فاصل بين
+      // حزم الشبكة إلى محرفين "�" (U+FFFD) بدل المحرف الصحيح (اسم عميل/ملاحظة بالعربي مثلاً)
+      const body = Buffer.concat(chunks).toString('utf8');
       try { resolve(body ? JSON.parse(body) : {}); }
       catch { reject(new Error('جسم الطلب غير صالح (غير JSON)')); }
     });
