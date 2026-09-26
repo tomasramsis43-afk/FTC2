@@ -53,7 +53,7 @@ function renderSuppliersTable(){
       <td class="mono" data-label="الجوال">${escapeHtml(s.phone||'—')}</td>
       <td data-label="التصنيف">${escapeHtml(s.category||'—')}</td>
       <td class="mono" data-label="إجمالي المشتريات">${fmt(totals[s.id]||0)} ﷼</td>
-      <td data-label="ملاحظات">${escapeHtml(s.notes||'—')}</td>
+      <td data-label="ملاحظات">${s.notes ? truncateNotesHtml(s.notes) : '—'}</td>
       <td class="card-full" data-label="">
         <button class="btn btn-ghost btn-sm" data-edit-supplier="${s.id}">تعديل</button>
         <button class="btn btn-danger btn-sm" data-del-supplier="${s.id}">حذف</button>

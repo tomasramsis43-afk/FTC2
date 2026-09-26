@@ -321,6 +321,16 @@ function normalizeRole(r){ return VALID_ROLES.includes(r) ? r : 'staff'; }
 /* هروب أحرف HTML — معرّفة هنا (الملف الأول المحمّل) بدل clients-pagination-filters.js لأن
    backup-restore.js وملفات أخرى تستدعيها قبل تحميل ذلك الملف، وكان ذلك يرمي ReferenceError */
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+/* لعرض حقول نصية حرة قد تطول (ملاحظات، بيانات ...) داخل خلايا جدول بدون أن يتمدد ارتفاع
+   الصف لعدة أسطر (خصوصاً في عرض الكارت بالموبايل حيث white-space:normal يسمح بالالتفاف
+   الكامل). تقصّ النص لعدد حروف محدود وتضيف "…"، مع الاحتفاظ بالنص الكامل في title لإظهاره
+   بالتمرير عليه (أو لمسه بالموبايل) — فلا يُفقد شيء، فقط لا يُفرض على ارتفاع الصف. */
+function truncateNotesHtml(text, max = 60){
+  const s = String(text||'');
+  if (!s) return '';
+  if (s.length <= max) return escapeHtml(s);
+  return `<span title="${escapeHtml(s)}">${escapeHtml(s.slice(0, max))}…</span>`;
+}
 /* معدل ضريبة القيمة المضافة المركزي — كل حسابات الضريبة في النظام (فواتير الدورات، المبيعات
    اليدوية، المشتريات، إقرارات ضريبة القيمة المضافة، بيانات ZATCA) تستخدم هذا الثابت فقط،
    حتى لا يتشتت المعدل بين عدة قيم حرفية (0.15 / ÷1.15) يصعب تحديثها أو عرضة للتناقض.

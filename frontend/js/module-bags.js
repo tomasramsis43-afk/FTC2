@@ -277,7 +277,7 @@ function renderBags(){
       <td class="mono ${num(b.qty)<0?'red':''}" data-label="الكمية">${qtyDisplay}</td>
       <td class="mono" data-label="الرصيد بعدها">${b.balanceAfter!==undefined ? fmt(num(b.balanceAfter)) : '—'}</td>
       <td data-label="طريقة الدفع">${escapeHtml(b.method||'')}</td>
-      <td data-label="ملاحظات">${escapeHtml(b.notes||'')}</td>
+      <td data-label="ملاحظات">${truncateNotesHtml(b.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
         ${(isBPending && currentUserRole==='admin') ? `<button class="btn btn-gold btn-sm" data-approvestock="${b.id}" title="اعتماد هذه العملية لتدخل في إجماليات المخزون والحقائب">✅ اعتماد</button><button class="btn btn-danger btn-sm" data-rejectstock="${b.id}" title="رفض وحذف هذا التسجيل المعلّق نهائياً">✖ رفض</button>` : ''}
         ${b.type && b.type!=='issue' ? `<button class="btn btn-ghost btn-sm" data-editstock="${b.id}">${tr('edit')}</button>` : ''}
