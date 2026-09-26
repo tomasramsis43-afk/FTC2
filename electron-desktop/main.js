@@ -167,10 +167,43 @@ function clearStaleAssetsIfVersionChanged() {
   }
 }
 
+// رقم فحص الملفات المعطوبة — مستقل عن رقم إصدار التطبيق نفسه، لأن إصلاح علة تقطيع المحارف
+// العربية (راجع تعليق fetchText أعلاه) نزل بتحديث فى كود السيرفر فقط، من غير أي إصدار جديد
+// لتطبيق سطح المكتب. لو احتجنا نعيد هذا الفحص مستقبلاً لأي سبب، يكفي رفع هذا الرقم.
+const CORRUPTION_SCAN_VERSION = '1';
+
+// يفحص كل ملفات الواجهة المخزَّنة محلياً (SYNCED_FILES) بحثاً عن محرف "�" (U+FFFD) — الأثر
+// المميز لعلة تقطيع محارف عربي متعددة البايت (كانت موجودة فى fetchText قبل هذا الإصلاح).
+// أي ملف محلي فيه هذا المحرف يُحذف فقط هو (وليس كل الكاش) — فيعتبره checkForFrontendUpdate
+// (اللي بيتنفَّذ بعده مباشرة عند بدء التشغيل) "غير موجود محلياً" ويعيد تنزيله نظيفاً من
+// السيرفر تلقائياً. يعمل مرة واحدة فقط لكل رقم CORRUPTION_SCAN_VERSION (عبر ملف علامة)، مش
+// كل تشغيل، تفادياً لقراءة كل الملفات فى كل مرة يُفتح فيها البرنامج بلا داعٍ.
+function purgeCorruptedCachedAssets() {
+  const markerFile = path.join(userAssetsDir, '.corruption-scan-v' + CORRUPTION_SCAN_VERSION);
+  if (fs.existsSync(markerFile)) return; // اتفحص قبل كده بنفس رقم الفحص — لا داعي للتكرار
+
+  let purged = 0;
+  for (const file of SYNCED_FILES) {
+    const p = path.join(userAssetsDir, file);
+    try {
+      const content = fs.readFileSync(p, 'utf8');
+      if (content.indexOf('\uFFFD') !== -1) {
+        fs.unlinkSync(p);
+        purged++;
+      }
+    } catch (e) { /* الملف غير موجود محلياً أصلاً أو أي خطأ قراءة — نتجاهله، مفيش حاجة نحذفها */ }
+  }
+  try { fs.writeFileSync(markerFile, String(Date.now()), 'utf8'); } catch (e) {}
+  if (purged > 0) {
+    console.log(`[فحص الملفات المعطوبة] تم حذف ${purged} ملف واجهة محلي معطوب (محارف عربي متقطّعة) — سيُعاد تنزيله نظيفاً من السيرفر تلقائياً`);
+  }
+}
+
 async function prepareAssets() {
   userAssetsDir = path.join(app.getPath('userData'), 'app-assets');
   try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
   clearStaleAssetsIfVersionChanged();
+  purgeCorruptedCachedAssets();
 }
 
 // يتحقق من ملفات الواجهة على السيرفر الحي، ويحدّث المخزَّن محلياً فقط للملفات
