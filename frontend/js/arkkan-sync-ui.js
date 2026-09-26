@@ -169,15 +169,79 @@ function arkkanPatchFromData(c, data){
   return patch;
 }
 
-/* يجلب بيانات العميل من أركان وقدّمها على الحقول الناقصة واحد لواحد
-   (نفس منطق المزامنة)، ثم يحفظ الكائن في الخادم تلقائياً. */
+/* ══════════════════════════════════════════════
+   1-ب) نسخة "المقارنة الكاملة" — خاصة بزر "جلب من أركان" فى كارت العميل فقط.
+   بعكس arkkanPatchFromData (تملأ الحقول الناقصة فقط، وتُستخدم فى صندوق
+   المزامنة الجماعي وزر الصف المفرد بالشيت)، هذه النسخة تقارن كل حقل حتى لو
+   الكارت "مكتمل" ظاهرياً — وأي فرق حقيقي بين المسجَّل بالنظام وما هو مسجَّل
+   فى أركان يُستبدل تلقائياً بقيمة أركان. النطاق مقصور على ضغطة واعية من
+   المستخدم على كارت عميل واحد بالذات — صندوق المزامنة الجماعي التلقائي يبقى
+   بسلوكه القديم (ملء الناقص فقط) تفادياً لإفساد إجمالي/متبقي العملاء صامتاً
+   فى كل مزامنة جماعية (نفس السبب الموثَّق أعلى فى arkkanPatchFromData بخصوص
+   coursePrice). */
+function arkkanDiffFromData(c, data) {
+  const patch = {};
+  const changes = []; // {label, oldVal, newVal} — لعرضها للمستخدم فى التوست
+
+  function compareAndSet(field, oldRaw, newRaw, label) {
+    const newNorm = String(newRaw ?? '').trim();
+    if (!newNorm) return; // مفيش قيمة قادمة من أركان لهذا الحقل — لا نمسح شيء موجود بالنظام
+    const oldNorm = String(oldRaw ?? '').trim();
+    if (oldNorm === newNorm) return; // مطابق فعلاً بين النظامين — لا تحديث
+    patch[field] = newRaw;
+    changes.push({ label, oldVal: oldNorm || '—', newVal: newNorm });
+  }
+
+  if (data.invoice) compareAndSet('invoice', c.invoice, String(data.invoice).trim(), ARKKAN_FIELD_LABELS.invoice);
+  if (data.courseNumber) compareAndSet('courseNumber', c.courseNumber, String(data.courseNumber).trim(), ARKKAN_FIELD_LABELS.courseNumber);
+  if (data.bagInvoice) compareAndSet('bagInvoice', c.bagInvoice, String(data.bagInvoice).trim(), ARKKAN_FIELD_LABELS.bagInvoice);
+
+  // تاريخ الحقيبة: نوحّد الصيغة لـ ISO أولاً كي لا يظهر فرق وهمي بسبب اختلاف الصيغة فقط
+  if (data.bagPurchaseDate) {
+    const nd = arkkanToInputDate(data.bagPurchaseDate);
+    if (nd && isValidIsoDate(nd)) compareAndSet('bagPurchaseDate', c.bagPurchaseDate, nd, ARKKAN_FIELD_LABELS.bagPurchaseDate);
+  }
+
+  // تاريخ الدورة: نقارن بالقيمة الفعلية المعروضة بالكارت (المسجّلة على العميل
+  // أو تاريخ جدول الدورات إن لم تكن مسجّلة مباشرة عليه)
+  if (data.startDate) {
+    const nd = arkkanToInputDate(data.startDate);
+    if (nd && isValidIsoDate(nd)) {
+      const current = c.startDate || arkkanCourseDate(c);
+      compareAndSet('startDate', current, nd, ARKKAN_FIELD_LABELS.startDate);
+    }
+  }
+
+  // قيمة الفاتورة: نقارن السعر المسجَّل بالنظام (coursePrice) بما هو مسجَّل فى أركان،
+  // ونحدّث كذلك قيمة الإيصال الفعلية (كانت أصلاً تُحدَّث دائماً بلا شرط — نفس السلوك محفوظ)
+  if (data.coursePrice) {
+    const newPrice = arkkanNumPrice(data.coursePrice);
+    if (String(newPrice) !== String(c.receiptActualValue ?? '')) patch.receiptActualValue = newPrice;
+    compareAndSet('coursePrice', c.coursePrice, newPrice, ARKKAN_FIELD_LABELS.coursePrice);
+  }
+
+  // تاريخ إصدار الفاتورة: كان يُحدَّث دائماً بلا شرط أصلاً — نفس السلوك محفوظ، مع إضافته
+  // لقائمة التغييرات الظاهرة للمستخدم لو اختلف عن المسجَّل
+  if (data.date) {
+    const normDate = arkkanToInputDate(data.date);
+    if (normDate && isValidIsoDate(normDate)) {
+      if (String(normDate) !== String(c.receiptIssueDate ?? '')) patch.receiptIssueDate = normDate;
+      compareAndSet('receiptIssueDate', c.receiptIssueDate, normDate, 'تاريخ الفاتورة');
+    }
+  }
+
+  return { patch, changes };
+}
+
+/* يجلب بيانات العميل من أركان، يقارنها بالكامل بما هو مسجَّل بالنظام (حتى لو
+   الكارت مكتمل ظاهرياً) عبر arkkanDiffFromData، ثم يحفظ أي فرق فى الخادم تلقائياً. */
 async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
   const data = await arkkanFetchOne(clientId, referNum); // يرمي خطأ لو فشل
   const idx = clients.findIndex(x => x.clientId === clientId);
   if (idx === -1) throw new Error('العميل غير موجود في القائمة');
 
   const c = clients[idx];
-  const patch = arkkanPatchFromData(c, data);
+  const { patch, changes } = arkkanDiffFromData(c, data);
 
   if (Object.keys(patch).length > 0) {
     Object.assign(clients[idx], patch);
@@ -190,7 +254,7 @@ async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
     if (patch.receiptActualValue !== undefined && typeof autoPostCourseInvoice === 'function')
       autoPostCourseInvoice(clients[idx]);
   }
-  return { updated: Object.keys(patch).length, client: clients[idx] };
+  return { updated: Object.keys(patch).length, changes, client: clients[idx] };
 }
 
 /* معالج زر "جلب من أركان" الموجود في كرت العميل */
@@ -207,10 +271,12 @@ async function arkkanFetchCardButton(id, btn) {
   try {
     const res = await arkkanFetchAndAutoUpdate(c.clientId, c.referNum || '');
     if (res.updated > 0) {
-      showToast(`✅ تم جلب وحفظ ${res.updated} حقل من أركان`, 'success');
+      const changeList = (res.changes || []).map(ch => `${ch.label}: ${ch.oldVal} ← ${ch.newVal}`);
+      const summary = changeList.length ? ' (' + changeList.join('، ') + ')' : '';
+      showToast((`✅ تم تحديث ${res.updated} حقل من أركان${summary}`).slice(0, 220), 'success');
       if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id); // تحديث الكارت فوراً
     } else {
-      showToast('بيانات الكارت مكتملة بالفعل من أركان — لا جديد', 'info');
+      showToast('البيانات مطابقة تماماً لأركان — لا فرق', 'info');
     }
   } catch (err) {
     showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 90), 'error');
