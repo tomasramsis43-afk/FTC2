@@ -154,6 +154,18 @@ function startWindowsWindowHider() {
   run();
   _winHideTimer = setInterval(run, 2000);
   if (typeof _winHideTimer.unref === 'function') _winHideTimer.unref();
+  // حارس أمان: لو تعذّر بدء المتصفح لسبب ما، يتوقف الاستطلاع بعد 30 ثانية على أي حال
+  // بدل تركه يعمل بلا فائدة.
+  setTimeout(stopWindowsWindowHider, 30000).unref?.();
+}
+
+// إيقاف الاستطلاع فور اكتمال التهيئة: النافذة تكون مخفية بالفعل، فلا داعي Thousands من
+// عمليات PowerShell بعد ذلك. سابقاً كان هذا المؤقّت يعمل طوال عمر الوكيل: 30 عملية
+// PowerShell في الدقيقة و1800 في الساعة على جهاز المستخدم، حتى لو لم يُطلب من أركان
+// أي عملية — وكل عملية تدفع كلفة بدء CLR (50-150ms معالج) بلا فائدة. الاستطلاع أثناء
+// الإقلاع وحده كافٍ لاختفاء النافذة.
+function stopWindowsWindowHider() {
+  if (_winHideTimer) { clearInterval(_winHideTimer); _winHideTimer = null; }
 }
 startWindowsWindowHider();
 let _workers = [];
@@ -1152,6 +1164,8 @@ async function initBrowser() {
         _workers.push({ page: pg, ctx });
       }
       _ready = true;
+      // النافذة مخفية الآن — أوقف استطلاع PowerShell (كان يعمل بلا توقف طوال عمر الوكيل).
+      stopWindowsWindowHider();
       log.info(`✅ جاهز — ${_workers.length} عامل. المنفذ: ${cfg.AGENT_PORT}`);
       return;
     } catch (e) {
