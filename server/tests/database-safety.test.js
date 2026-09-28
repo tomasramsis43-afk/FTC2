@@ -335,3 +335,112 @@ test('S21: الفهارس المعاد تعريفها تُعاد بناؤها ف
       `${gone}: لم يُحذف عبر migration (كان DDL تدميري داخل schema.sql)`);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ١٠) الجلب الكامل مُرقَّم: لا طلب واحد بلا حدود يعيد جدولاً كاملاً
+// ═══════════════════════════════════════════════════════════════════════════════
+test('S22: الجلب الكامل في الواجهة يمرّ عبر حلقة ترقيم لا بطلب واحد بلا حدود', () => {
+  const sync = read('../frontend/js/storage-sync.js');
+  //Helper الحلقة نفسها موجودة وتستخدم page/pageSize
+  assert.ok(/async function _fetchAllRecordsPaginated\(/.test(sync), 'حلقة الترقيم مفقودة');
+  const helper = fnBody(sync, 'async function _fetchAllRecordsPaginated(');
+  assert.ok(/pathForPage\(page\)/.test(helper), 'الحلقة لا تمرّر رقم الصفحة');
+  assert.ok(/records\.length\s*<\s*_FULL_PAGE_SIZE/.test(helper),
+    'الحلقة لا تتوقف عند صفحة أقصر من pageSize (قد لا تنتهي أبداً)');
+  //المساران الكاملان (لا delta) لازم يستعملا الحلقة
+  const gen = fnBody(sync, 'async function fetchAllRecordsGeneric(');
+  assert.ok(/_fetchAllRecordsPaginated\(/.test(gen), 'fetchAllRecordsGeneric لا يرقّم');
+  const cl = fnBody(sync, 'async function fetchAllClientRecords(');
+  assert.ok(/_fetchAllRecordsPaginated\(/.test(cl), 'fetchAllClientRecords لا يرقّم');
+  // ممنوع: GET كامل بلا page لمساري الجدولين (كان يُعيد السجلات كلها في استجابة واحدة).
+  // نتحقق من كل استدعاء إلى مسار التصنيف: إمّا مُرقَّم (?page=) أو محدود بقائمة ids
+  // أو مسار فرعي محدود (?version / /versions / /bulk-* / /:id).
+  const collBase = '/api/records/${encodeURIComponent(collection)}';
+  let at = sync.indexOf(collBase);
+  let seen = 0;
+  while (at >= 0) {
+    seen++;
+    const after = sync.slice(at + collBase.length, at + collBase.length + 10);
+    assert.ok(after.startsWith('?page=') || after.startsWith('?ids=') || after.startsWith('/'),
+      `GET بلا ترقيم إلى تصنيف (يرجع الجدول كاملاً): ...${collBase}${after}`);
+    at = sync.indexOf(collBase, at + 1);
+  }
+  assert.ok(seen >= 5, `عدد استدعاءات مسار التصنيف أقل من المتوقع (${seen})`);
+  assert.ok(!/serverFetch\('\/api\/client-records'\)/.test(sync),
+    'ما زال هناك GET كامل بلا ترقيم إلى جدول العملاء');
+  assert.ok(/\/api\/client-records\?page=\$\{p\}&pageSize=\$\{_FULL_PAGE_SIZE\}/.test(sync),
+    'جلب العملاء الكامل لا يمرّ بصفحة مُرقَّمة');
+  //Page يمرّر page + pageSize صراحةً
+  assert.ok(/page=\$\{p\}&pageSize=\$\{_FULL_PAGE_SIZE\}/.test(sync),
+    'الاستعلام المُرقَّم لا يرسل page/pageSize');
+});
+
+test('S23: ترتيب الترقيم على id الثابت لا على version المتغيّر', () => {
+  const repo = read('repo/records.repo.js');
+  const code = stripSqlComments(repo);
+  // version يتغيّر مع كل تعديل ⇒ حدود الصفحات "تنزلق" فيتكرر/يسقط سجل بين الصفحات.
+  assert.ok(!/ORDER BY version/i.test(code),
+    'ما زال هناك ORDER BY version — يجب الترتيب على id (المفتاح الأساسي) الثابت');
+  // كلا الدالتين ترقّمان بنفس الترتيب
+  const cr = fnBody(code, 'async function clientRecords(');
+  const bc = fnBody(code, 'async function recordsByCollection(');
+  for (const [name, body] of [['clientRecords', cr], ['recordsByCollection', bc]]) {
+    const m = body.match(/ORDER BY[^`]*?LIMIT/);
+    assert.ok(m, `${name}: مسار الترقيم بلا ORDER BY + LIMIT`);
+    assert.ok(/ORDER BY id ASC/.test(m[0]), `${name}: ترتيب الترقيم ليس id ASC`);
+  }
+});
+
+test('S24: حدود body الخاصة بمسارات AI/البريد مركّبة قبل المحوّل العام', () => {
+  const srv = read('server.js');
+  const code = stripJsComments(srv);
+  const generalAt = code.indexOf("express.json({ limit: '2mb' })");
+  assert.ok(generalAt > 0, 'المحوّل العام 2mb غير موجود');
+  // body-parser يتخطّى أي محوّل JSON تالٍ بعد وضع req._body، فالمسارات الخاصة لازم
+  // تسبق العام وإلا صارت حدودها (40mb/15mb) غير قابلة للوصول وSارياً هو 2mb.
+  for (const p of ["'/api/ai/read-invoices'", "'/api/email/invoice'", "'/api/email/report'"]) {
+    const at = code.indexOf(p);
+    assert.ok(at > 0, `محوّل مخصّص غير موجود للمسار ${p}`);
+    assert.ok(at < generalAt, `محوّل ${p} مركّب بعد المحوّل العام 2mb فحدّه لا يعمل`);
+  }
+  // والحد المخصّص يجب أن يكون أكبر من العام (وإلا فلا فائدة منه)
+  const aiAt = code.indexOf("'/api/ai/read-invoices'");
+  const lim = code.slice(aiAt, aiAt + 80).match(/limit:\s*'(\d+)mb'/);
+  assert.ok(lim && Number(lim[1]) > 2, 'حد مسار AI ليس أكبر من الحد العام 2mb');
+});
+
+test('S25: ميزانية بايت مجمّعة وسقف تزامن على مسار الذكاء الاصطناعي', () => {
+  const ai = read('routes/ai.js');
+  const body = fnBody(ai, "router.post('/api/ai/read-invoices'");
+  // حدّ لكل ملف وحده لا يمنع 30×8mb داخل الذاكرة ⇒ لازم ميزانية مجمّعة
+  assert.ok(/MAX_BATCH_BYTES/.test(body), 'لا توجد ميزانية بايت مجمّعة للطلب');
+  assert.ok(/approxTotal\s*\+=\s*approxBytes/.test(body),
+    'الحجم المجمّع لا يُحتسب لكل الملفات');
+  // سقف تزامن: حدّ rate limit يعدّ بدايات الطلبات ولا يحدّ ما هو قيد التشغيل فعلياً
+  assert.ok(/AI_MAX_CONCURRENCY/.test(body), 'لا يوجد سقف تزامن على مستوى الطلب');
+});
+
+test('S26: حد المرفق بالبايتات المفكوكة لا بعدد محارف base64', () => {
+  const email = read('routes/email.js');
+  const code = stripJsComments(email);
+  // base64 يضخّم 4/3: طول المحارف × 0.75 = البايتات الفعلية
+  assert.ok(/attachmentBase64\.length\s*\*\s*0\.75/.test(code),
+    'حد المرفق لا يحوّل base64 إلى بايتات فعلية (مقدّر بـ4/3)');
+  assert.ok(!/MAX_ATTACHMENT_BASE64_CHARS/.test(code),
+    'ما زال هناك حد معبّر بعدد محارف base64 موصوف كأنه ميجابايت');
+});
+
+test('S27: استطلاع إخفاء نافذة أركان يتوقف بعد التهيئة', () => {
+  const agent = read('../arkkan-agent.js');
+  // كان setInterval كل ثانيتين بلا توقف = 1800 عملية PowerShell/ساعة طوال عمر الوكيل
+  assert.ok(/function stopWindowsWindowHider\(/.test(agent), 'دالة الإيقاف غير موجودة');
+  const init = fnBody(agent, 'async function initBrowser(');
+  assert.ok(/stopWindowsWindowHider\(\)/.test(init),
+    'initBrowser لا يوقف الاستطلاع بعد ضبط _ready');
+  const stopAt = agent.indexOf('function stopWindowsWindowHider(');
+  const setAt = agent.indexOf('_winHideTimer = setInterval(');
+  assert.ok(stopAt > 0 && setAt > 0, 'المؤقّت غير موجود');
+  // يجب أن يمرّ الإيقاف عبر clearInterval فعلاً
+  assert.ok(/clearInterval\(_winHideTimer\)/.test(agent.slice(stopAt, stopAt + 200)),
+    'stopWindowsWindowHider لا تمسح المؤقّت');
+});
