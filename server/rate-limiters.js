@@ -56,4 +56,17 @@ const arkkanLimiter = rateLimit({
   message: { error: 'طلبات أركان كثيرة جداً، يرجى الانتظار قليلاً قبل إعادة المحاولة' },
 });
 
-module.exports = { authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter, arkkanLimiter };
+// polling حالة دخول الـ QR: الواجهة تسأل كل ~2 ثانية (≈30 طلب/دقيقة)، فلا يصح أن يشترك في
+// authLimiter (20 طلب/15 دقيقة لكل IP) وإلا يُقفل تسجيل الدخول لكل من على نفس الشبكة.
+// المفتاح = معرّف الجلسة العشوائي نفسه (بلا IP، فلا مشاكل NAT/IPv6).
+const qrStatusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 45,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => 'qr:' + String(req.params.id || '').slice(0, 64),
+  validate: { keyGeneratorIpFallback: false },
+  message: { status: 'expired' },
+});
+
+module.exports = { qrStatusLimiter, authLimiter, licenseLimiter, storageLimiter, aiLimiter, emailLimiter, arkkanLimiter };

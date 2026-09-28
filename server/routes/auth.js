@@ -13,6 +13,7 @@ const { alertAdmins } = require('../services/email');
 // best-effort بالكامل: أي فشل (شبكة/انتهاء مهلة/عنوان محلي) يُرجع null بهدوء دون كسر تسجيل
 // الدخول نفسه أبداً. مهلة قصيرة (2.5 ثانية) حتى لا تُبطئ استجابة الدخول بشكل ملحوظ لو تعذّر
 // الوصول للخدمة الخارجية.
+const DUMMY_BCRYPT_HASH_PROMISE = hashPassword('dummy-password-for-timing-equalization'); // hash حقيقي (cost 12) لمعادلة الزمن
 async function geolocateIp(ip) {
   if (!ip) return null;
   // تجاهل عناوين IP المحلية/الخاصة — الاستعلام عنها لن يعطي نتيجة مفيدة على أي حال.
@@ -112,6 +113,8 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
     }
     const user = await authRepo.findByUsername(username.trim());
     if (!user) {
+      // نفس كلفة bcrypt لحساب موجود، حتى لا يكشف فرق الزمن وجود اسم المستخدم.
+      await verifyPassword(password, await DUMMY_BCRYPT_HASH_PROMISE).catch(() => false);
       authRepo.recordLogin({ username: username.trim(), role: null, ip: loginIp, device: loginDevice, success: false })
         .catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
       return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
@@ -122,7 +125,7 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
       authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: false })
         .catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
-      return res.status(403).json({ error: `الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة، حاول بعد ${minutesLeft} دقيقة` });
+      return res.status(401).json({ error: 'بيانات الدخول غير صحيحة أو الحساب مقفل مؤقتاً، حاول بعد قليل' });
     }
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) {
@@ -154,6 +157,9 @@ router.post('/api/auth/login', authLimiter, async (req, res) => {
       if (!sfResult.ok) {
         authRepo.recordLogin({ username: user.username, role: user.role || 'staff', ip: loginIp, device: loginDevice, success: false })
           .catch(e => console.error('تعذّر تسجيل محاولة دخول فاشلة:', e));
+        // محاولات كود التحقق الخاطئة تُحسب ضمن قفل الحساب (كانت تخضع لـ rate limit بالـ IP فقط).
+        authRepo.incrementFailedLogin(user.id)
+          .catch(e => console.error('تعذّر تحديث عداد المحاولات الفاشلة:', e));
         return res.status(401).json({ error: 'كود التحقق غير صحيح' });
       }
     }

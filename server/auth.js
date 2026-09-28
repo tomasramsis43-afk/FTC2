@@ -196,6 +196,7 @@ async function consumeBackupCode(storedJson, code) {
    - { needed: true }            الحساب مفعّل عنده TOTP ولم يُرسَل أي كود → الواجهة تعرض حقل الإدخال
    - { ok: true }                تحقق ناجح → يُصدَر التوكن في المستدعي
    - { ok: false }               كود خاطئ/منتهٍ → يُرفض الدخول */
+const _usedTotpCodes = new Map(); // userId:code -> expiry(ms)
 async function verifySecondFactor(user, body) {
   const { totpCode, backupCode } = body || {};
   if (!totpCode && !backupCode) return { needed: true };
@@ -204,6 +205,14 @@ async function verifySecondFactor(user, body) {
   // الاستهلاك الذري للأكواد الاحتياطية — فيقبل الحوار الواحد نوعَي الأكواد كما في تطبيقات المصادقة.
   if (totpCode) {
     verified = verifyTotpToken(totpCode, user.totp_secret);
+    // منع إعادة استخدام نفس كود TOTP (replay) خلال نافذة صلاحيته: الكود المقبول مرة يُرفض بعدها.
+    if (verified) {
+      const replayKey = user.id + ':' + String(totpCode).replace(/\s/g, '');
+      const now = Date.now();
+      for (const [k, exp] of _usedTotpCodes) if (exp < now) _usedTotpCodes.delete(k);
+      if (_usedTotpCodes.has(replayKey)) verified = false;
+      else _usedTotpCodes.set(replayKey, now + 120 * 1000);
+    }
   }
   if (!verified && backupCode) {
     try {

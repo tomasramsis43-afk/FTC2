@@ -29,30 +29,41 @@ function sanitizeSubject(s) {
   return String(s == null ? '' : s).replace(/[\r\n\t\x00-\x1f]/g, ' ').trim().slice(0, 200);
 }
 
-// تنظيف HTML المُرسَل من الواجهة — يزيل أي عناصر/سمات خطيرة قد تُستخدم في تصييد أو حقن محتوى
+// تنظيف HTML المُرسَل من الواجهة بمكتبة allowlist حقيقية (بدل regex قابلة للتجاوز):
+// وسوم تنسيق/جداول فقط، روابط http/https/mailto فقط، بلا سكربت/أحداث/iframe/form،
+// وصور data: فقط (لا تحميل خارجي/تتبّع). أي شيء آخر يُحذف.
+const sanitizeHtmlLib = require('sanitize-html');
 function sanitizeEmailHtml(html) {
   if (typeof html !== 'string') return html;
-  // إزالة الوسوم القابلة للتنفيذ/الحقن أولاً (بما فيها وسوم الميتا/الرابط التي قد تحدّث
-  // الصفحة أو تجلب محتوى خارجياً داخل عارض البريد — نافذة تصييد محتملة),
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?\/?>/gi, '')
-    .replace(/<form[\s\S]*?<\/form>/gi, '')
-    .replace(/<base[\s\S]*?\/?>/gi, '')
-    .replace(/<meta[\s\S]*?>/gi, '')
-    .replace(/<link[\s\S]*?\/?>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-    // إسقاط معالجات الأحداث + البروتوكولات/الطرق القابلة للتنفيذ
-    .replace(/\bon\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript\s*:/gi, '')
-    .replace(/data\s*:/gi, '')
-    .replace(/vbscript\s*:/gi, '')
-    .replace(/expression\s*\(/gi, '')
-    // تحييد تعابير CSS المنفّذة للجلب الخارجي (تسريب شاشات داخل عارضات قديمة)
-    .replace(/url\s*\(\s*['"]?(?:data|https?):/gi, 'url(none)');
+  return sanitizeHtmlLib(html, {
+    allowedTags: ['div','span','p','br','hr','b','strong','i','em','u','small','h1','h2','h3','h4','ul','ol','li',
+      'table','thead','tbody','tfoot','tr','th','td','a','img','pre','code','blockquote'],
+    allowedAttributes: {
+      '*': ['style', 'dir', 'align'],
+      a: ['href'],
+      img: ['src', 'alt', 'width', 'height'],
+      td: ['colspan', 'rowspan'],
+      th: ['colspan', 'rowspan'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: { img: ['data'] },
+    allowProtocolRelative: false,
+    // قيم style: نسمح فقط بخصائص عرض آمنة، ونحجب url()/expression
+    allowedStyles: {
+      '*': {
+        'color': [/^[#a-z0-9(),.\s%-]+$/i],
+        'background-color': [/^[#a-z0-9(),.\s%-]+$/i],
+        'font-size': [/^[0-9.]+(px|pt|em|rem|%)$/],
+        'font-weight': [/^[a-z0-9]+$/],
+        'font-family': [/^[a-z0-9,'"\s-]+$/i],
+        'text-align': [/^(left|right|center|justify)$/],
+        'direction': [/^(rtl|ltr)$/],
+        'padding': [/^[0-9.\spx%-]+$/], 'margin': [/^[0-9.\spx%-]+$/],
+        'border': [/^[#a-z0-9(),.\s%-]+$/i], 'border-collapse': [/^(collapse|separate)$/],
+        'width': [/^[0-9.]+(px|%)$/],
+      },
+    },
+  });
 }
 
 function parseAttachment(body) {
@@ -173,7 +184,7 @@ router.post('/api/email/admin-alert', requireAuth, emailLimiter, async (req, res
     const { subject, bodyHtml } = req.body || {};
     if (!subject || !bodyHtml) return res.status(400).json({ error: 'نقص في بيانات التنبيه' });
     if (getAdminAlertEmails().length === 0) return res.json({ ok: true, skipped: true });
-    await alertAdmins(String(subject).slice(0, 200), bodyHtml);
+    await alertAdmins(sanitizeSubject(subject), sanitizeEmailHtml(String(bodyHtml)));
     res.json({ ok: true });
   } catch (e) {
     console.error('فشل إرسال تنبيه الإدارة:', e);

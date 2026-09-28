@@ -443,7 +443,17 @@ async function checkPendingQrLoginApproval(){
   try{ sessionId = sessionStorage.getItem('pendingQrLoginSession'); }catch(e){ return; }
   if(!sessionId) return;
   try{ sessionStorage.removeItem('pendingQrLoginSession'); }catch(e){ console.error('[QR Login] Failed to clear pending session:', e); }
-  const approve = await customConfirm('فيه جهاز تاني عايز يدخل بحسابك عن طريق مسح الكود — توافق؟');
+  // نعرض بيانات الجهاز الطالب (IP + المتصفح) قبل الموافقة، عشان ما توافقش على كود اتمسح بالغلط.
+  let deviceLine = '';
+  try{
+    const infoRes = await fetch(API_BASE + '/api/auth/qr-login/info/' + encodeURIComponent(sessionId), {
+      headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },
+    });
+    if(!infoRes.ok){ showToast('انتهت صلاحية الكود أو تم استخدامه بالفعل'); return; }
+    const info = await infoRes.json();
+    deviceLine = '\n\nالجهاز الطالب: ' + (info.device || 'غير معروف') + '\nعنوان IP: ' + (info.ip || 'غير معروف');
+  }catch(e){ console.error('[QR Login] فشل جلب بيانات الجهاز الطالب:', e); showToast('تعذّر التحقق من طلب الدخول'); return; }
+  const approve = await customConfirm('فيه جهاز تاني عايز يدخل بحسابك عن طريق مسح الكود. وافق فقط لو إنت اللي فتحت الكود بنفسك على جهازك.' + deviceLine + '\n\nتوافق؟');
   try{
     const res = await fetch(API_BASE + '/api/auth/qr-login/' + (approve ? 'approve' : 'reject') + '/' + encodeURIComponent(sessionId), {
       method: 'POST', headers: { Authorization: 'Bearer ' + SERVER_AUTH_TOKEN },

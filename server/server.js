@@ -200,15 +200,14 @@ app.get('/gsheet-csv', requireAuth, (req, res) => {
    نفسه عشان يكتب "معتمد" في عمود الحالة بجانب صف العميل. الرابط والـ secret يفضلوا هنا
    فقط على السيرفر (env vars لو موجودة، وإلا القيم الافتراضية اللي جهزها المستخدم) —
    الواجهة الأمامية بتنادي /gsheet-approve-notify بس، من غير ما تعرف السر أو الرابط. */
-const GSHEET_APPROVE_WEBHOOK_URL = process.env.GSHEET_APPROVE_WEBHOOK_URL ||
-  'https://script.google.com/macros/s/AKfycbz6njPoEHfq5J5ZyiznpnkixL2hCsgRoEY96c0dkJXa_TVp3DdYP69HZO3MGZ23xLngmA/exec';
-const GSHEET_APPROVE_SECRET = process.env.GSHEET_APPROVE_SECRET || 'GHAYYER_DI_TOKEN_SERI_TAWEEL';
+const GSHEET_APPROVE_WEBHOOK_URL = process.env.GSHEET_APPROVE_WEBHOOK_URL || '';
+const GSHEET_APPROVE_SECRET = process.env.GSHEET_APPROVE_SECRET || '';
 
 app.post('/gsheet-approve-notify', requireAuth, express.json(), (req, res) => {
   const clientId = String((req.body && req.body.clientId) || '').trim();
   const sheetName = String((req.body && req.body.sheetName) || '').trim();
   if (!clientId) return res.status(400).json({ ok: false, error: 'clientId مطلوب' });
-  if (!GSHEET_APPROVE_WEBHOOK_URL) return res.status(400).json({ ok: false, error: 'GSHEET_APPROVE_WEBHOOK_URL غير مُعدّ' });
+  if (!GSHEET_APPROVE_WEBHOOK_URL || !GSHEET_APPROVE_SECRET) return res.status(400).json({ ok: false, error: 'إشعار اعتماد الشيت غير مُعدّ على الخادم (GSHEET_APPROVE_WEBHOOK_URL / GSHEET_APPROVE_SECRET)' });
 
   let target;
   try { target = new URL(GSHEET_APPROVE_WEBHOOK_URL); } catch (e) {
@@ -364,8 +363,8 @@ ensureSchema()
       shutdown('uncaughtException');
     });
     process.on('unhandledRejection', (reason) => {
-      console.error('🔴 unhandledRejection — Promise مرفوض بدون معالجة فى أي مكان بالكود:', reason);
-      shutdown('unhandledRejection');
+      // نسجّل ونكمل: Promise مرفوض واحد لا يستحق إسقاط السيرفر بالكامل وقطع كل المستخدمين.
+      console.error('🔴 unhandledRejection — Promise مرفوض بدون معالجة:', reason);
     });
   })
   .catch(e => {

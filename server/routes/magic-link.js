@@ -12,8 +12,26 @@ const { signToken, verifySecondFactor } = require('../auth');
 const { authLimiter } = require('../rate-limiters');
 const { sendEmail, isConfigured } = require('../services/email');
 
-function getOrigin(req) {
-  return req.headers.origin || `https://${req.headers.host}`;
+// الأصل الموثوق لبناء رابط الدخول — من إعدادات السيرفر فقط (لا Origin/Host من الطلب أبداً،
+// لأنهما تحت تحكم الطالب: مهاجم يطلب رابطاً لمستخدم آخر بـ Origin مزوّر فيصل التوكن لدومينه).
+function getTrustedOrigin() {
+  const candidates = [
+    process.env.APP_BASE_URL,
+    process.env.RENDER_EXTERNAL_URL,
+    (process.env.CORS_ORIGIN || '').split(',')[0],
+  ];
+  for (const c of candidates) {
+    const v = String(c || '').trim().replace(/\/+$/, '');
+    if (!v) continue;
+    try {
+      const u = new URL(v);
+      if (u.protocol === 'https:' || u.protocol === 'http:') return u.origin;
+    } catch (e) { /* تجاهل قيمة غير صالحة */ }
+  }
+  return null;
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // رسالة عامة واحدة دائماً بغض النظر عن وجود الحساب/الإيميل من عدمه، لمنع تسريب معلومة "هل هذا
@@ -30,16 +48,21 @@ router.post('/api/auth/magic-link/request', authLimiter, async (req, res) => {
       console.error('تعذّر إرسال رابط الدخول: لا يوجد RESEND_API_KEY ولا إعدادات SMTP كاملة على السيرفر');
       return res.json(GENERIC_RESPONSE); // لا نكشف تفاصيل إعداد السيرفر لطالب الرابط
     }
+    const trustedOrigin = getTrustedOrigin();
+    if (!trustedOrigin) {
+      console.error('تعذّر إرسال رابط الدخول: APP_BASE_URL (أو RENDER_EXTERNAL_URL) غير مضبوط على السيرفر');
+      return res.json(GENERIC_RESPONSE);
+    }
     const rawToken = crypto.randomBytes(32).toString('base64url');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await authRepo.insertMagicLink(user.username, tokenHash, expiresAt);
-    const link = `${getOrigin(req)}/?magicToken=${rawToken}&u=${encodeURIComponent(user.username)}`;
+    const link = `${trustedOrigin}/?magicToken=${rawToken}&u=${encodeURIComponent(user.username)}`;
     await sendEmail({
       to: user.email,
       subject: 'رابط الدخول إلى نظام إدارة المركز',
       html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.8;">
-        <p>مرحباً ${user.display_name || user.username}،</p>
+        <p>مرحباً ${escapeHtml(user.display_name || user.username)}،</p>
         <p>اضغط الرابط التالي لتسجيل الدخول مباشرة بدون كلمة مرور (صالح لمدة 15 دقيقة فقط، ولمرة واحدة):</p>
         <p><a href="${link}" style="color:#7C5CFC;">${link}</a></p>
         <p style="color:#888; font-size:13px;">لو لم تطلب هذا الرابط، تجاهل هذه الرسالة ببساطة — لن يتم تسجيل أي دخول بدونها.</p>

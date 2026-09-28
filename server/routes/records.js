@@ -1,4 +1,5 @@
 const express = require('express');
+function escHtmlSrv(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 const router = express.Router();
 const crypto = require('crypto');
 const { requireAuth, requireRole } = require('../auth');
@@ -397,7 +398,7 @@ router.put('/api/client-records/:id', requireAuth, storageLimiter, async (req, r
       if (upsert.version === 1) {
         notifyChange(
           `إضافة عميل جديد${plainClientId ? ' — ' + plainClientId : ''}`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بإضافة عميل جديد (معرّف السجل: ${req.params.id}${plainClientId ? ' — رقم الهوية: ' + plainClientId : ''}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+          `<p>قام المستخدم <b>${escHtmlSrv(req.user.username)}</b> بإضافة عميل جديد (معرّف السجل: ${escHtmlSrv(req.params.id)}${plainClientId ? ' — رقم الهوية: ' + escHtmlSrv(plainClientId) : ''}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       } else {
         // تم تعطيل إيميل "تعديل بيانات عميل" بناءً على طلب صريح — الإيميل يبقى فقط على
@@ -794,7 +795,7 @@ router.put('/api/records/:collection/:id', requireAuth, storageLimiter, requireV
       if (req.params.collection === 'vaultTx') {
         notifyChange(
           `تعديل حركة مالية — ${req.params.id}`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بتعديل حركة مالية (معرّف: ${req.params.id}) — الحالة: ${upsert.status} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+          `<p>قام المستخدم <b>${escHtmlSrv(req.user.username)}</b> بتعديل حركة مالية (معرّف: ${escHtmlSrv(req.params.id)}) — الحالة: ${escHtmlSrv(upsert.status)} — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       }
       return res.json({ id: req.params.id, version: upsert.version, origin: upsert.origin, status: upsert.status });
@@ -850,7 +851,7 @@ router.delete('/api/records/:collection/:id', requireAuth, storageLimiter, requi
     if (req.params.collection === 'vaultTx') {
       notifyChange(
         `حذف حركة مالية — ${req.params.id}`,
-        `<p>قام المستخدم <b>${req.user.username}</b> بحذف حركة مالية (معرّف: ${req.params.id}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        `<p>قام المستخدم <b>${escHtmlSrv(req.user.username)}</b> بحذف حركة مالية (معرّف: ${escHtmlSrv(req.params.id)}) — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
       );
     }
     res.json({ id: req.params.id, deleted: true });
@@ -922,7 +923,7 @@ router.post('/api/records/:collection/bulk-migrate', requireAuth, storageLimiter
       if (req.params.collection === 'vaultTx') {
         notifyChange(
           `تحديث جماعي لحركات مالية — ${result.migrated} سجل`,
-          `<p>قام المستخدم <b>${req.user.username}</b> بتحديث جماعي لـ <b>${result.migrated}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+          `<p>قام المستخدم <b>${escHtmlSrv(req.user.username)}</b> بتحديث جماعي لـ <b>${result.migrated}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
         );
       }
     }
@@ -956,7 +957,7 @@ router.post('/api/records/:collection/bulk-delete', requireAuth, storageLimiter,
     if (req.params.collection === 'vaultTx') {
       notifyChange(
         `حذف جماعي لحركات مالية — ${ids.length} سجل`,
-        `<p>قام المستخدم <b>${req.user.username}</b> بحذف جماعي لـ <b>${ids.length}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
+        `<p>قام المستخدم <b>${escHtmlSrv(req.user.username)}</b> بحذف جماعي لـ <b>${ids.length}</b> حركة مالية — الوقت: ${new Date().toLocaleString('ar-EG')}</p>`
       );
     }
     res.json({ deleted });

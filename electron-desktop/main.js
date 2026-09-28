@@ -416,7 +416,7 @@ function startLocalServer() {
         try {
           hiddenWin = new BrowserWindow({
             width: 1280, height: 900, show: false,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false }
+            webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, partition: 'arkkan-hidden-' + Date.now() }
           });
 
           const targetUrl = 'https://arkkanapp2.net/Municipal/Disbursed-bags.aspx';

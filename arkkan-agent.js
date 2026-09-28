@@ -1225,6 +1225,20 @@ const server = http.createServer(async (req, res) => {
   // CORS آمن: فقط من localhost أو Electron
   const origin = req.headers.origin || '';
   const isLocal = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
+  // حماية من DNS-rebinding: الطلب لازم يوصل بـ Host محلي فقط.
+  const hostHeader = String(req.headers.host || '').toLowerCase();
+  if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(hostHeader)) {
+    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Host غير مسموح' }));
+    return;
+  }
+  // رفض أي صفحة ويب أخرى (CSRF من موقع خارجي): الطلب إما بدون Origin (أدوات محلية)
+  // أو من Origin محلي أو من الأصل المُعتمد صراحةً في الإعدادات.
+  if (origin && !isLocal && origin !== cfg.CORS_ORIGIN) {
+    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Origin غير مسموح' }));
+    return;
+  }
   res.setHeader('Access-Control-Allow-Origin', isLocal ? origin : cfg.CORS_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -1492,7 +1506,7 @@ const server = http.createServer(async (req, res) => {
 /* ══════════════════════════════════════════════
    Start Server
    ══════════════════════════════════════════════ */
-server.listen(cfg.AGENT_PORT, async () => {
+server.listen(cfg.AGENT_PORT, '127.0.0.1', async () => {
   log.info(`\n${'═'.repeat(50)}`);
   log.info(`  🚀 Arkkan Agent — المنفذ ${cfg.AGENT_PORT}`);
   log.info(`${'═'.repeat(50)}\n`);

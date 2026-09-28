@@ -10,7 +10,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const authRepo = require('../repo/auth.repo');
 const { requireAuth, signToken } = require('../auth');
-const { authLimiter } = require('../rate-limiters');
+const { authLimiter, qrStatusLimiter } = require('../rate-limiters');
 
 // نخزّن جلسات QR مؤقتاً فى ذاكرة السيرفر فقط (لا حاجة لجدول قاعدة بيانات لبيانات قصيرة الأمد
 // كهذه؛ أقصى عمر 3 دقائق) — تُنظَّف تلقائياً بمرور الوقت.
@@ -27,17 +27,23 @@ setInterval(() => {
 router.post('/api/auth/qr-login/create', authLimiter, (req, res) => {
   const id = crypto.randomBytes(24).toString('base64url');
   const expiresAt = Date.now() + QR_SESSION_TTL_MS;
-  qrSessions.set(id, { status: 'pending', createdAt: Date.now(), expiresAt });
+  // نحفظ هوية الجهاز الطالب (IP + User-Agent) ليراها صاحب الحساب على شاشة الموافقة،
+  // فلا يوافق على كود مسحه بالخطأ من صفحة/شخص آخر (هجوم "امسح الكود").
+  const requesterIp = (req.ip || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+  const requesterDevice = (req.headers['user-agent'] || '').toString().slice(0, 200);
+  qrSessions.set(id, { status: 'pending', createdAt: Date.now(), expiresAt, requesterIp, requesterDevice });
   res.json({ sessionId: id, expiresAt: new Date(expiresAt).toISOString() });
 });
 
-router.get('/api/auth/qr-login/status/:id', authLimiter, (req, res) => {
-  // حماية من Race Condition: استخراج + حذف ذرياً (get-and-delete) لتمنع تمرير التوكن
-  // لطلبين متزامنين — بدل get ثم delete منفصلين قد يتداخلان بين طلبين في Event Loop
+router.get('/api/auth/qr-login/status/:id', qrStatusLimiter, (req, res) => {
   const session = qrSessions.get(req.params.id);
-  if (session) qrSessions.delete(req.params.id);
-  if (!session || session.expiresAt < Date.now()) return res.json({ status: 'expired' });
+  if (!session || session.expiresAt < Date.now()) {
+    if (session) qrSessions.delete(req.params.id);
+    return res.json({ status: 'expired' });
+  }
   if (session.status === 'approved') {
+    // استهلاك لمرة واحدة: التوكن يُسلَّم مرة واحدة فقط ثم تُحذف الجلسة (لا يُحذف أثناء الانتظار).
+    qrSessions.delete(req.params.id);
     return res.json({
       status: 'approved',
       token: session.token,
@@ -46,7 +52,20 @@ router.get('/api/auth/qr-login/status/:id', authLimiter, (req, res) => {
       user: session.user,
     });
   }
+  if (session.status === 'rejected') {
+    qrSessions.delete(req.params.id);
+    return res.json({ status: 'rejected' });
+  }
   res.json({ status: session.status });
+});
+
+// معلومات الجهاز الطالب لعرضها في شاشة الموافقة (يتطلب تسجيل دخول الجهاز الموافق).
+router.get('/api/auth/qr-login/info/:id', requireAuth, (req, res) => {
+  const session = qrSessions.get(req.params.id);
+  if (!session || session.expiresAt < Date.now() || session.status !== 'pending') {
+    return res.status(404).json({ error: 'انتهت صلاحية الكود أو تم استخدامه بالفعل' });
+  }
+  res.json({ ip: session.requesterIp || '', device: session.requesterDevice || '', createdAt: new Date(session.createdAt).toISOString() });
 });
 
 router.post('/api/auth/qr-login/approve/:id', requireAuth, async (req, res) => {
