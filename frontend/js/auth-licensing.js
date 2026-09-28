@@ -210,6 +210,10 @@ async function magicLinkVerify(username, token){
 function showServerLoginScreen(errorMsg){
   const el = document.getElementById('server-login-screen');
   if(!el) return;
+  // شاشة الترخيص (كود التشفير) أولاً دائماً: لو ظاهرة، لا نعرض شاشة الدخول فوقها — وإلا
+  // (مثلاً 401 من أي طلب مبكر) يتعذّر إدخال الكود ولا يمكن الدخول للبرنامج أبداً.
+  const lic = document.getElementById('license-screen');
+  if(lic && lic.style.display !== 'none' && getComputedStyle(lic).display !== 'none') return;
   el.style.display = 'flex';
   const errEl = document.getElementById('server-login-error');
   if(errorMsg){ errEl.textContent = errorMsg; errEl.style.display = 'block'; }
