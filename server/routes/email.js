@@ -20,7 +20,11 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-const MAX_ATTACHMENT_BASE64_CHARS = 15 * 1024 * 1024; // ~15MB بعد الترميز، يكفي أي فاتورة/تقرير PDF بمساحة
+// الحد الأقصى لحجم المرفق（二进制 الفعلي بعد فك ترميز base64، وليس عدد محارف base64 نفسه).
+// base64 يضخّم الحجم بنسبة 4/3، فكان الحد القديم مكتوباً بعدد المحارف (15M محرف ≈ 11.25MB فعلي)
+// وموصوفاً خطأً بأنه "~15MB". نُقارن الآن دائماً بالبايتات الفعلية المفكوكة (len * 0.75)،
+// تماماً كما يفعل مسار قراءة الفواتير بالذكاء الاصطناعي، فلا يختلف الحد بين المسارين.
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024; // 8MB فعلي ≈ 10.7MB محارف base64
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // عنوان الإيميل يأتي من بيانات واجهة غير موثوقة (رقم فاتورة/اسم) — نعقّمه من المحارف
@@ -69,7 +73,7 @@ function sanitizeEmailHtml(html) {
 function parseAttachment(body) {
   const { attachmentBase64, attachmentName, attachmentType } = body || {};
   if (!attachmentBase64) return null;
-  if (attachmentBase64.length > MAX_ATTACHMENT_BASE64_CHARS) {
+  if (Math.ceil(attachmentBase64.length * 0.75) > MAX_ATTACHMENT_BYTES) {
     const err = new Error('المرفق أكبر من الحجم المسموح به');
     err.status = 413;
     throw err;

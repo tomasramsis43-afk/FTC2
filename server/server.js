@@ -87,7 +87,14 @@ app.use(compression({
 const bulkJsonParser = express.json({ limit: '10mb' });
 app.use('/api/client-records/bulk-migrate', bulkJsonParser);
 app.use('/api/records/:collection/bulk-migrate', bulkJsonParser);
-app.use(express.json({ limit: '2mb' })); // إصلاح أمني/أداء: كان 25mb يسمح بهجوم OOM. ترتيب bulk قبل العام حتى لا يحجب 10mb
+// محوّلات JSON مخصّصة للمسارات التي تحتاج bodies أكبر (إرفاق PDF / قراءة فواتير بالذكاء
+// الاصطناعي). لازم تكون مُركّبة قبل المحوّل العام أدناه، وإلا فالمحوّل العام سيحلّل الـ body
+// أولاً ويضع req._body، فيتخطّى body-parser أي محوّل تالٍ بدل أن يرفضه — أي أن الحدود الخاصة
+// بهذه المسارات (40MB للذكاء الاصطناعي / المرفق) كانت غير قابلة للوصول فعلياً.
+app.use('/api/ai/read-invoices', express.json({ limit: '28mb' }));
+app.use('/api/email/invoice', express.json({ limit: '12mb' }));
+app.use('/api/email/report', express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '2mb' })); // إصلاح أمني/أداء: كان 25mb يسمح بهجوم OOM. ترتيب bulk والمخصّصين قبل العام حتى لا يحجبهم 2mb
 
 /* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
    تسجيل دخول مسبق. نحدّد بالـ IP لأن هذين المسارين تحديداً هما هدف مباشر

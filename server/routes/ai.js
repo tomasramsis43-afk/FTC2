@@ -86,33 +86,54 @@ router.post('/api/ai/read-invoices', requireAuth, invoiceReadJsonParser, aiLimit
   if (!files.length) return res.status(400).json({ error: 'لم يتم إرسال أي ملفات' });
   if (files.length > 30) return res.status(400).json({ error: 'الحد الأقصى 30 ملفاً في المرة الواحدة' });
   // حد أقصى 8 ميجابايت لكل ملف على حدة (أكثر من كافٍ لأي فاتورة/إيصال ممسوح ضوئياً) — دفاع إضافي
-  // بجانب حد الـ 40 ميجابايت الإجمالي لكل الطلب، بدل الاعتماد على الحد الكلي فقط.
+  // بجانب حد حجم الطلب نفسه، بدل الاعتماد على الحد الكلي فقط.
   const MAX_FILE_BYTES = 8 * 1024 * 1024;
+  // ميزانية مجمّعة لكل الطلب (مهمة): الحدّ لكل ملف وحده لا يمنع 30×8MB = 240MB داخل ذاكرة Node
+  // دفعة واحدة، فوقها نسخة JSON.stringify ثانية عند الإرسال لـ Anthropic (ذروة ~2-3 أضعاف).
+  // هذا هو الحدّ الذي يجعل المسار آمناً على استضافة قليلة الذاكرة.
+  const MAX_BATCH_BYTES = 20 * 1024 * 1024;
+  let approxTotal = 0;
   for (const f of files) {
     const approxBytes = f?.dataBase64 ? Math.ceil(f.dataBase64.length * 0.75) : 0;
     if (approxBytes > MAX_FILE_BYTES) {
       return res.status(400).json({ error: `الملف "${f.name || 'بدون اسم'}" أكبر من الحد المسموح (8 ميجابايت للملف الواحد)` });
     }
+    approxTotal += approxBytes;
+  }
+  if (approxTotal > MAX_BATCH_BYTES) {
+    return res.status(400).json({ error: 'حجم الملفات الإجمالي أكبر من الحد المسموح في الطلب الواحد (20 ميجابايت) — اختر ملفات أقل أو قسّمها على أكثر من دفعة' });
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مُعدّ على الخادم (ANTHROPIC_API_KEY)' });
   }
-  // معالجة بحد أقصى 3 ملفات بالتوازي في نفس الوقت لتفادي إغراق الـ API
+  // معالجة بحد أقصى 3 ملفات بالتوازي في نفس الوقت لتفادي إغراق الـ API.
+  // يُضاف سقف إجمالي للطلبات قيد التشغيل (concurrency cap) كدرع ثانٍ أمام أي طلب متزامن
+  // متعدد (حتى لو مرّ الـ rate limit بفجوة قصيرة)، دون زيادة عدد العمالة فوق قيمة آمنة لـ Anthropic.
+  const AI_MAX_CONCURRENCY = 3;
   const results = [];
   const queue = [...files];
-  async function worker() {
-    while (queue.length) {
-      const f = queue.shift();
-      results.push(await extractInvoiceFile(f));
-    }
-  }
-  try {
-    await Promise.all([worker(), worker(), worker()]);
-    res.json({ results });
-  } catch (e) {
+  let active = 0, done = 0;
+  return new Promise((resolve, reject) => {
+    const spawn = () => {
+      while (queue.length > 0 && active < AI_MAX_CONCURRENCY) {
+        active++;
+        const f = queue.shift();
+        (async () => {
+          try { results.push(await extractInvoiceFile(f)); }
+          finally {
+            active--; done++;
+            if (done === files.length) return resolve();
+            spawn();
+          }
+        })().catch(err => reject(err));
+      }
+      if (queue.length === 0 && active === 0) resolve();
+    };
+    spawn();
+  }).then(() => res.json({ results })).catch(e => {
     console.error(e);
     res.status(500).json({ error: 'تعذّرت معالجة الملفات' });
-  }
+  });
 });
 
 /* ---------------- تصنيف المصروفات بالذكاء الاصطناعي (عبر الخادم) ----------------
