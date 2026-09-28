@@ -44,15 +44,47 @@ if (databaseSslValue === 'false') {
   sslConfig = { rejectUnauthorized: true };
 }
 
+// ============================================================
+// ضبط Connection Pool لاستضافة حرة / منخفضة التكلفة
+// ------------------------------------------------------------
+// الاستضافة المجانية (Neon/Railway/Render Free/Supabase Free) تحدّ الحد الأقصى
+// للاتصالات على مستوى المشروع كله (٥–١٠ اتصالات عادةً) لا لكل عملية، فـ max:20
+// كان يستهلك الحصة المتاحة أمام منافسين على نفس القاعدة.
+// القاعدة: اتصالات قليلة تُفتح عند الحاجة وتُغلق فور الخمول — كل اتصال مفتوح
+// يحجز backend process (~٥–١٠ ميجابايت) في ذاكرة Postgres طوال عمر العملية،
+// وهو أكبر بند ثابت في الاستهلاك المجاني.
+//   · min: 0            → لا نُبقي أي اتصال مفتوحاً بلا عمل (min:2 كان يحتجز 2 دائماً).
+//   · idleTimeout 10s   → إغلاق أسرع للاتصالات الخاملة (10s بدل 30s).
+//   · keepAlive         → يمنع إعادة مصافحة TLS مع كل طلب جديد على الشبكات المهلَلة.
+// كل القيم قابلة للضبط بمتغيّرات بيئة بلا تعديل الكود.
+function intEnv(name, def, min, max) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return def;
+  const n = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+const poolMax = intEnv('DB_POOL_MAX', 5, 1, 50);
+const poolMin = intEnv('DB_POOL_MIN', 0, 0, poolMax);
+// مهلة العبارة الواحدة: تُركت 15s ونفس query_timeout. أي bulk كبير يتجاوزها
+// يُلغى كاملاً (rollback) فلا يبقى اتصال محجوزاً طويلاً بلا فائدة.
+const stmtTimeout = intEnv('DB_STATEMENT_TIMEOUT_MS', 15000, 1000, 120000);
+
 const pool = new Pool({
   connectionString: stripSslModeFromConnectionString(process.env.DATABASE_URL),
   ssl: sslConfig,
-  max: 20,
-  min: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  statement_timeout: 15000,
-  query_timeout: 15000,
+  application_name: 'ftc2-server',
+  max: poolMax,
+  min: poolMin,
+  idleTimeoutMillis: intEnv('DB_IDLE_TIMEOUT_MS', 10000, 1000, 300000),
+  connectionTimeoutMillis: intEnv('DB_CONNECTION_TIMEOUT_MS', 10000, 1000, 60000),
+  statement_timeout: stmtTimeout,
+  query_timeout: stmtTimeout,
+  // إعادة استخدام اتصال TCP/TLS نفسها بدل فتح مصافحة جديدة مع كل طلب على
+  // الشبكة البطيئة/المهلَلة (توفير CPU + زمن استجابة). 0 = بلا حد.
+  keepAlive: intEnv('DB_KEEPALIVE_MS', 30000, 0, 600000) > 0,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 // إصلاح حرج: قواعد Neon (serverless) تُنهي الاتصالات الخاملة في الـ pool من جهتها بين الحين

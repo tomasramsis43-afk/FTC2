@@ -4,7 +4,7 @@ const authRepo = require('../repo/auth.repo');
 const { signToken, requireAuth, requireRole, resolveUserFromToken, hashPassword, verifyPassword,
   verifyEmergencyAdmin, signEmergencyToken, generateTotpSecret, totpOtpauthUrl, verifyTotpToken,
   generateBackupCodes, hashBackupCodes, verifySecondFactor } = require('../auth');
-const { addClient: addSseClient, removeClient: removeSseClient } = require('../sse');
+const { addClient: addSseClient, removeClient: removeSseClient, canAcceptClient: sseCanAcceptClient } = require('../sse');
 const { authLimiter, licenseLimiter } = require('../rate-limiters');
 const { validateLicenseKey } = require('../license');
 const { alertAdmins } = require('../services/email');
@@ -297,6 +297,14 @@ router.get('/api/events/stream', async (req, res) => {
   } catch (e) {
     return res.status(e.status || 401).end();
   }
+  // سقف الاتصالات المفتوحة: كل اتصال يحمل مقبساً في ذاكرة السيرفر طوال بقائه مفتوحاً.
+  // عند بلوغ السقف نرفض قبل writeHead (إلا لان فتح الترويسات ثم الرد يترك اتصالاً
+  // نصفي مفتوح بلا فائدة). المتصفح يعيد المحاولة تلقائياً (EventSource) ويتزامن
+  // بالفرق عند نجاحها، فليس الرفض فقدَ قناة دائمة — بل حماية ذاكرة النسخة.
+  if (!sseCanAcceptClient()) {
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({ error: 'عدد الاتصالات اللحظية بلغ الحد الأقصى — أعد المحاولة بعد قليل' });
+  }
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -312,6 +320,12 @@ router.get('/api/events/stream', async (req, res) => {
   res.flushHeaders();
   res.write(': connected\n\n');
   const clientId = addSseClient(res, user);
+  // addSseClient يرجع null فقط عند تجاوز السقف (حالة نادرة بين الفحص والإضافة؛ لا مجال
+  // لتداخل عمليتين في JS) — نغلق الاتصال بدل تركه مفتوحاً بلا تسجيل في القائمة.
+  if (clientId === null) {
+    try { res.end(); } catch (e) { /* مغلق أصلاً */ }
+    return;
+  }
   req.on('close', () => removeSseClient(clientId));
 });
 

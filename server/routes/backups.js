@@ -43,8 +43,10 @@ router.get('/api/backups/:id', requireAuth, requireRole('admin'), async (req, re
 });
 router.delete('/api/backups/:id', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    await backupService.remove(req.params.id);
-    res.json({ deleted: true });
+    // deleted يُبلّغ بالحقيقة: المتصفح يكتفي بـ res.ok فلا يتأثر، لكن ردّ
+    // "deleted: true" على id غير موجود كان مضلّلاً (كان يُرجع true دائماً).
+    const deleted = await backupService.remove(req.params.id);
+    res.json({ deleted });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر حذف النسخة الاحتياطية' });

@@ -244,15 +244,24 @@ async function recordsVersions(whereClause, params) {
   return r.rows;
 }
 
-// سجلات معلّقة من كل التصنيفات (للأدمن فقط)
-async function pendingRecordsAll() {
+// سجلات معلّقة من كل التصنيفات (للأدمن فقط).
+// حدّ أعلى صريح: بدونه كان استعلام واحد بلا LIMIT يُعيد كل السجلات المعلّقة لكل
+// التصنيفات دفعة واحدة (payload غير محدود ⇒ ذاكرة سيرفر + استجابة ضخمة). الحد
+// مريح جداً (٢٠٠٠) عملياً، ومعه total/truncated في الرد ليبقى الأدمن على علم إن
+// كان هناك المزيد بدل أن يظن أن القائمة كاملة.
+async function pendingRecordsAll(limit = 2000) {
   const r = await pool.query(
     `SELECT collection, id, enc, version, origin, status, created_by, updated_by, updated_at
      FROM collection_records
      WHERE origin = 'reception' AND status = 'pending'
-     ORDER BY updated_at DESC`
+     ORDER BY updated_at DESC
+     LIMIT $1`,
+    [limit]
   );
-  return r.rows;
+  const totalR = await pool.query(
+    `SELECT COUNT(*)::int AS c FROM collection_records WHERE origin = 'reception' AND status = 'pending'`
+  );
+  return { rows: r.rows, total: totalR.rows[0].c };
 }
 
 // جلب سجل عام واحد (لحماية العزل)
@@ -327,22 +336,38 @@ async function recordDeleteAll(collection) {
 }
 
 // تنظيف (prune) تصنيفات قابلة للتقليم
+// بدون RETURNING: المسار كان يُبني مصفوفة JS بكل معرّف محذوف (آلاف النصوص) بلا أي
+// استخدام — الطريق يستهلك rowCount أصلاً. الحذف نفسه ينفَّذ على دفعات (5000 صف)
+// في حلقة حتى يكتمل ⇒ النتيجة النهائية مطابقة تماماً للحذف المفرد (بلا اقتطاع) مع
+// تفادي حجز اتصال واحد طويلاً يخرج به الاستعلام عن statement_timeout.
+const PRUNE_BATCH = 5000;
 async function recordPrune(collection, olderThanDays) {
-  const r = await pool.query(
-    `DELETE FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval RETURNING id`,
-    [collection, olderThanDays]
-  );
-  return r.rowCount;
+  let total = 0;
+  for (;;) {
+    const r = await pool.query(
+      `DELETE FROM collection_records WHERE id IN (
+         SELECT id FROM collection_records
+         WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval
+         LIMIT ${PRUNE_BATCH}
+       )`,
+      [collection, olderThanDays]
+    );
+    total += r.rowCount;
+    if (r.rowCount < PRUNE_BATCH) break;
+  }
+  return total;
 }
 
-// معاينة تنظيف (بدون حذف)
+// معاينة تنظيف (بدون حذف) — عدّان في استعلام واحد بدل استعلامين منفصلين
 async function recordPrunePreview(collection, olderThanDays) {
   const r = await pool.query(
-    `SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1 AND updated_at < now() - ($2 || ' days')::interval`,
+    `SELECT
+       COUNT(*) FILTER (WHERE updated_at < now() - ($2 || ' days')::interval)::int AS would_delete,
+       COUNT(*)::int AS total
+     FROM collection_records WHERE collection = $1`,
     [collection, olderThanDays]
   );
-  const total = await pool.query('SELECT COUNT(*)::int AS c FROM collection_records WHERE collection = $1', [collection]);
-  return { wouldDelete: r.rows[0].c, total: total.rows[0].c };
+  return { wouldDelete: r.rows[0].would_delete, total: r.rows[0].total };
 }
 
 /* ============== رفع مجمّع موحّد (client_records / collection_records) ============== */
@@ -351,10 +376,25 @@ async function recordPrunePreview(collection, olderThanDays) {
 // requestId اختياري: لو مُقدَّم، يُستخدم كمعرّف دفعة لمنع الإدراج المزدوج عند إعادة الإرسال.
 // كل سجل يحصل على request_id فريد = "${requestId}:${recordId}" — لو كان موجوداً مسبقاً
 // يُتخطَّى السجل (عدم تكرار تقديم نفس الطلب).
+//
+// ===== إصلاح الأداء الحاسم: الفهارس على الجداول المؤقتة =====
+// كان _inc و _conf يُنشآن بـ CREATE TEMP TABLE ... AS SELECT (بلا أي فهرس)، بينما
+// الاستعلامات تعتمد عليهما في موضعين بمقارنة لكل صف:
+//   · NOT EXISTS (SELECT 1 FROM _conf c WHERE c.id = i.id)
+//   · ON CONFLICT ... WHERE client_records.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
+// الاستعلام الفرعي (subquery) لا يمكن أن يُنفَّذ كـ hash join أبداً، فيصبح **مسحاً
+// تسلسلياً كاملاً للجدول المؤقت لكل صف** = O(N²). عند 5000 سجل = ~25 مليون مقارنة
+// داخل معاملة واحدة تُحتجز على اتصال الـ pool طوال الوقت (وهذا بالضبط ما يُرهق
+// Postgres المجاني ويُسقطها statement_timeout).
+// الحل: إنشاء الجدولين بأعمدة حقيقية + PRIMARY KEY على id (فهرس btree)، فيتحوّل
+// كل بحث إلى O(log N) probe وتبقى العملية O(N log N) بنفس عدد الاستعلامات تماماً.
+// نفس الإصلاح خفّض تكلفة الـ DELETE في مسار الـ idempotency والـ JOIN نفسه.
 async function bulkMigrate({ tableConfig, records, username, origin, status, guardSql, guardParams, requestId }) {
   const client = await pool.connect();
   try {
     const { clientTable, collection, gated, isClientCollection } = tableConfig;
+    // نفس الحمولة بالضبط التي كانت تُبنى قبل (المعرّف/enc/نسخة معروفة/[رقم هوية]/[requestId])
+    // — الفرق الوحيد أنها الآن تُدرَج في جدول حقيقي مفهرس بدل جدول مُشتق بلا فهرس.
     const payload = JSON.stringify(records.map(r => {
       const base = {
         id: String(r.id),
@@ -372,11 +412,26 @@ async function bulkMigrate({ tableConfig, records, username, origin, status, gua
       catch (e) { e.message = `[${label}] ` + e.message; throw e; }
     };
 
-    await step('inc',
-      `CREATE TEMP TABLE _inc ON COMMIT DROP AS
-       SELECT (t->>'id')::text AS id, (t->>'enc')::text AS enc, COALESCE((t->>'version')::int, 0) AS known_version,
-              (t->>'clientId')::text AS client_id${requestId ? `, (t->>'requestId')::text AS request_id` : ''}
-       FROM jsonb_array_elements($1::jsonb) AS t`,
+    // جدول مؤقت بمفتاح أساسي على id ⇒ فهرس btree جاهز لكل بحث id لاحق.
+    // ON COMMIT DROP ⇒ نفس السلوك القديم (يختفي مع المعاملة) بلا أيDROP صريح.
+    await step('inc', `CREATE TEMP TABLE _inc (
+      id            text PRIMARY KEY,
+      enc           text NOT NULL,
+      known_version int,
+      client_id     text,
+      request_id    text
+    ) ON COMMIT DROP`);
+
+    // تكرار نفس الـ id داخل الدفعة الواحدة: نحتفظ بـ**أول** نسخة (نفس نتيجة السلوك
+    // السابق تماماً: الصف الأول كان يُدرَج/يُحدَّث، وأي تكرار بعده كان يفشل شرط
+    // version فِيُتخطّى — إذاً الأول يفوز). ORDINALITY يضمن ترتيباً حتمياً واضحاً.
+    await step('inc-fill',
+      `INSERT INTO _inc (id, enc, known_version, client_id, request_id)
+       SELECT DISTINCT ON ((t.v->>'id')::text)
+              (t.v->>'id')::text, (t.v->>'enc')::text,
+              COALESCE((t.v->>'version')::int, 0), (t.v->>'clientId')::text, (t.v->>'requestId')::text
+       FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS t(v, ord)
+       ORDER BY (t.v->>'id')::text, t.ord`,
       [payload]
     );
 
@@ -400,9 +455,14 @@ async function bulkMigrate({ tableConfig, records, username, origin, status, gua
     const guardShifted = isClientCollection
       ? guardSql
       : guardSql.replace(/\$2/g, '__TMP_DOLLAR2__').replace(/\$1/g, '$2').replace(/__TMP_DOLLAR2__/g, '$3');
-    await step('conf',
-      `CREATE TEMP TABLE _conf ON COMMIT DROP AS
-       SELECT cr.id, cr.version AS current_version, cr.enc AS current_enc
+    await step('conf', `CREATE TEMP TABLE _conf (
+      id             text PRIMARY KEY,
+      current_version int,
+      current_enc    text
+    ) ON COMMIT DROP`);
+    await step('conf-fill',
+      `INSERT INTO _conf (id, current_version, current_enc)
+       SELECT cr.id, cr.version, cr.enc
        FROM _inc i
        JOIN ${clientTable} cr ON cr.id = i.id${isClientCollection ? '' : ' AND cr.collection = $1'}
        WHERE cr.version <> i.known_version OR NOT (${guardShifted})`,
@@ -410,6 +470,8 @@ async function bulkMigrate({ tableConfig, records, username, origin, status, gua
     );
 
     // إدراج/تحديث غير المتعارضين في بيان واحد
+    // RETURNING id + version معاً (بلا تكلفة إضافية) — نحتاج النسخة الجديدة لكل سجل
+    // لمزامنة فهرس العرض clients_rows (وهو فهرس مشتق من client_records لا غير).
     const upsertRes = await step('upsert',
       `INSERT INTO ${clientTable} (${isClientCollection ? 'id, enc, version, updated_by, origin, status, created_by, client_id' : 'collection, id, enc, version, updated_by, origin, status, created_by'}${requestId ? ', request_id' : ''})
        SELECT ${isClientCollection ? 'i.id, i.enc, 1, $1, $2, $3, $1, i.client_id' : '$1, i.id, i.enc, 1, $2, $3, $4, $2'}${requestId ? ', i.request_id' : ''}
@@ -420,12 +482,16 @@ async function bulkMigrate({ tableConfig, records, username, origin, status, gua
          enc = EXCLUDED.enc, version = ${isClientCollection ? 'client_records' : 'collection_records'}.version + 1,
          updated_at = now(), updated_by = EXCLUDED.updated_by${isClientCollection ? ', client_id = EXCLUDED.client_id' : ''}${requestId ? ', request_id = EXCLUDED.request_id' : ''}
        WHERE ${isClientCollection ? 'client_records' : 'collection_records'}.version = (SELECT i2.known_version FROM _inc i2 WHERE i2.id = EXCLUDED.id)
-       RETURNING id`,
+       RETURNING id, version`,
       isClientCollection ? [username, origin, status] : [collection, username, origin, status]
     );
 
     const succeededIds = new Set(upsertRes.rows.map(r => r.id));
-    const allIds = (await step('ids', 'SELECT id FROM _inc')).rows.map(r => r.id);
+    const newVersions = {};
+    upsertRes.rows.forEach(r => { newVersions[r.id] = Number(r.version); });
+    // قائمة المُعرّفات المرسلة معروفة أصلاً في JS — لم يعد我们需要 رحلة إضافية
+    // (SELECT id FROM _inc) لقراءة جدول مؤقت، فنوفّر استعلاماً كاملاً من كل دفعة رفع.
+    const allIds = [...new Set(records.map(r => String(r.id)))];
     const conflictedIds = allIds.filter(id => !succeededIds.has(id));
 
     let conflictRows = [];
@@ -439,7 +505,11 @@ async function bulkMigrate({ tableConfig, records, username, origin, status, gua
 
     const migrated = records.length - conflictRows.length;
     await client.query('COMMIT');
-    return { migrated, conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })) };
+    return {
+      migrated,
+      conflicts: conflictRows.map(r => ({ id: r.id, currentVersion: r.current_version, currentEnc: r.current_enc })),
+      newVersions,
+    };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;

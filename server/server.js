@@ -269,16 +269,37 @@ app.use(centralErrorHandler);
 const PORT = process.env.PORT || 3000;
 ensureSchema()
   .then(async () => {
+    // ترحيلات البنية: تُطبَّق بعد إنشاء/تحديث الجداول (ensureSchema) وقبل أي خدمة.
+    // مبدأ المشروع: لا DDL تدميري عند الإقلاع — الترحيلات الآمنة فقط تُطبَّق تلقائياً،
+    // أما الترحيلات التدميرية (حذف جداول ZATCA الباقيا) فمؤجَّلة حتى أمر صريح من
+    // المشغّل:  node server/migrations/run.js --allow-destructive
+    // (이는 تغيير سلوكي مقصود: كان DROP يجري بصمت في كل إقلاع، وهو ما يجعل إعادة
+    // تشغيل السيرفر على قاعدة خاطئة عملية غير قابلة للتراجع).
+    try {
+      const { runMigrations } = require('./migrations');
+      const res = await runMigrations({ allowDestructive: false });
+      if (res.skipped.length) {
+        console.log(`ℹ️  ${res.skipped.length} ترحيل تدميري مؤجَّل — لتطبيقه: node server/migrations/run.js --allow-destructive`);
+      }
+      if (res.failed.length) console.error('⚠️  بعض الترحيلات الآمنة فشلت (استمر التشغيل على البنية الحالية):', res.failed.map(f => f.id).join(', '));
+    } catch (e) { console.error('⚠️  تعذّر تشغيل الترحيلات (استمر التشغيل على البنية الحالية):', e.message); }
+
     try {
       await loadRolePermissionsCache();
       console.log('✅ تم تحميل صلاحيات الأدوار (role_permissions)');
     } catch (e) { console.error('❌ تعذّر تحميل صلاحيات الأدوار — سيُعتمد وضع الحظر الاحترازي حتى إعادة المحاولة التالية:', e.message); }
 
-    // مزامنة عند بدء التشغيل: لو عدد صفوف clients_rows لا يطابق عدد عملاء kv_store الفعلي
-    // (يشمل الحالة القديمة: 0 صف رغم وجود آلاف العملاء — كانت تحدث بصمت لو صف واحد فقط
-    // به id مكرر أوقف كل عملية المزامنة بالكامل قبل هذا الإصلاح)، نعيد المزامنة كاملة.
-    // الآن آمنة ورخيصة التكلفة (UPSERT) فتُستدعى دائماً عند الإقلاع لضمان تطابق دائم.
-    syncService.startupCheckAndSync();
+    // فحص سلامة فهرس العملاء عند الإقلاع — **قراءة فقط** (بلا إعادة كتابة كاملة):
+    // كان يعيد بناء clients_rows بالكامل عند كل إقلاع من الكتلة التراثية الجمودة
+    // (O(N) كتابة + WAL عند كل إعادة تشغيل) مع DELETE لكل صف غير موجود فيها، وهو ما
+    // كان يمسح فهرس كل العملاء المضافين بعد الترحيل. الآن: فحص بعدّاد + تصحيح
+    // الصفوف اليتيمة فقط (آمنة لأنها غير موجودة في المصدر)، والتهيئة الأولية من
+    // الكتلة التراثية تتم مرة واحدة فقط عند فراغ الفهرس. التفاصيل في services/sync.js.
+    await syncService.startupCheckAndSync();
+
+    // فحص دوري رخيص لسلامة فهرس العملاء (استعلام واحد) — يلتقط الصفوف اليتيمة فقط.
+    // كل 6 ساعات: يكفي لأن اليتيم لا يظهر إلا بعد حذف عميل، والفحص التالي يلتقطه.
+    setInterval(() => syncService.periodicIntegrityCheck(), 6 * 60 * 60 * 1000);
 
     // تنظيف دوري لجدول login_history: نحتفظ بآخر 90 يوماً فقط حتى لا يكبر الجدول للأبد.
     async function cleanLoginHistory() {

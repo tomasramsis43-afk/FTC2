@@ -676,8 +676,12 @@ router.get('/api/records/pending', requireAuth, async (req, res) => {
   // ولا يفك تشفيراً أبداً) ويعرضه المتصفح.
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'غير متاح لهذا الدور' });
   try {
-    const rows = await recordsRepo.pendingRecordsAll();
-    res.json({ records: rows });
+    // سقف على عدد الصفوف المُعادة: الاستعلام كان يُجلب كل السجلات المعلّقة دفعة واحدة،
+    // ومع تراكم بيانات الاستقبال (وكل صف يحمل نصه المشفّر) صار بحجم استجابة غير محدود.
+    // pagination: نُبقي 'records' مصفوفة كما تستهلكها الواجهة تماماً (بلا تغيير في العقد)
+    // ونضيف total/truncated كحقول إضافية فقط — الواجهة تتجاهلها.
+    const { rows, total } = await recordsRepo.pendingRecordsAll();
+    res.json({ records: rows, total, truncated: rows.length < total });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'تعذّر جلب العمليات المعلّقة' });

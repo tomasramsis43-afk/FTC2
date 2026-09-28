@@ -8,15 +8,21 @@ const { pool } = require('../db');
 
 const MAX_BACKUPS_RETAINED = 30;
 
-// حفظ نسخة جديدة + تنظيف تجاوز الحد (يبقي آخر MAX_BACKUPS_RETAINED فقط)
-// يتم كلاهما داخل معاملة واحدة (transaction) — حتى لا يتغيّر تقييد TTL/الحد الأقصى عدة مرات
-// بشكل غير ذرّي، ولا تبقى النسخة الجديدة ظاهرة في نفس لحظة زيادة العدد ثم تنظيفه.
+// حفظ نسخة جديدة + تنظيف التجاوز.
+// يتم كله داخل معاملة واحدة (transaction) — حتى لا يتغيّر التقييد عدة مرات بشكل غير
+// ذرّي، ولا تبقى النسخة الجديدة ظاهرة في نفس لحظة زيادة العدد ثم تنظيفه.
 // قبل هذا التعديل كانت العملية تبدأ بـ INSERT ثم DELETE منفصلين (بلا transaction)، فلو حدث
 // خطأ بينهما أو تنافست عمليتان متزامنتان، قد يتجاوز عدد النسخ المحفوظة حدّ MAX_BACKUPS_RETAINED
 // مؤقتاً أو تُحذف نسخة لا يجوز (سباق غير محسوم). المعاملة تجعل العملية ذرّية تماماً.
-// (انتباه: `pool.connect` وحده لا يُغلّف العبارات في معاملة على pg خام — يجب BEGIN/COMMIT
+// (انتبه: `pool.connect` وحده لا يُغلّف العبارات في معاملة على pg خام — يجب BEGIN/COMMIT
 // صريحان، بنفس النمط المتّبع في user.repo.js / role.repo.js.)
-async function insertAndPrune({ kind, enc, createdBy }) {
+//
+// التقليم بحدّين معاً داخل استعلام واحد (كان استعلامين = قراءة الجدول مرتين):
+//   · maxCount      : يُبقي الأحدث N (المحصور بـ 30 أصلاً)
+//   · maxTotalBytes : يُبقي الأحدث ما لم يتجاوز المجموع ميزانية البايت
+//     (30 × 10MB = 300MB جدول واحد ⇒ استنزاف قاعدة بيانات مجانية، والقطران معاً يمنع ذلك)
+// الترتيب created_at DESC, id DESC يكسر التعادل (نسختان بنفس الثانية) فالتقليم حتمي.
+async function insertAndPrune({ kind, enc, createdBy, maxCount = MAX_BACKUPS_RETAINED, maxTotalBytes = null }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -24,12 +30,27 @@ async function insertAndPrune({ kind, enc, createdBy }) {
       `INSERT INTO app_backups (kind, enc, size_bytes, created_by) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
       [kind, enc, Buffer.byteLength(enc, 'utf8'), createdBy]
     );
-    await client.query(
-      `DELETE FROM app_backups WHERE id NOT IN (SELECT id FROM app_backups ORDER BY created_at DESC LIMIT $1)`,
-      [MAX_BACKUPS_RETAINED]
+    // نُبقي أحدث maxCount صفاً، وأيضاً أحدث ما تراكم حجمه ≤ maxTotalBytes.
+    // "الأحدث ضمن الميزانية" = ترتيب تنازلي ثم مجموع تراكمي (SUM OVER) — لا يكفي
+    // طرح المجموع من الحدّ (يعطي الفائض بالبايت لا عدد الصفوف).
+    // rn = 1 شرط أمان: أحدث نسخة لا تُحذف أبداً حتى لو وحدها تجاوزت الميزانية
+    // (حارس ضد إرجاع id لنسخة حُذفت فوراً).
+    const del = await client.query(
+      `DELETE FROM app_backups b
+        WHERE b.ctid NOT IN (SELECT ctid FROM app_backups ORDER BY created_at DESC, id DESC LIMIT $1)
+          AND b.ctid NOT IN (
+            SELECT ctid FROM (
+              SELECT ctid,
+                     SUM(size_bytes) OVER (ORDER BY created_at DESC, id DESC) AS cum_bytes,
+                     ROW_NUMBER() OVER (ORDER BY created_at DESC, id DESC)      AS rn
+                FROM app_backups
+            ) t
+            WHERE t.cum_bytes <= $2::bigint OR t.rn = 1
+          )`,
+      [maxCount, maxTotalBytes === null ? MAX_BACKUPS_RETAINED * 10 * 1024 * 1024 : maxTotalBytes]
     );
     await client.query('COMMIT');
-    return { id: ins.rows[0].id, createdAt: ins.rows[0].created_at };
+    return { id: ins.rows[0].id, createdAt: ins.rows[0].created_at, pruned: del.rowCount };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;
@@ -50,9 +71,11 @@ async function get(id) {
   return r.rows[0] || null;
 }
 
-// حذف نسخة
+// حذف نسخة — يُرجع عدد الصفوف المحذوفة فعلياً (صفر = غير موجودة) حتى تُبلّغ
+// الواجهة/browser بنتيجة حقيقية بدل "deleted: true" كذباً عند id غير موجود.
 async function del(id) {
-  await pool.query('DELETE FROM app_backups WHERE id = $1', [id]);
+  const r = await pool.query('DELETE FROM app_backups WHERE id = $1', [id]);
+  return r.rowCount > 0;
 }
 
 module.exports = { MAX_BACKUPS_RETAINED, insertAndPrune, list, get, del };

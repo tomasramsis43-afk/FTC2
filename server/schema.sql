@@ -44,13 +44,18 @@ CREATE TABLE IF NOT EXISTS kv_store (
 );
 
 -- ============================================================
--- إزالة ربط هيئة الزكاة والضريبة والجمارك (تمت إزالة الميزة بالكامل من الكود
--- والواجهة). الأسطر أدناه تحذف الجدولين وكل بياناتهما (بما فيها سجل الفواتير
--- القديم) نهائياً من قاعدة البيانات في أول إقلاع بعد هذا التحديث — إجراء غير
--- قابل للتراجع عنه.
--- ============================================================
-DROP TABLE IF EXISTS zatca_invoice_log;
-DROP TABLE IF EXISTS zatca_credentials;
+-- ربط هيئة الزكاة والضريبة والجمارك (ZATCA)
+-- ------------------------------------------------------------
+-- كان هنا سابقاً سطران يجريان
+--   DROP TABLE IF EXISTS zatca_invoice_log;
+--   DROP TABLE IF EXISTS zatca_credentials;
+-- في *كل مرة يُشغَّل فيها السيرفر* (هذا الملف يُنفَّذ كاستعلام واحد عند كل إقلاع):
+-- سلوك تدميري صامت على قاعدة الإنتاج بلا نسخة ولا مراجعة ولا رجوع — ممنوع كلياً.
+-- الكود نفسه لا يحوي أي مسار ZATCA، والجدولان بقايا من ميزة أُزيلت كلياً من
+-- الواجهة والخادم. الإزالة الصحيحة صارت Migration صريحة في server/migrations/
+--   (id = 2026-01-01-zatca-drop-legacy-tables, safe: false)
+-- تُشغَّل يدوياً فقط بعد نسخة احتياطية مؤكدة — لا تلقائياً عند الإقلاع إطلاقاً.
+-- هذا الملف الآن غير هدّام تماماً: CREATE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS فقط.
 
 -- ============================================================
 -- جدول العملاء كصفوف حقيقية مفهرسة (Pagination من السيرفر)
@@ -73,13 +78,29 @@ CREATE TABLE IF NOT EXISTS clients_rows (
   course_number TEXT,
   invoice_no    TEXT,
   reg_date      TEXT,
+  -- نسخة client_records التي بُني منها هذا الصف (مصدر الحقيقة) — تُملأ من الحفظ
+  -- التزايدي في clients_rows.repo.js وتُستخدم في فحص التطابق رخيص (بلا إعادة كتابة).
+  src_version   INTEGER,
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- تسريع البحث النصي ILIKE '%..%' عبر pg_trgm (يحتاج CREATE EXTENSION)
+ALTER TABLE clients_rows ADD COLUMN IF NOT EXISTS src_version INTEGER;
+-- تسريع البحث النصي ILIKE '%..%' عبر pg_trgm (يحتاج CREATE EXTENSION).
+-- فهرس GIN واحد فقط على name: هذا هو العمود الوحيد من الأربعة الذي يمكن لبوستجرس
+-- ربطه فعلاً بشرط البحث `name ILIKE '%..%'` (راجع GET /api/clients).
+-- الفهرس القديم الثاني idx_clients_rows_search_trgm كان GIN على التعبير
+-- (name || ' ' || client_id || ' ' || refer_num || ' ' || invoice_no) — وهو
+-- **لا يمكن لأي استعلام أن يستخدمه**، لأن الاستعلام يختبر كل عمود على حدة
+-- (name ILIKE ... OR client_id ILIKE ...)، وبوستجرس لا يحوّل شرطاً على عمود
+-- إلى شرط على تعبير مركّب. أي أنه كان كلفة تخزين + كتابة (فهرس GIN على 4 حقول
+-- نصية = غالباً أكبر من حجم الجدول نفسه) بلا أي فائدة بحثية إطلاقاً.
+-- حُذف عبر Migration صريحة (2026-01-02-clients-rows-index-cleanup) بعد إثبات
+-- عدم وجود أي استعلام في الكود يستخدم ذلك التعبير.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS idx_clients_rows_name_trgm ON clients_rows USING gin (name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_clients_rows_search_trgm ON clients_rows USING gin ((name || ' ' || client_id || ' ' || refer_num || ' ' || invoice_no) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_clients_rows_name ON clients_rows(name);
+-- (name, id) بدل name وحدها: نفس العمود القائد (فلا يتأثر ORDER BY name إطلاقاً)
+-- لكن يخدم أيضاً شرط الـ keyset pagination `(name > $ OR (name = $ AND id > $))`
+-- بالكامل داخل الفهرس بدل الفرز على N صف — وبلا زيادة في عدد الفهارس.
+CREATE INDEX IF NOT EXISTS idx_clients_rows_name_id ON clients_rows (name, id);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_client_id ON clients_rows(client_id);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_course_type ON clients_rows(course_type);
 CREATE INDEX IF NOT EXISTS idx_clients_rows_nationality ON clients_rows(nationality);
@@ -116,7 +137,9 @@ CREATE INDEX IF NOT EXISTS idx_client_records_origin_status ON client_records(or
 -- بعدها أبداً (بعكس updated_by الذي يتحدّث مع كل تعديل)، فيبقى دائماً هوية صاحب السجل الأصلي
 -- حتى لو حرّره الأدمن لاحقاً. للسجلات القديمة قبل هذا العمود نملأها افتراضياً من updated_by.
 ALTER TABLE client_records ADD COLUMN IF NOT EXISTS created_by TEXT;
-UPDATE client_records SET created_by = updated_by WHERE created_by IS NULL;
+-- تعبئة created_by = updated_by للسجلات القديمة كانت UPDATE على الجدول كله يتكرّر في كل
+-- إقلاع (مسح كامل، وكتابة صفوف جديدة/ميتة إن طابق أي صف NULL). رُفعت إلى Migration
+-- تُنفَّذ مرّة واحدة فقط (2026-01-04-backfill-created-by).
 -- فهرس مركّب لتسريع استعلامات الاستقبال (clientRecordsVisibilitySql: WHERE origin='reception'
 -- AND created_by=$2): بدون هذا الفهرس، عمود created_by وحده غير مفهرس، فيضطر بوستجرس لفحص كل
 -- الصفوف التي origin='reception' (تتزايد مع الوقت) بحثاً عن مطابقة created_by بدل القفز مباشرة
@@ -157,7 +180,8 @@ CREATE TABLE IF NOT EXISTS collection_records (
 -- ملاحظة: لا حاجة لإندكس منفصل على عمود collection وحده — المفتاح الأساسي المركّب
 -- PRIMARY KEY (collection, id) يغطي بالفعل أي استعلام WHERE collection = X (العمود القائد
 -- فى الإندكس المركّب)، فأي إندكس إضافي عليه وحده تكرار بلا فائدة حقيقية.
-DROP INDEX IF EXISTS idx_collection_records_collection;
+-- كان يُحذف هنا بـ DROP INDEX IF EXISTS في كل إقلاع (DDL تدميري عند كل تشغيل) — رُفع
+-- إلى Migration صريحة (2026-01-03-drop-unused-redundant-indexes).
 
 -- عزل بيانات الاستقبال في السجلات العامة: نفس نمط client_records تماماً. أي سجل يسجّله
 -- مستخدم بدور 'reception' في تصنيفات التشغيل (الخزنة/المخزون/الدورات) يُوسَم origin='reception'
@@ -167,9 +191,9 @@ DROP INDEX IF EXISTS idx_collection_records_collection;
 ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'general';
 ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'confirmed';
 ALTER TABLE collection_records ADD COLUMN IF NOT EXISTS created_by TEXT;
--- created_by يُسجَّل مرة واحدة عند إنشاء السجل ولا يتغيّر لاحقاً (عزل مستخدمي الاستقبال عن
--- بعضهم مهما عُدِّل السجل أو اُعتمد) — القيم القديمة تُملأ من آخر من حدّث السجل كما هو متاح.
-UPDATE collection_records SET created_by = updated_by WHERE created_by IS NULL;
+-- تعبئة created_by من updated_by للسجلات القديمة كانت عبارة عن UPDATE على الجدول كله
+-- يتكرّر في كل إقلاع (مسح كامل + كتابة جديدة لصفوف جديدة/ميتة إن طابق أي صف). رُفعت
+-- إلى Migration تُنفَّذ مرّة واحدة فقط (2026-01-04-backfill-created-by).
 CREATE INDEX IF NOT EXISTS idx_collection_records_origin_status ON collection_records(origin, status);
 -- نفس فهرس created_by المضاف لـ client_records أعلاه وبنفس السبب: يسرّع فلترة عزل الاستقبال
 -- (WHERE collection=X AND origin='reception' AND created_by=$2) فى recordsVisibilitySql.
@@ -233,16 +257,25 @@ CREATE TABLE IF NOT EXISTS magic_link_tokens (
   used_at     TIMESTAMPTZ,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_username ON magic_link_tokens(username);
-CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_lookup ON magic_link_tokens(username, token_hash);
-CREATE INDEX IF NOT EXISTS idx_login_history_username ON login_history(username);
+-- كل استعلامات login_history الحقيقية (auth.repo.js) تشترط success مع username:
+--   lastSuccessfulLogin/deviceSeen/ipSeen ⇒ (username, success, ...) أو (username, success, device_info/ip_address)
+--   suspicious*                          ⇒ (logged_in_at DESC) WHERE success = false
+--   loginHistory / cleanLoginHistory      ⇒ (logged_in_at DESC)
+-- فـ idx_login_history_username (على username وحده) لا يخدم أياً منها: عمود username
+-- هو العمود القائد في (username, success, logged_in_at) و(username, success, device_info)
+-- و(username, success, ip_address)، فأي WHERE username = X يستفيد منها أصلاً.
+-- كان كل تسجيل دخول يكتب في ٧ فهارس بلا داعٍ. حُذف عبر Migration صريحة.
 CREATE INDEX IF NOT EXISTS idx_login_history_logged_in_at ON login_history(logged_in_at DESC);
 CREATE INDEX IF NOT EXISTS idx_login_history_failed ON login_history(logged_in_at DESC) WHERE success = false;
 CREATE INDEX IF NOT EXISTS idx_login_history_user_success_time ON login_history(username, success, logged_in_at DESC);
-CREATE INDEX IF NOT EXISTS idx_login_history_user_device ON login_history(username, device_info);
-CREATE INDEX IF NOT EXISTS idx_login_history_user_ip ON login_history(username, ip_address);
+CREATE INDEX IF NOT EXISTS idx_login_history_user_device ON login_history(username, success, device_info);
+CREATE INDEX IF NOT EXISTS idx_login_history_user_ip ON login_history(username, success, ip_address);
 CREATE INDEX IF NOT EXISTS idx_collection_records_updated_at ON collection_records(collection, updated_at);
 CREATE INDEX IF NOT EXISTS idx_collection_records_pending_sort ON collection_records(origin, status, updated_at DESC);
+-- findValidMagicLink يبحث بـ (username, token_hash) و cleanMagicLinkTokens بـ created_at.
+-- idx_magic_link_tokens_username على username وحده = بادئة الفهرس المركّب نفسه ⇒ تكرار
+-- صِرف (لا يخدم استعلاماً لا يخدمه المركّب). حُذف عبر Migration صريحة.
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_lookup ON magic_link_tokens(username, token_hash);
 CREATE INDEX IF NOT EXISTS idx_magic_link_created ON magic_link_tokens(created_at);
 CREATE INDEX IF NOT EXISTS idx_kv_store_key_pattern ON kv_store(key text_pattern_ops);
 
@@ -257,7 +290,11 @@ CREATE TABLE IF NOT EXISTS app_backups (
   created_by   TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_app_backups_created_at ON app_backups(created_at DESC);
+-- فهرس قائمة النسخ/التقليم: الترتيب created_at DESC مع id لفض التعادل (نسختان بنفس
+-- الثانية ⇒ ترتيب غير محدّد كان يجعل التقليم يختار أحياناً نسخة أقدم من اللازم).
+-- (لاحظ: الفهرس يغطي الترتيب والعدّ فقط، ولا يغطي مسح عمود enc الكبير، الذي لا يمكن
+-- تجنّبه عند التقليم — وعدد الصفوف محكوم بـ 30 + ميزانية البايت.)
+CREATE INDEX IF NOT EXISTS idx_app_backups_created_at ON app_backups(created_at DESC, id DESC);
 
 -- المصادقة الثنائية (TOTP) — متاحة لأي مستخدم لكن الاستخدام الفعلي حالياً مقتصر على الأدمن.
 -- totp_secret مخزّن base32 خام (نفس ما تتطلبه تطبيقات المصادقة العادية Google/Microsoft Authenticator)؛
