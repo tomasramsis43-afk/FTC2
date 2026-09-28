@@ -39,8 +39,15 @@ async function clientRecords({ where, params, page, pageSize, ids }) {
     sqlParams.push(ids);
     hasWhere = true;
   }
+  // الترتيب موحّد بين مسار الترقيم ومسار الجلب الكامل (ORDER BY id ASC) عن قصد:
+  //  1) الاتساق: لو اختلف الترتيب بين page وغير page لتغيّر محتوى الصفحة نفسها باختلاف
+  //     طريقة الجلب، فتفقد الواجهة سجلات أو تكررها عند المزج بين المسارين.
+  //  2) الثبات: id مفتاح أساسي لا يتغيّر أبداً، بينما version يتغيّر مع كل تعديل على السجل،
+  //     فترتيب الصفحات على version يجعل حدود الصفحات "تنزلق" أثناء الترقيم (تكرار/سقوط صفوف).
+  //  3) بلا فهرس جديد: id هو PRIMARY KEY أصلاً، فالفهرس موجود بالفعل — لا نضيف فهرساً جديداً
+  //     لمجرد دعم الترقيم (زيادة فهرس = مساحة + تكلفة كتابة على كل UPDATE لـ version).
   if (Number.isInteger(page) && page >= 1) {
-    sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
+    sql += ` ORDER BY id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
     sqlParams.push(pageSize, (page - 1) * pageSize);
   } else {
     // ترتيب ثابت ومحدد لكل جلبات الصفحات الكاملة وجلب الفروق ids= — بلا ORDER BY كان ترتيب
@@ -216,8 +223,11 @@ async function recordsByCollection({ collection, where, params, page, pageSize, 
     sql += ` AND id = ANY($${sqlParams.length + 1}::text[])`;
     sqlParams.push(ids);
   }
+  // نفس مبدأ clientRecords أعلاه: ترتيب موحّد وثابت على id بين مسار الترقيم ومسار الجلب الكامل،
+  // لئلا تنزلق حدود الصفحات (id ثابت، version يتغيّر مع كل تعديل) أو تختلف النتيجة بين المسارين.
+  // composite PK (collection, id) يخدم هذا الترتيب مباشرةً — بلا فهرس جديد.
   if (Number.isInteger(page) && page >= 1) {
-    sql += ` ORDER BY version ASC, id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
+    sql += ` ORDER BY id ASC LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}`;
     sqlParams.push(pageSize, (page - 1) * pageSize);
   } else {
     // نفس مبدأ الترتيب الثابت في clientRecords — راجع التعليق هناك

@@ -927,6 +927,29 @@ async function _persistAllSnapshotsAfterLoad(){
   }
 }
 
+// ---- الجلب الكامل مُرقَّم (Full load paginated) ----
+// المسار الكامل كان طلباً واحداً بلا حدود: `GET /api/records/:collection` أو `/api/client-records`
+// بدون page يعيدان الجدول كاملاً في استجابة واحدة (آلاف السجلات × نصّها المشفّر) — وهو أعلى بند
+// في استهلاك حصة نقل بيانات قاعدة البيانات الشهرية على Free Tier، وزيد ذاكرة Node والمتصفح
+// والضغط على استجابة واحدة كبيرة. الآن نطلب 500 سجلاً في كل مرة حتى تنتهي، فنصل لنفس النتيجة
+// الكاملة بالضبط لكن مقسّمة على طلبات محدودة الحجم، مع استفادة حقيقية من فهرس المفتاح الأساسي.
+const _FULL_PAGE_SIZE = 500;
+const _FULL_MAX_PAGES = 400; // سقف أمان: 400×500 = 200,000 سجل — أبعد بأبعد عن أي حجم حقيقي
+async function _fetchAllRecordsPaginated(pathForPage){
+  const all = [];
+  for(let page = 1; page <= _FULL_MAX_PAGES; page++){
+    const res = await serverFetch(pathForPage(page));
+    if(!res.ok) throw new Error('تعذّر جلب البيانات (HTTP ' + res.status + ')');
+    const data = await res.json();
+    const records = (data && data.records) || [];
+    for(const r of records) all.push(r);
+    // صفحة أقصر من pageSize = انتهت البيانات (شرط نهائي، ينتج عنه صفحة فارغة عند مضاعفات 500)
+    if(records.length < _FULL_PAGE_SIZE) return all;
+    if(page === _FULL_MAX_PAGES) throw new Error('عدد السجلات تجاوز الحد الأقصى الآمن للترقيم');
+  }
+  throw new Error('انتهى الترقيم دون بلوغ نهاية البيانات');
+}
+
 async function fetchAllRecordsGeneric(collection){
   await flushPendingRecordWrites().catch(()=>{});
   // المسار الجديد: جلب "الفروق فقط" (لا ننزّل الجدول كاملاً إطلاقاً إلا عند الضرورة) لتسريع
@@ -937,14 +960,12 @@ async function fetchAllRecordsGeneric(collection){
     const delta = await _fetchDeltaRecords(collection);
     if(delta) return delta;
   }catch(e){ /* نكمل بالمسار الكامل */ }
-  const res = await serverFetch(`/api/records/${encodeURIComponent(collection)}`);
-  if(!res.ok) throw new Error('تعذّر جلب بيانات ' + collection);
-  const data = await res.json();
+  const records = await _fetchAllRecordsPaginated((p) =>
+    `/api/records/${encodeURIComponent(collection)}?page=${p}&pageSize=${_FULL_PAGE_SIZE}`);
   const list = [];
   const baseline = new Map();
   const versions = new Map();
   const metaMap = {};
-  const records = data.records || [];
   for(const r of records){
     versions.set(r.id, r.version);
     metaMap[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
@@ -1692,13 +1713,11 @@ async function fetchAllClientRecords(){
     const delta = await _fetchDeltaClientRecords();
     if(delta) return delta;
   }catch(e){ /* نكمل بالمسار الكامل */ }
-  const res = await serverFetch('/api/client-records');
-  if(!res.ok) throw new Error('تعذّر جلب سجلات العملاء من السيرفر');
-  const data = await res.json();
+  const records = await _fetchAllRecordsPaginated((p) =>
+    `/api/client-records?page=${p}&pageSize=${_FULL_PAGE_SIZE}`);
   const list = [];
   const baseline = new Map();
   clientRecordMeta = {};
-  const records = data.records || [];
   for(const r of records){
     _clientRecordVersions[r.id] = r.version;
     clientRecordMeta[r.id] = { origin: r.origin || 'general', status: r.status || 'confirmed' };
