@@ -1645,11 +1645,24 @@ async function _fetchDeltaClientRecords(){
   const baseline = new Map();
   clientRecordMeta = {};
 
+  // اللقطة المحلية قد تكون أقدم من آخر حفظ ناجح فى هذه الجلسة (تُكتب بتأخير debounce ~1.2 ثانية)،
+  // بينما _clientRecordVersions يُحدَّث فوراً عند نجاح الحفظ — فلا يُعاد جلب هذا العميل من السيرفر
+  // (الإصدار مطابق) وتُؤخذ نسخته القديمة من اللقطة، فيختفي أثر التعديل (مثل الرقم المرجعي) من
+  // الكرت/نافذة التعديل مع بقائه فى الجدول (المسار السريع من السيرفر). الـ baseline بالذاكرة هو
+  // آخر حالة مؤكدة على السيرفر، فنعتمدها بدل نسخة اللقطة لو اختلفا.
+  const fetchSet = new Set(fetchIds);
   for(const it of oldItems){
     if(!it || !it.id) continue;
     if(removedIds.includes(it.id)) continue;
-    finalItems.push(it);
-    const j = snapBaseline.get(it.id);
+    let item = it;
+    let j = snapBaseline.get(it.id);
+    if(!fetchSet.has(it.id) && _clientsSyncBaseline instanceof Map){
+      const memJson = _clientsSyncBaseline.get(it.id);
+      if(memJson !== undefined && memJson !== j){
+        try{ item = JSON.parse(memJson); j = memJson; }catch(e){ /* نبقى على نسخة اللقطة */ }
+      }
+    }
+    finalItems.push(item);
     if(j !== undefined) baseline.set(it.id, j);
   }
   for(const pair of (snap.metaPairs||[])){ if(pair && pair.length===2 && pair[0] && pair[1] && pair[1].status && !removedIds.includes(pair[0])) clientRecordMeta[pair[0]] = { origin: pair[1].origin || 'general', status: pair[1].status }; }
