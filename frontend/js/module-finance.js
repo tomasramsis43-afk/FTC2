@@ -294,6 +294,26 @@ function vaultKnownMethodOptions(){
   vaultTx.forEach(t=>{ if(t.method && !definedSet.has(t.method)) extra.add(t.method); });
   return defined.concat(Array.from(extra).sort((a,b)=>a.localeCompare(b,'ar')));
 }
+/* خيارات فلتر التصنيف: تصنيفات المصروفات المُعرَّفة فى الإعدادات + أى تصنيف مستخدم فعلياً فى الحركات (حتى لو حُذف من الإعدادات لاحقاً) */
+const VAULT_NO_CATEGORY = '__none__';
+function vaultKnownCategoryOptions(){
+  const defined = (settings.expenseCategories||[]).filter(Boolean);
+  const definedSet = new Set(defined);
+  const extra = new Set();
+  vaultTx.forEach(t=>{ const c = String(t.category||'').trim(); if(c && !definedSet.has(c)) extra.add(c); });
+  return defined.concat(Array.from(extra).sort((a,b)=>a.localeCompare(b,'ar')));
+}
+function repopulateVaultCategoryFilter(){
+  const sel = $('#v-filter-category');
+  if(!sel) return;
+  repopulateFilterSelectPreserve(sel, vaultKnownCategoryOptions(), 'كل التصنيفات');
+  // خيار "بدون تصنيف" (الحركات الواردة وأى صادر بلا تصنيف) — قيمته خاصة فلا يتعارض مع اسم تصنيف حقيقى
+  const prev = selectedFilterValues(sel);
+  const first = sel.options[0];
+  if(first) first.insertAdjacentHTML('afterend', `<option value="${VAULT_NO_CATEGORY}">بدون تصنيف</option>`);
+  Array.from(sel.options).forEach(o=> o.selected = prev.includes(o.value));
+  refreshMultiSelectFilterUI(sel);
+}
 /* أرقام الهوية التي تتكرر أكثر من مرة ضمن كل حركات الخزنة/البنك/الشبكة (بغض النظر عن الفلتر الحالي) */
 function vaultDuplicateClientIds(){
   if(_dupCacheVersion===vaultTxVersion && _dupCache) return _dupCache;
@@ -335,6 +355,7 @@ function vaultFilteredRows(){
   const typeVals = selectedFilterValues($('#v-filter-type'));
   const destVals = selectedFilterValues($('#v-filter-dest'));
   const methodVals = selectedFilterValues($('#v-filter-method'));
+  const categoryVals = selectedFilterValues($('#v-filter-category'));
   const q = $('#v-search').value.trim().toLowerCase();
   const dupOnly = $('#v-filter-dup')?.checked;
   const dupIds = dupOnly ? vaultDuplicateClientIds() : null;
@@ -353,6 +374,10 @@ function vaultFilteredRows(){
     if(typeVals.length && !typeVals.includes(t.type)) return false;
     if(destVals.length && !destVals.includes(t.destination||'vault')) return false;
     if(methodVals.length && !methodVals.includes(t.method||'')) return false;
+    if(categoryVals.length){
+      const cat = String(t.category||'').trim();
+      if(!categoryVals.includes(cat || VAULT_NO_CATEGORY)) return false;
+    }
     if(dupOnly && !(t.clientId && dupIds.has(t.clientId))) return false;
     if(noMethodOnly && String(t.method||'').trim()) return false;
     if(q){
@@ -946,6 +971,7 @@ function renderVault(){
   if(typeof populateReceptionFilterSelects==='function') populateReceptionFilterSelects();
   populateSelect($('#vf-category'), settings.expenseCategories, false);
   repopulateFilterSelectPreserve($('#v-filter-method'), vaultKnownMethodOptions(), 'كل طرق الدفع');
+  repopulateVaultCategoryFilter();
   runDueScheduledVaultTx().then(ran=>{ if(ran) renderVault(); });
   renderRecurringSuggestions();
   renderScheduledVaultTable();
@@ -972,7 +998,7 @@ function renderVault(){
 
   // إعادة الصفحة إلى الأولى تلقائياً كلما تغيّر البحث أو أي فلتر (وليس عند التنقّل بين الصفحات فقط)
   const vaultFilterSig = JSON.stringify([
-    $('#v-from')?.value, $('#v-to')?.value, selectedFilterValues($('#v-filter-type')), selectedFilterValues($('#v-filter-dest')), selectedFilterValues($('#v-filter-method')),
+    $('#v-from')?.value, $('#v-to')?.value, selectedFilterValues($('#v-filter-type')), selectedFilterValues($('#v-filter-dest')), selectedFilterValues($('#v-filter-method')), selectedFilterValues($('#v-filter-category')),
     $('#v-search')?.value, $('#v-filter-dup')?.checked, $('#v-filter-nomethod')?.checked, $('#v-filter-anomaly')?.checked, selectedFilterValues($('#v-filter-reception'))
   ]);
   if(vaultFilterSig !== vaultLastFilterSig){ vaultCurrentPage = 1; vaultLastFilterSig = vaultFilterSig; }
@@ -1240,7 +1266,7 @@ function renderDenomHistory(){
 // الاثنين معاً لكل عنصر كان يستدعي renderVault مرتين لبعض العناصر (input ثم change) فيُعاد رسم
 // الجدول الكبير مرتين لكل تفاعل، ويزيد بشكل ملحوظ مع كثرة البيانات.
 ['#v-from','#v-to'].forEach(sel=>{ const el=$(sel); el?.addEventListener('input', renderVault); });
-['#v-filter-type','#v-filter-dest','#v-filter-method','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
+['#v-filter-type','#v-filter-dest','#v-filter-method','#v-filter-category','#v-filter-dup','#v-filter-nomethod','#v-filter-anomaly','#v-filter-reception'].forEach(sel=>{ const el=$(sel); el?.addEventListener('change', renderVault); });
 // تبويبات الصناديق (الكل/الخزنة/البنك/الشبكة): تضبط فلتر الوجهة الموجود أصلاً وتُطلق change
 // عليه لإعادة استخدام نفس مسار renderVault والفرز والصفحات دون أي تكرار لأي منطق.
 $('#vault-fund-tabs')?.addEventListener('click', e=>{
