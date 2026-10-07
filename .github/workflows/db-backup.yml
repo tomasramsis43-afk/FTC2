@@ -1,0 +1,167 @@
+name: DB Backup (encrypted)
+
+# نسخة احتياطية ليلية مشفّرة من قاعدة Neon إلى Cloudflare R2.
+# المبادئ:
+#   · التشفير بـ age بمفتاح عام فقط — المفتاح الخاص لا يدخل GitHub إطلاقاً (يُحفظ خارجياً).
+#   · قبل الرفع: استرجاع فعلي للنسخة داخل Postgres مؤقت + مطابقة عدد الصفوف. نسخة لا تُسترجع لا تُرفع.
+#   · الملف غير المشفّر يُحذف فور التشفير، ولا يُرفع أبداً.
+#   · الاحتفاظ 30 يوماً مع حد أدنى 7 نسخ لا تُحذف مهما حدث (حماية من خطأ منطق/ساعة).
+# الأسرار المطلوبة (Settings → Secrets and variables → Actions):
+#   DATABASE_URL, AGE_PUBLIC_KEY, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+# متغيّر اختياري (Variables): PG_MAJOR (الافتراضي 17) — لازم يساوي أو يزيد عن إصدار Neon.
+
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  PG_MAJOR: ${{ vars.PG_MAJOR || '17' }}
+  RETENTION_DAYS: '30'
+  MIN_KEEP: '7'
+  PREFIX: 'db-backups/'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      verify-db:
+        image: postgres:${{ vars.PG_MAJOR || '17' }}
+        env:
+          POSTGRES_PASSWORD: verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check required secrets
+        env:
+          S1: ${{ secrets.DATABASE_URL }}
+          S2: ${{ secrets.AGE_PUBLIC_KEY }}
+          S3: ${{ secrets.R2_ACCOUNT_ID }}
+          S4: ${{ secrets.R2_ACCESS_KEY_ID }}
+          S5: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          S6: ${{ secrets.R2_BUCKET }}
+        run: |
+          missing=0
+          for n in 1 2 3 4 5 6; do
+            v="S$n"
+            if [ -z "${!v}" ]; then echo "::error::missing secret #$n (DATABASE_URL, AGE_PUBLIC_KEY, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET)"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Install pg client and age
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}" age
+          pg_dump --version
+
+      - name: Dump (custom format)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          echo "STAMP=$(date -u +%Y%m%dT%H%M%SZ)" >> "$GITHUB_ENV"
+          count_all() {
+            for t in server_users kv_store client_records collection_records clients_rows app_backups role_permissions; do
+              exists=$(psql "$1" -Atc "select to_regclass('public.$t') is not null")
+              if [ "$exists" = "t" ]; then echo "$t=$(psql "$1" -Atc "select count(*) from public.$t")"; fi
+            done
+          }
+          count_all "$DATABASE_URL" > counts_before.txt
+          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges -f ftc2.dump
+          count_all "$DATABASE_URL" > counts_after.txt
+          size=$(stat -c %s ftc2.dump)
+          echo "dump size: $size bytes"
+          if [ "$size" -lt 2048 ]; then echo "::error::dump suspiciously small"; exit 1; fi
+
+      - name: Restore test (ephemeral Postgres) and row-count check
+        run: |
+          set -euo pipefail
+          T="postgresql://postgres:verify@localhost:5432/postgres"
+          pg_restore --no-owner --no-privileges --exit-on-error --dbname="$T" ftc2.dump
+          fail=0
+          while IFS='=' read -r t before; do
+            after=$(grep "^$t=" counts_after.txt | cut -d= -f2)
+            restored=$(psql "$T" -Atc "select count(*) from public.$t")
+            lo=$(( before < after ? before : after ))
+            hi=$(( before > after ? before : after ))
+            echo "$t: restored=$restored (source $lo..$hi)"
+            if [ "$restored" -lt "$lo" ] || [ "$restored" -gt "$hi" ]; then
+              echo "::error::row count mismatch in $t"; fail=1
+            fi
+          done < counts_before.txt
+          exit $fail
+
+      - name: Encrypt with age and remove plaintext
+        env:
+          AGE_PUBLIC_KEY: ${{ secrets.AGE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          age -r "$AGE_PUBLIC_KEY" -o "ftc2-${STAMP}.dump.age" ftc2.dump
+          sha256sum "ftc2-${STAMP}.dump.age" > "ftc2-${STAMP}.dump.age.sha256"
+          shred -u ftc2.dump
+          ls -l ftc2-*.age
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "ftc2-${STAMP}.dump.age" "s3://${R2_BUCKET}/${PREFIX}ftc2-${STAMP}.dump.age" --endpoint-url "$EP" --only-show-errors
+          aws s3 cp "ftc2-${STAMP}.dump.age.sha256" "s3://${R2_BUCKET}/${PREFIX}ftc2-${STAMP}.dump.age.sha256" --endpoint-url "$EP" --only-show-errors
+          # التحقق من وصول الملف بنفس الحجم
+          local_size=$(stat -c %s "ftc2-${STAMP}.dump.age")
+          remote_size=$(aws s3api head-object --bucket "$R2_BUCKET" --key "${PREFIX}ftc2-${STAMP}.dump.age" --endpoint-url "$EP" --query ContentLength --output text)
+          if [ "$local_size" != "$remote_size" ]; then echo "::error::upload size mismatch ($local_size vs $remote_size)"; exit 1; fi
+          echo "uploaded ${PREFIX}ftc2-${STAMP}.dump.age ($remote_size bytes)"
+
+      - name: Retention (keep 30 days, never fewer than 7 backups)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          EP="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%Y%m%dT%H%M%SZ)
+          keys=$(aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "$PREFIX" --endpoint-url "$EP" --query 'Contents[?ends_with(Key, `.dump.age`)].Key' --output text | tr '\t' '\n' | sort)
+          total=$(echo "$keys" | grep -c . || true)
+          echo "backups in bucket: $total"
+          old=$(echo "$keys" | while read -r k; do
+                  s=$(echo "$k" | sed -E 's/.*ftc2-([0-9]{8}T[0-9]{6}Z)\.dump\.age/\1/')
+                  if [[ "$s" < "$cutoff" ]]; then echo "$k"; fi
+                done)
+          n_old=$(echo "$old" | grep -c . || true)
+          if [ "$n_old" -gt 0 ] && [ $((total - n_old)) -ge "$MIN_KEEP" ]; then
+            echo "$old" | while read -r k; do
+              aws s3 rm "s3://${R2_BUCKET}/${k}" --endpoint-url "$EP" --only-show-errors
+              aws s3 rm "s3://${R2_BUCKET}/${k}.sha256" --endpoint-url "$EP" --only-show-errors || true
+              echo "deleted $k"
+            done
+          else
+            echo "nothing deleted (old=$n_old, total=$total, min keep=$MIN_KEEP)"
+          fi
