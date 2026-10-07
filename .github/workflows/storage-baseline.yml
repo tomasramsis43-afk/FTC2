@@ -1,0 +1,32 @@
+name: Storage Baseline (manual)
+
+# زر يدوي: يقيس حجم قاعدة البيانات (قراءة فقط) ويعرض النتيجة في ملخّص التشغيل.
+# الريبو عام ⇒ الملخّص يحوي أحجاماً فقط (بلا أعداد سجلات ولا أي محتوى).
+# السر المطلوب: DATABASE_URL (نفس سر النسخ الاحتياطي).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: npm ci
+        run: npm ci --omit=dev
+      - name: Measure (read-only) and write summary
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/storage-baseline.js --summary >> "$GITHUB_STEP_SUMMARY"

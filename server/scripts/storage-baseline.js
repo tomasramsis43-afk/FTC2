@@ -28,6 +28,23 @@ function compareSnapshots(before, after) {
   return out;
 }
 
+// ملخّص Markdown للأحجام فقط (بلا أعداد سجلات ولا محتوى) — يُكتب في ملخّص تشغيل GitHub.
+// الريبو عام، فنكتفي بالأحجام المقرّبة ولا نكشف عدد العملاء/السجلات.
+function toMarkdown(s) {
+  const L = [];
+  L.push(`## حجم التخزين — ${s.takenAt}`, '');
+  L.push(`**الحجم الكلي لقاعدة البيانات:** ${fmtBytes(s.dbBytes)}`, '');
+  L.push('| الجدول (مع الفهارس) | الحجم |', '|---|---|');
+  s.tables.forEach(t => L.push(`| ${t.table} | ${fmtBytes(t.total_bytes)} |`));
+  L.push('', '| collection_records | الحجم | أكبر سجل |', '|---|---|---|');
+  s.collections.forEach(c => L.push(`| ${c.collection} | ${fmtBytes(c.enc_bytes)} | ${fmtBytes(c.max_record_bytes)} |`));
+  L.push('', `**client_records:** ${fmtBytes(s.clientRecords.enc_bytes)} (متوسط السجل ${fmtBytes(s.clientRecords.avg_record_bytes)})`);
+  L.push(`**app_backups:** ${fmtBytes(s.appBackups.bytes)}`, '');
+  L.push('| أكبر مفاتيح kv_store | الحجم |', '|---|---|');
+  s.kvTop.forEach(k => L.push(`| ${k.key} | ${fmtBytes(k.bytes)} |`));
+  return L.join('\n') + '\n';
+}
+
 async function collect(pool) {
   const c = await pool.connect();
   try {
@@ -83,14 +100,15 @@ function print(s) {
   console.log('');
 }
 
-module.exports = { fmtBytes, compareSnapshots, collect };
+module.exports = { fmtBytes, compareSnapshots, collect, toMarkdown };
 
 if (require.main === module) {
   (async () => {
     const { pool } = require('../db');
     try {
       const snap = await collect(pool);
-      print(snap);
+      if (process.argv.includes('--summary')) process.stdout.write(toMarkdown(snap));
+      else print(snap);
       const i = process.argv.indexOf('--out');
       if (i > -1 && process.argv[i + 1]) {
         fs.writeFileSync(process.argv[i + 1], JSON.stringify(snap, null, 2));

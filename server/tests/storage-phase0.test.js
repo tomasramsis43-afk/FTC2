@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
-const { fmtBytes, compareSnapshots } = require('../scripts/storage-baseline.js');
+const { fmtBytes, compareSnapshots, toMarkdown } = require('../scripts/storage-baseline.js');
 const metrics = require('../metrics.js');
 
 test('fmtBytes: وحدات صحيحة', () => {
@@ -55,4 +55,18 @@ test('db-backup.yml: حواجز الأمان موجودة (تشفير، استر
   assert.match(y, /actions\/upload-artifact@v4/, 'حفظ النسخة كـ artifact');
   assert.match(y, /path: \|\n\s+ftc2-\*\.dump\.age\n/, 'الـ artifact للملف المشفّر فقط');
   assert.doesNotMatch(y, /path:[^\n]*ftc2\.dump\s*$/m, 'لا يُرفع dump غير مشفّر كـ artifact');
+});
+
+test('toMarkdown: أحجام فقط — لا أعداد سجلات ولا بيانات حساسة (الريبو عام)', () => {
+  const snap = {
+    takenAt: '2026-10-07T00:00:00Z', dbBytes: 50 * 1024 * 1024,
+    tables: [{ table: 'client_records', total_bytes: 10 * 1024 * 1024, est_rows: 4321 }],
+    collections: [{ collection: 'vaultTx', records: 987, enc_bytes: 2 * 1024 * 1024, max_record_bytes: 4096, avg_record_bytes: 100 }],
+    clientRecords: { records: 5555, enc_bytes: 9 * 1024 * 1024, avg_record_bytes: 1700 },
+    kvTop: [{ key: 'settings', bytes: 2048, version: 3 }], appBackups: { n: 12, bytes: 1024 * 1024 },
+  };
+  const md = toMarkdown(snap);
+  assert.match(md, /50\.0 MB/);
+  assert.match(md, /\| vaultTx \| 2\.0 MB \| 4\.0 KB \|/);
+  for (const secret of ['4321', '987', '5555']) assert.ok(!md.includes(secret), 'لا يظهر عدد السجلات: ' + secret);
 });
