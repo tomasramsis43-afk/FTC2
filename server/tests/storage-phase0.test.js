@@ -71,3 +71,21 @@ test('toMarkdown: أحجام فقط — لا أعداد سجلات ولا بيا
   assert.match(md, /\| vaultTx \| 2\.0 MB \| 4\.0 KB \|/);
   for (const secret of ['4321', '987', '5555']) assert.ok(!md.includes(secret), 'لا يظهر عدد السجلات: ' + secret);
 });
+
+test('قياس dbegress: يجمع حجم الصفوف لكل مسار::استعلام ولا يغيّر النتيجة ولا الخطأ', async () => {
+  const { wrapPoolQuery, routeContext, reportEgress, estimateRowsBytes, egressSnapshot } = metrics;
+  assert.equal(estimateRowsBytes([{ a: 'xxxx', b: Buffer.alloc(6), c: null, d: 1 }]), 4 + 6 + 8);
+  const fake = { query: async (sql) => { if (/boom/.test(sql)) throw new Error('db down'); return { rows: [{ enc: 'y'.repeat(1000) }] }; } };
+  wrapPoolQuery(fake);
+  const before = egressSnapshot().sinceBootBytes;
+  const mw = routeContext();
+  const req = { method: 'GET', originalUrl: '/api/records/vaultTx?x=1' };
+  await new Promise((resolve) => mw(req, {}, async () => { const r = await fake.query('SELECT id, enc FROM collection_records'); assert.equal(r.rows.length, 1); resolve(); }));
+  assert.equal(egressSnapshot().sinceBootBytes - before, 1000);
+  await assert.rejects(() => fake.query('boom'), /db down/);
+  const lines = [];
+  reportEgress({ log: (l) => lines.push(l) });
+  assert.match(lines[0], /\[metric\] dbegress window_total=/);
+  assert.match(lines[1], /dbegress top#1 .* GET \/api\/records\/vaultTx :: SELECT id, enc FROM collection_records/);
+  assert.equal(egressSnapshot().windowBytes, 0, 'النافذة تتصفّر بعد التقرير');
+});

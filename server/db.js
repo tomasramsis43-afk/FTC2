@@ -103,4 +103,6 @@ async function ensureSchema() {
   await pool.query(sql);
 }
 
+require('./metrics').wrapPoolQuery(pool); // قياس حجم نتائج الاستعلامات (لوج dbegress) — لا يغيّر النتائج
+
 module.exports = { pool, ensureSchema };
