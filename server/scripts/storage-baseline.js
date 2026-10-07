@@ -34,8 +34,12 @@ function toMarkdown(s) {
   const L = [];
   L.push(`## حجم التخزين — ${s.takenAt}`, '');
   L.push(`**الحجم الكلي لقاعدة البيانات:** ${fmtBytes(s.dbBytes)}`, '');
-  L.push('| الجدول (مع الفهارس) | الحجم |', '|---|---|');
-  s.tables.forEach(t => L.push(`| ${t.table} | ${fmtBytes(t.total_bytes)} |`));
+  L.push('| الجدول | الكلي | البيانات | الفهارس | TOAST | ميّت % |', '|---|---|---|---|---|---|');
+  s.tables.forEach(t => L.push(`| ${t.table} | ${fmtBytes(t.total_bytes)} | ${fmtBytes(t.heap_bytes)} | ${fmtBytes(t.index_bytes)} | ${fmtBytes(t.toast_bytes)} | ${t.dead_pct == null ? '-' : t.dead_pct} |`));
+  if (s.indexes && s.indexes.length) {
+    L.push('', '| أكبر الفهارس | الجدول | الحجم |', '|---|---|---|');
+    s.indexes.forEach(i => L.push(`| ${i.index} | ${i.table} | ${fmtBytes(i.bytes)} |`));
+  }
   L.push('', '| collection_records | الحجم | أكبر سجل |', '|---|---|---|');
   s.collections.forEach(c => L.push(`| ${c.collection} | ${fmtBytes(c.enc_bytes)} | ${fmtBytes(c.max_record_bytes)} |`));
   L.push('', `**client_records:** ${fmtBytes(s.clientRecords.enc_bytes)} (متوسط السجل ${fmtBytes(s.clientRecords.avg_record_bytes)})`);
@@ -55,10 +59,19 @@ async function collect(pool) {
       select c.relname as "table",
              pg_total_relation_size(c.oid)::bigint as total_bytes,
              pg_relation_size(c.oid)::bigint as heap_bytes,
-             c.reltuples::bigint as est_rows
+             pg_indexes_size(c.oid)::bigint as index_bytes,
+             coalesce(pg_total_relation_size(nullif(c.reltoastrelid, 0)), 0)::bigint as toast_bytes,
+             c.reltuples::bigint as est_rows,
+             case when coalesce(s.n_live_tup,0) + coalesce(s.n_dead_tup,0) > 0
+                  then round(100.0 * s.n_dead_tup / (s.n_live_tup + s.n_dead_tup), 1) else 0 end as dead_pct
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      left join pg_stat_user_tables s on s.relid = c.oid
       where n.nspname = 'public' and c.relkind = 'r'
       order by pg_total_relation_size(c.oid) desc`)).rows;
+    const indexes = (await c.query(`
+      select relname as "table", indexrelname as "index", pg_relation_size(indexrelid)::bigint as bytes
+      from pg_stat_user_indexes where schemaname = 'public'
+      order by pg_relation_size(indexrelid) desc limit 10`)).rows;
     // جداول قد لا تكون موجودة في كل قاعدة (قاعدة أقدم/مختلفة): نفحص الوجود بدل الانهيار.
     const has = async (t) => (await c.query('select to_regclass($1) is not null as ok', ['public.' + t])).rows[0].ok;
     const collections = (await has('collection_records')) ? (await c.query(`
@@ -80,7 +93,7 @@ async function collect(pool) {
     const missing = [];
     for (const t of ['collection_records', 'client_records', 'kv_store', 'app_backups', 'clients_rows']) if (!(await has(t))) missing.push(t);
     await c.query('COMMIT');
-    return { takenAt: new Date().toISOString(), dbBytes: Number(db.bytes), tables, collections, clientRecords, kvTop: kv, appBackups: backups, missingTables: missing };
+    return { takenAt: new Date().toISOString(), dbBytes: Number(db.bytes), tables, collections, clientRecords, kvTop: kv, appBackups: backups, missingTables: missing, indexes };
   } catch (e) {
     await c.query('ROLLBACK').catch(() => {});
     throw e;

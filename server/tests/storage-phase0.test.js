@@ -67,6 +67,7 @@ test('toMarkdown: أحجام فقط — لا أعداد سجلات ولا بيا
   };
   const md = toMarkdown(snap);
   assert.match(md, /50\.0 MB/);
+  assert.match(md, /\| client_records \| 10\.0 MB \|/);
   assert.match(md, /\| vaultTx \| 2\.0 MB \| 4\.0 KB \|/);
   for (const secret of ['4321', '987', '5555']) assert.ok(!md.includes(secret), 'لا يظهر عدد السجلات: ' + secret);
 });
