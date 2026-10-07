@@ -52,4 +52,7 @@ test('db-backup.yml: حواجز الأمان موجودة (تشفير، استر
   assert.match(y, /shred -u ftc2\.dump/, 'حذف الملف غير المشفّر');
   assert.match(y, /MIN_KEEP: '7'/, 'حد أدنى للنسخ المحتفظ بها');
   assert.doesNotMatch(y, /s3 (cp|sync) ftc2\.dump(?!\.age)/, 'لا يُرفع الملف غير المشفّر');
+  assert.match(y, /actions\/upload-artifact@v4/, 'حفظ النسخة كـ artifact');
+  assert.match(y, /path: \|\n\s+ftc2-\*\.dump\.age\n/, 'الـ artifact للملف المشفّر فقط');
+  assert.doesNotMatch(y, /path:[^\n]*ftc2\.dump\s*$/m, 'لا يُرفع dump غير مشفّر كـ artifact');
 });

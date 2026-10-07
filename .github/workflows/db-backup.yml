@@ -1,13 +1,15 @@
 name: DB Backup (encrypted)
 
-# نسخة احتياطية ليلية مشفّرة من قاعدة Neon إلى Cloudflare R2.
+# نسخة احتياطية ليلية مشفّرة من قاعدة Neon تُحفظ كـ GitHub Artifact (90 يوماً، بلا حساب إضافي ولا بطاقة)
+# + رفع اختياري إلى تخزين خارجي متوافق مع S3 (Cloudflare R2 / Backblaze B2) لو أُضيفت أسراره.
 # المبادئ:
 #   · التشفير بـ age بمفتاح عام فقط — المفتاح الخاص لا يدخل GitHub إطلاقاً (يُحفظ خارجياً).
 #   · قبل الرفع: استرجاع فعلي للنسخة داخل Postgres مؤقت + مطابقة عدد الصفوف. نسخة لا تُسترجع لا تُرفع.
 #   · الملف غير المشفّر يُحذف فور التشفير، ولا يُرفع أبداً.
-#   · الاحتفاظ 30 يوماً مع حد أدنى 7 نسخ لا تُحذف مهما حدث (حماية من خطأ منطق/ساعة).
+#   · الـ Artifact يُحذف تلقائياً بعد 90 يوماً؛ وفي التخزين الخارجي (إن وُجد) الاحتفاظ 30 يوماً مع حد أدنى 7 نسخ لا تُحذف مهما حدث (حماية من خطأ منطق/ساعة).
 # الأسرار المطلوبة (Settings → Secrets and variables → Actions):
-#   DATABASE_URL, AGE_PUBLIC_KEY, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
+#   إلزامي:  DATABASE_URL, AGE_PUBLIC_KEY
+#   اختياري (تخزين خارجي S3): R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
 # متغيّر اختياري (Variables): PG_MAJOR (الافتراضي 17) — لازم يساوي أو يزيد عن إصدار Neon.
 
 on:
@@ -49,16 +51,21 @@ jobs:
         env:
           S1: ${{ secrets.DATABASE_URL }}
           S2: ${{ secrets.AGE_PUBLIC_KEY }}
-          S3: ${{ secrets.R2_ACCOUNT_ID }}
-          S4: ${{ secrets.R2_ACCESS_KEY_ID }}
-          S5: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          S6: ${{ secrets.R2_BUCKET }}
+          X1: ${{ secrets.R2_ACCOUNT_ID }}
+          X2: ${{ secrets.R2_ACCESS_KEY_ID }}
+          X3: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          X4: ${{ secrets.R2_BUCKET }}
         run: |
           missing=0
-          for n in 1 2 3 4 5 6; do
+          for n in 1 2; do
             v="S$n"
-            if [ -z "${!v}" ]; then echo "::error::missing secret #$n (DATABASE_URL, AGE_PUBLIC_KEY, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET)"; missing=1; fi
+            if [ -z "${!v}" ]; then echo "::error::missing secret #$n (DATABASE_URL, AGE_PUBLIC_KEY)"; missing=1; fi
           done
+          if [ -n "$X1" ] && [ -n "$X2" ] && [ -n "$X3" ] && [ -n "$X4" ]; then
+            echo "HAS_S3=true" >> "$GITHUB_ENV"; echo "off-site S3 storage: enabled"
+          else
+            echo "off-site S3 storage: not configured (GitHub artifact only)"
+          fi
           exit $missing
 
       - name: Install pg client and age
@@ -119,7 +126,19 @@ jobs:
           shred -u ftc2.dump
           ls -l ftc2-*.age
 
-      - name: Upload to R2
+      - name: Upload encrypted backup (GitHub artifact, 90 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ftc2-db-backup-${{ env.STAMP }}
+          path: |
+            ftc2-*.dump.age
+            ftc2-*.dump.age.sha256
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload to off-site S3 storage (optional)
+        if: env.HAS_S3 == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -137,7 +156,8 @@ jobs:
           if [ "$local_size" != "$remote_size" ]; then echo "::error::upload size mismatch ($local_size vs $remote_size)"; exit 1; fi
           echo "uploaded ${PREFIX}ftc2-${STAMP}.dump.age ($remote_size bytes)"
 
-      - name: Retention (keep 30 days, never fewer than 7 backups)
+      - name: Off-site retention (keep 30 days, never fewer than 7 backups)
+        if: env.HAS_S3 == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
