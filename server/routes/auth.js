@@ -299,7 +299,8 @@ router.get('/api/events/stream', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || '';
     const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    user = await resolveUserFromToken(headerToken || req.query.token);
+    // التوكن من ترويسة Authorization فقط — لا يُقبل ?token= في الرابط (يتسرّب في السجلات/الـ Referer)
+    user = await resolveUserFromToken(headerToken);
   } catch (e) {
     return res.status(e.status || 401).end();
   }
