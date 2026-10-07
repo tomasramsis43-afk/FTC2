@@ -742,14 +742,29 @@ function startLocalServer() {
       }
     }
 
+    // مجلد حزمة اعتماديات الوكيل المرفقة (package.json + package-lock.json بـ integrity hashes).
+    // نستخدم npm ci بدل npm install: يثبّت بالضبط ما في القفل ويرفض أي حزمة لا يطابق hash-ها.
+    function arkkanBundledEnvDir() {
+      const candidates = [
+        path.join(process.resourcesPath || '', 'agent-env'),
+        path.join(__dirname, 'agent-env')
+      ];
+      for (const c of candidates) {
+        try { if (fs.existsSync(path.join(c, 'package-lock.json'))) return c; } catch (e) {}
+      }
+      return null;
+    }
+
     async function arkkanInstallDeps() {
       const envDir = arkkanEnvDir();
       fs.mkdirSync(envDir, { recursive: true });
-      const pkgFile = path.join(envDir, 'package.json');
-      if (!fs.existsSync(pkgFile)) fs.writeFileSync(pkgFile, '{}');
       if (!arkkanPlaywrightInstalled(envDir)) {
-        console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة…');
-        await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', 'playwright@1.62.1']);
+        const src = arkkanBundledEnvDir();
+        if (!src) throw new Error('ملفات قفل الاعتماديات غير موجودة مع البرنامج — أعد تثبيته');
+        fs.copyFileSync(path.join(src, 'package.json'), path.join(envDir, 'package.json'));
+        fs.copyFileSync(path.join(src, 'package-lock.json'), path.join(envDir, 'package-lock.json'));
+        console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة (مع التحقق من hash)…');
+        await arkkanRunNpm(['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
       }
       if (!arkkanChromiumInstalled()) {
         console.log('[Arkkan Agent] تنزيل متصفح Chromium لأول مرة… (قد يستغرق بضع دقائق)');

@@ -1,0 +1,8 @@
+{
+  "name": "ftc2-arkkan-agent-env",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "playwright": "1.62.1"
+  }
+}
