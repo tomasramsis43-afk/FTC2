@@ -245,6 +245,23 @@ async function checkForFrontendUpdate() {
 function startLocalServer() {
   return new Promise((resolve, reject) => {
     const srv = express();
+    // ── حماية الخادم المحلي من مواقع الويب الأخرى (CSRF / DNS-rebinding) ──
+    // أي صفحة مفتوحة في المتصفح كانت تقدر توصل لـ 127.0.0.1:17532. الآن نقبل فقط:
+    // (1) Host محلي بنفس المنفذ، (2) Origin غير موجود أو يطابق أصل التطبيق تماماً،
+    // (3) Sec-Fetch-Site غير cross-site/same-site (نافذة Electron ترسله same-origin).
+    const SELF_ORIGIN = `http://127.0.0.1:${PORT}`;
+    const ALLOWED_HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];
+    srv.use((req, res, next) => {
+      const host = String(req.headers.host || '').toLowerCase();
+      const origin = req.headers.origin;
+      const site = req.headers['sec-fetch-site'];
+      const bad =
+        !ALLOWED_HOSTS.includes(host) ||
+        (origin && origin !== SELF_ORIGIN && origin !== `http://localhost:${PORT}`) ||
+        (site && site !== 'same-origin' && site !== 'none');
+      if (bad) return res.status(403).json({ error: 'طلب غير مسموح به' });
+      next();
+    });
     srv.use((req, res, next) => {
       // تحصين إضافي: منع أي محاولة تجاوز للبروكسي
       if (req.path.includes('..')) return res.status(400).end();
@@ -386,7 +403,6 @@ function startLocalServer() {
           } catch (e) {}
           res.writeHead(remoteRes.statusCode || 200, {
             'Content-Type': remoteRes.headers['content-type'] || 'text/csv; charset=utf-8',
-            'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'no-store'
           });
           remoteRes.pipe(res);
@@ -866,8 +882,23 @@ function createWindow() {
     if (url === 'about:blank' || url.startsWith('about:blank')) {
       return { action: 'allow' };
     }
-    shell.openExternal(url);
+    // نفتح فقط روابط http/https خارجياً — نمنع file: وأي بروتوكول مخصص
+    try {
+      const u = new URL(url);
+      if (u.protocol === 'https:' || u.protocol === 'http:') shell.openExternal(url);
+    } catch (e) {}
     return { action: 'deny' };
+  });
+
+  // منع تنقّل النافذة الرئيسية لأي مكان خارج التطبيق نفسه
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(`http://127.0.0.1:${PORT}/`)) {
+      event.preventDefault();
+      try {
+        const u = new URL(url);
+        if (u.protocol === 'https:' || u.protocol === 'http:') shell.openExternal(url);
+      } catch (e) {}
+    }
   });
 
   // ── حفظ إيصالات أركان تلقائياً دون نافذة حفظ ──
