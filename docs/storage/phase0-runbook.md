@@ -17,7 +17,7 @@
 2. **Secrets** في GitHub (Settings → Secrets and variables → Actions) — اثنان فقط:
    `DATABASE_URL` (يُفضّل role قراءة فقط في Neon) و`AGE_PUBLIC_KEY`.
 3. شغّل الـ workflow يدوياً (Actions ← DB Backup (encrypted) ← Run workflow). النسخة تظهر أسفل صفحة التشغيل في قسم **Artifacts**.
-   - لو إصدار Postgres في Neon غير 17: اضبط Variable باسم `PG_MAJOR`.
+   - لو إصدار Postgres في Neon غير 18: اضبط Variable باسم `PG_MAJOR`.
 4. **اختياري**: تخزين خارجي إضافي (Cloudflare R2 أو Backblaze B2): أضف `R2_ACCOUNT_ID` و`R2_ACCESS_KEY_ID` و`R2_SECRET_ACCESS_KEY` و`R2_BUCKET` فيُفعَّل الرفع والاحتفاظ تلقائياً.
 
 > ملاحظة: الريبو عام، فالـ Artifacts قابلة للتنزيل من أي حساب GitHub مسجّل؛ المحتوى مشفّر بـ age فلا يُقرأ بدون المفتاح الخاص، لكن حجم الملف وتوقيته ظاهران.
