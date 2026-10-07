@@ -142,6 +142,45 @@ function fetchText(url) {
   });
 }
 
+// ── التحقق من توقيع التحديثات (Ed25519) ──
+// الملفات المُنزَّلة من Render (الواجهة) ومن GitHub (الوكيل) لا تُكتب ولا تُنفَّذ إلا إذا
+// طابق hash كل ملف manifest موقَّع بالمفتاح الخاص عند المالك. المفتاح العام مرفق مع التطبيق
+// (update-pubkey.pem). أي فشل (manifest مفقود/توقيع غير صالح/hash مختلف/seq أقدم) = رفض
+// التحديث والاستمرار بالنسخة المحلية المرفقة — لا يوجد fail-open.
+const crypto = require('crypto');
+let UPDATE_PUBKEY = null;
+try { UPDATE_PUBKEY = crypto.createPublicKey(fs.readFileSync(path.join(__dirname, 'update-pubkey.pem'))); }
+catch (e) { console.warn('[Updates] المفتاح العام غير موجود — التحديثات الخارجية معطّلة'); }
+
+function sha256Text(text) {
+  return crypto.createHash('sha256')
+    .update(Buffer.from(String(text).replace(/\r\n/g, '\n'), 'utf8')).digest('hex');
+}
+function updateSeqFile(name) { return path.join(app.getPath('userData'), 'update-seq-' + name + '.json'); }
+async function loadSignedManifest(url, name) {
+  if (!UPDATE_PUBKEY) return null;
+  try {
+    const wrapper = JSON.parse(await fetchText(url));
+    if (!wrapper || typeof wrapper.payload !== 'string' || typeof wrapper.sig !== 'string') throw new Error('بنية غير صالحة');
+    const ok = crypto.verify(null, Buffer.from(wrapper.payload, 'utf8'), UPDATE_PUBKEY, Buffer.from(wrapper.sig, 'base64'));
+    if (!ok) throw new Error('توقيع غير صالح');
+    const m = JSON.parse(wrapper.payload);
+    if (m.v !== 1 || typeof m.seq !== 'number' || !m.files || typeof m.files !== 'object') throw new Error('محتوى غير صالح');
+    let lastSeq = 0;
+    try { lastSeq = JSON.parse(fs.readFileSync(updateSeqFile(name), 'utf8')).seq || 0; } catch (e) {}
+    if (m.seq < lastSeq) throw new Error('manifest أقدم من المُطبَّق سابقاً (rollback)');
+    try { fs.writeFileSync(updateSeqFile(name), JSON.stringify({ seq: m.seq }), 'utf8'); } catch (e) {}
+    return m;
+  } catch (e) {
+    console.warn('[Updates] رُفض manifest (' + name + '): ' + e.message + ' — لن تُطبَّق تحديثات خارجية');
+    return null;
+  }
+}
+function matchesManifest(manifest, file, content) {
+  const expected = manifest && manifest.files && manifest.files[file];
+  return typeof expected === 'string' && expected === sha256Text(content);
+}
+
 // مجلد الواجهة المرفق فعلياً مع الـ setup (ثابت، جوه حزمة التطبيق).
 // مجلد بيانات المستخدم يُستخدم فقط لتخزين أي ملفات مُحدَّثة تم تنزيلها من
 // السيرفر لاحقاً — لا حاجة لنسخ أي شيء إليه عند أول تشغيل (تجنّباً لمشكلة
@@ -204,6 +243,17 @@ async function prepareAssets() {
   try { fs.mkdirSync(userAssetsDir, { recursive: true }); } catch (e) {}
   clearStaleAssetsIfVersionChanged();
   purgeCorruptedCachedAssets();
+  purgeUnsignedCaches();
+}
+
+// مرة واحدة: كل ما نُزّل قبل تفعيل التوقيع لم يُتحقَّق منه — نحذفه ليعاد تنزيله موقَّعاً.
+function purgeUnsignedCaches() {
+  const marker = path.join(userAssetsDir, '.signed-updates-v1');
+  if (fs.existsSync(marker)) return;
+  for (const file of SYNCED_FILES) { try { fs.unlinkSync(path.join(userAssetsDir, file)); } catch (e) {} }
+  const agentDir = path.join(app.getPath('userData'), 'arkkan-agent-files');
+  for (const f of AGENT_FILES) { try { fs.unlinkSync(path.join(agentDir, f)); } catch (e) {} }
+  try { fs.writeFileSync(marker, String(Date.now()), 'utf8'); } catch (e) {}
 }
 
 // يتحقق من ملفات الواجهة على السيرفر الحي، ويحدّث المخزَّن محلياً فقط للملفات
@@ -211,6 +261,8 @@ async function prepareAssets() {
 // عشان اللي بينادي الدالة يقرر هل يعمل reload للنافذة المفتوحة بالفعل أو لأ.
 async function checkForFrontendUpdate() {
   let changed = false;
+  const manifest = await loadSignedManifest(`${REMOTE_BASE}/update-manifest.json`, 'frontend');
+  if (!manifest) return false;
   const CONCURRENCY = 5;
   for (let i = 0; i < SYNCED_FILES.length; i += CONCURRENCY) {
     const batch = SYNCED_FILES.slice(i, i + CONCURRENCY);
@@ -219,6 +271,10 @@ async function checkForFrontendUpdate() {
         const remote = await fetchText(`${REMOTE_BASE}/${file}`);
         // نتأكد إن السيرفر رجّع فعلاً ملف مش صفحة خطأ فاضية قبل ما نكتب فوق النسخة المحلية.
         if (remote && remote.length > 20) {
+          if (!matchesManifest(manifest, file, remote)) {
+            console.warn('[Updates] تخطّي ' + file + ': غير مطابق للـ manifest الموقَّع');
+            return;
+          }
           const destPath = path.join(userAssetsDir, file);
           let existing = null;
           try { existing = fs.readFileSync(destPath, 'utf8'); } catch (e) {}
@@ -606,9 +662,12 @@ function startLocalServer() {
 
       // 1) محاولة تحديث كل الملفات من الريبو (لو فيه إنترنت).
       let anyRemote = false;
+      const agentManifest = await loadSignedManifest(AGENT_REMOTE_BASE + 'agent-manifest.json', 'agent');
       try {
+        if (!agentManifest) throw new Error('no signed manifest');
         await Promise.all(AGENT_FILES.map(async (f) => {
           const remote = await fetchText(AGENT_REMOTE_BASE + f);
+          if (!matchesManifest(agentManifest, f, remote)) { console.warn('[Updates] تخطّي ' + f + ': غير مطابق للـ manifest الموقَّع'); return; }
           // نحرس الوكيل الرئيسي بأن يحتوي المنفذ/playwright فعلاً (حماية من خطأ)
           // والملفات المرافقة بأن لا يكون الرد فارغاً/قصيراً جداً قبل الكتابة.
           const valid = f === 'arkkan-agent.js'

@@ -1,0 +1,4 @@
+{
+  "payload": "{\"v\":1,\"seq\":1791369926058,\"issuedAt\":\"2026-10-07T10:45:26.058Z\",\"files\":{\"arkkan-agent.js\":\"b6ad2f9f33f92a0b3db07ba98124540af016a6f3766c9a5c2904c28f7665fe65\",\"arkkan-config.js\":\"4695c4e490dba9659e0286a634d603edf366c497223a255e8751f3b3f4aad3fe\",\"arkkan-logger.js\":\"b449490a1d7d818e03d243bf52a6c916c94e8766bffe32e6daf7d70985e24433\",\"arkkan-utils.js\":\"8ae5655814aedae529639c33a0305f23aa24e1be76dd5a7c7ad0e8d9a2320718\",\"arkkan-sync.js\":\"f0df87ff4585d8d1c15d84a0dc2004bd8480abd7c9d6a4dff38520a96a94c0d0\"}}",
+  "sig": "tu9M2VZTjtqr+UBxX6Gu19Y5AZU7/iJxMOeFmNbY/E6iHkVgDQDwsH3fcEXepm+r+ifd4teQlAXgNZ84QX2pCA=="
+}

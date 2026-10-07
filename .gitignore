@@ -8,3 +8,8 @@ dist/
 FTC2/
 .arkkan-submits/
 .inspect-shots/
+
+# مفتاح توقيع تحديثات سطح المكتب — لا يُرفع أبداً
+.update-private.pem
+*.pem
+!electron-desktop/update-pubkey.pem
