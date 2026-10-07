@@ -954,7 +954,12 @@ $('#client-form')?.addEventListener('submit', async e=>{
   // بالفعل عند مستخدم استقبال آخر أو ضمن العملاء العامين دون أن يعرف النظام محلياً. مهلة 8 ثوانٍ
   // فقط (بدل الافتراضي 60 ثانية) — لو السيرفر بطيء/نائم وقتها، لا يجوز تعليق تسجيل عميل جديد
   // كل هذه المدة لمجرد فحص احتياطي إضافي؛ نتراجع تلقائياً للفحص المحلي فقط (allIds=null).
-  const allIds = await fetchAllClientIds(8000);
+  // الفحص عبر الخادم يُنفَّذ فقط لو العميل جديد، أو رقم هويته اتغيّر فعلاً أثناء التعديل. لو بنعدّل عميل موجود
+  // ورقم هويته ما اتغيّرش، مفيش مبرر نسأل السيرفر عن "تكرار" أصلاً: أي صف تاني على السيرفر بنفس الرقم (سجل
+  // قديم/شبح) كان يخلّي الفحص يرفض أي تعديل حتى لو على حقل مختلف تماماً (اسم/هاتف/ملاحظات...).
+  const prevClientForDupCheck = editingId ? clients.find(x=>x.id===editingId) : null;
+  const clientIdChanged = !prevClientForDupCheck || String(prevClientForDupCheck.clientId||'').trim() !== data.clientId;
+  const allIds = clientIdChanged ? await fetchAllClientIds(8000) : null;
   if(allIds){
     const existingRecordId = allIds.get(await sha256Hex(data.clientId));
     if(existingRecordId && existingRecordId !== editingId){
