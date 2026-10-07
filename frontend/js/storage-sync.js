@@ -108,8 +108,115 @@ async function _totalPendingCount(){
   return (kvPending||0) + (recPending||0);
 }
 
+// ---- شارة وشاشة «تعديلات لم تُحفظ» ----
+let _rejectedLastRefresh = 0;
+function _updateRejectedBadge(){
+  try{
+    const host = document.getElementById('offline-status-indicator');
+    if(!host || !host.parentNode) return;
+    let b = document.getElementById('rejected-edits-badge');
+    if(_rejectedEditsSyncCount <= 0){ if(b) b.style.display = 'none'; return; }
+    if(!b){
+      b = document.createElement('button');
+      b.id = 'rejected-edits-badge';
+      b.type = 'button';
+      b.style.cssText = 'display:flex;align-items:center;gap:6px;border:none;border-radius:6px;padding:5px 10px;font-size:12.5px;color:#fff;background:#a12a2a;cursor:pointer;white-space:nowrap;margin-inline-start:6px;';
+      b.onclick = ()=>{ openRejectedEditsDialog(); };
+      host.parentNode.insertBefore(b, host.nextSibling);
+    }
+    b.style.display = 'flex';
+    b.title = 'تعديلات لم تُرفع للسيرفر (رفضها السيرفر أو تعارضت مع تعديل آخر) — نسخها محفوظة هنا لمراجعتها';
+    b.textContent = `⚠️ ${_rejectedEditsSyncCount} تعديل لم يُحفظ — مراجعة`;
+  }catch(e){}
+}
+async function _rejectedEditPreview(it){
+  try{
+    let txt = it.plain;
+    if(!txt && it.enc) txt = await decryptValue(it.enc);
+    if(typeof txt !== 'string') txt = JSON.stringify(txt);
+    return txt || '';
+  }catch(e){ return '(تعذّر فك التشفير — المفتاح غير متاح)'; }
+}
+async function openRejectedEditsDialog(){
+  const old = document.getElementById('rejected-edits-overlay');
+  if(old) old.remove();
+  const items = await _rejectedEditList();
+  const ov = document.createElement('div');
+  ov.id = 'rejected-edits-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const box = document.createElement('div');
+  box.dir = 'rtl';
+  box.style.cssText = 'background:#1b2230;color:#fff;border-radius:10px;max-width:760px;width:100%;max-height:85vh;overflow:auto;padding:16px;font-size:14px;line-height:1.6;';
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;';
+  head.innerHTML = '<strong style="font-size:16px">تعديلات لم تُحفظ</strong>';
+  const close = document.createElement('button');
+  close.textContent = '✕ إغلاق';
+  close.style.cssText = 'background:#333b4d;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;';
+  close.onclick = ()=> ov.remove();
+  head.appendChild(close);
+  box.appendChild(head);
+  const note = document.createElement('div');
+  note.style.cssText = 'color:#c9d1e0;margin-bottom:10px;';
+  note.textContent = 'دي تعديلات عملتها ورفضها السيرفر أو تعارضت مع تعديل من جهاز آخر. اتحفظت نسختها هنا ولن تُرفع تلقائياً (علشان ما تكتبش فوق بيانات أحدث). راجع المحتوى وأعد إدخاله يدوياً لو لسه مطلوب، أو نزّل النسخة.';
+  box.appendChild(note);
+  if(!items.length){
+    const empty = document.createElement('div');
+    empty.textContent = 'لا توجد تعديلات غير محفوظة.';
+    box.appendChild(empty);
+  }else{
+    const dl = document.createElement('button');
+    dl.textContent = '⬇️ تنزيل الكل (JSON)';
+    dl.style.cssText = 'background:#1f5c3a;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;margin-bottom:10px;';
+    dl.onclick = async ()=>{
+      const out = [];
+      for(const it of items){ out.push(Object.assign({}, it, { data: await _rejectedEditPreview(it) })); }
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type:'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'ftc2-rejected-edits-' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 2000);
+    };
+    box.appendChild(dl);
+    for(const it of items){
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid #333b4d;border-radius:8px;padding:8px 10px;margin-bottom:8px;';
+      const reason = it.reason === 'conflict' ? 'تعارض مع تعديل آخر' : ('رفض السيرفر' + (it.status ? ' (' + it.status + ')' : ''));
+      const meta = document.createElement('div');
+      meta.style.cssText = 'color:#9fb0cc;font-size:12.5px;';
+      meta.textContent = `${it.collection} · ${it.op === 'delete' ? 'حذف' : 'تعديل'} · ${reason} · ${new Date(it.at || 0).toLocaleString('ar-EG')}`;
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;margin:6px 0;max-height:130px;overflow:auto;background:#121722;border-radius:6px;padding:6px;font-size:12px;direction:ltr;text-align:left;';
+      pre.textContent = it.op === 'delete' ? '(طلب حذف السجل ' + it.id + ')' : '...';
+      if(it.op !== 'delete') _rejectedEditPreview(it).then(t=>{ pre.textContent = String(t).slice(0, 4000); });
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:6px;';
+      const cp = document.createElement('button');
+      cp.textContent = '📋 نسخ';
+      cp.style.cssText = 'background:#333b4d;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;';
+      cp.onclick = async ()=>{ try{ await navigator.clipboard.writeText(await _rejectedEditPreview(it)); showToast('تم النسخ'); }catch(e){ showToast('تعذّر النسخ'); } };
+      const del = document.createElement('button');
+      del.textContent = '🗑️ حذف';
+      del.style.cssText = 'background:#7a1f1f;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;';
+      del.onclick = async ()=>{
+        const okDel = (typeof customConfirm === 'function') ? await customConfirm('حذف هذه النسخة نهائياً؟ لن تقدر تسترجعها.', 'تأكيد الحذف') : confirm('حذف هذه النسخة نهائياً؟');
+        if(!okDel) return;
+        await _rejectedEditDelete(it.rkey);
+        row.remove();
+      };
+      btns.appendChild(cp); btns.appendChild(del);
+      row.appendChild(meta); row.appendChild(pre); row.appendChild(btns);
+      box.appendChild(row);
+    }
+  }
+  ov.appendChild(box);
+  ov.addEventListener('click', (e)=>{ if(e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
 async function updateOfflineIndicator(){
   try{
+    if(Date.now() - _rejectedLastRefresh > 30000){ _rejectedLastRefresh = Date.now(); _refreshRejectedEditsCount(); }
     const el = document.getElementById('offline-status-indicator');
     if(!el) return;
     el.style.display = 'flex';
@@ -366,7 +473,12 @@ async function _safeToApplyOnConflict(conflict, collection, isClient, id, stored
 // عند تعارض حقيقي (لا نستطيع الكتابة فوق الآخرين): نُحدّث النسخة المحلية المعروفة ونُزيل أي تعديل
 // معلّق لذلك السجل حتى لا يُعاد رفعه لاحقاً فوق بيانات أحدث — مع إشعار للمستخدم (رسالة الـ toast
 // يضيفها المتصل). نفس معاملة تعارضات kv تماماً.
-async function _dropRecordOnRealConflict(collection, isClient, id, conflict){
+async function _dropRecordOnRealConflict(collection, isClient, id, conflict, payload){
+  // قبل إسقاط التعديل من الطابور: نحفظ نسخة منه في «تعديلات لم تُحفظ» حتى لا يضيع بصمت.
+  try{
+    const p = payload || await _pendingRecordGetOne(collection, id);
+    if(p) await _rejectedEditArchive(collection, id, p, 'conflict');
+  }catch(e){}
   try{
     if(isClient){
       _clientRecordVersions[id] = (conflict && typeof conflict.currentVersion === 'number') ? conflict.currentVersion : (_clientRecordVersions[id] || 0);
@@ -453,6 +565,7 @@ async function flushPendingRecordWrites(){
             // رفض دائم (403/400/422 — صلاحية/بيانات/تشفير): لا نعيده إرسالاً في الطابور للأبد.
             // فقط نُسقط التعديل المعلّق ونُبلّغ المستخدم، لأن إعادة المحاولة لن تغيّر النتيجة أبداً.
             if(res.status >= 400 && res.status < 500 && res.status !== 429){
+              await _rejectedEditArchive(item.collection, item.id, item, 'rejected', { status: res.status });
               await _pendingRecordDelete(item.collection, item.id);
               showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}): رفض دائم من السيرفر (${res.status}) — تم تجاهل هذا التعديل المعلّق`);
               return;
@@ -1146,7 +1259,7 @@ async function saveOneRecordGeneric(collection, id, plainJson){
           const retryRes = await serverFetch(url, { method: 'PUT', body: JSON.stringify({ enc, version: conflict.currentVersion }) });
           if(retryRes.status === 409){
             const c2 = await retryRes.json().catch(()=>({}));
-            await _dropRecordOnRealConflict(collection, false, id, c2);
+            await _dropRecordOnRealConflict(collection, false, id, c2, { op:'upsert', enc });
             showToast('تعارض حقيقي في حفظ السجل: عُدّلت هذه البيانات من جهاز آخر — يرجى تحديث الصفحة لمراجعتها');
             return false;
           }
@@ -1154,6 +1267,7 @@ async function saveOneRecordGeneric(collection, id, plainJson){
             if(retryRes.status === 429 || retryRes.status >= 500){
               await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
             }else{
+              await _rejectedEditArchive(collection, id, { op:'upsert', enc }, 'rejected', { status: retryRes.status });
               showToast('تعذّر حفظ سجل في "' + collection + '": رفض دائم من السيرفر (' + retryRes.status + ') — تم تجاهل هذا التعديل');
             }
             return null;
@@ -1171,6 +1285,7 @@ async function saveOneRecordGeneric(collection, id, plainJson){
           return null;
         }
       }
+      await _rejectedEditArchive(collection, id, { op:'upsert', enc }, 'conflict');
       showToast('' + (conflict.error || 'تعارض فى الحفظ: عدّل شخص آخر نفس البيانات — يرجى تحديث الصفحة لمراجعتها'));
       return false;
     }
@@ -1180,6 +1295,7 @@ async function saveOneRecordGeneric(collection, id, plainJson){
       if(res.status === 429 || res.status >= 500){
         await _pendingRecordPut(collection, id, { op:'upsert', enc }, bp);
       }else{
+        await _rejectedEditArchive(collection, id, { op:'upsert', enc }, 'rejected', { status: res.status });
         showToast('تعذّر حفظ سجل في "' + collection + '": رفض دائم من السيرفر (' + res.status + ') — تم تجاهل هذا التعديل');
       }
       return null;
@@ -1803,6 +1919,7 @@ async function saveOneClientRecord(client, plainJson){
     if(res.status === 409){
       const conflict = await res.json().catch(()=>({}));
       _clientRecordVersions[client.id] = conflict.currentVersion || _clientRecordVersions[client.id];
+      await _rejectedEditArchive('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson }, 'conflict');
       showToast(`تعارض فى حفظ بيانات العميل "${client.name||client.id}": عدّله شخص آخر من جهاز آخر — يرجى تحديث الصفحة لمراجعتها`);
       return false;
     }
@@ -1812,6 +1929,9 @@ async function saveOneClientRecord(client, plainJson){
       if(res.status === 429 || res.status >= 500){
         const bp = _clientsSyncBaseline instanceof Map ? _clientsSyncBaseline.get(client.id) : undefined;
         await _pendingRecordPut('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson }, bp);
+      }else{
+        await _rejectedEditArchive('clients', client.id, { op:'upsert', enc, clientId: client.clientId || '', plain: plainJson }, 'rejected', { status: res.status });
+        showToast('تعذّر حفظ بيانات العميل "' + (client.name || client.id) + '": رفض دائم من السيرفر (' + res.status + ') — نسختك محفوظة في «تعديلات لم تُحفظ»');
       }
       return null;
     }

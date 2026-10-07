@@ -382,6 +382,10 @@ const RECORD_PENDING_STORE = 'pendingRecords';
 // كل مستخدمي نفس الأصل).
 const ENC_KEY_IDB_STORE = 'encKey';
 const ENC_KEY_IDB_RECORD = 'main';
+// مخزن خامس (نفس قاعدة IndexedDB، النسخة 5): "تعديلات لم تُحفظ" — أي تعديل رفضه السيرفر نهائياً أو تعارض
+// مع تعديل جهاز آخر كان يُمسح من الطابور برسالة فقط؛ الآن يُحفظ هنا (مشفّراً كما هو) ليراجعه المستخدم
+// أو ينزّله أو يحذفه بنفسه — فلا يضيع أي تعديل صامتاً. لا يُرفع تلقائياً أبداً (قد يكون قديماً فيكتب فوق الأحدث).
+const REJECTED_EDITS_STORE = 'rejectedEdits';
 // عدّاد متزامن (بلا await) لإجمالي عدد التعديلات فى طابوري IndexedDB (kv + records) معاً — يُحدَّث
 // فور اكتمال أي إضافة/حذف/مسح فعلي فى أي منهما (راجع _refreshPendingQueueSyncCount أدناه، ومواضع
 // استدعائها فى نهاية _pendingWrite/_pendingDelete/_pendingRecordPut/_pendingRecordDelete/
@@ -406,7 +410,7 @@ function _openKvIdb(){
   _kvIdbPromise = new Promise((resolve)=>{
     try{
       if(!window.indexedDB){ resolve(null); return; }
-      const req = indexedDB.open(KV_IDB_NAME, 4);
+      const req = indexedDB.open(KV_IDB_NAME, 5);
       // ثغرة "عزل مستخدم ثانٍ" كانت هنا: لو تاب قديم (مفتوح من قبل آخر تحديث للسيرفر) لسه شغّال
       // ومتصل بقاعدة IndexedDB بنسخة أقدم، أي تاب جديد يطلب نسخة أحدث (4) يتوقف تماماً بلا أي
       // خطأ ظاهر — المتصفح "يحجب" (blocked) فتح الاتصال الجديد لحد ما كل الاتصالات القديمة تُغلَق،
@@ -428,6 +432,7 @@ function _openKvIdb(){
         try{ if(!req.result.objectStoreNames.contains(KV_IDB_PENDING_STORE)) req.result.createObjectStore(KV_IDB_PENDING_STORE, { keyPath: 'key' }); }catch(e){ console.error('[Core] IDB createObjectStore pending failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(RECORD_PENDING_STORE)) req.result.createObjectStore(RECORD_PENDING_STORE, { keyPath: 'ckey' }); }catch(e){ console.error('[Core] IDB createObjectStore pendingRecords failed:', e); }
         try{ if(!req.result.objectStoreNames.contains(ENC_KEY_IDB_STORE)) req.result.createObjectStore(ENC_KEY_IDB_STORE); }catch(e){ console.error('[Core] IDB createObjectStore encKey failed:', e); }
+        try{ if(!req.result.objectStoreNames.contains(REJECTED_EDITS_STORE)) req.result.createObjectStore(REJECTED_EDITS_STORE, { keyPath: 'rkey' }); }catch(e){ console.error('[Core] IDB createObjectStore rejectedEdits failed:', e); }
       };
       req.onsuccess = ()=>{
         if(blockedTimer){ clearTimeout(blockedTimer); blockedTimer = null; }
@@ -594,6 +599,86 @@ async function _pendingRecordClearAll(){
 }
 async function _pendingRecordCount(){
   try{ return (await _pendingRecordReadAll()).length; }catch(e){ return 0; }
+}
+// ---- تعديلات لم تُحفظ (rejectedEdits) — راجع تعليق REJECTED_EDITS_STORE أعلاه ----
+let _rejectedEditsSyncCount = 0;
+// يختار فقط حقول التعديل المفيدة من عنصر طابور/حمولة حفظ (بدون ckey/queuedAt القديمة)
+function _rejectedPayloadOf(p){
+  const out = {};
+  if(!p) return out;
+  ['op','enc','clientId','plain','baselinePlain'].forEach(k=>{ if(p[k] !== undefined && p[k] !== null) out[k] = p[k]; });
+  return out;
+}
+async function _pendingRecordGetOne(collection, id){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return null;
+    return await new Promise((resolve)=>{
+      try{
+        const req = db.transaction(RECORD_PENDING_STORE, 'readonly').objectStore(RECORD_PENDING_STORE).get(_recordCkey(collection,id));
+        req.onsuccess = ()=> resolve(req.result || null);
+        req.onerror = ()=> resolve(null);
+      }catch(e){ resolve(null); }
+    });
+  }catch(e){ return null; }
+}
+// يحفظ نسخة من تعديل لن يُرفع. لا يرمي أبداً (فشل الأرشفة لا يجب أن يكسر مسار الحفظ الأصلي).
+async function _rejectedEditArchive(collection, id, payload, reason, extra){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return false;
+    const now = Date.now();
+    const item = Object.assign({ rkey: collection + '::' + id + '::' + now, collection, id, at: now, user: _pendingQueueUser(), reason: reason || 'rejected' }, _rejectedPayloadOf(payload), extra || {});
+    const ok = await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(REJECTED_EDITS_STORE, 'readwrite');
+        tx.objectStore(REJECTED_EDITS_STORE).put(item);
+        tx.oncomplete = ()=> resolve(true);
+        tx.onerror = ()=> resolve(false);
+        tx.onabort = ()=> resolve(false);
+      }catch(e){ resolve(false); }
+    });
+    if(ok){
+      try{ showToast('تم حفظ نسخة من تعديلك في «تعديلات لم تُحفظ» (الزر الأحمر أعلى الشاشة) لمراجعتها لاحقاً'); }catch(e){}
+    }
+    _refreshRejectedEditsCount();
+    return ok;
+  }catch(e){ console.error('[Core] _rejectedEditArchive failed:', e); return false; }
+}
+async function _rejectedEditList(){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return [];
+    const me = _pendingQueueUser();
+    return await new Promise((resolve)=>{
+      try{
+        const req = db.transaction(REJECTED_EDITS_STORE, 'readonly').objectStore(REJECTED_EDITS_STORE).getAll();
+        req.onsuccess = ()=> resolve((req.result || []).filter(it => !it.user || it.user === me).sort((a,b)=> (b.at||0)-(a.at||0)));
+        req.onerror = ()=> resolve([]);
+      }catch(e){ resolve([]); }
+    });
+  }catch(e){ return []; }
+}
+async function _rejectedEditDelete(rkey){
+  try{
+    const db = await _openKvIdb();
+    if(!db) return;
+    await new Promise((resolve)=>{
+      try{
+        const tx = db.transaction(REJECTED_EDITS_STORE, 'readwrite');
+        tx.objectStore(REJECTED_EDITS_STORE).delete(rkey);
+        tx.oncomplete = ()=> resolve();
+        tx.onerror = ()=> resolve();
+      }catch(e){ resolve(); }
+    });
+  }catch(e){}
+  _refreshRejectedEditsCount();
+}
+async function _refreshRejectedEditsCount(){
+  try{
+    _rejectedEditsSyncCount = (await _rejectedEditList()).length;
+    if(typeof _updateRejectedBadge === 'function') _updateRejectedBadge();
+  }catch(e){}
 }
 // يمسح طابور التعديلات المعلّقة القديمة (مخزن kv) بالكامل — يُستخدم مع _pendingRecordClearAll
 // أثناء "إعادة ضبط المصنع" حتى لا تُرفع أي تعديلات قديمة معلّقة فوق البيانات الممسوحة لاحقاً.
