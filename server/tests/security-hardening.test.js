@@ -124,3 +124,20 @@ test('server.js يستورد requireAuth من auth.js (السلكون الكام
   const src = readServerSource('server.js');
   assert.ok(/requireAuth/.test(src), 'server.js يجب أن يحتوي requireAuth (استيراداً واستخداماً)');
 });
+
+// --- صلاحيات المسارات: إصلاحات مراجعة الصلاحيات ---
+test('client-records/bulk-migrate: الموظف العام (staff) مقيَّد بسجلاته هو فقط', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'records.js'), 'utf8');
+  const start = src.indexOf("router.post('/api/client-records/bulk-migrate'");
+  const end = src.indexOf("router.get('/api/storage-versions'");
+  const route = src.slice(start, end);
+  assert.ok(/role === 'staff'[\s\S]{0,600}cr\.created_by = \$2::text/.test(route),
+    'staff يجب أن يُقيَّد بـ created_by في الرفع الجماعي للعملاء');
+});
+
+test('email/report: مقصور على من لديه صلاحية شاشة التقارير', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'email.js'), 'utf8');
+  assert.ok(/router\.post\('\/api\/email\/report',\s*requireAuth,\s*requireReportsAccess/.test(src),
+    'مسار إرسال التقارير بلا فحص صلاحية الشاشة');
+  assert.ok(/roleCanAccessView\(req\.user\.role,\s*'reports'\)/.test(src));
+});

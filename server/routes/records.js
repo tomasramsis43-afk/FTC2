@@ -589,6 +589,12 @@ router.post('/api/client-records/bulk-migrate', requireAuth, storageLimiter, asy
   } else if (req.user.role === 'admin') {
     guardSql = `($1::text = 'admin')`;
     guardParams = [req.user.role];
+  } else if (req.user.role === 'staff') {
+    // الموظف العام: لا يكتب فوق إلا سجلاته المعتمدة التي أنشأها هو — مطابق لمسارات التعديل الفردي
+    // (PUT /api/client-records/:id) والحذف الفردي/الجماعي. بدونه كان يستطيع عبر الرفع الجماعي
+    // الكتابة فوق أي عميل معتمد لموظف آخر.
+    guardSql = `($1::text = 'staff' AND cr.status = 'confirmed' AND cr.created_by = $2::text)`;
+    guardParams = [req.user.role, req.user.username];
   } else {
     guardSql = `cr.status = 'confirmed'`;
     guardParams = [];

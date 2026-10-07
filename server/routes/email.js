@@ -13,6 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../auth');
+const { roleCanAccessView } = require('../permissions');
 const { emailLimiter } = require('../rate-limiters');
 const { sendEmail, wrapHtml, alertAdmins, getAdminAlertEmails } = require('../services/email');
 
@@ -144,7 +145,16 @@ router.post('/api/email/invoice', requireAuth, emailLimiter, async (req, res) =>
 // POST /api/email/report — إرسال تقرير (يدوي من شاشة التقارير، أو تلقائي من جدولة
 // جانب المتصفح — راجع reports-email-schedule.js فى الفرونت إند). body: { to, subject,
 // bodyHtml, attachmentBase64, attachmentName, attachmentType }.
-router.post('/api/email/report', requireAuth, emailLimiter, async (req, res) => {
+// إرسال تقرير بالإيميل: مقصور على الأدوار التي لها صلاحية شاشة «التقارير» (نفس مصدر صلاحيات
+// الواجهة — جدول role_permissions). بدونه كان أي مستخدم مسجّل (حتى الاستقبال) يرسل محتوى ومرفقاً
+// لأي عنوان إيميل عبر مرسل الشركة.
+function requireReportsAccess(req, res, next) {
+  if (!roleCanAccessView(req.user.role, 'reports')) {
+    return res.status(403).json({ error: 'ليست لديك صلاحية إرسال التقارير بالإيميل' });
+  }
+  next();
+}
+router.post('/api/email/report', requireAuth, requireReportsAccess, emailLimiter, async (req, res) => {
   try {
     const { to, cc, subject, bodyHtml } = req.body || {};
     const recipients = Array.isArray(to) ? to : [to];
