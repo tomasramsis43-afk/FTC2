@@ -23,6 +23,7 @@ const emailRouter = require('./routes/email');
 const { router: permissionsRouter } = require('./permissions');
 const { router: recordsRouter } = require('./routes/records');
 const arkkanRouter = require('./routes/arkkan');
+const { conflictLogger } = require('./metrics');
 
 const app = express();
 // Render (وأغلب منصّات الاستضافة السحابية) تعمل خلف reverse proxy، فبدون هذا
@@ -95,6 +96,7 @@ app.use('/api/ai/read-invoices', express.json({ limit: '28mb' }));
 app.use('/api/email/invoice', express.json({ limit: '12mb' }));
 app.use('/api/email/report', express.json({ limit: '12mb' }));
 app.use(express.json({ limit: '2mb' })); // إصلاح أمني/أداء: كان 25mb يسمح بهجوم OOM. ترتيب bulk والمخصّصين قبل العام حتى لا يحجبهم 2mb
+app.use(conflictLogger()); // قياس 409 فقط (لوج + عدّاد) — لا يغيّر أي استجابة
 
 /* حماية من محاولات التخمين المتكررة (Brute-force) على المسارات التي لا تتطلب
    تسجيل دخول مسبق. نحدّد بالـ IP لأن هذين المسارين تحديداً هما هدف مباشر
