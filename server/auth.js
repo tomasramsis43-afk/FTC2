@@ -17,9 +17,9 @@ if (!JWT_SECRET) {
 const JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS || '';
 function verifyAnyJwtSecret(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
   } catch (e) {
-    if (JWT_SECRET_PREVIOUS) return jwt.verify(token, JWT_SECRET_PREVIOUS);
+    if (JWT_SECRET_PREVIOUS) return jwt.verify(token, JWT_SECRET_PREVIOUS, { algorithms: ['HS256'] });
     throw e;
   }
 }

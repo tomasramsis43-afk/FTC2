@@ -749,11 +749,11 @@ function startLocalServer() {
       if (!fs.existsSync(pkgFile)) fs.writeFileSync(pkgFile, '{}');
       if (!arkkanPlaywrightInstalled(envDir)) {
         console.log('[Arkkan Agent] تثبيت مكتبة الأتمتة لأول مرة…');
-        await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', 'playwright@^1.62.1']);
+        await arkkanRunNpm(['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', 'playwright@1.62.1']);
       }
       if (!arkkanChromiumInstalled()) {
         console.log('[Arkkan Agent] تنزيل متصفح Chromium لأول مرة… (قد يستغرق بضع دقائق)');
-        await arkkanRunNpm(['exec', '--yes', 'playwright', 'install', 'chromium']);
+        await arkkanRunNpm(['exec', '--no', '--', 'playwright', 'install', 'chromium']);
       }
     }
 
