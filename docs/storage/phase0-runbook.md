@@ -3,7 +3,7 @@
 ## ما الذي أُضيف
 | الملف | الوظيفة |
 |---|---|
-| `.github/workflows/db-backup.yml` | نسخة ليلية (01:30 UTC) من Neon ← استرجاع تجريبي + مطابقة الصفوف ← تشفير age ← حفظ كـ GitHub Artifact (90 يوماً) ← رفع اختياري لتخزين S3 خارجي لو أُضيفت أسراره |
+| `.github/workflows/db-backup.yml` | نسخة مرتين أسبوعياً (الأحد والخميس 01:30 UTC — لتوفير حصة نقل البيانات 5GB في Neon المجاني) من Neon ← استرجاع تجريبي + مطابقة الصفوف ← تشفير age ← حفظ كـ GitHub Artifact (90 يوماً) ← رفع اختياري لتخزين S3 خارجي لو أُضيفت أسراره |
 | `server/scripts/storage-baseline.js` | قياس حجم الجداول والـ collections (قراءة فقط) |
 | `server/metrics.js` | عدّ تعارضات 409 في اللوج (بلا تغيير في أي استجابة) |
 | `server/tests/storage-phase0.test.js` | اختبارات + حواجز على الـ workflow |
