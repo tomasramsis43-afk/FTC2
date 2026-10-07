@@ -32,15 +32,14 @@ const app = express();
 // تُحسب كأنها من نفس المصدر). القيمة 1 تعني "ثق بأول proxy فقط" وهو ترتيب Render.
 app.set('trust proxy', 1);
 // رؤوس أمان HTTP أساسية (X-Content-Type-Options, X-Frame-Options, HSTS...).
-// نعطّل Content-Security-Policy الافتراضي حالياً: الواجهة تحمّل سكريبتات من
-// cdnjs.cloudflare.com ولديها معالجات onclick مضمّنة عبر innerHTML، وتفعيل CSP
-// الصارم بدون اختبار حي قد يمنعها من العمل. تفعيله لاحقاً كخطوة منفصلة بعد
-// حصر كل مصادر السكريبت والتحقق من الواجهة فعلياً.
+// Content-Security-Policy: script-src صارم (بدون 'unsafe-inline' ولا 'unsafe-eval') — الواجهة
+// لا تحتوي أي سكريبت مضمّن ولا معالجات on* مضمّنة (تُربط كلها عبر addEventListener)، وhelmet
+// يضيف افتراضياً script-src-attr 'none' و form-action 'self'. 'unsafe-inline' موجودة في
+// style-src فقط (أكثر من 1000 سمة style في app.html) — خطرها أقل بكثير لأنها لا تنفّذ كوداً.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:    ["'self'"],
-      // 'unsafe-inline' مطلوبة لأن الواجهة تستخدم innerHTML مع onclick ومعالجات أحداث مضمّنة.
       // cdnjs.cloudflare.com مطلوب للمكتبات الخارجية (xlsx, qrious, html2canvas, jspdf).
       scriptSrc:     ["'self'", "cdnjs.cloudflare.com"],
       styleSrc:      ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
