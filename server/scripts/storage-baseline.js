@@ -42,6 +42,7 @@ function toMarkdown(s) {
   L.push(`**app_backups:** ${fmtBytes(s.appBackups.bytes)}`, '');
   L.push('| أكبر مفاتيح kv_store | الحجم |', '|---|---|');
   s.kvTop.forEach(k => L.push(`| ${k.key} | ${fmtBytes(k.bytes)} |`));
+  if (s.missingTables && s.missingTables.length) L.push('', `⚠️ جداول غير موجودة في هذه القاعدة: ${s.missingTables.join(', ')}`);
   return L.join('\n') + '\n';
 }
 
@@ -58,24 +59,28 @@ async function collect(pool) {
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r'
       order by pg_total_relation_size(c.oid) desc`)).rows;
-    const collections = (await c.query(`
+    // جداول قد لا تكون موجودة في كل قاعدة (قاعدة أقدم/مختلفة): نفحص الوجود بدل الانهيار.
+    const has = async (t) => (await c.query('select to_regclass($1) is not null as ok', ['public.' + t])).rows[0].ok;
+    const collections = (await has('collection_records')) ? (await c.query(`
       select collection, count(*)::int as records,
              coalesce(sum(octet_length(enc)),0)::bigint as enc_bytes,
              coalesce(max(octet_length(enc)),0)::bigint as max_record_bytes,
              coalesce(avg(octet_length(enc)),0)::bigint as avg_record_bytes
-      from collection_records group by collection order by enc_bytes desc`)).rows;
-    const clientRecords = (await c.query(`
+      from collection_records group by collection order by enc_bytes desc`)).rows : [];
+    const clientRecords = (await has('client_records')) ? (await c.query(`
       select count(*)::int as records,
              coalesce(sum(octet_length(enc)),0)::bigint as enc_bytes,
              coalesce(avg(octet_length(enc)),0)::bigint as avg_record_bytes
-      from client_records`)).rows[0];
-    const kv = (await c.query(`
+      from client_records`)).rows[0] : { records: 0, enc_bytes: 0, avg_record_bytes: 0 };
+    const kv = (await has('kv_store')) ? (await c.query(`
       select key, octet_length(value)::bigint as bytes, version
-      from kv_store order by octet_length(value) desc nulls last limit 15`)).rows;
-    const backups = (await c.query(`
-      select count(*)::int as n, coalesce(sum(octet_length(enc)),0)::bigint as bytes from app_backups`)).rows[0];
+      from kv_store order by octet_length(value) desc nulls last limit 15`)).rows : [];
+    const backups = (await has('app_backups')) ? (await c.query(`
+      select count(*)::int as n, coalesce(sum(octet_length(enc)),0)::bigint as bytes from app_backups`)).rows[0] : { n: 0, bytes: 0 };
+    const missing = [];
+    for (const t of ['collection_records', 'client_records', 'kv_store', 'app_backups', 'clients_rows']) if (!(await has(t))) missing.push(t);
     await c.query('COMMIT');
-    return { takenAt: new Date().toISOString(), dbBytes: Number(db.bytes), tables, collections, clientRecords, kvTop: kv, appBackups: backups };
+    return { takenAt: new Date().toISOString(), dbBytes: Number(db.bytes), tables, collections, clientRecords, kvTop: kv, appBackups: backups, missingTables: missing };
   } catch (e) {
     await c.query('ROLLBACK').catch(() => {});
     throw e;
