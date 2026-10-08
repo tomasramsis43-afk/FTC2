@@ -188,33 +188,20 @@
 
   <!-- DASHBOARD -->
   <section class="view active" id="view-dashboard">
-    <div id="cfo-hero" class="cfo-hero"></div>
-    <div id="smart-alerts-panel"></div>
-    <div id="pending-approvals-panel"></div>
-    <div class="panel" id="close-entities-panel" style="display:none;">
-      <h3 data-i18n="closeEntitiesTitle">الدورات النشطة حسب حالة الاكتمال</h3>
-      <div class="close-entities-grid" id="close-entities-grid"></div>
-    </div>
-    <div class="toolbar toolbar-card" id="cfo-tabs" style="margin-bottom:10px; align-items:center; gap:6px;">
-      <button type="button" class="btn btn-ghost btn-sm cfo-tab-btn active" data-cfo-tab="overview">نظرة عامة</button>
-      <button type="button" class="btn btn-ghost btn-sm cfo-tab-btn" data-cfo-tab="collection">التحصيل والذمم</button>
-      <button type="button" class="btn btn-ghost btn-sm cfo-tab-btn" data-cfo-tab="inventory">المخزون والموردون</button>
-    </div>
-    <div class="toolbar toolbar-card" style="margin-bottom:10px; align-items:center;">
-      <span style="font-size:13px; color:var(--text-muted);">نطاق الرسوم البيانية:</span>
-      <select id="cfo-range" style="max-width:150px;">
-        <option value="12">آخر 12 شهر</option>
-        <option value="6">آخر 6 أشهر</option>
-        <option value="3">آخر 3 أشهر</option>
-      </select>
-      <span class="hint hint-info" style="margin:0;">الرسوم البيانية في لوحة التحكم تُعرض على آخر 12 شهراً افتراضياً — يمكنك تضييق النطاق إلى 6 أو 3 أشهر.</span>
-      <span class="spacer"></span>
+    <div class="dash2-head">
+      <div class="dash2-head-title">
+        <h2>لوحة التحكم</h2>
+        <span class="dash2-head-sub" id="dash2-range-label"></span>
+      </div>
+      <div class="dash2-seg" id="dash2-period" role="group" aria-label="فترة العرض">
+        <button type="button" data-d2-period="today">اليوم</button>
+        <button type="button" data-d2-period="week">7 أيام</button>
+        <button type="button" data-d2-period="month">الشهر</button>
+        <button type="button" data-d2-period="year">السنة</button>
+      </div>
       <div class="overflow-wrap">
         <button type="button" class="btn btn-ghost btn-sm" data-overflow-toggle>⚙ تخصيص اللوحة</button>
         <div class="overflow-menu">
-          <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; cursor:pointer;">
-            <input type="checkbox" id="dash-toggle-cockpit" style="width:auto; margin:0;" checked> نبض التدفق النقدي وسجل النشاط
-          </label>
           <label style="display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:13px; cursor:pointer;">
             <input type="checkbox" id="dash-toggle-followups" style="width:auto; margin:0;" checked> المتابعات
           </label>
@@ -224,8 +211,10 @@
         </div>
       </div>
     </div>
-    <div class="cfo-grid" id="cfo-grid"></div>
-    <div id="cockpit-pulse" style="margin-top:14px;"></div>
+    <div class="dash2-kpis" id="dash2-kpis"></div>
+    <div id="smart-alerts-panel"></div>
+    <div id="pending-approvals-panel"></div>
+    <div class="dash2-grid" id="dash2-grid"></div>
     <div id="followups-panel" style="margin-top:14px;"></div>
     <div class="panel" id="reports-email-panel" style="margin-top:14px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
@@ -3474,6 +3463,7 @@
 <script defer src="js/module-purchases.js"></script>
 <script defer src="js/module-idsearch.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
+<script defer src="js/dashboard-v2.js"></script>
 <script defer src="js/notification-center.js"></script>
 <script defer src="js/module-followups.js"></script>
 <script defer src="js/client-workspace.js"></script>

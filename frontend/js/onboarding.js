@@ -65,7 +65,7 @@
       await saveSettings();
       await logAudit('edit', 'الإعدادات', 'تهيئة أولية للنظام عبر معالج الترحيب');
       if(typeof showToast === 'function') showToast('تمت تهيئة النظام — أهلاً بك في نبض!');
-      if(typeof renderCfoDashboard === 'function' && typeof isViewActive === 'function' && isViewActive('dashboard')) renderCfoDashboard();
+      if(typeof renderDashboardV2 === 'function' && typeof isViewActive === 'function' && isViewActive('dashboard')) renderDashboardV2();
       if(typeof renderSmartAlerts === 'function') renderSmartAlerts();
     } catch(e) {}
     markDone();

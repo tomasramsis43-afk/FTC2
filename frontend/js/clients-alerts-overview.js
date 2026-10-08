@@ -4,7 +4,6 @@
    المخفي أيضاً (وليس فقط إخفاءه بصرياً) توفيراً لنفس نوع الحساب الذي كان renderDashboard
    يتجنبه أصلاً عند إغلاق تبويب لوحة التحكم بالكامل. */
 const DASH_WIDGETS = {
-  'dash-toggle-cockpit': { storageKey: 'ftc2-dash-hide-cockpit', panel: '#cockpit-pulse' },
   'dash-toggle-followups': { storageKey: 'ftc2-dash-hide-followups', panel: '#followups-panel' },
   'dash-toggle-emailreports': { storageKey: 'ftc2-dash-hide-emailreports', panel: '#reports-email-panel' },
 };
@@ -31,21 +30,13 @@ Object.keys(DASH_WIDGETS).forEach(cbId=>{
 
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){
-  const c = clients.filter(x=>matchYear(x.date));
-  const totalPaid = c.reduce((s,x)=>s+paidTotal(x),0);
-  const totalRemaining = c.filter(x=>!x.suspended && !x.cancelled).reduce((s,x)=>s+remaining(x),0);
-  // شريط الملخص السريع بالهيدر (quickstats) أُلغي بالكامل (عميل/مستلم/متبقي) بناءً على طلب المستخدم —
-  // "متبقي" انتقلت مكانها لصندوق إحصائيات شاشة العملاء بجانب "إجمالي المدفوع"، والقيم totalPaid/
-  // totalRemaining ما زالت تُحسب هنا لأنها مستخدمة في renderCloseOverview أدناه.
+  // الشريط العلوي (quickstats) أُلغي بالكامل بناءً على طلب المستخدم — نُفرّغه فقط.
   $('#quickstats').innerHTML = '';
-  // الشريط العلوي (quickstats) دايماً ظاهر فمحتاج يتحدّث دايماً — لكن باقي لوحة التحكم (CFO/التنبيهات
-  // الذكية/نظرة الإقفال) بيحسب على كل بيانات العملاء والخزنة، وده تقيل ومحتاجينه بس لو تبويب "لوحة
-  // التحكم" فعلاً مفتوح قدام المستخدم دلوقتي. لو مقفول، هيتحسب تلقائياً لحظة ما يفتحه (نفس السلوك
-  // الموجود فى معالج نقر أزرار التنقل). ده بيوفر حساب كامل مكرر بعد كل عملية إضافة/حذف/تعديل فى أي
-  // قسم تاني بالبرنامج (فواتير، خزنة، حقائب، دورات...) وهو أصلاً مش شايف لوحة التحكم دلوقتي.
+  // لوحة التحكم بتحسب على كل بيانات العملاء والخزنة وده تقيل — فنرسمها بس لو تبويبها مفتوح قدام
+  // المستخدم دلوقتي. لو مقفول بتتحسب تلقائياً لحظة ما يفتحه (نفس السلوك فى معالج نقر أزرار التنقل)،
+  // ده بيوفر حساب كامل مكرر بعد كل عملية إضافة/حذف/تعديل فى أي قسم تاني.
   if(isViewActive('dashboard')){
-    renderCfoDashboard();
-    if(!isDashWidgetHidden('dash-toggle-cockpit')) renderCockpitPulse();
+    renderDashboardV2();
     renderSmartAlerts();
     if(typeof renderFollowUpsPanel==='function' && !isDashWidgetHidden('dash-toggle-followups')) renderFollowUpsPanel();
     if(currentUserRole==='admin') refreshPendingApprovals();
@@ -359,6 +350,15 @@ function renderSmartAlerts(){
     }
   }
 
+  // ٧) فواتير مشتريات (موردين) غير مسددة
+  if(typeof purchases!=='undefined' && canAccessView('purchases')){
+    const unpaid = purchases.filter(p=>p.status==='unpaid');
+    if(unpaid.length){
+      const unpaidTotal = unpaid.reduce((s,p)=>s+num(p.total),0);
+      alerts.push({key:'unpaid-purchases', level:'gold', icon:'payments', text:`${unpaid.length} فاتورة مشتريات غير مسددة بإجمالي ${fmt(unpaidTotal)} ﷼`, view:'purchases'});
+    }
+  }
+
   // مؤجَّلة مؤقتاً: تنبيهات ضُغط عليها "🔔 ذكّرني غدًا" ولها تذكير مفتوح لم يستحق بعد — تُخفى من هنا
   // (تبقى ظاهرة فى مركز المتابعة والتذكيرات نفسه) وتعود تلقائياً بمجرد وصول تاريخ التذكير.
   const snoozedKeys = new Set(
@@ -414,136 +414,3 @@ $('#smart-alerts-panel')?.addEventListener('click', async e=>{
   if(!item) return;
   document.querySelector(`nav.tabs button[data-view="${item.dataset.saView}"]`)?.click();
 });
-
-
-/* ============ لوحة "النظرة التنفيذية" — عصرية بطابع لوحات إقفال الحسابات ============ */
-function closeRingSvg(pct, size, strokeW, color){
-  const p = Math.max(0, Math.min(100, pct));
-  const r = (size/2) - (strokeW/2) - 1;
-  const circumference = 2 * Math.PI * r;
-  const dash = (p/100) * circumference;
-  return `<svg viewBox="0 0 ${size} ${size}">
-    <circle class="close-ring-track" cx="${size/2}" cy="${size/2}" r="${r}" stroke-width="${strokeW}"></circle>
-    <circle class="close-ring-fill" cx="${size/2}" cy="${size/2}" r="${r}" stroke-width="${strokeW}"
-      style="stroke:${color}; stroke-dasharray:${dash} ${circumference};"></circle>
-  </svg>`;
-}
-function closeEntityRingSvg(pct, color){
-  const size=44, strokeW=5;
-  const r = (size/2) - (strokeW/2);
-  const circumference = 2 * Math.PI * r;
-  const dash = (Math.max(0,Math.min(100,pct))/100) * circumference;
-  return `<svg viewBox="0 0 ${size} ${size}">
-    <circle class="close-entity-ring-track" cx="${size/2}" cy="${size/2}" r="${r}"></circle>
-    <circle class="close-entity-ring-fill" cx="${size/2}" cy="${size/2}" r="${r}"
-      style="stroke:${color}; stroke-dasharray:${dash} ${circumference};"></circle>
-  </svg>`;
-}
-function renderCloseOverview(c, totalPaid, totalRemaining){
-  // ملاحظة: الحاوية المستهدفة (.close-overview) مصمَّمة فعلاً فى styles.css لكنها لم تُضَف بعد
-  // كعنصر فى app.html، وهذه الدالة لا يستدعيها أي كود حالياً — فلا تأثير ظاهر على الواجهة اليوم.
-  // كان السطر التالي يبحث بالخطأ عن معرِّف id="close-overview" غير موجود إطلاقاً بدل الكلاس
-  // .close-overview المعرَّف فعلياً فى الـ CSS — صُحِّح هنا للاتساق فقط، تحسباً لربطها لاحقاً.
-  const el = $('.close-overview');
-  if(!el) return;
-  const overdueDays = settings.paymentOverdueDays || 30;
-  const active = c.filter(x=>!x.suspended && !x.cancelled);
-  const fullyPaid = active.filter(x=> remaining(x) <= 0);
-  const owing = active.filter(x=> remaining(x) > 0);
-  const overdue = owing.filter(x=> daysSinceDate(x.date) > overdueDays);
-  const onTrack = owing.filter(x=> daysSinceDate(x.date) <= overdueDays);
-
-  const collectionBase = totalPaid + totalRemaining;
-  const collectionPct = collectionBase > 0 ? (totalPaid/collectionBase)*100 : 100;
-  const isDone = collectionPct >= 99.5;
-
-  const purchasedBuy = clients.filter(x=>x.bagSource==='buy' && x.bagStatus==='purchased' && !x.suspended);
-  const pendingBuy = clients.filter(x=>x.bagSource==='buy' && x.bagStatus!=='purchased' && !x.suspended);
-  const bagsBase = purchasedBuy.length + pendingBuy.length;
-  const bagsPct = bagsBase > 0 ? (purchasedBuy.length/bagsBase)*100 : 100;
-
-  const fullyPaidPct = active.length > 0 ? (fullyPaid.length/active.length)*100 : 100;
-  const alertsCount = window.__openAlertsCount || 0;
-  const alertsPct = alertsCount === 0 ? 100 : Math.max(10, 100 - alertsCount*15);
-
-  const metric = (name, tag, num, pct, warn) => `
-    <div class="close-metric">
-      <div class="close-metric-head">
-        <span class="close-metric-name">${escapeHtml(name)}</span>
-        ${tag ? `<span class="close-metric-tag">${escapeHtml(tag)}</span>` : ''}
-      </div>
-      <div class="close-metric-num">${num}</div>
-      <div class="close-metric-track"><div class="close-metric-fill ${warn?'warn':''}" style="width:${pct.toFixed(0)}%"></div></div>
-    </div>`;
-
-  el.innerHTML = `
-    <div class="close-ring-col">
-      <div class="close-ring-wrap">
-        ${closeRingSvg(collectionPct, 168, 10, isDone ? 'var(--teal)' : 'var(--gold)')}
-        <div class="close-ring-center">
-          <div class="close-ring-pct">${collectionPct.toFixed(0)}<span>%</span></div>
-          <div class="close-ring-label">${tr('closeRingLabel')}</div>
-        </div>
-      </div>
-      <div class="close-status-chip ${isDone?'done':'pending'}">${isDone ? tr('closeRingDone') : tr('closeRingPending')}</div>
-      <div class="close-target">${tr('closeTarget')}</div>
-      <div class="close-remaining">${tr('closeRemainingPrefix')} <b>${fmt(totalRemaining)}</b> ${tr('closeRemainingSuffix')} (${owing.length})</div>
-    </div>
-    <div class="close-body">
-      <div class="close-status-row">
-        <div class="close-status-item teal"><span class="dot"></span><span class="n">${fullyPaid.length}</span><span class="l">${tr('closeStatusPaid')}</span></div>
-        <div class="close-status-item navy"><span class="dot"></span><span class="n">${onTrack.length}</span><span class="l">${tr('closeStatusOwe')}</span></div>
-        <div class="close-status-item gold"><span class="dot"></span><span class="n">${overdue.length}</span><span class="l">${tr('closeStatusOverdue')}</span></div>
-      </div>
-      <div class="close-metrics-grid">
-        ${metric(tr('closeMetricCollections'), null, fmt(totalPaid)+' / '+fmt(collectionBase), collectionPct, collectionPct<80)}
-        ${metric(tr('closeMetricBags'), pendingBuy.length? `${pendingBuy.length} ${currentLang==='ar'?'متبقية':'left'}`:null, `${purchasedBuy.length} / ${bagsBase}`, bagsPct, bagsPct<80)}
-        ${metric(tr('closeMetricFullyPaid'), null, `${fullyPaid.length} / ${active.length}`, fullyPaidPct, fullyPaidPct<70)}
-        ${metric(tr('closeMetricAlerts'), null, String(alertsCount), alertsPct, alertsCount>0)}
-      </div>
-    </div>
-  `;
-  renderCloseEntities();
-}
-function renderCloseEntities(){
-  const panel = $('#close-entities-panel');
-  const grid = $('#close-entities-grid');
-  if(!panel || !grid) return;
-  if(typeof courseSessions==='undefined' || typeof groupClientsByCourseNumber!=='function'){ panel.style.display='none'; return; }
-  const sessionsWithCapacity = courseSessions.filter(s=>s.capacity);
-  if(!sessionsWithCapacity.length){ panel.style.display='none'; return; }
-  const byCourseNumber = groupClientsByCourseNumber();
-  const buckets = { early:[], onTrack:[], nearFull:[], complete:[] };
-  sessionsWithCapacity.forEach(s=>{
-    const enrolled = (byCourseNumber.get(s.courseNumber)||[]).filter(c=>!c.cancelled).length;
-    const ratio = s.capacity ? enrolled/s.capacity : 0;
-    if(ratio >= 1) buckets.complete.push(s);
-    else if(ratio >= 0.8) buckets.nearFull.push(s);
-    else if(ratio >= 0.25) buckets.onTrack.push(s);
-    else buckets.early.push(s);
-  });
-  const total = sessionsWithCapacity.length;
-  panel.style.display = '';
-  const card = (key, label, color) => {
-    const n = buckets[key].length;
-    const pct = total ? (n/total)*100 : 0;
-    return `<div class="close-entity-card">
-      <div class="close-entity-info">
-        <div class="l"><span class="dot" style="background:${color}"></span>${escapeHtml(label)}</div>
-        <div class="n">${n}</div>
-        <div class="of">${tr('closeEntityOf')} ${total} ${tr('closeEntityCourses')}</div>
-      </div>
-      <div class="close-entity-ring">
-        ${closeEntityRingSvg(pct, color)}
-        <div class="close-entity-ring-txt">${pct.toFixed(0)}%</div>
-      </div>
-    </div>`;
-  };
-  grid.innerHTML = [
-    card('early', tr('closeEntityEarly'), 'var(--gold-soft)'),
-    card('onTrack', tr('closeEntityOnTrack'), 'var(--navy)'),
-    card('nearFull', tr('closeEntityNearFull'), 'var(--gold)'),
-    card('complete', tr('closeEntityComplete'), 'var(--teal)')
-  ].join('');
-}
-
