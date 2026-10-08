@@ -12,7 +12,8 @@
                 },
     "devDependencies":  {
                             "electron":  "^44.0.0",
-                            "electron-builder":  "^26.15.3"
+                            "electron-builder":  "^26.15.3",
+                            "rcedit":  "^5.0.2"
                         },
     "dependencies":  {
                          "express":  "^4.19.2"
@@ -23,6 +24,7 @@
     "build":  {
                   "appId":  "com.ftc2.desktop",
                   "productName":  "FTC2",
+                  "afterPack":  "build/after-pack.js",
                   "files":  [
                                 "main.js",
                                 "preload.js",
