@@ -5317,3 +5317,35 @@ body.dark-theme .studio-ico { color: var(--brand-primary-bright); }
   .dash2-kpi, .dash2-meter .fill { transition: none; }
   .dash2-kpi:hover { transform: none; }
 }
+
+/* ============================================================
+   خلفية بيضاء + أشكال هندسية بسيطة فى كامل البرنامج
+   ------------------------------------------------------------
+   الأشكال SVG واحد معرَّف فى app.html (#geo-art) ويُعاد استخدامه: خلفية ثابتة خلف كل الشاشات
+   (.geo-bg) + داخل شاشتي الترخيص والدخول (.geo-bg-abs). ألوانها من ألوان الثيم الحالي
+   (--brand-primary / --brand-secondary) بشفافية منخفضة جداً حتى لا تشتّت عن المحتوى، وهى بعيدة
+   عن منتصف الشاشة قدر الإمكان. الوضع الليلي يبقى داكناً مع نفس الأشكال.
+   ============================================================ */
+.geo-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+.geo-bg.geo-bg-abs { position: absolute; }
+body:not(.dark-theme) {
+  --bg: #ffffff;
+  --bg-page: #ffffff;
+  background: #ffffff;
+}
+body:not(.dark-theme) #license-screen,
+body:not(.dark-theme) #server-login-screen {
+  --auth-bg-deep: #ffffff;
+  --auth-bg-mid: #ffffff;
+  background: #ffffff;
+}
+body.dark-theme .geo-bg { opacity: .8; }
+@media print { .geo-bg { display: none !important; } }
