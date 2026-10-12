@@ -215,6 +215,7 @@ function showServerLoginScreen(errorMsg){
   const lic = document.getElementById('license-screen');
   if(lic && lic.style.display !== 'none' && getComputedStyle(lic).display !== 'none') return;
   el.style.display = 'flex';
+  if(typeof fillSavedLogin === 'function') fillSavedLogin();
   const errEl = document.getElementById('server-login-error');
   if(errorMsg){ errEl.textContent = errorMsg; errEl.style.display = 'block'; }
   else { errEl.style.display = 'none'; }

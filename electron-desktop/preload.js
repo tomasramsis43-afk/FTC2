@@ -10,4 +10,9 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   getReceiptsFolder: () => ipcRenderer.invoke('get-receipts-folder'),
   // يلغي المجلد المختار ويعود لمجلد التنزيلات الافتراضي
   clearReceiptsFolder: () => ipcRenderer.invoke('clear-receipts-folder'),
+  // تذكّر بيانات الدخول: مشفّرة بحماية نظام التشغيل (safeStorage) داخل مجلد بيانات التطبيق
+  saveLoginCreds: (username, password) => ipcRenderer.invoke('save-login-creds', username, password),
+  // يعيد { ok, username, password } أو { ok:false } لو لا توجد بيانات محفوظة
+  getLoginCreds: () => ipcRenderer.invoke('get-login-creds'),
+  clearLoginCreds: () => ipcRenderer.invoke('clear-login-creds'),
 });

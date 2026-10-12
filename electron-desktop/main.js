@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog, safeStorage } = require('electron');
 // تعطيل تسريع الرسوميات (GPU) للنص: على بعض أجهزة ويندوز (خصوصاً كروت الشاشة
 // المدمجة/القديمة) بيحصل باگ معروف في Chromium/Electron بيخلي بعض الحروف
 // العربية (خصوصاً أشكال الحروف المتصلة زي "الم") تترسم كمربعات مكسورة (tofu)
@@ -107,6 +107,41 @@ function writeReceiptsFolder(folder) {
     fs.writeFileSync(receiptsFolderFilePath(), JSON.stringify({ folder: String(folder || '') }), 'utf8');
     return true;
   } catch (e) { console.warn('[Receipts Folder] فشل حفظ المسار:', e); return false; }
+}
+
+// ── تذكّر بيانات الدخول (اسم المستخدم + كلمة المرور) على هذا الجهاز ──
+// تُحفظ مشفّرة بحماية نظام التشغيل عبر safeStorage (على ويندوز: DPAPI — لا تُفكّ إلا من نفس مستخدم
+// ويندوز على نفس الجهاز) داخل مجلد بيانات التطبيق. لا نخزّنها أبداً كنص صريح: لو التشفير غير متاح
+// نرفض الحفظ (ok:false) فتكتفي الواجهة بتذكّر اسم المستخدم فقط. الحفظ اختياري بمربع «تذكرني».
+function loginCredsFilePath() {
+  return path.join(app.getPath('userData'), 'login-creds.bin');
+}
+function saveLoginCreds(username, password) {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return { ok: false, reason: 'unavailable' };
+    const enc = safeStorage.encryptString(JSON.stringify({ u: username, p: password }));
+    fs.mkdirSync(path.dirname(loginCredsFilePath()), { recursive: true });
+    fs.writeFileSync(loginCredsFilePath(), enc, { mode: 0o600 });
+    return { ok: true };
+  } catch (e) { console.warn('[Login Creds] فشل الحفظ:', e && e.message); return { ok: false, reason: 'error' }; }
+}
+function readLoginCreds() {
+  try {
+    if (!fs.existsSync(loginCredsFilePath()) || !safeStorage.isEncryptionAvailable()) return null;
+    const obj = JSON.parse(safeStorage.decryptString(fs.readFileSync(loginCredsFilePath())));
+    if (obj && typeof obj.u === 'string' && typeof obj.p === 'string') return { username: obj.u, password: obj.p };
+  } catch (e) { /* ملف تالف/من مستخدم آخر: نتجاهله */ }
+  return null;
+}
+function clearLoginCreds() {
+  try { fs.rmSync(loginCredsFilePath(), { force: true }); return true; } catch (e) { return false; }
+}
+// نقبل هذه الأوامر فقط من صفحة التطبيق نفسه (127.0.0.1:PORT) — لا من أي إطار/صفحة أخرى.
+function isTrustedLoginSender(event) {
+  try {
+    const url = (event.senderFrame && event.senderFrame.url) || event.sender.getURL();
+    return String(url).startsWith(`http://127.0.0.1:${PORT}/`);
+  } catch (e) { return false; }
 }
 
 // بادئة إيصالات أركان القديمة (التوافق) — تُستخدم في فحص التنزيلات ومسار الحفظ
@@ -1075,6 +1110,23 @@ if (!gotTheLock) {
     });
     ipcMain.handle('get-receipts-folder', () => ({ ok: true, folder: readReceiptsFolder() }));
     ipcMain.handle('clear-receipts-folder', () => ({ ok: writeReceiptsFolder(''), folder: '' }));
+
+    // ── بيانات الدخول المحفوظة (تُستدعى من preload.js) ──
+    ipcMain.handle('save-login-creds', (event, username, password) => {
+      if (!isTrustedLoginSender(event)) return { ok: false, reason: 'untrusted' };
+      if (typeof username !== 'string' || typeof password !== 'string') return { ok: false, reason: 'invalid' };
+      if (!username || !password || username.length > 256 || password.length > 1024) return { ok: false, reason: 'invalid' };
+      return saveLoginCreds(username, password);
+    });
+    ipcMain.handle('get-login-creds', (event) => {
+      if (!isTrustedLoginSender(event)) return { ok: false };
+      const c = readLoginCreds();
+      return c ? { ok: true, username: c.username, password: c.password } : { ok: false };
+    });
+    ipcMain.handle('clear-login-creds', (event) => {
+      if (!isTrustedLoginSender(event)) return { ok: false };
+      return { ok: clearLoginCreds() };
+    });
 
     createWindow();
 

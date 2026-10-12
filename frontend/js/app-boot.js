@@ -502,21 +502,42 @@ async function checkPendingQrLoginApproval(){
   }
 })();
 
-// تذكّر اسم المستخدم فقط (وليس كلمة المرور إطلاقاً) على هذا الجهاز، لتسريع الدخول لاحقاً
+// تذكّر بيانات الدخول على هذا الجهاز (اختياري بمربع «تذكرني»):
+//  - المتصفح/PWA: اسم المستخدم فقط (localStorage)، وكلمة المرور لا تُخزَّن إطلاقاً.
+//  - نسخة سطح المكتب (Electron): اسم المستخدم + كلمة المرور معاً، مشفّرة بحماية نظام التشغيل
+//    (safeStorage/DPAPI) في مجلد بيانات التطبيق عبر window.desktopAPI. لا دخول تلقائي: نملأ الحقول
+//    فقط ويضغط المستخدم «دخول» — حتى لا تتكرر محاولات بكلمة قديمة فتقفل الحساب (5 محاولات = 15 دقيقة).
 const REMEMBER_USERNAME_KEY = 'ftcRememberedUsername';
+const DESKTOP_CREDS_API = (typeof window !== 'undefined' && window.desktopAPI && typeof window.desktopAPI.getLoginCreds === 'function') ? window.desktopAPI : null;
 (function(){
+  if(!DESKTOP_CREDS_API) return;
+  const lbl = document.querySelector('.login-remember span');
+  if(lbl) lbl.textContent = 'تذكر اسم المستخدم وكلمة المرور على هذا الجهاز';
+})();
+async function fillSavedLogin(){
   try{
+    const uField = $('#server-login-user');
+    const pField = $('#server-login-pass');
+    const rCheck = $('#server-login-remember');
+    if(DESKTOP_CREDS_API){
+      const r = await DESKTOP_CREDS_API.getLoginCreds();
+      if(r && r.ok && r.username){
+        if(uField && !uField.value) uField.value = r.username;
+        if(pField && !pField.value) pField.value = r.password || '';
+        if(rCheck) rCheck.checked = true;
+        $('#server-login-form button[type="submit"]')?.focus();
+        return;
+      }
+    }
     const remembered = localStorage.getItem(REMEMBER_USERNAME_KEY);
     if(remembered){
-      const uField = $('#server-login-user');
-      const rCheck = $('#server-login-remember');
-      if(uField) uField.value = remembered;
+      if(uField && !uField.value) uField.value = remembered;
       if(rCheck) rCheck.checked = true;
-      const passEl = $('#server-login-pass');
-      if(passEl) setTimeout(()=> passEl.focus(), 0);
+      if(pField) setTimeout(()=> pField.focus(), 0);
     }
-  }catch(e){ console.error('[Auth] Failed to load remembered username:', e); }
-})();
+  }catch(e){ console.error('[Auth] Failed to load remembered login:', e); }
+}
+fillSavedLogin();
 
 $('#server-login-form')?.addEventListener('submit', async e=>{
   e.preventDefault();
@@ -530,9 +551,18 @@ $('#server-login-form')?.addEventListener('submit', async e=>{
     const loginData = await serverLogin(uname, upass, totpCode || undefined);
     try{
       const rCheck = $('#server-login-remember');
-      if(rCheck && rCheck.checked) localStorage.setItem(REMEMBER_USERNAME_KEY, uname);
-      else localStorage.removeItem(REMEMBER_USERNAME_KEY);
-    }catch(e){ console.error('[Auth] Failed to persist remembered username:', e); }
+      if(rCheck && rCheck.checked){
+        localStorage.setItem(REMEMBER_USERNAME_KEY, uname);
+        if(DESKTOP_CREDS_API){
+          DESKTOP_CREDS_API.saveLoginCreds(uname, upass)
+            .then(r => { if(r && !r.ok) showToast('تعذّر حفظ كلمة المرور بأمان على هذا الجهاز — تم تذكّر اسم المستخدم فقط'); })
+            .catch(()=>{});
+        }
+      }else{
+        localStorage.removeItem(REMEMBER_USERNAME_KEY);
+        if(DESKTOP_CREDS_API) DESKTOP_CREDS_API.clearLoginCreds().catch(()=>{});
+      }
+    }catch(e){ console.error('[Auth] Failed to persist remembered login:', e); }
     $('#server-login-screen').style.display = 'none';
     await startApp();
     checkPendingQrLoginApproval();
