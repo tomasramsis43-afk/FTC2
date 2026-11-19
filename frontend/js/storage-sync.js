@@ -183,6 +183,21 @@ async function openRejectedEditsDialog(){
       setTimeout(()=> URL.revokeObjectURL(a.href), 2000);
     };
     box.appendChild(dl);
+    const clearAll = document.createElement('button');
+    clearAll.textContent = '🗑️ مسح الكل';
+    clearAll.style.cssText = 'background:#a12a2a;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;margin-inline-start:6px;margin-bottom:10px;';
+    clearAll.onclick = async ()=>{
+      const n = items.length;
+      const okClear = (typeof customConfirm === 'function')
+        ? await customConfirm(`حذف كل التعديلات غير المحفوظة (${n}) نهائياً؟ لن تقدر تسترجعها.`, 'تأكيد الحذف')
+        : confirm(`حذف كل التعديلات غير المحفوظة (${n})؟`);
+      if(!okClear) return;
+      for(const it of items){ await _rejectedEditDelete(it.rkey); }
+      await _refreshRejectedEditsCount();
+      ov.remove();
+      showToast('تم حذف كل التعديلات غير المحفوظة');
+    };
+    box.appendChild(clearAll);
     for(const it of items){
       const row = document.createElement('div');
       row.style.cssText = 'border:1px solid #333b4d;border-radius:8px;padding:8px 10px;margin-bottom:8px;';
@@ -393,7 +408,7 @@ async function flushPendingWrites(){
             const conflict = await res.json().catch(()=>({}));
             _kvVersions[item.key] = conflict.currentVersion || _kvVersions[item.key];
             await _pendingDelete(item.key);
-            showToast(`تعذّرت مزامنة تعديل محفوظ محلياً (${item.key}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+            /* تنبيه المزامنة مُسكَت بطلب المستخدم — المنطق يعمل في الخلفية */
             return;
           }
           if(!res.ok){
@@ -538,7 +553,7 @@ async function flushPendingRecordWrites(){
                 // تغيّر حقيقي أثناء إعادة المحاولة — تعارض حقيقي (لا كتابة فوق)
                 const c2 = await retryRes.json().catch(()=>({}));
                 await _dropRecordOnRealConflict(item.collection, isClient, item.id, c2);
-                showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+                /* تنبيه المزامنة مُسكَت بطلب المستخدم — المنطق يعمل في الخلفية */
                 return;
               }
               if(!retryRes.ok) return; // السيرفر لسه غير متجاوب — يفضل فى الطابور لإعادة المحاولة لاحقاً
@@ -554,7 +569,7 @@ async function flushPendingRecordWrites(){
               return;
             }
             await _dropRecordOnRealConflict(item.collection, isClient, item.id, conflict);
-            showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}) بسبب تعديل آخر لنفس البيانات — يرجى تحديث الصفحة لمراجعتها`);
+            /* تنبيه المزامنة مُسكَت بطلب المستخدم — المنطق يعمل في الخلفية */
             return;
           }
           // حذف فشل بـ404: السجل لم يعد موجوداً على السيرفر (حُذف من جهاز آخر أو لم يُرفع قط).
@@ -571,7 +586,7 @@ async function flushPendingRecordWrites(){
             if(res.status >= 400 && res.status < 500 && res.status !== 429){
               await _rejectedEditArchive(item.collection, item.id, item, 'rejected', { status: res.status });
               await _pendingRecordDelete(item.collection, item.id);
-              showToast(`تعذّرت مزامنة تعديل معلّق (${item.collection}): رفض دائم من السيرفر (${res.status}) — تم تجاهل هذا التعديل المعلّق`);
+              /* تنبيه المزامنة مُسكَت بطلب المستخدم — المنطق يعمل في الخلفية */
               return;
             }
             // أخطاء مؤقتة (429/5xx) — يبقى في الطابور لإعادة المحاولة
