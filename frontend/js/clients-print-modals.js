@@ -263,12 +263,13 @@ ADVANCED_FILTER_IDS.forEach(id=>{
   if(el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', updateAdvancedFiltersBadge);
 });
 updateAdvancedFiltersBadge();
-
-document.addEventListener('click', async e=>{
+ 
+   // --- Invoice number click handling انتقل إلى receipts-auto-sync.js ---
+   // (نقر رقم الفاتورة يفتح نافذة العرض/الطباعة مباشرة عبر مستمع واحد في طور الالتقاط)
+  document.addEventListener('click', async e=>{
   const editId = e.target.dataset.edit;
   const delId = e.target.dataset.del;
   const invId = e.target.dataset.invoice;
-  const emailInvoiceId = e.target.dataset.emailinvoice;
   const suspendId = e.target.dataset.suspend;
   const unsuspendId = e.target.dataset.unsuspend;
   const cancelBagId = e.target.dataset.cancelbag;
@@ -310,9 +311,9 @@ document.addEventListener('click', async e=>{
         await logAudit('edit','العملاء', `تم اعتماد تسجيل الاستقبال للعميل "${c?.name||approveId}"${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر اعتماد ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
         if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
-        showToast(cascade.count ? `✅ تم اعتماد العميل مع ${cascade.ok} عملية مرتبطة` : '✅ تم اعتماد العميل');
+        invoiceShowToast(cascade.count ? `✅ تم اعتماد العميل مع ${cascade.ok} عملية مرتبطة` : '✅ تم اعتماد العميل');
       }else{
-        showToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
+        invoiceShowToast('تعذّر الاعتماد — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -328,9 +329,9 @@ document.addEventListener('click', async e=>{
         await logAudit('delete','العملاء', `تم رفض تسجيل الاستقبال المعلّق للعميل "${c?.name||rejectId}" (يبقى ظاهراً للاستقبال 15 يوماً)${cascade.count ? ` مع ${cascade.ok} عملية مرتبطة (حركات مالية/حقائب)${cascade.fail ? ` — تعذّر حذف ${cascade.fail}` : ''}` : ''}`);
         refreshEverything();
         if(typeof refreshPendingApprovals==='function') refreshPendingApprovals();
-        showToast(cascade.count ? `تم رفض التسجيل مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل');
+        invoiceShowToast(cascade.count ? `تم رفض التسجيل مع ${cascade.ok} عملية مرتبطة` : 'تم رفض التسجيل');
       }else{
-        showToast('تعذّر الرفض — تحقق من الاتصال وحاول مجدداً');
+        invoiceShowToast('تعذّر الرفض — تحقق من الاتصال وحاول مجدداً');
       }
     }
     return;
@@ -340,25 +341,19 @@ document.addEventListener('click', async e=>{
     // الاستقبال مسموح له تحديداً بطباعة الفاتورة حتى قبل اعتماد الأدمن لتسجيل العميل (بناءً على طلب
     // صريح) — باقي الأدوار (أدمن/محاسب/موظف عام) تبقى ممنوعة حتى الاعتماد كما كانت دائماً.
     if(invMeta && invMeta.status==='pending' && currentUserRole!=='reception'){
-      showToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
+      invoiceShowToast('⏳ لا يمكن إصدار فاتورة ضريبية رسمية لهذا العميل قبل اعتماد الأدمن لتسجيله');
       return;
     }
     await printInvoice(invId); return;
   }
-  if(emailInvoiceId){
-    const c = clients.find(x=>x.id===emailInvoiceId);
-    if(!c){ showToast('تعذر إيجاد بيانات العميل'); return; }
-    await sendInvoiceEmailManual(c);
-    return;
-  }
   if(delInvoiceId){
     const c = clients.find(x=>x.id===delInvoiceId);
-    if(!canDeleteClientRecord(c)){ showToast('غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
-    if(!c || !c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل'); return; }
+    if(!canDeleteClientRecord(c)){ invoiceShowToast('غير مسموح لصلاحيتك بحذف بيانات هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
+    if(!c || !c.taxInvoiceNo){ invoiceShowToast('لا توجد فاتورة صادرة لهذا العميل'); return; }
     const invLabel = formatInvoiceNo(c.taxInvoiceNo);
     const reason = await customPrompt(`توثيقاً للمعايير المحاسبية، لا يمكن حذف رقم الفاتورة التسلسلي (${invLabel}) نهائياً أو إعادة استخدامه — سيتم حذف الفاتورة من سجل العميل "${c.name}" فقط مع الاحتفاظ بالرقم والسبب في سجل الفواتير المحذوفة. عند طباعة فاتورة جديدة لهذا العميل لاحقاً سيُمنح رقماً تسلسلياً جديداً.\nيرجى كتابة سبب الحذف (إلزامي):`, {title:'سبب حذف الفاتورة', required:true, placeholder:'اكتب سبب الحذف هنا...'});
     if(reason===null) return;
-    if(!reason.trim()){ showToast('سبب الحذف إلزامي — لم يتم الحذف'); return; }
+    if(!reason.trim()){ invoiceShowToast('سبب الحذف إلزامي — لم يتم الحذف'); return; }
     snapshotState(`حذف فاتورة العميل: ${c.name} (${invLabel})`);
     const removed = softDeleteClientInvoice(c.id, reason.trim());
     if(removed){
@@ -366,14 +361,14 @@ document.addEventListener('click', async e=>{
       await saveDeletedInvoices();
       await logAudit('delete','العملاء', `تم حذف الفاتورة رقم ${removed.invoiceNoLabel} للعميل "${removed.clientName}" — السبب: ${removed.deletedReason}`);
       refreshEverything();
-      showToast(`تم حذف الفاتورة ${removed.invoiceNoLabel}`);
+      invoiceShowToast(`تم حذف الفاتورة ${removed.invoiceNoLabel}`);
     }
     return;
   }
   if(editId){
     const targetClient = clients.find(x=>x.id===editId);
     if(!canReceptionEditClient(targetClient)){
-      showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
+      invoiceShowToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
     }else{
       openModal(editId);
     }
@@ -386,7 +381,7 @@ document.addEventListener('click', async e=>{
       await saveClients(); await saveVaultTx(); await saveBagStock(); await saveSettings();
       await logAudit('edit','مخزون الحقائب', `تم إلغاء حقيبة العميل ${c.name} — عادت حالته إلى "مطلوب شراء"`);
       refreshEverything();
-      showToast('تم إلغاء الحقيبة');
+      invoiceShowToast('تم إلغاء الحقيبة');
     }
   }
   if(suspendId){
@@ -397,7 +392,7 @@ document.addEventListener('click', async e=>{
       await saveClients();
       await logAudit('edit','العملاء', `تم إيقاف العميل ${c.name} — أصبح مخفياً من شيت الدورات ومخزون الحقائب`);
       refreshEverything();
-      showToast('تم إيقاف العميل');
+      invoiceShowToast('تم إيقاف العميل');
     }
   }
   if(unsuspendId){
@@ -408,11 +403,11 @@ document.addEventListener('click', async e=>{
       await saveClients();
       await logAudit('edit','العملاء', `تم إلغاء إيقاف العميل ${c.name} — عاد للظهور في شيت الدورات ومخزون الحقائب`);
       refreshEverything();
-      showToast('تم إلغاء الإيقاف');
+      invoiceShowToast('تم إلغاء الإيقاف');
     }
   }
   if(delId){
-    if(!canDeleteClientRecord(clients.find(c=>c.id===delId))){ showToast('غير مسموح لصلاحيتك بحذف هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
+    if(!canDeleteClientRecord(clients.find(c=>c.id===delId))){ invoiceShowToast('غير مسموح لصلاحيتك بحذف هذا العميل الآن (خارج المهلة المسموح بها أو الحذف معطَّل)'); return; }
     if(await customConfirm('تأكيد حذف هذا السجل؟ سيُحذف أيضاً أي ترحيل مالي مرتبط به.')){
       const removedClient = clients.find(c=>c.id===delId);
       snapshotState(`حذف عميل: ${removedClient?.name || delId}`);
@@ -421,7 +416,7 @@ document.addEventListener('click', async e=>{
       // عرض فوري (نفس مبدأ الإضافة أعلاه): العميل اتشال بالفعل من المصفوفة المحلية، فنحدّث
       // الشاشة على طول بدل انتظار رفع الحذف للسيرفر + حفظ الخزنة + سجل التدقيق.
       renderTable(); renderDashboard(); renderBags();
-      showToast('تم حذف السجل');
+      invoiceShowToast('تم حذف السجل');
       (async ()=>{
         await saveClients(); await saveVaultTx();
         await logAudit('delete','العملاء', `تم حذف بيانات العميل: ${removedClient?.name || delId}`);
@@ -564,7 +559,16 @@ function openModal(id){
     $('#f-bagsource').value = 'buy';
   }
   $('#f-bagprice').value = c ? (c.bagPrice ?? '') : settings.bagPrice;
-  $('#f-discount').value = c?.discount ?? 0;
+  // الخصم المحفوظ على العميل قد يشمل خصم عرض أو أكثر. نفصل الجزء اليدوي في حقل «خصم إضافي»
+  // ونعرض العروض المحفوظة على العميل كخيارات محددة مسبقاً حتى لا يُحسب أي جزء مرتين.
+  const _storedOffers = typeof appliedOffersOf === 'function' ? appliedOffersOf(c) : [];
+  const _storedOffer = _storedOffers.reduce((s,o)=> s + num(o.amount), 0);
+  const _storedTotalDiscount = c ? Math.max(0, num(c.discount)) : 0;
+  const _manualDiscount = typeof splitClientDiscount === 'function'
+    ? splitClientDiscount(_storedTotalDiscount, _storedOffer).manual
+    : Math.max(0, Math.round((_storedTotalDiscount - _storedOffer) * 100) / 100);
+  $('#f-discount').value = _manualDiscount;
+  if(typeof renderClientOfferChoices === 'function') renderClientOfferChoices(c);
   $('#f-paid').value = c?.paid ?? 0;
   if(c){
     const grandTotal = paidTotal(c);
@@ -660,9 +664,12 @@ function applyCompanyAgreedPricing(company){
   const price = num($('#f-courseprice').value);
   const agreed = num(company.agreedAmount);
   if(price<=0) return;
-  const neededDiscount = Math.max(0, Math.round((price - agreed)*100)/100);
+  // إن كانت علامة عرض الخصم مفعّلة، يُحسب الجزء اليدوي بعد استبعاد قيمة العرض حتى يبقى
+  // صافي دخل المركز مساوياً للمبلغ المتفق عليه تماماً (بدل خصم مزدوج).
+  const offerAmt = typeof currentOfferAmount === 'function' ? currentOfferAmount(price) : 0;
+  const neededDiscount = Math.max(0, Math.round((price - agreed - offerAmt)*100)/100);
   $('#f-discount').value = neededDiscount;
-  $('#f-company-hint').textContent = `المبلغ المتفق عليه لهذه الشركة (لكل متدرب بعد الخصم): ${fmt(agreed)} ﷼ — تم تعبئة الخصم تلقائياً (${fmt(neededDiscount)} ﷼) بحيث يصبح دخل المركز الصافي مساوياً لهذا المبلغ. يمكنك تعديل الخصم يدوياً إذا لزم الأمر.`;
+  $('#f-company-hint').textContent = `المبلغ المتفق عليه لهذه الشركة (لكل متدرب بعد الخصم): ${fmt(agreed)} ﷼ — تم تعبئة الخصم تلقائياً (${fmt(neededDiscount)} ﷼${offerAmt>0 ? ` + عرض ${fmt(offerAmt)} ﷼` : ''}) بحيث يصبح دخل المركز الصافي مساوياً لهذا المبلغ. يمكنك تعديل الخصم يدوياً إذا لزم الأمر.`;
   updateComputed();
 }
 $('#f-company')?.addEventListener('change', updateCompanyHint);
@@ -701,8 +708,9 @@ $('#btn-cancel')?.addEventListener('click', closeModal);
 $('#overlay')?.addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 
 /* ---------------- سجل الدفعات المرتبطة بالعميل (عرض فقط) ----------------
-   هذا السجل في شيت "العملاء" أصبح للعرض فقط — أي إضافة أو تعديل أو حذف لدفعات
-   العميل (غير دفعتَي التسجيل التلقائيتين) تتم حصرياً من تبويب "الحركات المالية". */
+   هذا السجل في شيت "العملاء" أصبح للعرض فقط — أي إضافة لدفعة جديدة تتم من تبويب
+   "الحركات المالية". دفعتا التسجيل التلقائيتان يمكن تعديلهما من هنا (حقول المبلغ/طريقة
+   الدفع) أو من "الحركات المالية" مباشرة، مع مزامنة تلقائية بين الاتجاهين. */
 function renderClientPaymentsPanel(){
   const wrap = $('#wrap-client-payments');
   if(!wrap) return;
@@ -718,7 +726,7 @@ function renderClientPaymentsPanel(){
     return `
     <div class="tag" style="width:100%; justify-content:space-between; border-radius:8px; margin-bottom:6px; flex-wrap:wrap;">
       <span class="mono" style="font-size:12px;">#${t.seq||'—'} · ${t.date||'—'} · ${escapeHtml(t.method||'—')} (${destLabel(t.destination||'vault')}) · <b>${fmt(num(t.amount))}</b> ﷼</span>
-      <span class="hint" style="margin:0; font-size:11px;">${isAuto ? 'دفعة التسجيل — عدّلها من حقلي "المبلغ المدفوع"/"طريقة الدفع" أعلاه' : 'للتعديل أو الحذف، استخدم تبويب "الحركات المالية"'}</span>
+      <span class="hint" style="margin:0; font-size:11px;">${isAuto ? 'دفعة التسجيل — عدّلها من حقلي "المبلغ المدفوع"/"طريقة الدفع" أعلاه أو مباشرة من تبويب "الحركات المالية"' : 'للتعديل أو الحذف، استخدم تبويب "الحركات المالية"'}</span>
     </div>`;
   }).join('');
 
@@ -792,7 +800,7 @@ $('#btn-refresh-clients')?.addEventListener('click', async ()=>{
   renderCourses();
   if(typeof renderVault==='function') renderVault();
   await logAudit('edit','العملاء', `تحديث شامل لشيت العملاء: إعادة مزامنة بيانات ${clients.length} عميل وإعادة رسم كل الشاشات المرتبطة`);
-  showToast('تم تحديث الشيت بالكامل');
+  invoiceShowToast('تم تحديث الشيت بالكامل');
 });
 
 $('#f-course')?.addEventListener('change', ()=>{
@@ -841,8 +849,158 @@ $('#f-coursenum')?.addEventListener('input', updateClientCourseStatus);
 ['#f-courseprice','#f-bagprice','#f-discount','#f-paid'].forEach(sel=>{
   $(sel).addEventListener('input', updateComputed);
 });
+/* ---------------- عروض الخصم (اختياري، أكثر من عرض) ----------------
+   «سعر الحقيبة لا يتغير»: خصم العروض يُطرح من قيمة التدريب (سعر الدورة) فقط، والحقيبة
+   تبقى تمريرية بسعرها كما هي. العروض المختارة تُحفظ على العميل نفسه وقت التسجيل، فتظل
+   قيمتها ثابتة حتى لو تغيّرت إعدادات العروض لاحقاً.
+   الاختيار يُدار بحالة مستقلة (_selectedOfferKeys) وليس بالاعتماد على DOM فقط، حتى يبقى
+   اختيار أكثر من عرض محفوظاً مهما أُعيد حساب الإجماليات أو إعادة رسم الخانات. */
+let _offerChoices = [];
+let _selectedOfferKeys = new Set();
+function offerChoiceHtml(o, opts){
+  const checked = !!opts.checked;
+  const locked = !!opts.locked;
+  const disabled = !!opts.disabled;
+  const name = escapeHtml(o.name || 'عرض');
+  const type = o.type === 'percent' ? 'percent' : 'amount';
+  const value = num(o.value);
+  const amount = locked ? num(o.amount) : offerDiscountAmountFor(opts.price, type, value);
+  const valueLabel = type === 'percent' ? fmt(value) + '%' : fmt(value) + ' ﷼';
+  const note = locked ? ' <span style="font-size:11px; color:var(--text-muted);">— محفوظ</span>'
+    : (value <= 0 ? ' <span style="font-size:11px; color:var(--warning,#b45309);">— بدون قيمة (عدّله من الإعدادات)</span>' : '');
+  return `<label style="display:flex; align-items:center; gap:6px; font-size:12.5px; background:var(--surface-alt,#f7f8fa); padding:6px 10px; border-radius:8px; border:1px solid var(--border); cursor:${disabled ? 'not-allowed' : 'pointer'};${disabled ? ' opacity:.6;' : ''}">
+    <input type="checkbox" class="f-offer-check" style="width:auto;" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+      data-offer-key="${escapeHtml(String(opts.key || o.id || ''))}"
+      data-offer-id="${escapeHtml(String(o.id || ''))}"
+      data-offer-name="${name}"
+      data-offer-type="${type}"
+      data-offer-value="${value}"
+      data-offer-amount="${amount}"
+      ${locked ? 'data-locked="1"' : ''}>
+    <span><b>${name}</b> <span style="color:var(--text-muted);">(${valueLabel})</span>${note}</span>
+  </label>`;
+}
+/* يبني خيارات العروض داخل نموذج العميل: العروض المحفوظة على العميل أولاً (كما هي)،
+   ثم بقية العروض الفعّالة حالياً. هكذا لا يتغير خصم عميل قديم عند تعديل العروض. */
+function renderClientOfferChoices(c){
+  const box = $('#f-offers-list');
+  if(!box) return;
+  const price = num($('#f-courseprice').value);
+  const saved = typeof appliedOffersOf === 'function' ? appliedOffersOf(c) : [];
+  const sig = o => `${String(o.name || '').trim()}|${o.type === 'percent' ? 'percent' : 'amount'}|${num(o.value)}`;
+  _offerChoices = [];
+  _selectedOfferKeys = new Set();
+  saved.forEach((o, i)=>{
+    const key = 'saved:' + i + ':' + String(o.id || '');
+    const type = o.type === 'percent' ? 'percent' : 'amount';
+    _offerChoices.push({
+      key, id: String(o.id || ''), name: o.name || 'عرض', type,
+      value: num(o.value), amount: num(o.amount), locked: true, disabled: false,
+    });
+    _selectedOfferKeys.add(key);
+  });
+  const active = typeof settingsOffers === 'function' ? settingsOffers().filter(o => o.active !== false) : [];
+  active.forEach((o, i)=>{
+    const id = String(o.id || ('cfg-' + i));
+    if(saved.some(a => (a.id && String(a.id) === id) || sig(a) === sig(o))) return;
+    const type = o.type === 'percent' ? 'percent' : 'amount';
+    const value = num(o.value);
+    const key = 'cfg:' + i + ':' + id;
+    _offerChoices.push({
+      key, id, name: o.name || 'عرض', type, value,
+      amount: offerDiscountAmountFor(price, type, value),
+      locked: false, disabled: value <= 0,
+    });
+  });
+  box.innerHTML = _offerChoices.length
+    ? _offerChoices.map(o => offerChoiceHtml(o, {
+        key: o.key, checked: _selectedOfferKeys.has(o.key), locked: o.locked, disabled: o.disabled, price,
+      })).join('')
+    : '<span class="hint" style="margin:0;">لا توجد عروض مُعرَّفة حالياً — أضفها من الإعدادات ← «عروض الخصم».</span>';
+  syncOfferChecks();
+  refreshOfferUi();
+}
+/* يطابق علامات الاختيار الظاهرة مع الحالة المحفوظة (يمنع أي فقدان للاختيار عند إعادة الحساب). */
+function syncOfferChecks(){
+  document.querySelectorAll('#f-offers-list .f-offer-check').forEach(cb=>{
+    const key = cb.dataset.offerKey || '';
+    cb.checked = !cb.disabled && _selectedOfferKeys.has(key);
+  });
+}
+function selectedAppliedOffers(price){
+  const p = Math.max(0, num(price));
+  const list = [];
+  _offerChoices.forEach(o=>{
+    if(!_selectedOfferKeys.has(o.key) || o.disabled) return;
+    const amount = o.locked ? num(o.amount) : offerDiscountAmountFor(p, o.type, o.value);
+    if(amount <= 0) return;
+    list.push({
+      id: o.id, name: o.name, type: o.type, value: o.value,
+      amount: Math.round(amount * 100) / 100,
+    });
+  });
+  return list;
+}
+function currentOfferAmount(price){
+  const p = Math.max(0, num(price));
+  const sum = selectedAppliedOffers(p).reduce((s,o)=> s + num(o.amount), 0);
+  return Math.min(p, Math.round(sum * 100) / 100);
+}
+function refreshOfferUi(){
+  const hint = $('#f-offer-hint');
+  if(!hint) return;
+  const price = num($('#f-courseprice').value);
+  const selected = selectedAppliedOffers(price);
+  const selectable = _offerChoices.filter(o => !o.disabled);
+  const countEl = $('#f-offers-count');
+  if(countEl){
+    countEl.textContent = _offerChoices.length
+      ? `المختار: ${selected.length} من ${selectable.length} عرض متاح`
+      : '';
+  }
+  if(selected.length){
+    hint.textContent = `الخصم المطبَّق: ${fmt(currentOfferAmount(price))} ﷼ من قيمة التدريب فقط (${selected.map(o=>`${o.name}: ${fmt(o.amount)}`).join(' + ')}) — سعر الحقيبة لا يتغير.`;
+    return;
+  }
+  if(selectable.length){
+    hint.textContent = `يمكنك اختيار أكثر من عرض معاً — تُجمع قيمتها وتُخصم من قيمة التدريب فقط، وسعر الحقيبة لا يتغير.`;
+    return;
+  }
+  if(_offerChoices.length){
+    hint.textContent = 'كل العروض المعرّفة قيمتها صفر حالياً — عدّل قيمتها من الإعدادات ← «عروض الخصم».';
+    return;
+  }
+  hint.textContent = 'لا توجد عروض مُعرَّفة حالياً — أضفها من الإعدادات ← «عروض الخصم».';
+}
+$('#f-offers-list')?.addEventListener('change', e=>{
+  const cb = e.target && e.target.closest ? e.target.closest('.f-offer-check') : null;
+  if(!cb) return;
+  const key = cb.dataset.offerKey || '';
+  if(!key) return;
+  if(cb.checked) _selectedOfferKeys.add(key);
+  else _selectedOfferKeys.delete(key);
+  updateComputed();
+});
+$('#f-offers-all')?.addEventListener('click', ()=>{
+  _offerChoices.forEach(o=>{ if(!o.disabled) _selectedOfferKeys.add(o.key); });
+  syncOfferChecks();
+  updateComputed();
+});
+$('#f-offers-none')?.addEventListener('click', ()=>{
+  _selectedOfferKeys.clear();
+  syncOfferChecks();
+  updateComputed();
+});
 function updateComputed(){
-  const income = num($('#f-courseprice').value) - num($('#f-discount').value);
+  syncOfferChecks();
+  const price = num($('#f-courseprice').value);
+  const manualDiscount = Math.max(0, num($('#f-discount').value));
+  const offerAmount = currentOfferAmount(price);
+  // إجمالي الخصم لا يتجاوز قيمة التدريب نفسها؛ الحقيبة تُحسب منفصلة ولا يُمسّ سعرها.
+  const discountTotal = typeof combineClientDiscount === 'function'
+    ? combineClientDiscount(price, manualDiscount, offerAmount)
+    : Math.min(price, Math.round((manualDiscount + offerAmount) * 100) / 100);
+  const income = price - discountTotal;
   const bag = $('#f-bagsource').value==='own' ? 0 : num($('#f-bagprice').value);
   const t = income + bag;
   const paidTotalForm = num($('#f-paid').value) + ($('#f-split-payment').checked ? num($('#f-paid2').value) : 0);
@@ -851,6 +1009,11 @@ function updateComputed(){
   $('#calc-bag').textContent = fmt(bag);
   $('#calc-total').textContent = fmt(t);
   $('#calc-remaining').textContent = fmt(r);
+  const offerRow = $('#calc-offer-row');
+  if(offerRow) offerRow.style.display = offerAmount > 0 ? '' : 'none';
+  if($('#calc-offer')) $('#calc-offer').textContent = fmt(offerAmount);
+  if($('#calc-discount-total')) $('#calc-discount-total').textContent = fmt(discountTotal);
+  refreshOfferUi();
 }
 
 // عند اكتشاف رقم هوية مكرر (سواء محلياً أو عبر فحص السيرفر)، العميل الآخر صاحب نفس الرقم قد
@@ -882,7 +1045,7 @@ async function revealDuplicateClient(clientIdValue, knownName){
   const searchEl = $('#search'); if(searchEl) searchEl.value = clientIdValue;
   if(typeof updateAdvancedFiltersBadge==='function') updateAdvancedFiltersBadge();
   if(typeof renderTable==='function') await renderTable();
-  showToast(knownName
+  invoiceShowToast(knownName
     ? `⚠️ رقم الهوية مستخدم بالفعل لعميل آخر: ${knownName} — تم عرضه أدناه`
     : `⚠️ رقم الهوية مستخدم بالفعل لعميل آخر فى النظام — تم مسح كل الفلاتر (بما فيها فلتر السنة) والبحث عنه أدناه`);
 }
@@ -897,10 +1060,19 @@ $('#client-form')?.addEventListener('submit', async e=>{
   // يُسجَّل تلقائياً فى طابور "المعلّقات" (pendingRecords) ويُعاد رفعه تلقائياً أول ما الاتصال يرجع
   // أو أول ما المزامنة الخلفية تكتمل — بنفس الآلية المستخدمة بالفعل لكل انقطاع اتصال فى البرنامج.
   if(editingId && !canReceptionEditClient(clients.find(x=>x.id===editingId))){
-    showToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
+    invoiceShowToast('⏱️ انتهت مهلة تعديل هذا العميل (5 ساعات من وقت تسجيله) — يمكن للأدمن فقط تعديله الآن');
     closeModal();
     return;
   }
+  const _formPrice = num($('#f-courseprice').value);
+  const _formManualDiscount = Math.max(0, num($('#f-discount').value));
+  const _formSelectedOffers = selectedAppliedOffers(_formPrice);
+  const _formOfferAmount = Math.min(_formPrice, Math.round(_formSelectedOffers.reduce((s,o)=> s + num(o.amount), 0) * 100) / 100);
+  // الخصم المحفوظ في c.discount هو الإجمالي (يدوي + عرض) ليبقى متوافقاً مع كل التقارير
+  // والفواتير القديمة، بينما يُحفظ جزء العرض منفصلاً للعرض وإعادة الفتح لاحقاً.
+  const _formDiscountTotal = typeof combineClientDiscount === 'function'
+    ? combineClientDiscount(_formPrice, _formManualDiscount, _formOfferAmount)
+    : Math.min(_formPrice, Math.round((_formManualDiscount + _formOfferAmount) * 100) / 100);
   const data = {
     name: $('#f-name').value.trim(),
     clientId: $('#f-id').value.trim(),
@@ -921,7 +1093,7 @@ $('#client-form')?.addEventListener('submit', async e=>{
     bagSource: $('#f-bagsource').value,
     bagOwnDate: $('#f-bagsource').value==='own' ? ($('#f-bagowndate').value || '') : undefined,
     bagPrice: $('#f-bagsource').value==='own' ? 0 : num($('#f-bagprice').value),
-    discount: num($('#f-discount').value),
+    discount: _formDiscountTotal,
     paid: num($('#f-paid').value),
     channel: $('#f-channel').value,
     networkInvoice: $('#f-netinvoice').value.trim(),
@@ -932,6 +1104,20 @@ $('#client-form')?.addEventListener('submit', async e=>{
     cancelled: $('#f-cancelled').checked,
     notes: $('#f-notes').value.trim(),
   };
+  // بيانات عروض الخصم: تُحفظ قائمة العروض المختارة بقيمها لحظة التسجيل (snapshot)،
+  // بينما c.discount يبقى الإجمالي (يدوي + عروض) لتوافق كل التقارير والفواتير.
+  data.appliedOffers = _formOfferAmount > 0
+    ? _formSelectedOffers.map(o=> ({ id:o.id, name:o.name, type:o.type, value:o.value, amount:o.amount }))
+    : [];
+  data.offerApplied = _formOfferAmount > 0;
+  data.offerDiscountAmount = _formOfferAmount;
+  data.offerNameSnapshot = _formOfferAmount > 0 ? _formSelectedOffers.map(o=>o.name).join(' + ') : '';
+  data.offerDiscountType = _formOfferAmount > 0
+    ? (_formSelectedOffers.length === 1 ? _formSelectedOffers[0].type : 'mix')
+    : '';
+  data.offerDiscountValue = (_formOfferAmount > 0 && _formSelectedOffers.length === 1)
+    ? num(_formSelectedOffers[0].value)
+    : 0;
   // حماية إضافية: مستخدم الاستقبال ممنوع تماماً من شراء/تسليم أي حقيبة من المخزون،
   // حتى لو وصل حقل مصدر الحقيبة بقيمة 'stock' بأي طريقة — تُعاد دائماً إلى "مطلوب الشراء".
   if(currentUserRole === 'reception' && data.bagSource === 'stock'){
@@ -944,9 +1130,9 @@ $('#client-form')?.addEventListener('submit', async e=>{
       data.absent = false;
     }
   }
-  if(!data.clientId){ showToast('رقم الهوية مطلوب — يُستخدم لربط كل العمليات بهذا العميل'); return; }
-  if(!/^\d{10}$/.test(data.clientId)){ showToast('رقم الهوية يجب أن يتكون من 10 خانات (أرقام) بالضبط — لا أقل ولا أكثر'); return; }
-  if(!data.name){ showToast('الاسم مطلوب'); return; }
+  if(!data.clientId){ invoiceShowToast('رقم الهوية مطلوب — يُستخدم لربط كل العمليات بهذا العميل'); return; }
+  if(!/^\d{10}$/.test(data.clientId)){ invoiceShowToast('رقم الهوية يجب أن يتكون من 10 خانات (أرقام) بالضبط — لا أقل ولا أكثر'); return; }
+  if(!data.name){ invoiceShowToast('الاسم مطلوب'); return; }
   const dupId = clients.find(c=>c.clientId===data.clientId && c.id!==editingId);
   if(dupId){ await revealDuplicateClient(data.clientId, dupId.name); return; }
   // فحص إضافي عبر الخادم (لا يعتمد على قائمة العملاء المحمَّلة محلياً فقط): مهم خصوصاً لمستخدم
@@ -968,7 +1154,6 @@ $('#client-form')?.addEventListener('submit', async e=>{
   }
   const wasEdit = !!editingId;
   const prevClientForEvents = editingId ? clients.find(x=>x.id===editingId) : null;
-  const prevCourseNumberForEvent = prevClientForEvents ? (prevClientForEvents.courseNumber||'') : '';
   snapshotState(wasEdit ? `تعديل عميل: ${data.name}` : `إضافة عميل: ${data.name}`);
   if(editingId){
     const idx = clients.findIndex(c=>c.id===editingId);
@@ -983,12 +1168,12 @@ $('#client-form')?.addEventListener('submit', async e=>{
     }
     clients[idx] = {...clients[idx], ...data};
     if(data.bagSource!=='stock') delete clients[idx].bagPurchaseDate;
-    showToast('تم تحديث السجل');
+    invoiceShowToast('تم تحديث السجل');
   }else{
     data.bagStatus = data.bagSource==='stock' ? 'purchased' : (data.bagSource==='buy' ? 'pending' : 'n/a');
     if(data.bagSource==='stock') data.bagPurchaseDate = data.bagPurchaseDate || todayISO();
     clients.push({id:uid(), createdAt:Date.now(), createdBy: currentUser, ...data});
-    showToast('تمت إضافة العميل');
+    invoiceShowToast('تمت إضافة العميل');
   }
   const savedClient = editingId ? clients.find(c=>c.id===editingId) : clients[clients.length-1];
   // ---- عرض فوري (Optimistic UI): العميل بالفعل موجود فى المصفوفة المحلية من فوق، فنعرضه على
@@ -1037,44 +1222,6 @@ $('#client-form')?.addEventListener('submit', async e=>{
     if(ledgerChanged) await saveVaultTx();
     await saveSettings();
     await logAudit(wasEdit ? 'edit' : 'add', 'العملاء', `${wasEdit ? 'تم تعديل' : 'تمت إضافة'} بيانات العميل: ${savedClient.name}`);
-    if(!wasEdit){
-      // تنبيه إيميل فوري للإدارة عند إضافة عميل جديد مع بيانات الدفع (المدفوع/طريقة الدفع/المتبقي).
-      notifyAdminAlert(
-        `عميل جديد: ${savedClient.name}`,
-        `<p>تمت إضافة عميل جديد بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
-         <table style="border-collapse:collapse; width:100%; max-width:460px; font-size:13px;">
-           <tr><td style="padding:4px 0; color:#66707E;">الاسم</td><td style="padding:4px 0; text-align:left;"><b>${escapeHtml(savedClient.name)}</b></td></tr>
-           <tr><td style="padding:4px 0; color:#66707E;">رقم الهوية</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.clientId || '—')}</td></tr>
-           <tr><td style="padding:4px 0; color:#66707E;">نوع الدورة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.courseType || '—')}</td></tr>
-           <tr><td style="padding:4px 0; color:#66707E;">سعر الدورة</td><td style="padding:4px 0; text-align:left;">${fmt(num(savedClient.coursePrice))} ﷼</td></tr>
-           ${num(savedClient.discount)>0 ? `<tr><td style="padding:4px 0; color:#66707E;">الخصم</td><td style="padding:4px 0; text-align:left;">-${fmt(num(savedClient.discount))} ﷼</td></tr>` : ''}
-           <tr><td style="padding:4px 0; color:#66707E;">الحقيبة</td><td style="padding:4px 0; text-align:left;">${escapeHtml(savedClient.bagSource==='stock' ? 'من المخزون' : (savedClient.bagSource==='own' ? 'خاصة (بدون سعر)' : (num(savedClient.bagPrice)>0 ? fmt(num(savedClient.bagPrice))+' ﷼' : '—')))}</td></tr>
-           <tr style="border-top:1px solid #ddd;"><td style="padding:4px 0; color:#66707E;">المدفوع</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidTotal(savedClient))} ﷼</b></td></tr>
-           <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
-           <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
-         </table>`
-      );
-      sendPowerAutomateEvent('new_client', {clientId: savedClient.clientId, name: savedClient.name, nationality: savedClient.nationality||'', phone: savedClient.phone||'', courseType: savedClient.courseType||'', courseNumber: savedClient.courseNumber||''});
-    }else{
-      // تم تعطيل إيميل "تعديل قيمة مدفوعات" بناءً على طلب صريح — لم يُحذف الكود، فقط عُطِّل.
-      // const paidBefore = num(prevForLedger.paid) + num(prevForLedger.paid2);
-      // const paidAfter = num(savedClient.paid) + num(savedClient.paid2);
-      // if(paidBefore !== paidAfter){
-      //   notifyAdminAlert(
-      //     `تعديل قيمة مدفوعات: ${savedClient.name}`,
-      //     `<p>تم تعديل قيمة المدفوعات للعميل <b>${escapeHtml(savedClient.name)}</b> بواسطة <b>${escapeHtml(currentUser || 'غير معروف')}</b>:</p>
-      //      <table style="border-collapse:collapse; width:100%; max-width:420px; font-size:13px;">
-      //        <tr><td style="padding:4px 0; color:#66707E;">المدفوع قبل التعديل</td><td style="padding:4px 0; text-align:left;">${fmt(paidBefore)} ﷼</td></tr>
-      //        <tr><td style="padding:4px 0; color:#66707E;">المدفوع بعد التعديل</td><td style="padding:4px 0; text-align:left;"><b>${fmt(paidAfter)} ﷼</b></td></tr>
-      //        <tr><td style="padding:4px 0; color:#66707E;">طريقة الدفع</td><td style="padding:4px 0; text-align:left;">${escapeHtml(paymentChannelsLabel(savedClient) || '—')}</td></tr>
-      //        <tr><td style="padding:4px 0; color:#66707E;">المتبقي</td><td style="padding:4px 0; text-align:left;"><b>${fmt(remaining(savedClient))} ﷼</b></td></tr>
-      //      </table>`
-      //   );
-      // }
-    }
-    if(savedClient.courseNumber && savedClient.courseNumber!==prevCourseNumberForEvent){
-      sendPowerAutomateEvent('course_number_updated', {clientId: savedClient.clientId, name: savedClient.name, courseNumber: savedClient.courseNumber, courseType: savedClient.courseType||''});
-    }
     // إعادة رسم نهائية بعد اكتمال الحفظ الفعلي: تعكس أي تحديث وصل من السيرفر فى هذه الأثناء
     // (حالة الاعتماد status/origin، تصحيح مخزون الحقائب، قيود الخزنة التلقائية...).
     // نفس الحماية الفردية بـ try/catch كأعلى الدالة: فشل رسم شاشة واحدة لا يمنع باقي خطوات
@@ -1089,4 +1236,14 @@ $('#client-form')?.addEventListener('submit', async e=>{
 let bulkAddRowSeq = 0;
 function bulkAddOptionsHtml(values, selected){
   return '<option value=""></option>' + values.map(v=>`<option value="${escapeHtml(v)}"${v===selected?' selected':''}>${escapeHtml(v)}</option>`).join('');
+}
+
+function invoiceShowToast(message, type = 'info', duration = 3000) {
+  // استخدام نظام التوست الموجود في البرنامج
+  if (typeof window.showToast === 'function' && window.showToast !== invoiceShowToast) {
+    return window.showToast(message, type, duration);
+  }
+  // Fallback بسيط
+  console.log(`[${type}] ${message}`);
+  return { close: () => {} };
 }

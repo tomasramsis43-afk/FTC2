@@ -261,7 +261,47 @@
     (w.rejected||[]).forEach(function(p){
       if(p.clientId) s.add(String(p.clientId).trim());
     });
+    // العميل المعتمد سابقاً لا يجوز أن يعود من الشيت كصف جديد: سجل العميل نفسه قد لا يكون ظاهراً
+    // بعد فى مصفوفة clients المحمَّلة (بعد فتح البرنامج تبقى ناقصة حتى تكتمل المزامنة الخلفية، وأى
+    // عميل سُجِّل من جهاز/جلسة أخرى بعد آخر تحميل هنا لا يظهر فيها إطلاقاً) — وقتها كان الصف يعود
+    // لصندوق الاعتماد واعتماده مرة ثانية ينشئ عميلاً مكرراً بنفس رقم الهوية. سجل approved هو الذاكرة
+    // الدائمة للاعتمادات داخل نفس الإعدادات، فيمنع التكرار بغض النظر عن حالة clients.
+    (w.approved||[]).forEach(function(a){
+      if(a && a.clientId) s.add(String(a.clientId).trim());
+    });
     return s;
+  }
+
+  /* ===================== Server-side clientId existence (cached) ===================== */
+
+  // بصمات SHA-256 لأرقام هوية العملاء المسجَّلين فعلاً على السيرفر (Map: hash -> recordId)، تُجلب
+  // من /api/client-records/ids بالنظام المشفّر نفسه الذي تستخدمه نماذج إضافة/تعديل العملاء — بدون
+  // نقل أي أرقام هوية صريحة للشبكة. الغرض: فحص التكرار حتى لو كانت مصفوفة clients المحلية ناقصة
+  // (أول ثوانٍ/دقائق بعد فتح البرنامج أو إعادة الدخول). تُخزَّن مؤقتاً لهذه الجلسة 30 ثانية لأن عدة
+  // صفوف في نفس دورة الجلب/الاعتماد تسأل عن الشيء نفسه. القيمة null تعني "تعذّر الفحص" — عندها
+  // نكتفي بالفحص المحلي (نفس خط الرجعة الآمن المستخدم في باقي شاشات العملاء).
+  var _gsServerIdHashes = null;
+  var _gsServerIdHashesAt = 0;
+  var _GS_SERVER_IDS_TTL = 30000;
+  async function gsServerIdHashes(force){
+    if(typeof fetchAllClientIds !== 'function') return null;
+    var now = Date.now();
+    if(!force && _gsServerIdHashes && (now - _gsServerIdHashesAt) < _GS_SERVER_IDS_TTL){
+      return _gsServerIdHashes;
+    }
+    // مهلة 8 ثوانٍ فقط بدل الافتراضي 60 ثانية — لا يجوز تعليق الاعتماد/الجلب طويلاً لفحص احتياطي.
+    var map = await fetchAllClientIds(8000);
+    if(map){ _gsServerIdHashes = map; _gsServerIdHashesAt = now; }
+    return _gsServerIdHashes;
+  }
+  async function clientIdExistsOnServer(clientId){
+    try{
+      var id = String(clientId||'').trim();
+      if(!id || typeof sha256Hex !== 'function') return false; // crypto.subtle غير متاح — الفحص المحلي فقط
+      var map = await gsServerIdHashes(false);
+      if(!map) return false;
+      return map.has(await sha256Hex(id));
+    }catch(e){ return false; } // فحص احتياطي — فشله لا يوقف الاعتماد أبداً
   }
 
   /* ===================== Server Auto-Confirm (fix stuck pending clients) ===================== */
@@ -303,6 +343,11 @@
       var known = new Set();
       (typeof clients!=='undefined' && Array.isArray(clients) ? clients : []).forEach(function(c){
         if(c.clientId) known.add(String(c.clientId).trim());
+      });
+      // نفس منطق knownClientIds: العميل المعتمد سابقاً يُعتبر مسجَّلاً حتى لو سجل العميل لسه ما
+      // ظهرش في clients المحلية — فيُزال صفّه العالق من صندوق الاعتماد فور أول رسم/فتح.
+      (w.approved||[]).forEach(function(a){
+        if(a && a.clientId) known.add(String(a.clientId).trim());
       });
       var cutoff = Date.now() - GSHEET_STALE_MAX_AGE_DAYS*86400000;
       var changed = false;
@@ -440,12 +485,23 @@
 
   /* ===================== Validation ===================== */
 
-  function validateClientId(clientId, workflowId){
+  // فحص صيغة رقم الهوية فقط (بدون أي فحص تكرار). يُستخدم في مسار اعتماد الشيت تحديداً، لأن فحص
+  // التكرار هناك له مسار خاص يزيل الصف المكرر بلا إنشاء أي سجل جديد (راجع approvePending) — بينما
+  // الاعتماد على validateClientId هناك كان يرفض العملية برسالة خطأ ويترك الصف عالقاً للأبد في
+  // صندوق الاعتماد (كل ضغطة تُظهر نفس الخطأ طالما العميل مسجَّل فعلاً أو موجود في صف آخر).
+  function validateClientIdFormat(clientId){
     var errors = [];
     var id = String(clientId||'').trim();
     if(!id) errors.push('رقم الهوية مطلوب');
     else if(id.length !== 10) errors.push('رقم الهوية يجب أن يكون 10 أرقام');
     else if(!/^\d{10}$/.test(id)) errors.push('رقم الهوية يجب أن يحتوي أرقاماً فقط');
+    return errors;
+  }
+
+  function validateClientId(clientId, workflowId){
+    var errors = validateClientIdFormat(clientId);
+    var id = String(clientId||'').trim();
+
     if(!errors.length){
       var count = 0;
       (typeof clients!=='undefined' && Array.isArray(clients) ? clients : []).forEach(function(c){
@@ -524,7 +580,11 @@
     if(listIdx<0) return;
     var p = list[listIdx];
 
-    if(p.status === 'PROCESSING'){
+    // "قيد التنفيذ" فعلاً فقط لو الإيجار (lease) ما زال سارياً. لو انتهى (دقيقة واحدة) نكمل عادي —
+    // acquireProcessingLease أسفل يتعامل مع الإيجار المنتهي بإعادة الحجز. بدون هذا الشرط كان أي صف
+    // عالق PROCESSING (جلسة أُغلقت أو تعطّلت في منتصف الاعتماد) يرفض كل محاولة برسالة "قيد التنفيذ
+    // من مستخدم آخر" حتى يمرّ تنظيف recoverStuckProcessing — أي أن المستخدم يضغط ولا يحدث شيء.
+    if(p.status === 'PROCESSING' && (p.leaseUntil||0) > Date.now()){
       showToast('العملية قيد التنفيذ من مستخدم آخر — يرجى الانتظار');
       return;
     }
@@ -533,13 +593,8 @@
       return;
     }
 
-    var vErrors = [];
-    if(!p.clientId || !String(p.clientId).trim()){
-      vErrors.push('رقم الهوية مطلوب');
-    } else {
-      var idErrs = validateClientId(p.clientId, p.id);
-      vErrors = vErrors.concat(idErrs);
-    }
+    // فحص الصيغة فقط هنا — التكرار له مسار خاص أدناه يزيل الصف بدل ترك صف عالق لا يمكن اعتماده.
+    var vErrors = validateClientIdFormat(p.clientId);
     if(vErrors.length){
       showToast('خطأ في البيانات: '+vErrors.join(' — '));
       return;
@@ -555,14 +610,35 @@
 
     try {
       var clientId = String(p.clientId).trim();
+
+      // ---- منع إنشاء عميل مكرّر عند الاعتماد ----
+      // الفحص المحلي وحده غير كافٍ: مصفوفة clients تُبنى عند فتح البرنامج من اللقطة المحلية ثم
+      // تكتمل بمزامنة خلفية، فتبقى ناقصة لثوانٍ/دقائق بعد كل فتح أو إعادة دخول — وأي عميل سُجِّل
+      // من جهاز/جلسة أخرى بعد آخر تحميل هنا لا يظهر فيها إطلاقاً. الاعتماد في تلك النافذة كان ينشئ
+      // سجلاً ثانياً مكرراً بنفس رقم الهوية (حدث فعلاً: عميلان اتسجّلوا مرتين وظهرا مكرّرين).
+      // نفحص بترتيب: (1) قائمة العملاء المحلية، (2) سجل الاعتمادات السابق w.approved الدائم داخل
+      // الإعدادات، (3) بصمات أرقام الهوية المسجَّلة على السيرفر (clientIdExistsOnServer — نفس الفحص
+      // المستخدم في نماذج إضافة/تعديل العملاء). لو وُجد العميل فعلاً نزيل الصف بلا أي إنشاء.
       var existingClient = (typeof clients!=='undefined' && Array.isArray(clients) ? clients : []).find(function(c){
         return String(c.clientId).trim() === clientId;
       });
-      if(existingClient){
-        showToast('رقم الهوية مستخدم بالفعل — تم حذف من قائمة الاعتماد');
-        w.pending.splice(pendingIdx, 1);
+      var approvedBefore = !existingClient && w.approved.some(function(a){
+        return a && String(a.clientId||'').trim() === clientId;
+      });
+      var serverExists = false;
+      if(!existingClient && !approvedBefore && typeof clientIdExistsOnServer === 'function'){
+        // ملاحظة: نصل هنا والإيجار (lease) بحوزتنا بالفعل، فلو السيرفر بطيء لا يفتح ذلك سباقاً
+        // مع مستخدم آخر على نفس الصف — الصف مُعلَّم PROCESSING منذ persistWf أعلى.
+        serverExists = await clientIdExistsOnServer(clientId);
+      }
+      if(existingClient || approvedBefore || serverExists){
+        var dupIdx = w.pending.findIndex(function(x){ return x.id===p.id; });
+        if(dupIdx >= 0) w.pending.splice(dupIdx, 1);
+        var dupRejIdx = w.rejected.findIndex(function(x){ return x.id===p.id; });
+        if(dupRejIdx >= 0) w.rejected.splice(dupRejIdx, 1);
         await persistWf();
         renderAll();
+        showToast('«'+(p.name||clientId)+'» مسجّل بالفعل برقم الهوية '+clientId+' — تم إزالة الصف من قائمة الاعتماد');
         return;
       }
 
@@ -1346,15 +1422,20 @@
     var w = wfData();
     var timeoutMs = 120000;
     var changed = false;
+    var nowTs = Date.now();
     w.pending.forEach(function(p){
-      if(p.status === 'PROCESSING' && p.processingStartedAt){
-        if(Date.now() - p.processingStartedAt > timeoutMs){
-          p.status = 'PENDING';
-          p.processedBy = null;
-          p.processingStartedAt = null;
-          p.leaseUntil = null;
-          changed = true;
-        }
+      if(p.status !== 'PROCESSING') return;
+      var started = p.processingStartedAt || 0;
+      // صف PROCESSING بلا processingStartedAt (سجل قديم/تالف من نسخة سابقة) ما كانش بيتصلح أبداً
+      // لأن الشرط القديم كان يتطلب وجوده — فيظل عالقاً للأبد وكل محاولة اعتماد تردّ برسالة
+      // "قيد التنفيذ من مستخدم آخر". نعتبره عالقاً لو انتهى إيجاره أو لو لا يوجد إيجار أصلاً.
+      var stuck = started ? (nowTs - started > timeoutMs) : !(p.leaseUntil > nowTs);
+      if(stuck){
+        p.status = 'PENDING';
+        p.processedBy = null;
+        p.processingStartedAt = null;
+        p.leaseUntil = null;
+        changed = true;
       }
     });
     // إصلاح: كانت الحالة تُصحَّح في الذاكرة المحلية فقط بدون حفظ على السيرفر،

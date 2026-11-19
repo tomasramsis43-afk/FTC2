@@ -71,7 +71,7 @@ function openVaultWorkspace(id){
         <div class="${t.type === 'in' ? 'ok' : 'due'}"><small>أثر هذه الحركة</small><b>${t.type === 'in' ? '+' : '-'}${fmt(num(t.amount))}</b></div>
         <div><small>حالة الاحتساب</small><b>${vaultTxCountsTowardBalance(t) ? 'داخل الرصيد' : 'خارجه (معلّقة)'}</b></div>
       </div>
-      ${isAutoClient ? '<div class="hint" style="margin-top:8px;">🔗 دفعة تسجيل مرتبطة بعميل — التعديل يتم من شيت العملاء وليس من هنا</div>' : ''}
+      ${isAutoClient ? '<div class="hint" style="margin-top:8px;">🔗 دفعة تسجيل مرتبطة بعميل — تعديل المبلغ/طريقة الدفع من هنا يُحدِّث بيانات العميل فوراً، وتعديلها من شيت العملاء ينعكس هنا.</div>' : ''}
       ${isCompany ? '<div class="hint" style="margin-top:8px;">👥 دفعة تحويل شركة — راجع تفاصيل المتدربين من زر الشاشة</div>' : ''}
     </div>`;
   $('#vw-body').innerHTML = bodyHtml;
@@ -80,7 +80,10 @@ function openVaultWorkspace(id){
   const foot = $('#vw-foot');
   const isCashIn = t.type === 'in' && (t.destination||'vault')==='vault';
   if(isAutoClient){
-    foot.innerHTML = isCashIn ? `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>` : '';
+    const autoActs = [`<button type="button" class="btn btn-gold btn-sm" id="vw-edit">تعديل</button>`];
+    if(isCashIn) autoActs.push(`<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>`);
+    autoActs.push(`<button type="button" class="btn btn-danger btn-sm" id="vw-del">حذف</button>`);
+    foot.innerHTML = autoActs.join('');
   } else if(isCompany){
     foot.innerHTML = isCashIn ? `<button type="button" class="btn btn-gold btn-sm" id="vw-receipt">🧾 سند قبض</button>` : '';
   } else {

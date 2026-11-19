@@ -61,6 +61,33 @@ function cwActivityHtml(c){
    كانت تخفي الأقسام عن بعضها) — الترتيب: الوضع المالي، الحركات المرتبطة، بيانات العميل،
    الدورة والحقائب، ثم سجل النشاط، كل قسم بعنوانه الخاص فى تمرير رأسي واحد. ---- */
 
+/* صلاحية التدريب / الحقيبة:
+   - إن وُجد تاريخ صلاحية صريح (جلب من أركان / مسجّل يدوياً) يُعرض كما هو.
+   - وإلا تُحسب من تاريخ بداية الدورة الفعلي بنفس قاعدة «صلاحية التثقيف الصحي»
+     في البرنامج: 3 سنوات ناقص يوم (بداية 2026-01-10 → نهاية 2029-01-09).
+   القيمة المحسوبة عرض فقط — لا تُكتب في سجل العميل. */
+function cwValidityText(c){
+  if(!c) return '';
+  const explicit = String(c.validityEndDate || '').trim();
+  if(explicit) return explicit;
+  const start = String(
+    c.startDate ||
+    (typeof actualCourseDateOf === 'function' ? actualCourseDateOf(c) : '') ||
+    ''
+  ).trim();
+  if(!start) return '';
+  const iso = start.replace(/\//g, '-').slice(0, 10);
+  if(typeof FTCHealthEducation !== 'undefined' && FTCHealthEducation &&
+     typeof FTCHealthEducation.calculateExpiry === 'function'){
+    try { const v = FTCHealthEducation.calculateExpiry(iso); if(v) return v; } catch(e){}
+  }
+  const d = new Date(iso + 'T00:00:00');
+  if(isNaN(d.getTime())) return '';
+  d.setFullYear(d.getFullYear() + 3);
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 /* بطاقات بيانات الكرت (بيانات العميل + الدورة والحقائب) — دالة منفصلة حتى
    نحدّثها فوراً بعد "جلب من أركان" من غير إعادة فتح الكلت */
 function cwInfoHtml(c){
@@ -84,14 +111,19 @@ function cwInfoHtml(c){
       <div class="cw-grid">
         ${row('الدورة', escapeHtml(c.courseType || ''))}
         ${row('رقم الدورة', escapeHtml(c.courseNumber || ''))}
-        ${row('رقم الفاتورة', escapeHtml(c.invoice || ''))}
+        ${row('رقم الفاتورة', c.invoice
+          ? `<span class="invoice-cell">${typeof receiptsIndicatorHtml === 'function' ? receiptsIndicatorHtml(c.invoice, c) : ''}<button type="button" class="invoice-toggle" data-invoice-toggle="${escapeHtml(String(c.id))}" data-invoice="${escapeHtml(c.invoice)}" title="عرض إيصال أركان — معاينة وطباعة (يُحمّل تلقائياً إن لم يكن محفوظاً)">${escapeHtml(c.invoice)}</button></span>`
+          : '')}
         ${row('قيمة الفاتورة', (c.coursePrice != null && c.coursePrice !== '') ? fmt(num(c.coursePrice)) : '')}
         ${row('تاريخ الدورة', formatDateDisplay(c.startDate) || '')}
+        ${c.endDate ? row('تاريخ انتهاء الدورة', formatDateDisplay(c.endDate) || '') : ''}
+        ${row('صلاحية التدريب / الحقيبة', formatDateDisplay(cwValidityText(c)) || '')}
         ${row('رقم إيصال الحقيبة', escapeHtml(c.bagInvoice || ''))}
         ${row('تاريخ الحقيبة', formatDateDisplay(c.bagPurchaseDate) || '')}
         ${row('الحقيبة', typeof bagSourceLabel === 'function' ? bagSourceLabel(c) : escapeHtml(c.bagSource || ''))}
         ${(c.bagPrice != null && c.bagPrice !== '') ? row('سعر الحقيبة', fmt(num(c.bagPrice))) : ''}
         ${(c.discount != null && Number(c.discount) !== 0) ? row('الخصم', fmt(num(c.discount))) : ''}
+        ${(c.offerApplied && num(c.offerDiscountAmount) > 0) ? row('عروض الخصم', (typeof appliedOffersOf === 'function' ? appliedOffersOf(c) : []).map(o=>`${escapeHtml(o.name || 'عرض')}: ${fmt(num(o.amount))}`).join(' + ') || `${escapeHtml(c.offerNameSnapshot || 'عرض الخصم')} — ${fmt(num(c.offerDiscountAmount))}`) : ''}
         ${c.arkkanSubmission ? row('رفع لأركان', arkkanSubmissionLabel(c.arkkanSubmission)) : ''}
       </div>
     </div>
@@ -164,7 +196,7 @@ function openClientWorkspace(id){
   const acts = [];
   if(typeof canReceptionEditClient !== 'function' || canReceptionEditClient(c)){
     acts.push(`<button type="button" class="btn btn-gold btn-sm" id="cw-edit">تعديل البيانات</button>`);
-    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً">⏬ جلب من أركان</button>`);
+    acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan" title="جلب البيانات الناقصة من منصة أركان وحفظها في بيانات العميل تلقائياً — ويجلب الرقم المرجعي أولاً إن كان ناقصاً">⏬ جلب من أركان</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan-refnum" title="جلب الرقم المرجعي لهذا العميل من منصة إدارة النظام وحفظه في الحقل">🔖 الرقم المرجعي</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-arkkan-receipts" title="تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز">📥 الإيصالات</button>`);
     acts.push(`<button type="button" class="btn btn-ghost btn-sm" id="cw-exam-sync" title="جلب نتيجة الاختبار الأخيرة من أركان وتحديث شارة النتيجة في شيت العملاء">🔄 مزامنة النتيجة</button>`);
@@ -191,6 +223,10 @@ function openClientWorkspace(id){
   $('#cw-vault')?.addEventListener('click', () => { closeClientWorkspace(); openVaultModal(null); });
 
   ov.classList.add('show');
+  // كل فتح يبدأ من أعلى الدرج — لا نُبقي تمرير العميل السابق
+  // (بعد إظهار الـ overlay حتى يُطبَّق التمرير على عنصر له layout فعلي)
+  const drawerBody = ov.querySelector('.drawer-body');
+  if (drawerBody) drawerBody.scrollTop = 0;
 }
 
 function closeClientWorkspace(){

@@ -76,7 +76,7 @@ async function renderViewSection(viewName){
   switch(viewName){
     case 'clients':       if(typeof renderTable==='function') renderTable(); break;
     case 'dashboard':     if(typeof renderDashboard==='function') renderDashboard(); break;
-    case 'settings':      if(typeof renderSettings==='function') renderSettings(); break;
+    case 'settings':      if(typeof renderSettings==='function') renderSettings(); if(typeof window.gdriveRenderPanel === 'function') window.gdriveRenderPanel(); if(typeof window.activityDigestRenderPanel === 'function') window.activityDigestRenderPanel(); break;
     case 'bags':          if(typeof renderBags==='function') renderBags(); break;
     case 'vault':         if(typeof renderVault==='function') renderVault(); break;
     case 'courses':       if(typeof renderCourses==='function') renderCourses(); break;
@@ -944,10 +944,38 @@ function _scanAutoLabelTables(root){
 
   function positionMenu(toggle, menu){
     const r = toggle.getBoundingClientRect();
+    const pad = 8;
     menu.style.position = 'fixed';
     menu.style.top = (r.bottom + 8) + 'px';
+    menu.style.bottom = 'auto';
     menu.style.right = (window.innerWidth - r.right) + 'px';
     menu.style.left = 'auto';
+    menu.style.maxHeight = '';
+    // القياس هنا بعد إظهار القائمة (الفئة .open تُضاف قبل النداء) — قبل كده
+    // كان الارتفاع/العرض صفراً وقت display:none فلا يمكن منع خروجها عن الشاشة.
+    const m = menu.getBoundingClientRect();
+    // أفقياً: لا تخرج من الحد الأيمن/الأيسر للنافذة (كانت تُقصّ في النوافذ الضيقة)
+    if(m.left < pad){
+      menu.style.right = 'auto';
+      menu.style.left = pad + 'px';
+    } else if(m.right > window.innerWidth - pad){
+      menu.style.left = 'auto';
+      menu.style.right = pad + 'px';
+    }
+    // رأسياً: لو أطول من المساحة تحتها، تُفتح فوق الزر، ولو أطول من الاتجاهين
+    // يُضبط أقصى ارتفاعها لتصير قابلة للتمرير بدل ما تختفي تحت حافة الشاشة.
+    const spaceBelow = window.innerHeight - r.bottom - 8 - pad;
+    const spaceAbove = r.top - 8 - pad;
+    const h = menu.getBoundingClientRect().height;
+    if(h > spaceBelow){
+      if(spaceAbove > spaceBelow){
+        menu.style.top = 'auto';
+        menu.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+        menu.style.maxHeight = Math.max(140, spaceAbove) + 'px';
+      } else {
+        menu.style.maxHeight = Math.max(140, spaceBelow) + 'px';
+      }
+    }
   }
 
   document.addEventListener('click', function(e){
@@ -960,8 +988,12 @@ function _scanAutoLabelTables(root){
         const willOpen = !menu.classList.contains('open');
         closeAllMenus();
         if(willOpen){
-          positionMenu(toggle, menu);
+          // الإظهار قبل القياس: positionMenu تعتمد على أبعاد حقيقية للقائمة
+          // (عند display:none كانت الأبعاد صفراً فيفلت الفحص من حدود الشاشة)
+          menu.style.visibility = 'hidden';
           menu.classList.add('open');
+          positionMenu(toggle, menu);
+          menu.style.visibility = '';
         }
       }
       return;

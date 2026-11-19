@@ -1,4 +1,4 @@
-/**
+﻿/**
  * arkkan-config.js — إعدادات مركزة لتكامل Arkkan
  * ══════════════════════════════════════════════════════════════
  * جميع الإعدادات في مكان واحد — لا تُعدّل أي قيمة هنا مباشرة.
@@ -8,17 +8,17 @@
 module.exports = {
   /* ── الشبكة ── */
   AGENT_PORT:        parseInt(process.env.ARKKAN_AGENT_PORT || '9955', 10),
-  ARKKAN_URL:        process.env.ARKKAN_URL || 'https://arkkanapp2.net/Bases/MainPage.aspx?url=98A7B2',
-  ARKKAN_DOCBASE:    process.env.ARKKAN_DOCBASE || 'https://arkkanapp2.net/Documents/',
+  ARKKAN_URL:        process.env.ARKKAN_URL || 'https://arkkanapp.net/Bases/MainPage.aspx?url=98A7B2',
+  ARKKAN_DOCBASE:    process.env.ARKKAN_DOCBASE || 'https://arkkanapp.net/Documents/',
 
   /* ── بوابة الحقيبة التثقيفية (رفع "طلب متدرب") ── */
-  ARKKAN_LOGIN_URL:    process.env.ARKKAN_LOGIN_URL || 'https://arkkanapp2.net/Municipal/educational-bags-login.aspx',
-  ARKKAN_TRAINEE_URL:  process.env.ARKKAN_TRAINEE_URL || 'https://arkkanapp2.net/Municipal/Traniee_Request.aspx',
+  ARKKAN_LOGIN_URL:    process.env.ARKKAN_LOGIN_URL || 'https://arkkanapp.net/Municipal/educational-bags-login.aspx',
+  ARKKAN_TRAINEE_URL:  process.env.ARKKAN_TRAINEE_URL || 'https://arkkanapp.net/Municipal/Traniee_Request.aspx',
 
   /* ── منصة النظام الجديدة (Bases) — جلب "الرقم المرجعي" برقم الهوية ──
      تتطلب تسجيل دخول (حساب إدارة النظام). الاعتمادات اختيارية تُمرَّر من
      إعدادات البرنامج في كل طلب — بلا اعتمادات يُتخطى جلب الرقم المرجعي. */
-  ARKKAN_BASES_LOGIN_URL: process.env.ARKKAN_BASES_LOGIN_URL || 'https://arkkanapp2.net/Bases/Login.aspx',
+  ARKKAN_BASES_LOGIN_URL: process.env.ARKKAN_BASES_LOGIN_URL || 'https://arkkanapp.net/Bases/Login.aspx',
   /* الاعتمادات تُقرأ من البيئة/ملف .env أو تُرسل في جسم الطلب من البرنامج —
      لا تُكتب في الكود أبداً */
   ARKKAN_USER:         process.env.ARKKAN_USER || '',

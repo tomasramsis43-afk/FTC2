@@ -75,14 +75,18 @@ let _ftcIsOffline = false;
 // أعلاه الذي يُكتشف تلقائياً من فشل الاتصال الفعلي). لما يكون مفعَّلاً، serverFetch يرفض الاتصال
 // بالسيرفر عمداً من أول خطوة، فتعمل كل قراءة/كتابة عبر نفس مسار "بدون اتصال" الموجود أصلاً
 // (قراءة من الكاش المحلي، وقائمة انتظار للتعديلات) دون أي تكرار للمنطق.
+// البرنامج محلي بالكامل الآن: لا يوجد سيرفر خارجي يمكن أن ينقطع، فالـ API
+// المحلي متاح دائماً. لذلك يُلغى وضع "العمل من الجهاز فقط" نهائياً، ونمسح
+// أي قيمة قديمة محفوظة من نسخة سابقة — لأن بقاءها مفعّلة كان يعني عدم رفع
+// التعديلات إطلاقاً (فقدان بيانات صامت) في هذه النسخة.
 let manualOfflineMode = false;
-try{ manualOfflineMode = localStorage.getItem('ftcManualOfflineMode') === '1'; }catch(e){ console.error('[StorageSync] Failed to read manualOfflineMode:', e); }
+try{ localStorage.removeItem('ftcManualOfflineMode'); }catch(e){ /* متصفح بلا تخزين */ }
 function setManualOfflineMode(on){
-  manualOfflineMode = !!on;
-  try{ localStorage.setItem('ftcManualOfflineMode', manualOfflineMode ? '1' : '0'); }catch(e){ console.error('[StorageSync] Failed to write manualOfflineMode:', e); }
+  manualOfflineMode = false;
+  try{ localStorage.setItem('ftcManualOfflineMode', '0'); }catch(e){ /* متصفح بلا تخزين */ }
   updateOfflineIndicator();
-  if(!manualOfflineMode){
-    // إعادة التفعيل: يبدأ فوراً برفع أي تعديلات تراكمت محلياً أثناء إيقاف الاتصال
+  if(!on){
+    // أي تعديلات تراكمت محلياً تُرفع فوراً للـ API المحلي
     flushPendingWrites();
   }
 }
@@ -222,35 +226,35 @@ async function updateOfflineIndicator(){
     el.style.display = 'flex';
     if(manualOfflineMode){
       const count = await _totalPendingCount();
-      el.style.background = '#4a3b1f';
-      el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — لا يتصل البرنامج بالسيرفر إطلاقاً، وأي تعديل يُحفظ محلياً فقط حتى تُعيد تفعيل الاتصال';
-      el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الرفع لاحقاً` : '');
+      el.dataset.syncState = 'manual';
+      el.title = 'وضع العمل من الجهاز فقط مفعَّل يدوياً من الإعدادات — كل البيانات تُحفظ على هذا الجهاز';
+      el.innerHTML = '🔒 وضع محلي فقط (يدوي)' + (count ? ` — ${count} تعديل بانتظار الحفظ` : '');
       return;
     }
     if(_ftcIsOffline){
       const count = await _totalPendingCount();
-      el.style.background = '#7a1f1f';
-      el.title = 'لا يوجد اتصال بالسيرفر حالياً — البرنامج يعمل من آخر نسخة محفوظة على هذا الجهاز، وأي تعديل سيُحفظ محلياً ويُرفع تلقائياً عند عودة الاتصال';
-      el.innerHTML = '⚠️ غير متصل' + (count ? ` (${count} بانتظار الرفع)` : '');
+      el.dataset.syncState = 'offline';
+      el.title = 'تعذّر الوصول لقاعدة البيانات المحلية لحظياً — أي تعديل سيُحفظ على هذا الجهاز ويُعاد تلقائياً';
+      el.innerHTML = '⚠️ حفظ مؤقت' + (count ? ` (${count} بانتظار الحفظ)` : '');
       return;
     }
     // فحص فوري (بدون انتظار IndexedDB): فيه طلب حفظ/حذف لسه طاير فى الشبكة الآن فعلياً؟
     if(_activeRecordSaves > 0 || _activeKvSaves > 0){
-      el.style.background = '#1f4a6e';
-      el.title = 'جارٍ رفع آخر تعديل إلى السيرفر الآن...';
-      el.innerHTML = '🔄 جارٍ الرفع للسيرفر...';
+      el.dataset.syncState = 'saving';
+      el.title = 'جارٍ حفظ آخر تعديل على هذا الجهاز...';
+      el.innerHTML = '💾 جارٍ الحفظ...';
       return;
     }
     const count = await _totalPendingCount();
     if(count > 0){
-      el.style.background = '#7a5a1f';
-      el.title = 'يوجد تعديلات محفوظة محلياً بانتظار رفعها للسيرفر — جارٍ المحاولة تلقائياً';
-      el.innerHTML = `⏳ جارٍ رفع ${count} تعديل...`;
+      el.dataset.syncState = 'pending';
+      el.title = 'توجد تعديلات تُحفظ على هذا الجهاز — جارٍ الحفظ تلقائياً';
+      el.innerHTML = `⏳ جارٍ حفظ ${count} تعديل...`;
       return;
     }
     // لا اتصال معطّل، ولا رفع جارٍ الآن، ولا تعديلات معلّقة بالطابور — كل شيء محفوظ فعلياً على السيرفر
-    el.style.background = '#1f5c3a';
-    el.title = 'كل التعديلات محفوظة على السيرفر بنجاح — لا يوجد أي شيء معلّق حالياً';
+    el.dataset.syncState = 'ok';
+    el.title = 'كل التعديلات محفوظة على هذا الجهاز بنجاح — لا يوجد أي شيء معلّق حالياً';
     el.innerHTML = '✅ كل شيء محدث';
   }catch(e){ console.error('[StorageSync] updateOfflineIndicator error:', e); }
 }
@@ -2063,6 +2067,13 @@ async function approveRecordGeneric(collection, id){
     _recordVersions[collection].set(id, data.version || (_recordVersions[collection].get(id) || 0));
     if(!recordMeta[collection]) recordMeta[collection] = {};
     recordMeta[collection][id] = { origin: 'reception', status: 'confirmed' };
+    // اعتماد حركة مالية معلّقة: تُرحَّل فوراً للقيد المزدوج (كانت مستثناة قبل الاعتماد)
+    if(collection==='vaultTx' && typeof syncVaultTxDoubleEntries==='function'){
+      try{
+        const deSync = syncVaultTxDoubleEntries();
+        if(deSync.changed) await Promise.all([saveJournalDE(), saveVaultTx()]);
+      }catch(e){ /* الترحيل التلقائي عند التحميل سيعالجها لاحقاً */ }
+    }
     return true;
   }catch(e){ return false; }
 }

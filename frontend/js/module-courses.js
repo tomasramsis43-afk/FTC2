@@ -158,6 +158,7 @@ function renderCourses(){
           ${s.isDefined ? `<button class="btn btn-ghost btn-sm" data-edit-session="${s.id}">${tr('editCourse')}</button>
           <button class="btn btn-danger btn-sm" data-del-session="${s.id}">${tr('delete')}</button>` : ''}
           <button class="btn btn-gold btn-sm" data-print-attendance="${escapeHtml(s.courseNumber)}">${tr('printAttendance')}</button>
+          <button class="btn btn-ghost btn-sm" data-print-course-receipts="${escapeHtml(s.courseNumber)}" title="طباعة إيصالات أركان (دورة + حقيبة) لكل المسجّلين في هذه الدورة — تختار الطابعة مرة واحدة ثم تُطبع كلها">🖨️ ${tr('printCourseReceipts')}</button>
         </div>
       </div>
       <div class="table-scroll table-scroll-course cards-mobile">
@@ -635,6 +636,7 @@ $('#courses-sessions-list')?.addEventListener('click', async e=>{
     }
   }
   if(printA) printAttendance(printA);
+  if(e.target.dataset.printCourseReceipts) printCourseReceipts(e.target.dataset.printCourseReceipts);
   if(markAbsent){
     const c = clients.find(x=>x.id===markAbsent);
     if(c && await customConfirm(`تحديد "${c.name}" كغائب؟ سيتم مسح رقم الدورة الحالي عنه تلقائياً حتى يوضع له رقم دورة جديد.`)){
@@ -693,6 +695,28 @@ function printAttendance(courseNumber){
     ${printDocFooterButton()}
   </body></html>`);
   finishPrintDoc(win);
+}
+
+/* طباعة إيصالات أركان (دورة + حقيبة) لكل المسجّلين في دورة واحدة — بضغطة واحدة.
+   تفتح نفس نافذة «طباعة إيصالات المحدد» لكن بنطاق هذه الدورة فقط، مع اختيار
+   الطابعة مرة واحدة ثم طباعة كل الإيصالات تباعاً. */
+function printCourseReceipts(courseNumber){
+  const cn = String(courseNumber || '').trim();
+  if(!cn){ showToast('رقم الدورة غير محدد', 'error'); return; }
+  const enrolled = clients.filter(c=>String(c.courseNumber||'').trim()===cn && !c.cancelled && !c.suspended);
+  if(!enrolled.length){ showToast('لا يوجد مسجّلون في هذه الدورة', 'info'); return; }
+  if(typeof receiptsOpenBatchPrint !== 'function'){
+    showToast('ميزة طباعة الإيصالات لم تكتمل تحميلها بعد — أعد المحاولة بعد لحظة', 'error');
+    return;
+  }
+  const s = getEffectiveSessions().find(x=>x.courseNumber===cn) || {courseNumber: cn, courseType:'', date:''};
+  const withCourse = enrolled.filter(c=>String(c.invoice||'').trim()).length;
+  const withBag = enrolled.filter(c=>String(c.bagInvoice||'').trim()).length;
+  receiptsOpenBatchPrint({
+    clients: enrolled,
+    title: `إيصالات الدورة ${cn}${s.courseType ? ' — ' + s.courseType : ''}`,
+    subtitle: `${enrolled.length} مسجّلاً · لهم رقم فاتورة دورة: ${withCourse} · لهم إيصال حقيبة: ${withBag}`,
+  });
 }
 
 /* عند استيراد/إدخال رقم دورة (أو رقم فاتورة) مرتبط برقم هوية غير موجود إطلاقاً في شيت العملاء ولا بأي مكان
@@ -793,9 +817,6 @@ $('#import-coursenum-input')?.addEventListener('change', async e=>{
         }
       }
       changedRows.push({'رقم الهوية':clientId, 'الاسم':c.name||'(غير مكتمل — أُضيف تلقائياً)', 'رقم الدورة (قديم)':oldCourseNumber, 'رقم الدورة (جديد)':courseNumber, 'ملاحظة الجدول': isNew ? `عميل جديد أُضيف تلقائياً بالحد الأدنى من البيانات${sessionNote?' — '+sessionNote:''}` : sessionNote});
-      if(courseNumber!==oldCourseNumber){
-        sendPowerAutomateEvent('course_number_updated', {clientId: c.clientId, name: c.name, courseNumber: c.courseNumber, courseType: c.courseType||''});
-      }
     }
     await saveClients();
     if(added){ await syncBagStockIssues(); await saveVaultTx(); }
@@ -920,9 +941,6 @@ $('#btn-cs-bulk-save')?.addEventListener('click', async ()=>{
     if(invoice) c.invoice = invoice;
     updated++;
     changedRows.push({'رقم الهوية':clientId, 'الاسم':c.name||'(غير مكتمل — أُضيف تلقائياً)', 'رقم الدورة (قديم)':oldCourseNumber, 'رقم الدورة (جديد)':c.courseNumber||'', 'رقم الفاتورة (قديم)':oldInvoice, 'رقم الفاتورة (جديد)':c.invoice||'', 'ملاحظة الجدول': isNew ? `عميل جديد أُضيف تلقائياً بالحد الأدنى من البيانات${sessionNote?' — '+sessionNote:''}` : sessionNote});
-    if(c.courseNumber && c.courseNumber!==oldCourseNumber){
-      sendPowerAutomateEvent('course_number_updated', {clientId: c.clientId, name: c.name, courseNumber: c.courseNumber, courseType: c.courseType||''});
-    }
   });
   await saveClients();
   if(newClientsCount){ await syncBagStockIssues(); await saveVaultTx(); }
@@ -1254,6 +1272,10 @@ $('#btn-ci-bulk-save')?.addEventListener('click', async ()=>{
     });
   });
   await saveClients();
+  // رقم فاتورة جديد/مُحدَّث من جدول فواتير الدورات → يلتحق تلقائياً بطابور الإيصالات.
+  if (invoiceChanged && typeof receiptsAutoScanSchedule === 'function') {
+    receiptsAutoScanSchedule('course-invoice-bulk', 800);
+  }
   if(postedCount>0) await saveJournalDE();
   await logAudit('edit','فواتير الدورات', `تحديث/استيراد فواتير الدورات من جدول داخل البرنامج: تحديث ${updated} سجل${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}${postedCount?` — ورُحّلت ${postedCount} فاتورة تلقائياً للقيد المزدوج`:''}`);
   closeCiBulkModal();

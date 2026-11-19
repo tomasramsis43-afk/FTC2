@@ -22,12 +22,59 @@ const ARKKAN_FIELD_LABELS = {
   coursePrice:  'قيمة الفاتورة',
   bagInvoice:   'رقم إيصال الحقيبة',
   bagPurchaseDate: 'تاريخ الحقيبة',
-  startDate:    'تاريخ الدورة'
+  startDate:    'تاريخ الدورة',
+  endDate:      'تاريخ انتهاء الدورة',
+  validityEndDate: 'صلاحية التدريب / الحقيبة'
 };
 
 /* هل نعمل داخل تطبيق سطح المكتب (Electron يخدم الواجهة من 127.0.0.1)؟
    نستخدمه لتقرير إمكانية تشغيل الوكيل من داخل البرنامج مباشرة. */
 const ARKKAN_IS_DESKTOP = /^127\.0\.0\.1$/.test(location.hostname) || /^localhost$/.test(location.hostname);
+
+/* ── العميل «الحيّ» من مصفوفة clients ──
+   مصفوفة clients تُستبدَل بالكامل عند أي مزامنة خلفية/إشعار SSE (loadData)، وهي
+   تحدث كثيراً (كل حفظ من أي جهاز/تبويب يُطلق إشعاراً). فأي كائن عميل مأخوذ قبل
+   انتظار شبكة طويل (جلب أركان قد يستغرق ثواني طويلة) يصبح نسخة منفصلة عن الشاشة:
+   الكتابة عليه لا تظهر في الجدول ولا في الكرت ولا في اللقطة المحلية، فيبدو أن
+   العملية «نجحت» بينما الحقل (مثل الرقم المرجعي) ما زال فارغاً — ويحتاج المستخدم
+   لإعادة العملية أكثر من مرة. لذلك: بعد أي await نعيد جلب الكائن الحيّ بهذه
+   الدالة قبل تعديل بيانات العميل، ولا نعدّل الكائن القديم أبداً. */
+function arkkanLiveClient(id, clientId) {
+  if (!Array.isArray(clients)) return null;
+  if (id) {
+    const byId = clients.find(x => x && x.id === id);
+    if (byId) return byId;
+  }
+  if (clientId) {
+    const cid = String(clientId);
+    const byClientId = clients.find(x => x && String(x.clientId) === cid);
+    if (byClientId) return byClientId;
+  }
+  return null;
+}
+
+/* يثبّت رقماً مرجعياً مؤكداً (نجح حفظه فعلاً على الخادم) على الكائن الحيّ —
+   حتى لو استُبدلت مصفوفة clients أثناء الانتظار — ويحدّث نسخة baseline الخاصة
+   به فقط لو كانت موجودة، بلا أي رفع إضافي. */
+function arkkanPinRefNum(id, clientId, refNum) {
+  const live = arkkanLiveClient(id, clientId);
+  if (!live) return null;
+  const val = String(refNum || '').trim();
+  if (val && String(live.referNum || '').trim() !== val) live.referNum = val;
+  if (val && typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline instanceof Map) {
+    const bp = _clientsSyncBaseline.get(live.id);
+    if (bp) {
+      try {
+        const obj = JSON.parse(bp);
+        if (String(obj.referNum || '').trim() !== val) {
+          obj.referNum = val;
+          _clientsSyncBaseline.set(live.id, JSON.stringify(obj));
+        }
+      } catch (e) { /* baseline غير قابل للقراءة — لا نلمسه */ }
+    }
+  }
+  return live;
+}
 
 /* تاريخ الدورة من تبويب الدورات: تاريخ الجلسة المسجّلة بنفس رقم الدورة،
    أو تاريخ الدورة المتوقعة المسجّل على العميل — حتى لا يظهر العميل
@@ -132,18 +179,14 @@ function arkkanPatchFromData(c, data){
   if (!c.bagInvoice && data.bagInvoice) patch.bagInvoice = data.bagInvoice;
   // تاريخ الحقيبة يُملأ فقط لو كان فاضياً — لا يمس أي تاريخ مسجّل مسبقاً
   if (!c.bagPurchaseDate && data.bagPurchaseDate) patch.bagPurchaseDate = arkkanToInputDate(data.bagPurchaseDate);
-  // قيمة الفاتورة: receiptActualValue (شيت فواتير الدورات) يُحدَّث دائماً من القيمة الفعلية
-  // بالإيصال، لأن هذا هو الغرض منه أصلاً — مقارنته بـ centerIncome (coursePrice - discount)
-  // لاكتشاف أي فرق بين المسجَّل بالنظام والمكتوب فعلياً بالإيصال (راجع فلتر "مطابق/مختلف" فى
-  // شيت فواتير الدورات، module-invoices.js). لكن coursePrice نفسه (سعر الدورة فى شيت العملاء،
-  // الذي يُحسب عليه مباشرة "الإجمالي" و"المتبقي" لكل عميل) لا يجوز أن يُفرَض بنفس القيمة تلقائياً
-  // فى كل مزامنة — هذا كان يُغيّر إجمالي/متبقي العميل صامتاً بدون أي تعديل حقيقي منه، ويُسقط
-  // مقارنة "مطابق/مختلف" تماماً (يصبح الاثنان متطابقين قسراً دائماً فتختفي أي فروقات حقيقية).
-  // نملأ coursePrice فقط لو كان فارغاً/صفراً أصلاً (عميل بلا سعر مسجَّل، مثل من أُضيف تلقائياً
-  // بالحد الأدنى من البيانات عبر استيراد رقم الدورة) — تماماً كباقي الحقول أعلاه.
+  // قيمة الفاتورة: تُسجَّل حصراً في receiptActualValue (شيت فواتير الدورات) — لأن هذا هو
+  // الغرض منه أصلاً: مقارنته بـ centerIncome (coursePrice - discount) لاكتشاف أي فرق بين
+  // المسجَّل بالنظام والمكتوب فعلياً بالإيصال (راجع فلتر "مطابق/مختلف" فى module-invoices.js).
+  // coursePrice (سعر الدورة فى شيت العملاء، الذي يُحسب عليه "الإجمالي" و"المتبقي") لا يُكتب
+  // من أركان إطلاقاً — لا فوق قيمة موجودة ولا عند كونها صفراً — حتى لا تتغيّر قيمة الدورة
+  // أو إجمالي/متبقي العميل صامتاً عند مجرد الجلب.
   if (data.coursePrice) {
     patch.receiptActualValue = arkkanNumPrice(data.coursePrice);
-    if (!(Number(c.coursePrice) > 0)) patch.coursePrice = arkkanNumPrice(data.coursePrice);
   }
   // تاريخ إصدار الفاتورة (data.date = Invoice Date من أركان) — يُعبّي "تاريخ الفاتورة"
   // في شيت فواتير الدورات (receiptIssueDate) تحديداً، وهو مصدر عمود المزامنة الوحيد
@@ -165,6 +208,16 @@ function arkkanPatchFromData(c, data){
   if (!c.startDate) {
     const sd = data.startDate || arkkanCourseDate(c);
     if (sd) patch.startDate = arkkanToInputDate(sd);
+  }
+  // تاريخ انتهاء الدورة: يُملأ فقط لو كان فاضياً — لا يمس أي قيمة مسجّلة مسبقاً.
+  if (!c.endDate && data.endDate) {
+    const ed = arkkanToInputDate(data.endDate);
+    if (ed && isValidIsoDate(ed)) patch.endDate = ed;
+  }
+  // صلاحية التدريب / الحقيبة: تُحفظ فقط لو أعادها أركان صريحة وكانت خانتها فاضية.
+  if (!c.validityEndDate && data.validityDate) {
+    const vd = arkkanToInputDate(data.validityDate);
+    if (vd && isValidIsoDate(vd)) patch.validityEndDate = vd;
   }
   return patch;
 }
@@ -212,12 +265,30 @@ function arkkanDiffFromData(c, data) {
     }
   }
 
-  // قيمة الفاتورة: نقارن السعر المسجَّل بالنظام (coursePrice) بما هو مسجَّل فى أركان،
-  // ونحدّث كذلك قيمة الإيصال الفعلية (كانت أصلاً تُحدَّث دائماً بلا شرط — نفس السلوك محفوظ)
+  // تاريخ انتهاء الدورة: يُقارن ويُحدَّث مثل تاريخ البداية (نفس الصيغة ISO)
+  if (data.endDate) {
+    const nd = arkkanToInputDate(data.endDate);
+    if (nd && isValidIsoDate(nd)) compareAndSet('endDate', c.endDate, nd, ARKKAN_FIELD_LABELS.endDate);
+  }
+
+  // صلاحية التدريب / الحقيبة: تُحدَّث فقط لو أعادها أركان صريحة (لا نحسبها هنا
+  // حتى لا نكتب قيمة مشتقة فوق أي قيمة مسجّلة يدوياً).
+  if (data.validityDate) {
+    const nd = arkkanToInputDate(data.validityDate);
+    if (nd && isValidIsoDate(nd)) compareAndSet('validityEndDate', c.validityEndDate, nd, ARKKAN_FIELD_LABELS.validityEndDate);
+  }
+
+  // قيمة الفاتورة: تُسجَّل في receiptActualValue (شيت فواتير الدورات) فقط.
+  // coursePrice (سعر الدورة بشيت العملاء) لا يُمس إطلاقاً — الجلب من أركان لا يغيّر
+  // قيمة الدورة ولا إجمالي/متبقي العميل، ويظل الفرق ظاهراً في عمود "مطابق/مختلف"
+  // بالشيت (لأن المقارنة هناك بين receiptActualValue و centerIncome).
   if (data.coursePrice) {
     const newPrice = arkkanNumPrice(data.coursePrice);
-    if (String(newPrice) !== String(c.receiptActualValue ?? '')) patch.receiptActualValue = newPrice;
-    compareAndSet('coursePrice', c.coursePrice, newPrice, ARKKAN_FIELD_LABELS.coursePrice);
+    const oldActual = String(c.receiptActualValue ?? '').trim();
+    if (String(newPrice).trim() !== oldActual) {
+      patch.receiptActualValue = newPrice;
+      changes.push({ label: ARKKAN_FIELD_LABELS.coursePrice, oldVal: oldActual || '—', newVal: String(newPrice) });
+    }
   }
 
   // تاريخ إصدار الفاتورة: كان يُحدَّث دائماً بلا شرط أصلاً — نفس السلوك محفوظ، مع إضافته
@@ -237,7 +308,7 @@ function arkkanDiffFromData(c, data) {
    الكارت مكتمل ظاهرياً) عبر arkkanDiffFromData، ثم يحفظ أي فرق فى الخادم تلقائياً. */
 async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
   const data = await arkkanFetchOne(clientId, referNum); // يرمي خطأ لو فشل
-  const idx = clients.findIndex(x => x.clientId === clientId);
+  const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
   if (idx === -1) throw new Error('العميل غير موجود في القائمة');
 
   const c = clients[idx];
@@ -248,13 +319,71 @@ async function arkkanFetchAndAutoUpdate(clientId, referNum = '') {
     // دورة تلقائية: لو رقم الدورة القادم من أركان جديد (مفيش دورة بنفس الرقم فى شيت الدورات)،
     // تُفتح دورة حقيقية محفوظة فوراً بنفس الاسم/التاريخ من هذا العميل تحديداً.
     const sessionCreated = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(clients[idx]);
+    // لو استُبدلت مصفوفة clients بمزامنة خلفية أثناء الحفظ، نُطبّق التصحيح (المؤكد على
+    // السيرفر) على الكائن الحيّ الجديد — وإلا يعرض الكرت/الجدول القيم القديمة رغم نجاح الجلب.
+    const live = arkkanLiveClient(null, clientId) || c;
+    if (live !== clients[idx]) Object.assign(live, patch);
+    // مهم: الترحيل قبل الحفظ — autoPostCourseInvoice يضع courseInvoiceDEId على كائن العميل،
+    // فلو حفظنا العملاء قبله يضيع المؤشر ويُعاد ترحيل نفس الفاتورة في كل جلب (قيود مكررة).
+    const posted = (patch.receiptActualValue !== undefined && typeof autoPostCourseInvoice === 'function')
+      ? autoPostCourseInvoice(live) : false;
     if (typeof saveClients === 'function') await saveClients();
     if (sessionCreated && typeof saveCourseSessions === 'function') await saveCourseSessions();
-    // لو رحّلنا receiptActualValue من أركان → نطلق القيد المزدوج تلقائياً
-    if (patch.receiptActualValue !== undefined && typeof autoPostCourseInvoice === 'function')
-      autoPostCourseInvoice(clients[idx]);
+    if (posted && typeof saveJournalDE === 'function') { try { await saveJournalDE(); } catch {} }
+    return { updated: Object.keys(patch).length, changes, client: live };
   }
-  return { updated: Object.keys(patch).length, changes, client: clients[idx] };
+  return { updated: Object.keys(patch).length, changes, client: arkkanLiveClient(null, clientId) || clients[idx] };
+}
+
+/* يجلب الرقم المرجعي لهوية العميل ويحفظه فعلياً في سجل العميل، مع كل حماية
+   «الكائن الحيّ» (المصفوفة قد تُستبدل أثناء الطلب). يرجع { refNum, oldRef, saveOk, client }.
+   saveOk: true = محفوظ على الخادم، false = تعارض، null = تعذّر الاتصال (سيبقى في طابور الرفع).
+   يُستخدم من زر «🔖 الرقم المرجعي» ومن «⏬ جلب من أركان» تلقائياً لو كان الرقم ناقصاً. */
+async function arkkanFetchAndStoreRefNum(id, clientId) {
+  const identity = String(clientId || '').trim();
+  if (!identity) throw new Error('لا يوجد رقم هوية لهذا العميل');
+  const body = await arkkanRefNumFetchOne(identity);
+  const refNum = String(body && body.refNum || '').trim();
+  if (!refNum) {
+    if (body && (body.confirmed === true || body.notFound === true))
+      throw new Error('لا يوجد رقم مرجعي لهذه الهوية في منصة إدارة النظام (بحث مكتمل بلا نتيجة)');
+    throw new Error('لم تصل نتيجة من منصة إدارة النظام لهذه الهوية — أعد المحاولة (قد يكون البحث لم يكتمل بعد)');
+  }
+
+  // نأخذ كائن العميل الحيّ بعد الانتظار: قد تكون مصفوفة clients استُبدلت
+  // بمزامنة خلفية/SSE أثناء الاستعلام، وتعديل الكائن القديم لا يظهر على الشاشة.
+  const c = arkkanLiveClient(id, identity);
+  if (!c) throw new Error('العميل غير موجود في القائمة — حدّث الصفحة');
+  const oldRef = String(c.referNum || '').trim();
+  c.referNum = refNum;
+  const cJson = JSON.stringify(c);
+  let saveOk = null;
+  // نحفظ هذا العميل مباشرة منفرداً لنقدر نتحقق من النتيجة الفعلية (نجاح/تعارض/فشل اتصال)
+  // بدل saveClients() العام الذي يبتلع فشل الرفع بصمت ويعرض نجاحاً زائفاً.
+  if (typeof saveOneClientRecord === 'function') {
+    saveOk = await saveOneClientRecord(c, cJson);
+  } else if (typeof saveClients === 'function') {
+    try { await saveClients(); saveOk = true; } catch (e) { saveOk = false; }
+  }
+  if (saveOk === true) {
+    if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline instanceof Map) _clientsSyncBaseline.set(c.id, cJson);
+    // حفظ اللقطة المحلية فوراً — بدون هذا، saveOneClientRecord ينجح على السيرفر لكن يترك
+    // اللقطة المحلية (المستخدمة عند أي تحديث/فتح لاحق للصفحة قبل اكتمال المزامنة الخلفية)
+    // بالقيمة القديمة، فيظهر الرقم المرجعي فارغاً بعد تحديث الصفحة رغم نجاح الحفظ فعلياً.
+    if (typeof _scheduleClientsSnapPersist === 'function') _scheduleClientsSnapPersist();
+    // الحفظ قد يستغرق أطول من نافذة مزامنة خلفية فيكون الكائن الحيّ الآن نسخة
+    // جديدة لم تحمل الرقم — نثبّته عليها من غير إعادة رفع (السيرفر استلمه بالفعل).
+    arkkanPinRefNum(c.id, identity, refNum);
+    // مزامنة خلفية بدأت قبل الحفظ قد تنتهي بعده فتعيد نسخة السيرفر الأقدم (بلا الرقم).
+    // نعيد التثبيت مرة واحدة بعد لحظة — بلا أي رفع إضافي — حتى لا يختفي الرقم من الشاشة.
+    setTimeout(() => {
+      try {
+        if (arkkanPinRefNum(c.id, identity, refNum) && typeof _scheduleClientsSnapPersist === 'function')
+          _scheduleClientsSnapPersist();
+      } catch (e) {}
+    }, 1500);
+  }
+  return { refNum, oldRef, saveOk, client: arkkanLiveClient(c.id, identity) || c };
 }
 
 /* معالج زر "جلب من أركان" الموجود في كرت العميل */
@@ -262,24 +391,51 @@ async function arkkanFetchCardButton(id, btn) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
-  if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
+  const identity = String(c.clientId || '').trim();
+  if (!identity) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
 
   btn.disabled = true;
   const oldLabel = btn.innerHTML;
-  btn.textContent = '⏳ جاري الجلب والحفظ...';
 
   try {
-    const res = await arkkanFetchAndAutoUpdate(c.clientId, c.referNum || '');
+    // بيانات أركان لا تُفتح إلا بالرقم المرجعي. لو كان ناقصاً نجلبه أولاً تلقائياً
+    // ونحفظه — بدل إرسال جلب بلا رقم مرجعي يرجع فاضي ويظهر «مطابقة تماماً» بينما
+    // الرقم المرجعي ما زال فارغاً (كان يضطر المستخدم لإعادة العملية أكثر من مرة).
+    let referNum = String(c.referNum || '').trim();
+    let fetchedRef = '';
+    if (!referNum) {
+      btn.textContent = '⏳ جاري جلب الرقم المرجعي...';
+      const got = await arkkanFetchAndStoreRefNum(id, identity);
+      referNum = got.refNum;
+      fetchedRef = got.refNum;
+      if (got.saveOk === true) {
+        showToast(`🔖 تم جلب الرقم المرجعي وحفظه: ${referNum}`, 'success');
+      } else if (got.saveOk === false) {
+        showToast(`تعذّر حفظ الرقم المرجعي (${referNum}): تعارض — سيُعرض الجلب لكن راجع الحفظ`, 'error');
+      } else {
+        showToast(`جُلب الرقم المرجعي (${referNum}) — سيُرفع تلقائياً عند عودة الاتصال`, 'info');
+      }
+      if (typeof renderTable === 'function') { try { renderTable(); } catch (e) {} }
+    }
+
+    btn.textContent = '⏳ جاري الجلب والحفظ...';
+    const res = await arkkanFetchAndAutoUpdate(identity, referNum);
     if (res.updated > 0) {
       const changeList = (res.changes || []).map(ch => `${ch.label}: ${ch.oldVal} ← ${ch.newVal}`);
       const summary = changeList.length ? ' (' + changeList.join('، ') + ')' : '';
       showToast((`✅ تم تحديث ${res.updated} حقل من أركان${summary}`).slice(0, 220), 'success');
-      if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id); // تحديث الكارت فوراً
+      if (typeof renderTable === 'function') { try { renderTable(); } catch (e) {} }
+      if (typeof openClientWorkspace === 'function') openClientWorkspace(id); // تحديث الكارت فوراً
     } else {
-      showToast('البيانات مطابقة تماماً لأركان — لا فرق', 'info');
+      if (fetchedRef) {
+        showToast(`🔖 تم جلب الرقم المرجعي وحفظه: ${fetchedRef} — وبيانات أركان مطابقة`, 'success');
+        if (typeof openClientWorkspace === 'function') openClientWorkspace(id);
+      } else {
+        showToast('البيانات مطابقة تماماً لأركان — لا فرق', 'info');
+      }
     }
   } catch (err) {
-    showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 90), 'error');
+    showToast('خطأ جلب بيانات أركان: ' + String(err.message).slice(0, 110), 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = oldLabel;
@@ -289,10 +445,10 @@ async function arkkanFetchCardButton(id, btn) {
 /* زر "🔖 الرقم المرجعي" في كرت العميل: يجلب الرقم المرجعي من منصة إدارة
    النظام بالهوية فقط ويحفظه في الحقل — ثم يحدّث الكرت فوراً. */
 async function arkkanRefNumCardButton(id, btn) {
-  const c = clients.find(x => x.id === id);
-  if (!c) return;
-  if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
-  await arkkanEnsureAgentReady();
+  const initial = clients.find(x => x.id === id);
+  if (!initial) return;
+  const identity = String(initial.clientId || '').trim();
+  if (!identity) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
   const creds = arkkanBasesCreds();
   if (!creds.user || !creds.pass) {
     showToast('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً', 'error');
@@ -304,45 +460,19 @@ async function arkkanRefNumCardButton(id, btn) {
   btn.textContent = '⏳ جاري الاستعلام...';
 
   try {
-    const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/refnum', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: c.clientId, basesCreds: creds }),
-      signal: AbortSignal.timeout(70000)
-    });
-    let body = {};
-    try { body = await r.json(); } catch {}
-    if (!r.ok) throw new Error((body && body.error) || `HTTP ${r.status}`);
-
-    const refNum = String(body.refNum || '').trim();
-    if (!refNum) throw new Error('لا يوجد رقم مرجعي لهذه الهوية في منصة إدارة النظام');
-
-    const oldRef = String(c.referNum || '').trim();
-    c.referNum = refNum;
-    const cJson = JSON.stringify(c);
-    let saveOk = null;
-    // نحفظ هذا العميل مباشرة منفرداً لنقدر نتحقق من النتيجة الفعلية (نجاح/تعارض/فشل اتصال)
-    // بدل saveClients() العام الذي يبتلع فشل الرفع بصمت ويعرض نجاحاً زائفاً.
-    if (typeof saveOneClientRecord === 'function') {
-      saveOk = await saveOneClientRecord(c, cJson);
-    } else if (typeof saveClients === 'function') {
-      try { await saveClients(); saveOk = true; } catch (e) { saveOk = false; }
-    }
-    if (saveOk === true) {
-      if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
-      // حفظ اللقطة المحلية فوراً — بدون هذا، saveOneClientRecord ينجح على السيرفر لكن يترك
-      // اللقطة المحلية (المستخدمة عند أي تحديث/فتح لاحق للصفحة قبل اكتمال المزامنة الخلفية)
-      // بالقيمة القديمة، فيظهر الرقم المرجعي فارغاً بعد تحديث الصفحة رغم نجاح الحفظ فعلياً.
-      if (typeof _scheduleClientsSnapPersist === 'function') _scheduleClientsSnapPersist();
-      showToast(`✅ الرقم المرجعي: ${refNum}${oldRef && oldRef !== refNum ? ` (كان ${oldRef})` : ''}`, 'success');
-    } else if (saveOk === false) {
-      showToast(`تعذّر حفظ الرقم المرجعي (${refNum}): تعارض مع تعديل آخر — حدّث الصفحة وأعد المحاولة`, 'error');
+    const got = await arkkanFetchAndStoreRefNum(id, identity);
+    if (got.saveOk === true) {
+      showToast(`✅ الرقم المرجعي: ${got.refNum}${got.oldRef && got.oldRef !== got.refNum ? ` (كان ${got.oldRef})` : ''}`, 'success');
+    } else if (got.saveOk === false) {
+      showToast(`تعذّر حفظ الرقم المرجعي (${got.refNum}): تعارض مع تعديل آخر — حدّث الصفحة وأعد المحاولة`, 'error');
     } else {
-      showToast(`جُلب الرقم (${refNum}) لكن تعذّر الاتصال بالخادم — سيتم الرفع تلقائياً عند عودة الاتصال`, 'error');
+      showToast(`جُلب الرقم (${got.refNum}) لكن تعذّر الاتصال بالخادم — سيتم الرفع تلقائياً عند عودة الاتصال`, 'error');
     }
-    if (typeof openClientWorkspace === 'function') openClientWorkspace(c.id);
+    // تحديث شيت العملاء خلف الكرت ثم الكرت نفسه بالبيانات الحيّة
+    if (typeof renderTable === 'function') { try { renderTable(); } catch (e) {} }
+    if (typeof openClientWorkspace === 'function') openClientWorkspace(id);
   } catch (err) {
-    showToast('خطأ جلب الرقم المرجعي: ' + String(err.message).slice(0, 100), 'error');
+    showToast('خطأ جلب الرقم المرجعي: ' + String(err.message).slice(0, 120), 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = oldLabel;
@@ -352,7 +482,7 @@ async function arkkanRefNumCardButton(id, btn) {
 /* زر "جلب" بجانب صف واحد في شيت المزامنة: يجلب بيانات هذا العميل فقط
    ويملأ الناقص ويحفظ — دون الحاجة للمزامنة الكاملة لكل العملاء. */
 async function arkkanSyncOne(clientId, btn) {
-  const c = clients.find(x => x.clientId === clientId);
+  const c = clients.find(x => String(x.clientId) === String(clientId));
   if (!c) return;
   if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
@@ -365,18 +495,27 @@ async function arkkanSyncOne(clientId, btn) {
 
   try {
     const data = await arkkanFetchOne(clientId, c.referNum || '');
-    const patch = arkkanPatchFromData(c, data);
+    // مصفوفة clients قد تُستبدل بمزامنة خلفية أثناء الجلب — نعدّل الكائن الحيّ
+    // (تعديل النسخة القديمة لا يظهر في الجدول ولا يُحفظ في اللقطة المحلية).
+    const live = arkkanLiveClient(null, clientId) || c;
+    const patch = arkkanPatchFromData(live, data);
     if (Object.keys(patch).length > 0) {
-      Object.assign(c, patch); // c هو نفس الكائن داخل clients
+      Object.assign(live, patch); // live هو نفس الكائن داخل clients
       // دورة تلقائية: لو رقم الدورة القادم من أركان جديد، تُفتح دورة حقيقية محفوظة فوراً.
-      const sessionCreated = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(c);
+      const sessionCreated = typeof ensureCourseSessionForClient === 'function' && ensureCourseSessionForClient(live);
+      // ترحيل فاتورة الدورة قبل حفظ العملاء حتى يُحفظ courseInvoiceDEId مع العميل
+      // (الحفظ قبله كان يُسقط المؤشر فيُعاد الترحيل كل مرة وتتراكم قيود مكررة).
+      const posted = typeof autoPostCourseInvoice === 'function' ? autoPostCourseInvoice(live) : false;
       if (typeof saveClients === 'function') await saveClients();
       if (sessionCreated && typeof saveCourseSessions === 'function') await saveCourseSessions();
-      // ترحيل فاتورة الدورة للقيد المزدوج تلقائياً (يستدعي الحفظ لحفظ القيد أيضاً)
-      if (typeof autoPostCourseInvoice === 'function' && autoPostCourseInvoice(c) && typeof saveJournalDE === 'function') {
+      if (posted && typeof saveJournalDE === 'function') {
         try { await saveJournalDE(); } catch {}
       }
-      arkkanRefreshRowCells(c);
+      // لو استُبدلت المصفوفة أثناء الحفظ، نُطبّق نفس التصحيح (المؤكد على السيرفر الآن)
+      // على الكائن الحيّ حتى لا يعود الصف يعرض القديم بعد لحظة.
+      const liveNow = arkkanLiveClient(null, clientId);
+      if (liveNow && liveNow !== live) Object.assign(liveNow, patch);
+      arkkanRefreshRowCells(liveNow || live);
       if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ تم (${Object.keys(patch).length} حقل)</span>`;
       showToast(`✅ تم جلب وحفظ ${Object.keys(patch).length} حقل من أركان`, 'success');
     } else {
@@ -394,54 +533,17 @@ async function arkkanSyncOne(clientId, btn) {
 
 /* ══════════════════════════════════════════════
    1.5) تحميل الإيصالات (دورة + حقيبة) PDF
-   ── زر لكل صف: يجلب إيصال العميل من الوكيل وينزّله كملف على الجهاز.
-      زر جماعي في شريط أدوات الصندوق الأول: ينزّل إيصالات كل العملاء. ──
+   ── كل أزرار الإيصالات (صف/كرت/محددون) تمر عبر طابور واحد في
+      receipts-auto-sync.js، ويُحفظ الإيصال في الأرشيف المحلي.
    ══════════════════════════════════════════════ */
 
-async function arkkanReceiptsFetchOne(clientId, referNum = '', forceRefresh = false) {
-  await arkkanEnsureAgentReady();
-  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/receipts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, referNum, forceRefresh: !!forceRefresh }),
-    signal: AbortSignal.timeout(165000)
-  });
-  if (!r.ok) {
-    let msg = 'فشل الوكيل المحلي (' + r.status + ')';
-    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
-    throw new Error(msg);
-  }
-  return r.json();
-}
-
-/* تحويل base64 من الوكيل إلى ملف محمّل على الجهاز عبر Blob + رابط مخفي —
-   التطبيق معزول تماماً (لا Node)، لكن روابط التنزيل تعمل داخل الصفحة. */
-function arkkanDownloadBase64(base64, mime, fileName) {
-  if (!base64) return false;
-  const bin = atob(base64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  const blob = new Blob([arr], { type: mime || 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName || 'receipt.' + (mime === 'image/png' ? 'png' : 'pdf');
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 5000);
-  a.remove();
-  return true;
-}
-
-/* ═══ سجل التحميلات المخفي (داخل البرنامج) + منع التكرار ═══
+/* ═══ سجل التحميلات (داخل البرنامج) ═══
    يُسجَّل في مفتاح تخزين خاص بالبرنامج (receiptDownloadsLog) — نفس نظام حفظ
    بيانات البرنامج (يُشفر ويُزامن مع السيرفر مثل بقية البيانات).
-   قواعد المنع:
-   - إيصال مسجَّل في السجل لا يُنزَّل مرة أخرى أبداً وبصمت تام (لا يُسأل المستخدم).
-   - عميل مسجَّل علامته «اكتمل تحميل إصالاته» (مفتاح _c:<id>) يُتخطَّى كلياً قبل الجلب
-     من الوكيل — ينتقل للعميل التالي فوراً.
+   أصبح السجل للعرض/العدّ فقط؛ منع التكرار الحقيقي يعتمد على فهرس الإيصالات
+   المحلي (receipts-auto-sync.js) لأن الملف يُحفظ في أرشيف الإيصالات.
    حرج: كل التعديلات تُحفَظ عبر طابور وعود مسلسل (بدون ذلك تتصادم الطلبات السريعة
-   المتتالية بنظرة الأسبق-DOM 409 فيفقد السجل تسجيلاته وتُعاد التنزيلات). */
+   المتتالية بنظرة الأسبق-DOM 409 فيفقد السجل تسجيلاته). */
 const ARKKAN_RECEIPTS_LOG_KEY = 'receiptDownloadsLog';
 const ARKKAN_RECEIPTS_CLIENT_PREFIX = '_c:';
 let _receiptsLog = null;
@@ -459,10 +561,7 @@ async function arkkanReceiptsLogLoad() {
   return _receiptsLog;
 }
 
-/* موجود مسبقاً بأي شكل (إيصال فردي أو علامة عميل كاملة) */
-function arkkanReceiptsLogHas(name) {
-  return !!(name && _receiptsLog && _receiptsLog[String(name)]);
-}
+/* ── تسجيل إيصال محفوظ في السجل (للعرض والعدّ في الإعدادات) ── */
 function arkkanReceiptsLogMark(name) {
   if (!name) return;
   if (!_receiptsLog) _receiptsLog = {};
@@ -470,11 +569,8 @@ function arkkanReceiptsLogMark(name) {
   arkkanReceiptsLogScheduleSave();
 }
 
-/* ── مستوى العميل: «اكتمل تحميل إصالاته» — يُتخطى قبل الجلب من الوكيل ── */
+/* ── مستوى العميل: «اكتمل تحميل إصالاته» — للعرض في السجل فقط ── */
 function arkkanReceiptsClientKey(clientId) { return ARKKAN_RECEIPTS_CLIENT_PREFIX + clientId; }
-function arkkanReceiptsClientDone(clientId) {
-  return !!(clientId && _receiptsLog && _receiptsLog[arkkanReceiptsClientKey(clientId)]);
-}
 function arkkanReceiptsMarkClientDone(clientId) {
   if (!clientId) return;
   if (!_receiptsLog) _receiptsLog = {};
@@ -525,81 +621,15 @@ function arkkanReceiptsLogClear() {
   _arkkanReceiptsLogFlush(); // كتابة فورية (غير مؤجلة) لتفريغ السجل من السيرفر فوراً
 }
 
-/* تنزيل قائمة إيصالات مع منع التكرار الصامت — القيمة المُرجع منها:
-   { downloaded, existing } (existing = المسجَّل مسبقاً والمُتخطَّى تلقائياً) */
-async function arkkanDownloadReceiptsDedup(list, clientId) {
-  await arkkanReceiptsLogLoad();
-  let downloaded = 0, existing = 0;
-  for (const rc of list || []) {
-    if (!rc || !rc.base64) continue;
-    if (arkkanReceiptsLogHas(rc.fileName)) {
-      existing++;
-      continue;
-    }
-    if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) {
-      arkkanReceiptsLogMark(rc.fileName);
-      downloaded++;
-    }
-  }
-  if (downloaded || existing) arkkanReceiptsMarkClientDone(clientId);
-  return { downloaded, existing };
-}
-
-/* معالج زر «📥 إيصال» بجانب صف واحد: جلب إيصالات هذا العميل وتنزيلها */
-async function arkkanSyncReceiptsOne(clientId, btn, forceRefresh = false) {
-  const c = clients.find(x => x.clientId === clientId);
-  if (!c) return;
-  if (arkkanIsSkipped(c)) { showToast('هذا العميل مستبعد من الجلب — ألغِ تفشيكه من عمود «إيقاف»', 'info'); return; }
-  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
-
-  // هذا العميل تم تحميل إصالاته مسبقاً وفق سجل البرنامج → تخطٍّ صامت بدون جلب
-  await arkkanReceiptsLogLoad();
-  if (arkkanReceiptsClientDone(clientId)) {
-    showToast(`تم تحميل إصالات هذا العميل (${clientId}) مسبقاً — امسح السجل من الإعدادات لإعادة تنزيلها`, 'info');
-    const st = $(`#arkkan-status-${cssEscapeId(clientId)}`);
-    if (st) st.innerHTML = '<span style="color:var(--text-muted);">📁 محمَّلة مسبقاً</span>';
-    return;
-  }
-
-  const statusEl = $(`#arkkan-status-${cssEscapeId(clientId)}`);
-  const oldLabel = btn.innerHTML;
-  btn.disabled = true;
-  btn.textContent = '⏳';
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold);">⏳ جاري تحميل الإيصالات...</span>';
-
-  try {
-    const data = await arkkanReceiptsFetchOne(clientId, c.referNum || '', forceRefresh);
-    if (data.servedFromCache && statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">📁 جاري التحميل من الكاش...</span>';
-    const list = Array.isArray(data.receipts) ? data.receipts : [];
-    if (!list.length) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">لا إيصالات</span>';
-      showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info');
-      return;
-    }
-    const r = await arkkanDownloadReceiptsDedup(list, clientId);
-    const fromCache = data.servedFromCache ? ' 📁' : '';
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--success, green);">✅ ${r.downloaded} إيصال${r.existing ? ` · 📁 ${r.existing} موجود` : ''}${fromCache}</span>`;
-    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل ${clientId}${fromCache ? ' — من الكاش المحلي فوراً' : ''}${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ فشل</span>`;
-    showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = oldLabel;
-  }
-}
-
-/* زر «📥 الإيصالات» في كرت العميل: تحميل إيصال الدورة + الحقيبة للعميل المعروض */
+/* زر «📥 الإيصالات» في كرت العميل: يمر عبر نفس الطابور الواحد ويُحفظ في الأرشيف المحلي */
 async function arkkanReceiptsCardButton(id, btn) {
   const c = clients.find(x => x.id === id);
   if (!c) return;
   if (!c.clientId) { showToast('لا يوجد رقم هوية لهذا العميل', 'error'); return; }
+  if (!c.invoice) { showToast('لا يوجد رقم فاتورة لهذا العميل — لا يمكن مطابقة الإيصال', 'info'); return; }
   if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
-
-  // هذا العميل تم تحميل إصالاته مسبقاً وفق سجل البرنامج → تخطٍّ صامت بدون جلب
-  await arkkanReceiptsLogLoad();
-  if (arkkanReceiptsClientDone(c.clientId)) {
-    showToast('تم تحميل إصالات هذا العميل مسبقاً — امسح السجل من الإعدادات لإعادة تنزيلها', 'info');
+  if (typeof receiptsEnqueue !== 'function') {
+    showToast('طابور الإيصالات لم يكتمل تحميله بعد — أعد المحاولة بعد لحظة', 'error');
     return;
   }
 
@@ -608,11 +638,9 @@ async function arkkanReceiptsCardButton(id, btn) {
   btn.textContent = '⏳ جاري التحميل...';
 
   try {
-    const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '');
-    const list = Array.isArray(data.receipts) ? data.receipts : [];
-    if (!list.length) { showToast('لا توجد إيصالات (دورة أو حقيبة) لهذا العميل', 'info'); return; }
-    const r = await arkkanDownloadReceiptsDedup(list, c.clientId);
-    showToast(`✅ تم تنزيل ${r.downloaded} إيصال للعميل (دورة وحقيبة)${r.existing ? ` — 📁 ${r.existing} محفوظ مسبقاً (تخطّي)` : ''}`, 'success');
+    const entry = await receiptsEnqueue(c, { source: 'click', priority: true, ignorePause: true }).promise;
+    if (!entry) throw new Error('تعذّر جلب الإيصال — تحقق من رقم الهوية والفاتورة');
+    showToast('✅ تم حفظ الإيصال محلياً — اضغط رقم الفاتورة لعرضه وطباعته', 'success');
   } catch (err) {
     showToast('خطأ تحميل الإيصالات: ' + String(err.message).slice(0, 90), 'error');
   } finally {
@@ -630,11 +658,210 @@ async function arkkanReceiptsCardButton(id, btn) {
 let _arkkanBulkRunning = false;
 let _arkkanBulkStop = false;
 
+/* ══════════════════════════════════════════════
+   قفل تشغيل واحد لكل عمليات أركان
+   يمنع ازدواج الجلب (صف + جماعي، أو صندوقان معاً، أو المزامنة الكاملة)
+   لأن الوكيل المحلي صفحة متصفح واحدة ولا يتحمل طلبين متوازيين.
+   ══════════════════════════════════════════════ */
+const _arkkanExamRunLock = {
+  active: false, label: '', prefix: null, name: null,
+  stoppable: false, total: 0, done: 0, startedAt: 0
+};
+
+/* ══════════════════════════════════════════════
+   شريط الحالة الثابت + مؤشر التبويب الشغّال
+   يظهر مهما بدّلت التبويبات، ويتيح الإيقاف من أي مكان.
+   ══════════════════════════════════════════════ */
+let _arkkanRunbarTimer = null;
+
+function arkkanPrefixToTab(prefix) {
+  if (!prefix) return '';
+  if (prefix === 'arkkan-exams') return 'noresult';
+  const m = /^arkkan-exams-(needing|passed|failed)$/.exec(prefix);
+  return m ? m[1] : '';
+}
+
+function arkkanRunbarEls() {
+  return {
+    bar: document.getElementById('arkkan-runbar'),
+    txt: document.getElementById('arkkan-runbar-text'),
+    btn: document.getElementById('btn-arkkan-runbar-stop')
+  };
+}
+
+function arkkanRunbarText() {
+  const L = _arkkanExamRunLock;
+  if (!L.active) return;
+  const { txt, btn } = arkkanRunbarEls();
+  const st = L.name ? _examBulkStates[L.name] : null;
+  const stopping = L.name ? !!(st && st.stop) : !!_arkkanBulkStop;
+  const secs = L.startedAt ? Math.max(0, Math.round((Date.now() - L.startedAt) / 1000)) : 0;
+  const prog = L.total > 0 ? ` — ${L.done}/${L.total}` : '';
+  if (txt) {
+    txt.textContent = stopping
+      ? `⏳ جارٍ الإيقاف بعد العميل الحالي — ${L.label}`
+      : `⏳ ${L.label}${prog} · ${secs} ث`;
+  }
+  if (btn) {
+    btn.style.display = L.stoppable ? '' : 'none';
+    btn.disabled = stopping;
+    btn.textContent = stopping ? '⏳ جارٍ الإيقاف…' : '⏹ إيقاف';
+    btn.title = L.stoppable ? 'إيقاف العملية الجارية في أركان' : '';
+  }
+}
+
+function arkkanRunbarUpdate() {
+  const L = _arkkanExamRunLock;
+  const { bar } = arkkanRunbarEls();
+  if (bar) bar.style.display = L.active ? '' : 'none';
+  const tabName = arkkanPrefixToTab(L.prefix);
+  document.querySelectorAll('[data-arkkan-tab]').forEach(t => {
+    t.classList.toggle(
+      'is-running',
+      !!L.active && tabName === t.getAttribute('data-arkkan-tab')
+    );
+  });
+  if (!L.active) {
+    if (_arkkanRunbarTimer) { clearInterval(_arkkanRunbarTimer); _arkkanRunbarTimer = null; }
+    return;
+  }
+  if (!_arkkanRunbarTimer) {
+    _arkkanRunbarTimer = setInterval(() => {
+      if (_arkkanExamRunLock.active) arkkanRunbarText();
+    }, 1000);
+  }
+  arkkanRunbarText();
+}
+
+function arkkanRunbarSetProgress(done, total) {
+  const L = _arkkanExamRunLock;
+  if (!L.active) return;
+  L.done = done;
+  L.total = total;
+  arkkanRunbarText();
+}
+
+function arkkanRunbarStop() {
+  const L = _arkkanExamRunLock;
+  if (!L.active) return;
+  if (L.name) { arkkanExamRequestStop(L.name, null); return; }
+  if (_arkkanBulkRunning) { arkkanBulkRequestStop(null); return; }
+  showToast('العملية الحالية جلب لعميل واحد — تكمّل خلال لحظات ولا تحتاج إيقافاً', 'info');
+}
+const ARKKAN_EXAM_RUN_BUTTON_IDS = [
+  'btn-arkkan-exams-start', 'btn-arkkan-exams-compare',
+  'btn-arkkan-exams-needing-start', 'btn-arkkan-exams-needing-compare',
+  'btn-arkkan-exams-failed-start', 'btn-arkkan-exams-failed-compare',
+  'btn-arkkan-exams-passed-compare'
+];
+
+function arkkanExamRunBusyMessage() {
+  showToast('فيه ' + (_arkkanExamRunLock.label || 'عملية') + ' شغالة بالفعل — استنى لحد ما تخلص أو اضغط «إيقاف»', 'info');
+}
+
+function arkkanExamAcquireRunLock(label, meta) {
+  meta = meta || {};
+  _arkkanExamRunLock.active = true;
+  _arkkanExamRunLock.label = label || 'جلب';
+  _arkkanExamRunLock.prefix = meta.prefix || null;
+  _arkkanExamRunLock.name = meta.name || null;
+  _arkkanExamRunLock.stoppable = !!meta.stoppable;
+  _arkkanExamRunLock.total = Number(meta.total) > 0 ? Number(meta.total) : 0;
+  _arkkanExamRunLock.done = 0;
+  _arkkanExamRunLock.startedAt = Date.now();
+  arkkanExamSyncRunButtons();
+  arkkanRunbarUpdate();
+}
+
+function arkkanExamReleaseRunLock() {
+  _arkkanExamRunLock.active = false;
+  _arkkanExamRunLock.label = '';
+  _arkkanExamRunLock.prefix = null;
+  _arkkanExamRunLock.name = null;
+  _arkkanExamRunLock.stoppable = false;
+  _arkkanExamRunLock.total = 0;
+  _arkkanExamRunLock.done = 0;
+  _arkkanExamRunLock.startedAt = 0;
+  arkkanExamSyncRunButtons();
+  arkkanRunbarUpdate();
+}
+
+/* تعطيل/تمكين أزرار البدء والمقارنة والتصدير وأزرار الصفوف أثناء أي عملية */
+function arkkanExamSyncRunButtons() {
+  const busy = _arkkanExamRunLock.active;
+  const set = (btn) => {
+    if (!btn) return;
+    btn.disabled = busy;
+    btn.style.opacity = busy ? '0.5' : '';
+    btn.style.cursor = busy ? 'not-allowed' : '';
+    if (busy) btn.title = 'عملية أخرى شغالة بالفعل';
+    else btn.removeAttribute('title');
+  };
+  ARKKAN_EXAM_RUN_BUTTON_IDS.forEach(id => set(document.getElementById(id)));
+  document.querySelectorAll('[data-arkkan-exam-one]').forEach(set);
+  document.querySelectorAll('[id^="btn-arkkan-exams"][id$="-export"]').forEach(set);
+}
+
+/* طلب إيقاف مع تغذية راجعة فورية (الطلب الجاري يكمّل ثم يتوقف) */
+function arkkanExamRequestStop(name, btn) {
+  const st = examBulkState(name);
+  if (!st.running) { showToast('لا توجد عملية شغالة في هذا الصندوق', 'info'); return; }
+  st.stop = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ جارٍ الإيقاف…';
+  }
+  showToast('تم طلب الإيقاف — هيقف بعد ما يخلّص العميل الحالي', 'info');
+  arkkanRunbarUpdate();
+}
+
+function arkkanBulkRequestStop(btn) {
+  if (!_arkkanBulkRunning) { showToast('لا توجد مزامنة شغالة حالياً', 'info'); return; }
+  _arkkanBulkStop = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ جارٍ الإيقاف…';
+  }
+  showToast('تم طلب الإيقاف — هتوقف بعد ما يخلّص العميل الحالي', 'info');
+  arkkanRunbarUpdate();
+}
+
 /* عملاء ناقصي البيانات المؤهلون — مرتبين من الأحدث تسجيلاً (c.date) إلى الأقدم */
 function arkkanMissingClients() {
   return (clients || [])
     .filter(c => clientEligibleForArkkan(c) && !c.noCourseNumber && clientIsMissingArkkanData(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+/* فلتر السنة لصندوق مزامنة بيانات أركان (الصندوق الخامس) */
+function arkkanSyncFilterYear() {
+  var el = document.getElementById('arkkan-sync-filter-year');
+  return el ? el.value : '';
+}
+function arkkanSyncClientYear(c) {
+  var d = c && (c.date || c.startDate || arkkanCourseDate(c));
+  return String(d || '').slice(0, 4);
+}
+function arkkanSyncFilteredClients() {
+  var base = arkkanMissingClients();
+  var y = arkkanSyncFilterYear();
+  if (!y) return base;
+  return base.filter(function (c) { return arkkanSyncClientYear(c) === String(y); });
+}
+function arkkanSyncPopulateYearFilter() {
+  var sel = document.getElementById('arkkan-sync-filter-year');
+  if (!sel) return;
+  var years = new Set();
+  arkkanMissingClients().forEach(function (c) {
+    var y = arkkanSyncClientYear(c);
+    if (/^\d{4}$/.test(y)) years.add(y);
+  });
+  var sorted = Array.from(years).sort(function (a, b) { return b.localeCompare(a); });
+  var cur = sel.value;
+  sel.innerHTML = ['<option value="">كل السنوات</option>']
+    .concat(sorted.map(function (y) { return '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>'; }))
+    .join('');
+  if (sorted.indexOf(cur) !== -1) sel.value = cur;
 }
 
 /* ── استبعاد عميل من الجلب (مربع التحديد) ──
@@ -655,10 +882,12 @@ function arkkanToggleSkip(clientId) {
 function renderArkkanSyncTable() {
   const tbody = $('#arkkan-sync-tbody');
   if (!tbody) return;
-  const missing = arkkanMissingClients();
+  arkkanSyncPopulateYearFilter();
+  const missing = arkkanSyncFilteredClients();
   const skipped = missing.filter(arkkanIsSkipped);
+  const totalAll = arkkanMissingClients().length;
   const counter = $('#arkkan-bulk-counter');
-  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
+  if (counter) counter.textContent = `عملاء ناقصي البيانات (بشرط وجود رقم مرجعي): ${missing.length} من ${totalAll}${skipped.length ? ` — ${skipped.length} مستبعدون ✓` : ''}`;
 
   tbody.innerHTML = missing.map(c => `
     <tr id="arkkan-row-${escapeHtml(c.clientId)}"${arkkanIsSkipped(c) ? ' style="opacity:.5;"' : ''}>
@@ -676,8 +905,6 @@ function renderArkkanSyncTable() {
       <td class="col-bagdate">${escapeHtml(c.bagPurchaseDate || '—')}</td>
       <td class="col-missing" style="color:#c26511;">${escapeHtml(arkkanMissingFields(c).map(f => ARKKAN_FIELD_LABELS[f]).join('، '))}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد من الجلب (ألغِ تفشيكه من عمود «إيقاف»)' : 'جلب بيانات هذا العميل فقط من أركان (بدون المزامنة الكاملة)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>جلب</button></td>
-      <td style="text-align:center;"><button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt="${escapeHtml(c.clientId)}" style="padding:2px 10px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'تحميل إيصال الدورة + إيصال الحقيبة كملف PDF على الجهاز (من الكاش المحلي فوراً إن كان محمَّلاً مسبقاً)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>📥 إيصال</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-arkkan-receipt-fresh="${escapeHtml(c.clientId)}" style="padding:2px 8px; font-size:12px;" title="${arkkanIsSkipped(c) ? 'هذا العميل مستبعد (ألغِ تفشيكه من عمود «إيقاف»)' : 'فتح موقع أركان وإعادة تحديث إيصالات هذا العميل من مصدرها (يتجاوز الكاش المحلي)'}"${arkkanIsSkipped(c) ? ' disabled' : ''}>🔄</button></td>
       <td id="arkkan-status-${escapeHtml(c.clientId)}">${arkkanIsSkipped(c) ? '<span style="color:var(--text-muted);">⛔ مستبعد</span>' : '<span style="color:var(--text-muted);">في الانتظار</span>'}</td>
     </tr>`).join('');
 }
@@ -809,21 +1036,23 @@ async function arkkanEnsureAgentReady() {
 }
 
 async function arkkanBulkSync() {
-  if (_arkkanBulkRunning) return;
+  if (_arkkanBulkRunning) { showToast('المزامنة الكاملة شغالة بالفعل', 'info'); return; }
+  if (_arkkanExamRunLock.active) { arkkanExamRunBusyMessage(); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
 
   _arkkanBulkRunning = true;
   _arkkanBulkStop = false;
+  arkkanExamAcquireRunLock('المزامنة الكاملة', { stoppable: true });
 
   const startBtn = $('#btn-arkkan-bulk-start');
   const stopBtn = $('#btn-arkkan-bulk-stop');
   const progress = $('#arkkan-progress-bar');
   const wrap = $('#arkkan-progress-bar-wrap');
   if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = '';
+  if (stopBtn) { stopBtn.style.display = ''; stopBtn.disabled = false; stopBtn.textContent = '⏹ إيقاف'; }
   if (wrap) wrap.style.display = '';
 
-const allEligible = arkkanMissingClients();
+const allEligible = arkkanSyncFilteredClients();
   /* المستبعدون (مربع «إيقاف») لا يُسأل أركان عنهم إطلاقاً — يُعرضون بس كتلميح */
   const userSkipped = allEligible.filter(arkkanIsSkipped);
   const all = allEligible.filter(c => !arkkanIsSkipped(c));
@@ -834,6 +1063,7 @@ const allEligible = arkkanMissingClients();
   });
   const total = missing.length;
   const skipped0 = all.length - total;
+  arkkanRunbarSetProgress(0, total);
   let done = 0, updated = 0, failed = 0;
 
   showToast(`بدأت المزامنة: ${total} عميل${skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : ''}${userSkipped.length ? ` — ${userSkipped.length} مستبعد ✓` : ''} — سيستغرق وقتاً حسب عدد العملاء`, 'info');
@@ -911,6 +1141,7 @@ const allEligible = arkkanMissingClients();
       }
 
       done++;
+      arkkanRunbarSetProgress(done, total);
       if (progress) progress.style.width = `${Math.round(done / Math.max(total, 1) * 100)}%`;
       const counter = $('#arkkan-bulk-counter');
       if (counter) counter.textContent = `✅ ${updated} محدّث · ❌ ${failed} فشل · ${done}/${total}`;
@@ -923,8 +1154,9 @@ const allEligible = arkkanMissingClients();
 
   _arkkanBulkRunning = false;
   if (startBtn) startBtn.style.display = '';
-  if (stopBtn) stopBtn.style.display = 'none';
+  if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = false; stopBtn.textContent = '⏹ إيقاف'; }
   if (wrap) wrap.style.display = 'none';
+  arkkanExamReleaseRunLock();
   renderArkkanSyncTable();
   showToast(`اكتملت المزامنة: ${updated} محدّث، ${failed} فشل`, updated > 0 ? 'success' : 'info');
 }
@@ -961,7 +1193,11 @@ function arkkanPatchExamsFromData(c, data) {
   return {
     examAttempts: Array.isArray(data.attempts) ? data.attempts : [],
     examLastDate: data.lastDate || '',
-    examResult: data.lastResult || ''
+    examResult: data.lastResult || '',
+    examGrade: data.lastGrade || '',
+    // موعد الاختبار كما ورد من أركان حرفياً (المركز + القاعة + اليوم + التاريخ + الساعة)
+    examAppointment: String(data.examAppointment || '').trim(),
+    examAppointmentDate: String(data.examAppointmentDate || '').trim()
   };
 }
 
@@ -979,10 +1215,16 @@ function arkkanExamFailed(c) {
     .some(a => String((a && a.r) || '').includes('راسب'));
 }
 
+/* هل للعميل أي دلالة تاريخ اختبار؟ تاريخ محفوظ أو موعد قادم من أركان. */
+function arkkanExamHasDate(c) {
+  if (String((c && c.examLastDate) || '').trim()) return true;
+  return !!String((c && c.examAppointment) || '').trim() || !!String((c && c.examAppointmentDate) || '').trim();
+}
+
 /* صندوق النتائج الرئيسي: بلا نتيجة وبلا تاريخ اختبار (لم يُسجّل له أي اختبار بعد) */
 function arkkanExamClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !(c.examLastDate || '').trim())
+    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !arkkanExamHasDate(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -990,7 +1232,7 @@ function arkkanExamClients() {
    (لا نجاح ولا رسوب سابق) — يُعيد الاختبار حتى تظهر نتيجة */
 function arkkanExamNeedingClients() {
   return (clients || [])
-    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && !!(c.examLastDate || '').trim())
+    .filter(c => clientEligibleForArkkanExams(c) && !arkkanExamPassed(c) && !arkkanExamFailed(c) && arkkanExamHasDate(c))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
@@ -1008,22 +1250,87 @@ function arkkanExamFailedClients() {
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
 }
 
-/* خلية نتيجة: ناجح أخضر / راسب أحمر */
-function arkkanExamCell(v) {
-  const s = String(v || '').trim();
-  if (!s) return '<span style="color:var(--text-muted);">—</span>';
-  const color = s.includes('ناجح') ? 'var(--success, green)' : s.includes('راسب') ? 'var(--danger, red)' : 'inherit';
-  return `<span style="color:${color}; font-weight:600;">${escapeHtml(s)}</span>`;
+/* خلية نتيجة: ناجح أخضر / راسب أحمر + الدرجة */
+function arkkanExamCell(attempt) {
+  // attempt يمكن أن يكون نصاً قديماً (للتوافق) أو كائن {r, g, d}
+  let r = '', g = '';
+  if (typeof attempt === 'object' && attempt !== null) {
+    r = String(attempt.r || '').trim();
+    g = String(attempt.g || '').trim();
+  } else {
+    r = String(attempt || '').trim();
+  }
+  if (!r && !g) return '<span style="color:var(--text-muted);">—</span>';
+  
+  const color = r.includes('ناجح') ? 'var(--success, green)' : r.includes('راسب') ? 'var(--danger, red)' : 'inherit';
+  const resultHtml = r ? `<span style="color:${color}; font-weight:600;">${escapeHtml(r)}</span>` : '';
+  const gradeHtml = g ? `<span style="color:var(--text-muted); font-size:0.85em; margin-right:6px;">(${escapeHtml(g)})</span>` : '';
+  
+  return `${gradeHtml}${resultHtml}`;
 }
 
 /* آخر اختبار تم للعميل: يقرأ examResult (آخر نتيجة)، ولو فاضي يرجع لأول محاولة مخزّنة
-   لها نتيجة ناجح/راسب — نفس معيار التصنيف المستخدم في صناديق نتائج الاختبارات */
+   لها نتيجة ناجح/راسب — نفس معيار التصنيف المستخدم في صناديق نتائج الاختبارات
+   يعيد { r: result, g: grade, d: date } */
+/* خلية «تاريخ آخر اختبار» — عمود واحد ذكي:
+   - نتيجة حقيقية موجودة  → التاريخ المخزَّن (+ منذ كام يوم)
+   - لا نتيجة لكن فيه موعد → نص الموعد الكامل كما ورد من أركان:
+     «مركز اختبار الخرج رجال - قاعة (2) - السبت 2026/11/07 - من 8:30 ص الي 10:00 ص»
+   هكذا لا تُضاف أعمدة مكررة ولا يضيع الفرق بين محاولة حقيقية وموعد قادم. */
+/* هل عند العميل نتيجة اختبار حقيقية (لا مجرد موعد)؟ */
+function arkkanExamHasResult(c) {
+  return !!(String((c && c.examResult) || '').trim()
+    || (Array.isArray(c && c.examAttempts) && c.examAttempts.length));
+}
+/* الموعد القادم يُعرض سطراً مستقلاً فقط لو العميل عنده نتيجة حقيقية أيضاً
+   — حتى لا يتكرر حين يكون الموعد هو النص الأساسي. */
+/* لم يعد هناك سطر موعد مستقل — الموعد القادم هو النص الأساسي نفسه. */
+function arkkanExamApptExtra(c) {
+  return '';
+}
+/* النص الأساسي للعمود: تاريخ المحاولة إن وُجدت، وإلا نص الموعد كما ورد من أركان. */
+/* (غير مستخدم) كان يقيّد العرض بالمواعيد القادمة فقط. */
+function arkkanExamApptUpcoming(c) {
+  const appt = String((c && c.examAppointment) || '').trim();
+  if (!appt) return '';
+  const ad = String((c && c.examAppointmentDate) || '').trim().replace(/-/g, '/');
+  if (!/^\d{4}\/\d{2}\/\d{2}$/.test(ad)) return appt; // بلا تاريخ قابل للمقارنة
+  const now = new Date();
+  const today = now.getFullYear() + '/' + String(now.getMonth() + 1).padStart(2, '0') + '/' + String(now.getDate()).padStart(2, '0');
+  return ad >= today ? appt : '';
+}
+function arkkanExamDateText(c) {
+  const appt = String((c && c.examAppointment) || '').trim();
+  const d = String((c && c.examLastDate) || '').trim();
+  // نص الموعد الكامل (اليوم + التاريخ + الساعة) يتقدّم دائماً عند وجوده،
+  // والا نعرض تاريخ آخر محاولة. لا نستبدل الجملة بتاريخ مجرّد.
+  return appt || d;
+}
+/* النص الكامل للتصدير: الأساسي + الموعد القادم لو الاثنان موجودان. */
+function arkkanExamDateFullText(c) {
+  const base = arkkanExamDateText(c);
+  const extra = arkkanExamApptExtra(c);
+  return extra ? (base ? base + ' — ' + extra : extra) : base;
+}
+function arkkanExamDateCellHtml(c) {
+  const txt = arkkanExamDateText(c);
+  const extra = arkkanExamApptExtra(c);
+  let out = txt ? `<span class="arkkan-appt" title="${escapeHtml(txt)}">${escapeHtml(txt)}</span>`
+    : '<span style="color:var(--text-muted);">—</span>';
+  // نتيجة حقيقية + موعد قادم معاً → الموعد سطر صغير تحت التاريخ
+  if (extra) {
+    out += `<div class="arkkan-appt-sub" title="موعد قادم من أركان" style="margin-top:4px; font-size:0.78em; color:var(--text-muted);">${escapeHtml(extra)}</div>`;
+  }
+  return out;
+}
+
 function arkkanExamStatusOf(c) {
   const er = String(c.examResult || '').trim();
-  if (er) return { r: er, d: c.examLastDate || '' };
+  const eg = String(c.examGrade || '').trim();
+  if (er) return { r: er, g: eg, d: c.examLastDate || '' };
   const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
   const last = att.slice().reverse().find(a => a && String(a.r || '').trim() && (String(a.r).includes('ناجح') || String(a.r).includes('راسب')));
-  if (last) return { r: last.r, d: last.d || '' };
+  if (last) return { r: last.r, g: last.g || '', d: last.d || '' };
   return null;
 }
 
@@ -1032,9 +1339,10 @@ function arkkanExamBadgeHtml(c) {
   const s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
   if (!s) return '';
   const r = String(s.r).trim();
-  const tip = `آخر اختبار تم: ${r}${s.d ? ' — بتاريخ ' + s.d : ''}`;
-  if (r.includes('ناجح')) return `<span class="stamp paid" title="${escapeHtml(tip)}">ناجح ✓</span>`;
-  if (r.includes('راسب')) return `<span class="stamp owe" title="${escapeHtml(tip)}">راسب</span>`;
+  const g = String(s.g).trim();
+  const tip = `آخر اختبار تم: ${r}${g ? ' (درجة: ' + g + ')' : ''}${s.d ? ' — بتاريخ ' + s.d : ''}`;
+  if (r.includes('ناجح')) return `<span class="stamp paid" title="${escapeHtml(tip)}">ناجح ✓${g ? ' (' + escapeHtml(g) + ')' : ''}</span>`;
+  if (r.includes('راسب')) return `<span class="stamp owe" title="${escapeHtml(tip)}">راسب${g ? ' (' + escapeHtml(g) + ')' : ''}</span>`;
   return '';
 }
 
@@ -1043,18 +1351,23 @@ function arkkanExamCardContent(c) {
   const s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
   const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
   const last = s ? String(s.r).trim() : '';
+  const lastGrade = s ? String(s.g).trim() : '';
   const badge = last.includes('ناجح')
-    ? '<span class="stamp paid">ناجح ✓</span>'
+    ? `<span class="stamp paid">ناجح ✓${lastGrade ? ' (' + escapeHtml(lastGrade) + ')' : ''}</span>`
     : last.includes('راسب')
-      ? '<span class="stamp owe">راسب</span>'
+      ? `<span class="stamp owe">راسب${lastGrade ? ' (' + escapeHtml(lastGrade) + ')' : ''}</span>`
       : `<span class="stamp" style="color:var(--text-muted);">${escapeHtml(last || 'لم يُختبَر بعد')}</span>`;
   const d = (s && s.d) || c.examLastDate || '';
-  const dateTxt = d ? (typeof formatDateDisplay === 'function' ? formatDateDisplay(d) : escapeHtml(d)) : '—';
+  // عمود واحد ذكي: الموعد الكامل إن لم توجد نتيجة حقيقية، وإلا تاريخ المحاولة
+  const dateSrc = arkkanExamDateText(c);
+  const dateTxt = dateSrc ? (typeof formatDateDisplay === 'function' ? formatDateDisplay(dateSrc) : escapeHtml(dateSrc)) : '—';
   const attempts = att.length
     ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">` + att.slice(0, 4).map((a, i) => {
         const r = String((a && a.r) || '—').trim();
+        const g = String((a && a.g) || '').trim();
         const cls = r.includes('ناجح') ? 'paid' : r.includes('راسب') ? 'owe' : '';
-        return `<span class="stamp ${cls}" title="محاولة ${i + 1} — ${escapeHtml((a && a.d) || '')}">م${i + 1}: ${escapeHtml(r)}</span>`;
+        const gradeHtml = g ? ` <span style="color:var(--text-muted); font-size:0.8em;">(${escapeHtml(g)})</span>` : '';
+        return `<span class="stamp ${cls}" title="محاولة ${i + 1} — ${escapeHtml((a && a.d) || '')}">م${i + 1}: ${escapeHtml(r)}${gradeHtml}</span>`;
       }).join('') + `</div>`
     : '';
   return `<div class="cw-grid">
@@ -1083,13 +1396,14 @@ function arkkanExamFilterState(prefix) {
     course: g(prefix + '-filter-course'),
     company: g(prefix + '-filter-company'),
     dateFrom: g(prefix + '-filter-date-from'),
-    dateTo: g(prefix + '-filter-date-to')
+    dateTo: g(prefix + '-filter-date-to'),
+    year: g(prefix + '-filter-year')
   };
 }
 
 function arkkanExamApplyFilters(list, prefix) {
   var f = arkkanExamFilterState(prefix);
-  if (!f.name && !f.id && !f.nat && !f.course && !f.company && !f.dateFrom && !f.dateTo) return list;
+  if (!f.name && !f.id && !f.nat && !f.course && !f.company && !f.dateFrom && !f.dateTo && !f.year) return list;
   return list.filter(function (c) {
     if (f.name && !String(c.name || '').toLowerCase().includes(f.name)) return false;
     if (f.id && !String(c.clientId || '').includes(f.id)) return false;
@@ -1102,6 +1416,10 @@ function arkkanExamApplyFilters(list, prefix) {
     var cdate = c.startDate || arkkanCourseDate(c) || '';
     if (f.dateFrom && (!cdate || cdate < f.dateFrom)) return false;
     if (f.dateTo && (!cdate || cdate > f.dateTo)) return false;
+    if (f.year) {
+      var y = String(cdate || '').slice(0, 4);
+      if (y !== String(f.year)) return false;
+    }
     return true;
   });
 }
@@ -1125,6 +1443,22 @@ function arkkanExamPopulateFilterOptions(prefix, fullList) {
   fillSelect(document.getElementById(prefix + '-filter-nat'), uniq(function (c) { return String(c.nationality || '').trim(); }), 'كل الجنسيات');
   fillSelect(document.getElementById(prefix + '-filter-course'), uniq(function (c) { return String(c.courseType || '').trim(); }), 'كل الدورات');
   fillSelect(document.getElementById(prefix + '-filter-company'), uniq(function (c) { return String(c.companyName || '').trim() || '(بدون شركة)'; }), 'كل الشركات');
+  // فلتر السنة: يُستخرج من تاريخ الدورة (startDate أو arkkanCourseDate)
+  var yearSel = document.getElementById(prefix + '-filter-year');
+  if (yearSel) {
+    var years = new Set();
+    fullList.forEach(function (c) {
+      var d = c.startDate || arkkanCourseDate(c) || '';
+      var y = String(d).slice(0, 4);
+      if (/^\d{4}$/.test(y)) years.add(y);
+    });
+    var sortedYears = Array.from(years).sort(function (a, b) { return b.localeCompare(a); });
+    var curYear = yearSel.value;
+    yearSel.innerHTML = ['<option value="">كل السنوات</option>']
+      .concat(sortedYears.map(function (y) { return '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>'; }))
+      .join('');
+    if (sortedYears.indexOf(curYear) !== -1) yearSel.value = curYear;
+  }
 }
 
 function arkkanExamExportBox(box, list) {
@@ -1136,7 +1470,7 @@ function arkkanExamExportBox(box, list) {
       'الجنسية': c.nationality || '',
       'الشركة': c.companyName || '',
       'الدورة': c.courseType || '',
-      'تاريخ آخر اختبار': c.examLastDate || '',
+      'تاريخ آخر اختبار': arkkanExamDateFullText(c),
       'النتيجة': (s && s.r) || c.examResult || '',
       'عدد المحاولات': Array.isArray(c.examAttempts) ? c.examAttempts.length : 0
     };
@@ -1150,12 +1484,12 @@ function arkkanExamExportBox(box, list) {
    الكتابة (الاسم/الهوية/التاريخ) حتى توقف الكتابة بدل إعادة بناء 4 جداول مع كل حرف. */
 const _debouncedArkkanExamsRender = debounce(renderArkkanExamsTable);
 document.addEventListener('input', function (e) {
-  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(name|id|date-from|date-to)$/.test(e.target.id)) {
+  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(name|id|date-from|date-to|year)$/.test(e.target.id)) {
     _debouncedArkkanExamsRender();
   }
 });
 document.addEventListener('change', function (e) {
-  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(nat|course|company)$/.test(e.target.id)) {
+  if (e.target && e.target.id && /^arkkan-exams(-needing|-passed|-failed)?-filter-(nat|course|company|year)$/.test(e.target.id)) {
     renderArkkanExamsTable();
   }
 });
@@ -1163,7 +1497,7 @@ document.addEventListener('click', function (e) {
   var clearBtn = e.target.closest('[id^="btn-arkkan-exams"][id$="-filter-clear"]');
   if (clearBtn) {
     var prefix = clearBtn.id.replace(/^btn-/, '').replace(/-filter-clear$/, '');
-    ['name', 'id', 'nat', 'course', 'company', 'date-from', 'date-to'].forEach(function (k) {
+    ['name', 'id', 'nat', 'course', 'company', 'date-from', 'date-to', 'year'].forEach(function (k) {
       var el = document.getElementById(prefix + '-filter-' + k);
       if (el) el.value = '';
     });
@@ -1177,6 +1511,61 @@ document.addEventListener('click', function (e) {
     if (box) arkkanExamExportBox(box, arkkanExamApplyFilters(box.listFn(), box.prefix));
   }
 });
+
+/* ══════════════════════════════════════════════
+   تبديل لوحات الصناديق الأربعة (تبويبات + بطاقات مؤشرات)
+   لا يغيّر أي منطق: يظهر لوحة واحدة ويخفي الباقي فقط،
+   ويحفظ اختيار المستخدم ليبقى بعد إعادة التشغيل.
+   ══════════════════════════════════════════════ */
+const ARKKAN_EXAM_BOX_IDS = {
+  noresult: 'arkkan-box-noresult',
+  needing: 'arkkan-box-needing',
+  passed: 'arkkan-box-passed',
+  failed: 'arkkan-box-failed'
+};
+const ARKKAN_EXAM_BOX_STORE = 'arkkanExamActiveBox';
+
+function arkkanExamShowBox(name) {
+  if (!ARKKAN_EXAM_BOX_IDS[name]) name = 'noresult';
+  try { localStorage.setItem(ARKKAN_EXAM_BOX_STORE, name); } catch (e) { /* تخزين غير متاح */ }
+
+  Object.keys(ARKKAN_EXAM_BOX_IDS).forEach(k => {
+    const box = document.getElementById(ARKKAN_EXAM_BOX_IDS[k]);
+    if (box) box.classList.toggle('is-active', k === name);
+  });
+
+  document.querySelectorAll('[data-arkkan-tab]').forEach(el => {
+    const on = el.getAttribute('data-arkkan-tab') === name;
+    el.classList.toggle('is-active', on);
+    if (el.getAttribute('role') === 'tab') el.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+function arkkanExamRestoreBox() {
+  let name = 'noresult';
+  try {
+    const saved = localStorage.getItem(ARKKAN_EXAM_BOX_STORE);
+    if (saved && ARKKAN_EXAM_BOX_IDS[saved]) name = saved;
+  } catch (e) { /* تخزين غير متاح */ }
+  arkkanExamShowBox(name);
+}
+
+document.addEventListener('click', function (e) {
+  const tab = e.target.closest?.('[data-arkkan-tab]');
+  if (!tab) return;
+  arkkanExamShowBox(tab.getAttribute('data-arkkan-tab'));
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const tab = e.target.closest?.('[data-arkkan-tab]');
+  if (!tab) return;
+  e.preventDefault();
+  arkkanExamShowBox(tab.getAttribute('data-arkkan-tab'));
+});
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arkkanExamRestoreBox);
+else arkkanExamRestoreBox();
 
 function renderArkkanExamsTable() {
   const tbody = $('#arkkan-exams-tbody');
@@ -1209,10 +1598,24 @@ function renderArkkanExamsTable() {
   const fcounter = $('#arkkan-exams-failed-counter');
   if (fcounter) fcounter.textContent = cnt(failed.length, failedFull.length, 'الراسبون (صندوق مستقل — يجلب لنفسه)');
 
+  // أرقام بطاقات المؤشرات وعدّادات التبويبات (الإجمالي الكامل، لا المتصفَّى)
+  const fmt = n => Number(n || 0).toLocaleString('en-US');
+  const setNum = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = fmt(n); };
+  setNum('arkkan-kpi-total',
+    noResultFull.length + needingFull.length + passedFull.length + failedFull.length);
+  setNum('arkkan-kpi-noresult', noResultFull.length);
+  setNum('arkkan-kpi-needing', needingFull.length);
+  setNum('arkkan-kpi-passed', passedFull.length);
+  setNum('arkkan-kpi-failed', failedFull.length);
+  setNum('arkkan-tab-count-noresult', noResultFull.length);
+  setNum('arkkan-tab-count-needing', needingFull.length);
+  setNum('arkkan-tab-count-passed', passedFull.length);
+  setNum('arkkan-tab-count-failed', failedFull.length);
+
   const cells = c => {
     const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
     return [0, 1, 2, 3].map(i =>
-      `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>'}</td>`
+      `<td class="col-exam-attempt">${att[i] ? arkkanExamCell(att[i]) : '<span style="color:var(--text-muted);">—</span>'}</td>`
     ).join('');
   };
 
@@ -1225,7 +1628,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td class="col-examdate">${arkkanExamDateCellHtml(c)}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
@@ -1240,7 +1643,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td class="col-examdate">${arkkanExamDateCellHtml(c)}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
@@ -1255,7 +1658,7 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td class="col-examdate">${arkkanExamDateCellHtml(c)}</td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--success, green); font-weight:600;">ناجح ✓</span></td>
     </tr>`).join('');
   }
@@ -1269,11 +1672,16 @@ function renderArkkanExamsTable() {
       <td>${escapeHtml(c.courseNumber || '—')}</td>
       <td class="col-examstartdate">${escapeHtml(c.startDate || arkkanCourseDate(c) || '—')}</td>
       ${cells(c)}
-      <td class="col-examdate">${escapeHtml(c.examLastDate || '—')}</td>
+      <td class="col-examdate">${arkkanExamDateCellHtml(c)}</td>
       <td><button type="button" class="btn btn-ghost btn-sm" data-arkkan-exam-one="${escapeHtml(c.clientId)}" style="padding:2px 12px; font-size:12px;">جلب</button></td>
       <td id="arkkan-exam-status-${cssEscapeId(c.clientId)}"><span style="color:var(--text-muted);">في الانتظار</span></td>
     </tr>`).join('');
   }
+
+  // أثناء أي عملية جارية: أزرار الصفوف الجديدة تبدأ معطّلة (منع ازدواج الجلب)
+  arkkanExamSyncRunButtons();
+  // أزرار «آخر التغييرات» بجانب التصدير — تظهر فقط للصناديق التي عندها تقرير محفوظ
+  try { arkkanSyncLastChangesButtons(); } catch (e) { }
 }
 
 function arkkanRefreshExamCells(c) {
@@ -1281,10 +1689,10 @@ function arkkanRefreshExamCells(c) {
   if (!row) return;
   const att = Array.isArray(c.examAttempts) ? c.examAttempts : [];
   [...row.querySelectorAll('.col-exam-attempt')].forEach((el, i) => {
-    el.innerHTML = att[i] ? arkkanExamCell(att[i].r) : '<span style="color:var(--text-muted);">—</span>';
+    el.innerHTML = att[i] ? arkkanExamCell(att[i]) : '<span style="color:var(--text-muted);">—</span>';
   });
   const de = row.querySelector('.col-examdate');
-  if (de) de.textContent = c.examLastDate || '—';
+  if (de) de.innerHTML = arkkanExamDateCellHtml(c);
 }
 
 async function arkkanExamSyncOne(clientId, btn) {
@@ -1293,26 +1701,60 @@ async function arkkanExamSyncOne(clientId, btn) {
   if (arkkanExamPassed(c)) { showToast('العميل ناجح — نتائجه مكتملة في صندوق النجاح', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
   if (!ARKKAN_IS_DESKTOP) { showToast('لا يمكن الجلب من المتصفح — استخدم تطبيق سطح المكتب حيث يعمل الوكيل المحلي مدمجاً تلقائياً', 'info'); return; }
-  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+  // قفل واحد لكل العمليات: يمنع جلب صفين معاً أو صف أثناء جلب جماعي
+  if (_arkkanExamRunLock.active) { arkkanExamRunBusyMessage(); return; }
+  arkkanExamAcquireRunLock('جلب نتيجة عميل', { stoppable: false });
+
+  const _safeId = cssEscapeId(clientId);
+  // نبحث دائماً عن الزر/الحالة الحيّين في الصفحة (الجدول قد يُعاد رسمه)
+  const _btnNow = () => (document.querySelector(`#arkkan-exam-row-${_safeId} [data-arkkan-exam-one]`)
+    || (btn && btn.isConnected ? btn : null));
+  const _stNow = () => document.getElementById('arkkan-exam-status-' + _safeId);
+
+  // ── تغذية بصرية فورية ──
+  const t0 = Date.now();
+  const setBusy = (txt) => { const b = _btnNow(); if (b) { b.disabled = true; b.textContent = txt; } };
+  const setStatus = (html) => { const st = _stNow(); if (st) st.innerHTML = html; };
+  setBusy('⏳ جارٍ…');
+  setStatus('<span style="color:var(--gold,#b8860b);">⏳ جارٍ الجلب من أركان… 0 ث</span>');
+  // عدّاد ثواني: يثبت للمستخدم أن العملية شغالة حتى لو استغرق أركان دقيقة
+  const timer = setInterval(() => {
+    const s = Math.max(0, Math.round((Date.now() - t0) / 1000));
+    setStatus(`<span style="color:var(--gold,#b8860b);">⏳ جارٍ الجلب من أركان… ${s} ث</span>`);
+  }, 1000);
+
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
     const patch = arkkanPatchExamsFromData(c, data);
+    // نلتقط الحالة قبل التعديل — لعرض تقرير «تغيّرت حالته إلى ناجح/راسب» بعد الجلب
+    const beforeKind = arkkanExamKind(c);
+    const beforeTxt = arkkanExamResultText(c);
+    const boxLabel = arkkanExamBoxLabelOf(c.clientId);
     const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
+    // تسجيل الفحص حتى يتخطاه الجلب الجماعي التالي (لا يُعاد جلب نفس العميل بلا داعٍ)
+    if (idx !== -1) clients[idx].arkkanExamCheck = { s: arkkanExamSig(clients[idx]), t: Date.now() };
     _examSession[String(clientId)] = arkkanExamSig(clients[idx] || c);
     const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
+    const secs = Math.max(1, Math.round((Date.now() - t0) / 1000));
     // إعادة الرسم: الناجح ينتقل إلى صندوق النجاح ويختفي من قائمة الجلب
     renderArkkanExamsTable();
-    const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
-    if (st) st.innerHTML = passed
+    // تقرير التغيير: ناجح/راسب (فردي — نافذة صغيرة بنفس الشكل)
+    const _chg = idx !== -1 ? arkkanExamChangeOf(clients[idx], beforeKind, beforeTxt, boxLabel) : null;
+    if (_chg) arkkanShowExamChangesReport([_chg], 'تغيّرت حالة العميل بعد الجلب');
+    setStatus(passed
       ? '<span style="color:var(--success, green);">✅ ناجح — انتقل إلى صندوق النجاح</span>'
-      : '<span style="color:var(--success, green);">✅ تم</span>';
+      : `<span style="color:var(--success, green);">✅ تم — ${secs} ث</span>`);
+    showToast(passed ? 'تم الجلب — العميل ناجح' : 'تم جلب نتيجة الاختبار ✅', 'success');
   } catch (err) {
-    const st = $(`#arkkan-exam-status-${cssEscapeId(clientId)}`);
-    if (st) st.innerHTML = `<span style="color:var(--danger, red);" title="${escapeHtml(err.message)}">❌ ${escapeHtml(err.message.slice(0, 60))}</span>`;
+    const msg = String((err && err.message) || err || 'خطأ غير معروف');
+    setStatus(`<span style="color:var(--danger, red);" title="${escapeHtml(msg)}">❌ ${escapeHtml(msg.slice(0, 80))}</span>`);
+    showToast('تعذّر الجلب: ' + msg.slice(0, 90), 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'جلب'; }
+    clearInterval(timer);
+    const b = _btnNow(); if (b) { b.disabled = false; b.textContent = 'جلب'; }
+    arkkanExamReleaseRunLock();
   }
 }
 
@@ -1322,7 +1764,9 @@ function arkkanExamSig(c) {
   return JSON.stringify([
     Array.isArray(c.examAttempts) ? c.examAttempts : [],
     c.examLastDate || '',
-    c.examResult || ''
+    c.examResult || '',
+    c.examAppointment || '',
+    c.examAppointmentDate || ''
   ]);
 }
 
@@ -1378,6 +1822,10 @@ async function arkkanExamSyncCard(clientId, btn) {
   try {
     const data = await arkkanExamFetchOne(c.clientId, c.referNum || '');
     const patch = arkkanPatchExamsFromData(c, data);
+    // الحالة قبل التعديل — لتقرير «تغيّرت حالته إلى ناجح/راسب»
+    const beforeKind = arkkanExamKind(c);
+    const beforeTxt = arkkanExamResultText(c);
+    const boxLabel = arkkanExamBoxLabelOf(c.clientId);
     const idx = clients.findIndex(x => String(x.clientId) === String(clientId));
     if (idx !== -1) Object.assign(clients[idx], patch);
     if (typeof saveClients === 'function') await saveClients();
@@ -1394,6 +1842,8 @@ async function arkkanExamSyncCard(clientId, btn) {
     if (typeof renderArkkanExamsTable === 'function') renderArkkanExamsTable();
     const cse = $('#cw-exam-section .cw-exam-content');
     if (cse && typeof arkkanExamCardContent === 'function') cse.innerHTML = arkkanExamCardContent(clients[idx] || c);
+    const _chg = idx !== -1 ? arkkanExamChangeOf(clients[idx], beforeKind, beforeTxt, boxLabel) : null;
+    if (_chg) arkkanShowExamChangesReport([_chg], 'تغيّرت حالة العميل بعد المزامنة');
     showToast(msg, has ? 'success' : 'info');
   } catch (err) {
     showToast('فشل جلب النتيجة: ' + (err.message || err), 'error');
@@ -1408,12 +1858,329 @@ function examBulkState(name) {
   return _examBulkStates[name] || (_examBulkStates[name] = { running: false, stop: false });
 }
 
+/* ══════════════════════════════════════════════════════════════
+   تقرير تغيّر الحالة بعد الجلب: من أصبح «ناجح» ومن أصبح «راسب»
+   --------------------------------------------------------------
+   قبل التعديل: المستخدم كان يرى في الصف لحظة الجلب فقط «تم» أو
+   «ناجح — انتقل»، ثم يختفي الأثر بعد إعادة رسم الجدول، فلا يعرف
+   مَن تغيّرت حالته فعلاً ضمن دفعة كبيرة.
+   الآن:
+   - نسجّل كل عميل انتقلت حالته (قبل → بعد) إلى ناجح أو راسب.
+   - بعد انتهاء الجلب/المقارنة تظهر نافذة بالاسم والهوية والدورة
+     والنتيجة قبل وبعد والدرجة، مع أزرار نسخ وتصدير Excel.
+   - يُحفظ آخر تقرير لكل صندوق ويُعاد فتحه من زر «📋 آخر التغييرات»
+     الموجود بجانب زر التصدير في نفس الصندوق.
+   ══════════════════════════════════════════════════════════════ */
+var ARKKAN_LAST_CHANGES_KEY = 'ftc2_arkkan_last_changes_v1';
+
+/* تصنيف حالة العميل: passed / failed / '' */
+function arkkanExamKind(c) {
+  if (!c) return '';
+  if (typeof arkkanExamPassed === 'function' && arkkanExamPassed(c)) return 'passed';
+  if (typeof arkkanExamFailed === 'function' && arkkanExamFailed(c)) return 'failed';
+  return '';
+}
+
+/* نص النتيجة المعروض (ناجح/راسب + الدرجة) أو «بدون نتيجة» */
+function arkkanExamResultText(c) {
+  var s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
+  var r = s && String(s.r || '').trim();
+  if (!r) return 'بدون نتيجة';
+  var g = String(s.g || '').trim();
+  return r + (g ? ' (' + g + ')' : '');
+}
+
+/* اسم الصندوق الذي كان فيه العميل قبل الجلب (يُقرأ من الصف الظاهر حالياً) */
+function arkkanExamBoxLabelOf(clientId) {
+  try {
+    var row = document.getElementById('arkkan-exam-row-' + cssEscapeId(clientId));
+    if (!row) return '';
+    var box = row.closest ? row.closest('[id^="arkkan-box-"]') : null;
+    var map = {
+      'arkkan-box-noresult': 'صندوق النتائج (بلا نتيجة)',
+      'arkkan-box-needing': 'يحتاج إلى اختبار',
+      'arkkan-box-passed': 'صندوق النجاح',
+      'arkkan-box-failed': 'صندوق الراسبين'
+    };
+    return (box && map[box.id]) || '';
+  } catch (e) { return ''; }
+}
+
+/* سجل تغيير واحد — أو null لو لم تنتقل الحالة إلى ناجح/راسب */
+function arkkanExamChangeOf(c, beforeKind, beforeText, boxLabel) {
+  if (!c) return null;
+  var afterKind = arkkanExamKind(c);
+  if (!afterKind || afterKind === String(beforeKind || '')) return null;
+  var s = typeof arkkanExamStatusOf === 'function' ? arkkanExamStatusOf(c) : null;
+  return {
+    clientId: String(c.clientId || ''),
+    name: String(c.name || ''),
+    nationality: String(c.nationality || ''),
+    company: String(c.companyName || ''),
+    course: String(c.courseType || ''),
+    courseNumber: String(c.courseNumber || ''),
+    referNum: String(c.referNum || ''),
+    before: beforeText || 'بدون نتيجة',
+    after: arkkanExamResultText(c),
+    kind: afterKind,
+    grade: String((s && s.g) || ''),
+    date: String((s && s.d) || '') || String(c.examLastDate || ''),
+    box: boxLabel || ''
+  };
+}
+
+/* ── حفظ/قراءة آخر تقرير لكل صندوق (يبقى بعد إغلاق البرنامج) ── */
+function arkkanReadLastChangesMap() {
+  try {
+    var raw = localStorage.getItem(ARKKAN_LAST_CHANGES_KEY);
+    var o = raw ? JSON.parse(raw) : {};
+    return (o && typeof o === 'object') ? o : {};
+  } catch (e) { return {}; }
+}
+function arkkanLastChangesFor(prefix) {
+  var m = arkkanReadLastChangesMap();
+  return (prefix && m[prefix]) || null;
+}
+function arkkanStoreLastChanges(prefix, report) {
+  if (!prefix) return;
+  try {
+    var m = arkkanReadLastChangesMap();
+    var items = (report && Array.isArray(report.items)) ? report.items : [];
+    var passed = items.filter(function (i) { return i && i.kind === 'passed'; }).length;
+    m[prefix] = {
+      title: (report && report.title) || 'تقرير تغيّر الحالة',
+      ts: (report && report.ts) || new Date().toISOString(),
+      total: items.length,
+      passed: passed,
+      failed: items.length - passed,
+      items: items
+    };
+    localStorage.setItem(ARKKAN_LAST_CHANGES_KEY, JSON.stringify(m));
+  } catch (e) { /* تخزين غير متاح */ }
+  arkkanSyncLastChangesButtons();
+}
+
+/* زر «آخر التغييرات» بجانب زر التصدير في كل صندوق.
+   يظهر دائماً — حتى قبل أول جلب — ليكون واضحاً أن الخاصية موجودة؛
+   ويعرض عدد من تغيّرت حالته في آخر تشغيل، و(0) لو لم يتغيّر أحد. */
+function arkkanSyncLastChangesButtons() {
+  try {
+    ((typeof ARKKAN_EXAM_BOXES !== 'undefined' && ARKKAN_EXAM_BOXES) || []).forEach(function (box) {
+      var anchor = document.getElementById('btn-' + box.prefix + '-export');
+      if (!anchor || !anchor.parentNode) return;
+      var id = 'btn-' + box.prefix + '-lastchanges';
+      var btn = document.getElementById(id);
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = id;
+        btn.className = 'btn btn-ghost btn-sm';
+        btn.setAttribute('data-arkkan-lastchanges', box.prefix);
+        anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+      }
+      var rep = arkkanLastChangesFor(box.prefix);
+      var n = rep && Array.isArray(rep.items) ? rep.items.length : 0;
+      var when = rep && rep.ts ? new Date(rep.ts).toLocaleString('ar-SA-u-nu-latn') : '';
+      btn.style.display = '';
+      btn.textContent = '📋 آخر التغييرات' + (rep ? ' (' + n + ')' : '');
+      if (!rep) {
+        btn.title = 'لسه مفيش جلب من أركان — بعد أول جلب تظهر هنا أسماء من تغيّرت حالته إلى ناجح أو راسب';
+        btn.style.opacity = '0.65';
+      } else if (n) {
+        var p = rep.passed || 0;
+        btn.title = 'آخر جلب: ' + when + ' — ناجح: ' + p + ' · راسب: ' + (n - p);
+        btn.style.opacity = '';
+      } else {
+        btn.title = 'آخر جلب: ' + when + ' — لم تتغيّر حالة أي عميل إلى ناجح أو راسب';
+        btn.style.opacity = '0.8';
+      }
+    });
+  } catch (e) { /* ليست صفحة أركان */ }
+}
+
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest ? e.target.closest('[data-arkkan-lastchanges]') : null;
+  if (!btn) return;
+  var rep = arkkanLastChangesFor(btn.getAttribute('data-arkkan-lastchanges'));
+  if (rep && Array.isArray(rep.items) && rep.items.length) {
+    arkkanRenderChangesModal(rep.items, rep.title || 'آخر تغييرات الحالة', rep.ts);
+  } else if (rep) {
+    showToast('آخر جلب (' + (rep.ts ? new Date(rep.ts).toLocaleString('ar-SA-u-nu-latn') : '') + '): لم تتغيّر حالة أي عميل إلى ناجح أو راسب', 'info');
+  } else {
+    showToast('لسه مفيش تقرير لهذا الصندوق — يعمل «جلب» أو «مقارنة» أولاً', 'info');
+  }
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { arkkanSyncLastChangesButtons(); });
+} else {
+  arkkanSyncLastChangesButtons();
+}
+
+/* ── نافذة التقرير ── */
+function arkkanChangesCopyText(items, title, ts) {
+  var head = ['الاسم', 'رقم الهوية', 'الجنسية', 'الشركة', 'الدورة', 'رقم الدورة', 'النتيجة قبل', 'النتيجة بعد', 'تاريخ آخر اختبار', 'الصندوق'];
+  var lines = [String(title || 'تقرير تغيّر الحالة') + (ts ? ' — ' + new Date(ts).toLocaleString('ar-SA-u-nu-latn') : ''), head.join('\t')];
+  items.forEach(function (i) {
+    lines.push([i.name, i.clientId, i.nationality, i.company, i.course, i.courseNumber, i.before, i.after, i.date, i.box].join('\t'));
+  });
+  return lines.join('\n');
+}
+
+function arkkanChangesExportRows(items) {
+  return items.map(function (i) {
+    return {
+      'الاسم': i.name,
+      'رقم الهوية': i.clientId,
+      'رقم المتابعة': i.referNum,
+      'الجنسية': i.nationality,
+      'الشركة': i.company,
+      'الدورة': i.course,
+      'رقم الدورة': i.courseNumber,
+      'النتيجة قبل': i.before,
+      'النتيجة بعد': i.after,
+      'الحالة الجديدة': i.kind === 'passed' ? 'ناجح' : 'راسب',
+      'الدرجة': i.grade,
+      'تاريخ آخر اختبار': i.date,
+      'الصندوق': i.box
+    };
+  });
+}
+
+function arkkanRenderChangesModal(items, title, ts) {
+  var list = (Array.isArray(items) ? items : []).filter(Boolean);
+  if (!list.length) return;
+  var prev = document.getElementById('arkkan-changes-overlay');
+  if (prev) prev.remove();
+
+  var passed = list.filter(function (i) { return i.kind === 'passed'; }).length;
+  var failed = list.length - passed;
+  var sorted = list.slice().sort(function (a, b) {
+    if (a.kind !== b.kind) return a.kind === 'passed' ? -1 : 1;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
+  var chip = function (txt, color, bg) {
+    return '<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700;font-size:12px;color:' + color + ';background:' + bg + ';">' + txt + '</span>';
+  };
+  var td = 'padding:8px 10px;border-bottom:1px solid var(--border);';
+  var rowsHtml = sorted.map(function (i) {
+    var st = i.kind === 'passed'
+      ? chip('ناجح ✓', 'var(--success)', 'rgba(4,120,87,.12)')
+      : chip('راسب', 'var(--danger)', 'rgba(190,18,60,.12)');
+    var afterCell = st + (i.grade ? ' <span style="color:var(--text-secondary);font-size:12px;">(' + escapeHtml(i.grade) + ')</span>' : '');
+    return '<tr>' +
+      '<td style="' + td + 'white-space:nowrap;">' + escapeHtml(i.name || '—') + '</td>' +
+      '<td style="' + td + 'white-space:nowrap;">' + escapeHtml(i.clientId || '—') + '</td>' +
+      '<td style="' + td + '">' + escapeHtml(i.course || '—') +
+        (i.courseNumber ? ' <span style="color:var(--text-secondary);font-size:12px;">' + escapeHtml(i.courseNumber) + '</span>' : '') + '</td>' +
+      '<td style="' + td + 'color:var(--text-secondary);white-space:nowrap;">' + escapeHtml(i.before) + '</td>' +
+      '<td style="' + td + 'white-space:nowrap;">' + afterCell + '</td>' +
+      '<td style="' + td + 'white-space:nowrap;color:var(--text-secondary);">' + escapeHtml(i.date || '—') + '</td>' +
+      '<td style="' + td + 'color:var(--text-secondary);">' + escapeHtml(i.box || '—') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.id = 'arkkan-changes-overlay';
+  overlay.setAttribute('dir', 'rtl');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML =
+    '<div role="dialog" aria-modal="true" aria-label="تقرير تغيّر الحالة" style="background:var(--surface-solid);border:1px solid var(--border);border-radius:20px;box-shadow:0 24px 64px rgba(15,23,42,.3);width:100%;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">' +
+      '<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:220px;">' +
+          '<div style="font-weight:800;font-size:16px;">' + escapeHtml(title) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">' + (ts ? escapeHtml(new Date(ts).toLocaleString('ar-SA-u-nu-latn')) : '') + '</div>' +
+        '</div>' +
+        (passed ? chip('ناجح: ' + passed, 'var(--success)', 'rgba(4,120,87,.12)') : '') +
+        (failed ? chip('راسب: ' + failed, 'var(--danger)', 'rgba(190,18,60,.12)') : '') +
+        '<button type="button" id="arkkan-changes-close-x" style="border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--text-secondary);padding:2px 6px;" title="إغلاق">×</button>' +
+      '</div>' +
+      '<div style="overflow:auto;padding:0 6px 6px;">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr style="position:sticky;top:0;background:var(--surface-alt);z-index:1;">' +
+            ['الاسم', 'رقم الهوية', 'الدورة', 'النتيجة قبل', 'الحالة الجديدة', 'تاريخ آخر اختبار', 'الصندوق'].map(function (h) {
+              return '<th style="padding:9px 10px;text-align:right;font-weight:700;color:var(--text-secondary);border-bottom:1px solid var(--border);white-space:nowrap;">' + h + '</th>';
+            }).join('') +
+          '</tr></thead><tbody>' + rowsHtml + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="arkkan-changes-copy">📋 نسخ الجدول</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="arkkan-changes-xlsx">📤 تصدير Excel</button>' +
+        '<button type="button" class="btn btn-gold btn-sm" id="arkkan-changes-close">إغلاق</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  var close = function () {
+    var el = document.getElementById('arkkan-changes-overlay');
+    if (el) el.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  var onKey = function (e) { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+
+  overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) close(); });
+  var bx = document.getElementById('arkkan-changes-close-x');
+  if (bx) bx.onclick = close;
+  var bc = document.getElementById('arkkan-changes-close');
+  if (bc) bc.onclick = close;
+
+  var copyBtn = document.getElementById('arkkan-changes-copy');
+  if (copyBtn) copyBtn.onclick = async function () {
+    var txt = arkkanChangesCopyText(sorted, title, ts);
+    try {
+      await navigator.clipboard.writeText(txt);
+      showToast('تم نسخ تقرير التغييرات', 'success');
+    } catch (e) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        showToast('تم نسخ تقرير التغييرات', 'success');
+      } catch (e2) { showToast('تعذّر النسخ', 'error'); }
+    }
+  };
+
+  var xlsBtn = document.getElementById('arkkan-changes-xlsx');
+  if (xlsBtn) xlsBtn.onclick = function () {
+    try {
+      var stamp = new Date().toISOString().slice(0, 10);
+      downloadXlsx('تقرير_تغير_الحالة_' + stamp + '.xlsx', 'تغير الحالة', arkkanChangesExportRows(sorted));
+      showToast('تم تصدير تقرير التغييرات', 'success');
+    } catch (e) { showToast('تعذّر التصدير: ' + (e.message || e), 'error'); }
+  };
+}
+
+/* نقطة الدخول: عرض التقرير (ويعرض ملخصاً مختصراً فوقه) */
+function arkkanShowExamChangesReport(items, title, opts) {
+  opts = opts || {};
+  var list = (Array.isArray(items) ? items : []).filter(Boolean);
+  if (!list.length) return;
+  var ts = new Date().toISOString();
+  if (opts.prefix) {
+    arkkanStoreLastChanges(opts.prefix, { title: title || 'تقرير تغيّر الحالة', ts: ts, items: list });
+  }
+  var passed = list.filter(function (i) { return i.kind === 'passed'; }).length;
+  var failed = list.length - passed;
+  try {
+    showToast('تغيّرت حالة ' + list.length + ' عميل — ناجح: ' + passed + ' · راسب: ' + failed, 'success');
+  } catch (e) { /* لا شيء */ }
+  arkkanRenderChangesModal(list, title || 'تقرير تغيّر الحالة', ts);
+}
+
 /* مشغّل صندوق عام — جلب (fetch) أو مقارنة (compare) — كل صندوق بعناصره وصفوفه.
    المقارنة: تراجع كل عميل من أركان، توازن المخزَّن بالمستخرج، وتحفظ أي اختلاف تلقائياً */
 async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, progressSel, counterSel, doneMsg, mode }) {
   const compare = mode === 'compare';
   const st = examBulkState(name);
-  if (st.running) return;
+  if (st.running) {
+    showToast('العملية شغالة بالفعل في هذا الصندوق — اضغط «إيقاف» أولاً', 'info');
+    return;
+  }
+  if (_arkkanExamRunLock.active) { arkkanExamRunBusyMessage(); return; }
+  if (_arkkanBulkRunning) { showToast('المزامنة الكاملة شغالة بالفعل — استنى لحد ما تخلص', 'info'); return; }
   if (!SERVER_AUTH_TOKEN) { showToast('لا يوجد اتصال بالخادم حالياً', 'error'); return; }
   // الجلب/المقارنة هنا يعتمدان على الوكيل المحلي (Playwright على localhost:9955) —
   // وده متاح فقط من تطبيق سطح المكتب. بدون هذا الفحص، نسخة الويب كانت تحاول الاتصال
@@ -1425,13 +2192,17 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
 
   st.running = true;
   st.stop = false;
+  const _boxMeta = ARKKAN_EXAM_BOXES.find(b => b.prefix === prefix);
+  arkkanExamAcquireRunLock((compare ? 'مقارنة ' : 'جلب ') + (_boxMeta ? _boxMeta.label : 'نتائج الاختبارات'), {
+    prefix: prefix, name: name, stoppable: true
+  });
 
   const startBtn = $(startSel);
   const stopBtn = $(stopSel);
   const progress = $(progressSel);
   const wrap = $(progressSel.replace('progress', 'progress-wrap'));
   if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = '';
+  if (stopBtn) { stopBtn.style.display = ''; stopBtn.disabled = false; stopBtn.textContent = '⏹ إيقاف'; }
   if (wrap) wrap.style.display = '';
 
   /* استئناف حقيقي: نستبعد المفحوصين حديثاً *قبل* بدء اللوب (نفس نمط arkkanBulkSync) —
@@ -1439,7 +2210,7 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
      بدل ما يعيدا عرض/عدّ كل الصفوف من الأول وهو بيتخطاها بسرعة من جوه اللوب. */
   const rowsAll = prefix ? arkkanExamApplyFilters(getRows(), prefix) : getRows();
   const ff = prefix ? arkkanExamFilterState(prefix) : null;
-  const filterNote = ff && (ff.name || ff.id || ff.nat || ff.course || ff.company || ff.dateFrom || ff.dateTo)
+  const filterNote = ff && (ff.name || ff.id || ff.nat || ff.course || ff.company || ff.dateFrom || ff.dateTo || ff.year)
     ? '، على الصفوف المطابقة للفلتر الحالي'
     : '';
   const rows = rowsAll.filter(c => {
@@ -1457,6 +2228,22 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
   const rowsTotal = rows.length;
   const skipped0 = rowsAll.length - rowsTotal;
   let done = 0, updated = 0, same = 0, failed = 0, skipped = 0;
+  /* تقرير التغييرات: كل من انتقلت حالته إلى ناجح/راسب خلال هذه العملية */
+  const changes = [];
+  const boxLabel = _boxMeta ? _boxMeta.label : '';
+
+  /* صندوق فاضي: لا تشغيل ولا وميض لزر الإيقاف — رسالة واضحة فقط */
+  if (rowsTotal === 0) {
+    st.running = false;
+    arkkanExamReleaseRunLock();
+    if (startBtn) startBtn.style.display = '';
+    if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = false; stopBtn.textContent = '⏹ إيقاف'; }
+    if (wrap) wrap.style.display = 'none';
+    showToast((compare ? 'لا يوجد عملاء يحتاجون مقارنة في هذا الصندوق' : 'لا يوجد عملاء يحتاجون جلباً في هذا الصندوق')
+      + (skipped0 ? ` — ${skipped0} فُحصوا حديثاً` : ''), 'info');
+    return;
+  }
+  arkkanRunbarSetProgress(0, rowsTotal);
 
   showToast((compare ? `بدأت المقارنة مع أركان: ${rowsTotal} عميل` : `بدأ الجلب: ${rowsTotal} عميل`)
     + (skipped0 ? ` (تخطّي ${skipped0} فُحصوا حديثاً)` : '') + filterNote, 'info');
@@ -1529,6 +2316,8 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
           _examSession[k] = sigNew;
           return null; // مطابق بدون تغيير
         }
+        const beforeKind = arkkanExamKind(cur);
+        const beforeTxt = arkkanExamResultText(cur);
         const [oldTxt, newTxt] = diffText(cur, data.lastResult);
         if (idx !== -1) {
           Object.assign(clients[idx], patch);
@@ -1538,6 +2327,8 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
         updated++;
         _examSession[k] = arkkanExamSig(clients[idx] || c);
         arkkanRefreshExamCells(clients[idx] || c);
+        const chg = idx !== -1 ? arkkanExamChangeOf(clients[idx], beforeKind, beforeTxt, boxLabel) : null;
+        if (chg) changes.push(chg);
         return [oldTxt, newTxt];
       };
 
@@ -1551,6 +2342,9 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
             : '<span style="color:var(--text-muted);">⏭️ مطابق للمخزَّن</span>';
         } else {
           const idx = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+          // الحالة قبل التعديل — لتقرير «تغيّرت حالته إلى ناجح/راسب»
+          const beforeKind = arkkanExamKind(cur);
+          const beforeTxt = arkkanExamResultText(cur);
           if (idx !== -1) {
             Object.assign(clients[idx], patch);
             clients[idx].arkkanExamCheck = { s: arkkanExamSig(clients[idx]), t: Date.now() };
@@ -1559,9 +2353,11 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
           updated++;
           _examSession[k] = arkkanExamSig(clients[idx] || c);
           arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
+          const chg = idx !== -1 ? arkkanExamChangeOf(clients[idx], beforeKind, beforeTxt, boxLabel) : null;
+          if (chg) changes.push(chg);
           const passed = idx !== -1 && arkkanExamPassed(clients[idx]);
           if (stEl) stEl.innerHTML = passed
-            ? '<span style="color:var(--success, green);">✅ ناجح</span>'
+            ? '<span style="color:var(--success, green);">✅ ناجح — انتقل إلى صندوق النجاح</span>'
             : '<span style="color:var(--success, green);">✅ تم</span>';
         }
       } catch (err) {
@@ -1578,6 +2374,9 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
               : '<span style="color:var(--text-muted);">⏭️ مطابق (من المحاولة الثانية)</span>';
           } else {
             const idx2 = clients.findIndex(x => String(x.clientId) === String(c.clientId));
+            // الحالة قبل التعديل (المحاولة الأولى لم تُطبّق أي patch)
+            const beforeKind2 = arkkanExamKind(cur);
+            const beforeTxt2 = arkkanExamResultText(cur);
             if (idx2 !== -1) {
               Object.assign(clients[idx2], patch2);
               clients[idx2].arkkanExamCheck = { s: arkkanExamSig(clients[idx2]), t: Date.now() };
@@ -1586,9 +2385,11 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
             _examSession[k] = arkkanExamSig(clients[idx2] || c);
             updated++;
             arkkanRefreshExamCells(clients[clients.findIndex(x => String(x.clientId) === String(c.clientId))] || c);
+            const chg2 = idx2 !== -1 ? arkkanExamChangeOf(clients[idx2], beforeKind2, beforeTxt2, boxLabel) : null;
+            if (chg2) changes.push(chg2);
             const passed2 = idx2 !== -1 && arkkanExamPassed(clients[idx2]);
             if (stEl) stEl.innerHTML = passed2
-              ? '<span style="color:var(--success, green);">✅ ناجح</span>'
+              ? '<span style="color:var(--success, green);">✅ ناجح — انتقل إلى صندوق النجاح</span>'
               : '<span style="color:var(--success, green);">✅ (من المحاولة الثانية)</span>';
           }
           ok = true;
@@ -1601,6 +2402,7 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
       }
 
       done++;
+      arkkanRunbarSetProgress(done, rowsTotal);
       if (progress) progress.style.width = `${Math.round(done / Math.max(rowsTotal, 1) * 100)}%`;
       const counter = $(counterSel);
       if (counter) counter.textContent = compare
@@ -1614,12 +2416,25 @@ async function arkkanExamBoxRun({ name, prefix, getRows, startSel, stopSel, prog
 
   st.running = false;
   if (startBtn) startBtn.style.display = '';
-  if (stopBtn) stopBtn.style.display = 'none';
+  if (stopBtn) { stopBtn.style.display = 'none'; stopBtn.disabled = false; stopBtn.textContent = '⏹ إيقاف'; }
   if (wrap) wrap.style.display = 'none';
+  arkkanExamReleaseRunLock();
   renderArkkanExamsTable();
   showToast(compare
     ? `${doneMsg}: ${updated} حُدِّثت تلقائياً، ${same} مطابق، ${failed} فشل${skipped ? `، ${skipped} تجاوز (فُحص حديثاً)` : ''}`
-    : `${doneMsg}: ${updated} محدّث، ${failed} فشل، ${skipped} تخطّي (بلا تغيير)`, updated > 0 ? 'success' : 'info');
+      + (changes.length ? ` · تغيّرت حالة ${changes.length}` : ' · لا تغيّر في النجاح/الرسوب')
+    : `${doneMsg}: ${updated} محدّث، ${failed} فشل، ${skipped} تخطّي (بلا تغيير)`
+      + (changes.length ? ` · تغيّرت حالة ${changes.length}` : ' · لا تغيّر في النجاح/الرسوب'),
+    updated > 0 ? 'success' : 'info');
+  /* تقرير من تغيّرت حالته إلى ناجح/راسب — يظهر بعد انتهاء الجلب/المقارنة.
+     يُحفظ دائماً (حتى لو صفر) حتى يعرف المستخدم أن الخاصية اشتغلت وأنه لا تغييرات. */
+  var _repTitle = (compare ? 'تغيّرت الحالة بعد المقارنة مع أركان' : 'تغيّرت الحالة بعد الجلب من أركان')
+    + (boxLabel ? ' — ' + boxLabel : '');
+  if (changes.length) {
+    arkkanShowExamChangesReport(changes, _repTitle, { prefix: prefix });
+  } else {
+    arkkanStoreLastChanges(prefix, { title: _repTitle, ts: new Date().toISOString(), items: [] });
+  }
 }
 
 /* الجلب الجماعي = تشغيل الصندوق بوضع الجلب */
@@ -1728,9 +2543,10 @@ function arkkanRefreshRowCells(c) {
 
 /* عند فتح تبويب مزامنة أركان: نعرض الجدولين ونحدّث الحالة */
 document.addEventListener('click', e => {
-  // لا نعيد الرسم عند التعامل مع مربع «إيقاف» (وإلا يُدمَّر الـ checkbox قبل أن
-  // يتسجّل التغيير، فيبدو الزرار غير شغال) — يتولّى معالجه الخاص الرسم.
-  if (e.target.closest?.('.arkkan-skip-chk')) return;
+  // أي نقرة داخل تبويب أركان (أزرار الشريط/الصفوف/الفلاتر/العنوان) لا تعيد رسم
+  // الجداول: إعادة الرسم كانت تمسح حالة الصفوف الحيّة وتُعيد بناء 4 جداول
+  // مع كل نقرة (بطء شديد مع آلاف العملاء). نُبقي التحديث عند التنقل للتبويب.
+  if (e.target.closest?.('#view-arkkan-sync')) return;
   if (document.querySelector('#view-arkkan-sync')?.classList?.contains('active')) {
     arkkanResumeFieldSync();
     arkkanCompareResumeFieldSync();
@@ -1749,27 +2565,36 @@ document.addEventListener('click', e => {
   arkkanToggleSkip(chk.dataset.arkkanSkip);
 });
 
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'arkkan-sync-filter-year') { renderArkkanSyncTable(); }
+});
 document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'btn-arkkan-sync-filter-clear') {
+    var el = document.getElementById('arkkan-sync-filter-year');
+    if (el) el.value = '';
+    renderArkkanSyncTable();
+    return;
+  }
   if (e.target.closest('[data-arkkan-one]')) { arkkanSyncOne(e.target.closest('[data-arkkan-one]').dataset.arkkanOne, e.target.closest('[data-arkkan-one]')); return; }
-  if (e.target.closest('[data-arkkan-receipt]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt]').dataset.arkkanReceipt, e.target.closest('[data-arkkan-receipt]'), false); return; }
-  if (e.target.closest('[data-arkkan-receipt-fresh]')) { arkkanSyncReceiptsOne(e.target.closest('[data-arkkan-receipt-fresh]').dataset.arkkanReceiptFresh, e.target.closest('[data-arkkan-receipt-fresh]'), true); return; }
   if (e.target.closest('[data-arkkan-exam-one]')) { arkkanExamSyncOne(e.target.closest('[data-arkkan-exam-one]').dataset.arkkanExamOne, e.target.closest('[data-arkkan-exam-one]')); return; }
   if (e.target.closest('#btn-arkkan-check-agent')) { arkkanUpdateStatus(); return; }
+  if (e.target.closest('#btn-arkkan-sync-check-agent')) { arkkanUpdateStatus(); return; }
   if (e.target.closest('#btn-arkkan-start-agent')) { arkkanStartAgent(); return; }
   if (e.target.closest('#btn-arkkan-stop-agent')) { arkkanStopAgent(); return; }
+  if (e.target.closest('#btn-arkkan-runbar-stop')) { arkkanRunbarStop(); return; }
   if (e.target.closest('#btn-arkkan-bulk-start')) { arkkanBulkSync(); return; }
-  if (e.target.closest('#btn-arkkan-bulk-stop')) { _arkkanBulkStop = true; return; }
+  if (e.target.closest('#btn-arkkan-bulk-stop')) { arkkanBulkRequestStop(e.target.closest('#btn-arkkan-bulk-stop')); return; }
   if (e.target.closest('#btn-arkkan-exams-start')) { arkkanExamsBulk(); return; }
-  if (e.target.closest('#btn-arkkan-exams-stop')) { examBulkState('exams').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-stop')) { arkkanExamRequestStop('exams', e.target.closest('#btn-arkkan-exams-stop')); return; }
   if (e.target.closest('#btn-arkkan-exams-failed-start')) { arkkanExamsFailedBulk(); return; }
-  if (e.target.closest('#btn-arkkan-exams-failed-stop')) { examBulkState('failed').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-failed-stop')) { arkkanExamRequestStop('failed', e.target.closest('#btn-arkkan-exams-failed-stop')); return; }
   if (e.target.closest('#btn-arkkan-exams-needing-start')) { arkkanExamsNeedingBulk(); return; }
-  if (e.target.closest('#btn-arkkan-exams-needing-stop')) { examBulkState('needing').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-needing-stop')) { arkkanExamRequestStop('needing', e.target.closest('#btn-arkkan-exams-needing-stop')); return; }
   if (e.target.closest('#btn-arkkan-exams-compare')) { arkkanExamsCompare(); return; }
   if (e.target.closest('#btn-arkkan-exams-needing-compare')) { arkkanExamsNeedingCompare(); return; }
   if (e.target.closest('#btn-arkkan-exams-passed-compare')) { arkkanExamsPassedCompare(); return; }
   if (e.target.closest('#btn-arkkan-exams-failed-compare')) { arkkanExamsFailedCompare(); return; }
-  if (e.target.closest('#btn-arkkan-exams-passed-stop')) { examBulkState('passed').stop = true; return; }
+  if (e.target.closest('#btn-arkkan-exams-passed-stop')) { arkkanExamRequestStop('passed', e.target.closest('#btn-arkkan-exams-passed-stop')); return; }
 });
 
 /* ربط زر التبويب بالرسم (نفس نمط بقية الشاشات) */
@@ -2069,8 +2894,6 @@ document.addEventListener('click', e => {
   if (e.target.closest('#btn-bulk-arkkan-stop')) { _bulkSubmitStop = true; return; }
   if (e.target.closest('#btn-bulk-arkkan-refnum')) { arkkanBulkRefNumSelected(); return; }
   if (e.target.closest('#btn-bulk-arkkan-refnum-stop')) { _bulkRefNumStop = true; return; }
-  if (e.target.closest('#btn-bulk-arkkan-receipts')) { arkkanBulkReceiptsSelected(); return; }
-  if (e.target.closest('#btn-bulk-arkkan-receipts-stop')) { _bulkReceiptsStop = true; return; }
 });
 
 /* ══════════════════════════════════════════════
@@ -2088,16 +2911,32 @@ async function arkkanRefNumFetchOne(clientId) {
   if (!creds.user || !creds.pass) {
     throw new Error('ضع بيانات حساب منصة إدارة النظام في تبويب «مزامنة أركان» أولاً');
   }
-  const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/refnum', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientId, basesCreds: creds }),
-    signal: AbortSignal.timeout(70000)
-  });
-  let body = {};
-  try { body = await r.json(); } catch {}
-  if (!r.ok) throw new Error((body && body.error) || `فشل الوكيل المحلي (HTTP ${r.status})`);
-  return body;
+  // نتجاهل النتيجة الفارغة مرة واحدة: الوكيل أحياناً يعيد '' لو لم يكتمل تحميل
+  // نتيجة البحث داخل المهلة (خصوصاً أول استعلام أو تحت ضغط)، فيبدو كأن الهوية
+  // بلا رقم مرجعي، ويضطر المستخدم لإعادة العملية يدوياً. المحاولة الثانية سريعة
+  // لأن الوكيل يعيد استخدام جلسة الدخول (reuseSession) — فلا نكرر تسجيل الدخول.
+  let lastBody = {};
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise(r => setTimeout(r, 800));
+    const r = await fetch(ARKKAN_API_BASE + '/api/arkkan/refnum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, basesCreds: creds, reuseSession: true }),
+      signal: AbortSignal.timeout(70000)
+    });
+    let body = {};
+    try { body = await r.json(); } catch {}
+    if (!r.ok) {
+      // أخطاء عابرة (الوكيل لسه بيجهّز المتصفح/إعادة تشغيل) — محاولة ثانية بدل فشل فوري
+      if (attempt === 0 && (r.status === 502 || r.status === 503 || r.status === 429)) continue;
+      throw new Error((body && body.error) || `فشل الوكيل المحلي (HTTP ${r.status})`);
+    }
+    lastBody = body || {};
+    if (String(lastBody.refNum || '').trim()) return lastBody;
+    // الوكيل أكّد «لا نتائج» (بحث مكتمل فعلاً) — إعادة المحاولة لن تغيّر شيئاً.
+    if (lastBody.confirmed === true || lastBody.notFound === true) return lastBody;
+  }
+  return lastBody;
 }
 
 async function arkkanBulkRefNumSelected() {
@@ -2127,28 +2966,41 @@ async function arkkanBulkRefNumSelected() {
     if (!_bulkRefNumRunning || _bulkRefNumStop) break;
     const c = clients.find(x => x.id === id);
     if (!c) continue;
+    const identity = String(c.clientId || '').trim();
+    if (!identity) {
+      failCount++;
+      failMsgs.push(`${c.name}: لا يوجد رقم هوية`);
+      done++;
+      continue;
+    }
     try {
-      const res = await arkkanRefNumFetchOne(c.clientId);
+      const res = await arkkanRefNumFetchOne(identity);
       const refNum = String(res && res.refNum || '').trim();
       if (refNum) {
-        const oldRef = String(c.referNum || '').trim();
-        c.referNum = refNum;
+        // بعد الانتظار: نأخذ الكائن الحيّ — مصفوفة clients قد تُستبدل بأي مزامنة
+        // خلفية/SSE أثناء الاستعلام، والكتابة على النسخة القديمة لا تظهر ولا تُحفظ.
+        const live = arkkanLiveClient(id, identity) || c;
+        const oldRef = String(live.referNum || '').trim();
+        live.referNum = refNum;
         if (oldRef !== refNum) {
           try {
             // حفظ منفرد مباشر لكل عميل لنعرف النتيجة الفعلية بدل saveClients() الذي يبتلع الفشل بصمت
-            const cJson = JSON.stringify(c);
+            const cJson = JSON.stringify(live);
             let saveOk = null;
             if (typeof saveOneClientRecord === 'function') {
-              saveOk = await saveOneClientRecord(c, cJson);
+              saveOk = await saveOneClientRecord(live, cJson);
             } else if (typeof saveClients === 'function') {
               await saveClients();
               saveOk = true;
             }
             if (saveOk === true) {
-              if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline) _clientsSyncBaseline.set(c.id, cJson);
+              if (typeof _clientsSyncBaseline === 'object' && _clientsSyncBaseline instanceof Map) _clientsSyncBaseline.set(live.id, cJson);
               // مؤجَّلة (debounced) أصلاً — استدعاؤها هنا لكل عميل ناجح آمن تماماً، وتُنفَّذ فعلياً
               // مرة واحدة فقط بعد توقف الحلقة (نفس سبب الإصلاح في arkkanRefNumCardButton أعلاه).
               if (typeof _scheduleClientsSnapPersist === 'function') _scheduleClientsSnapPersist();
+              // الحفظ قد يستغرق أطول من نافذة مزامنة خلفية — نثبّت الرقم على الكائن الحيّ
+              // الجديد (السيرفر استلمه بالفعل) حتى لا يختفي من الشاشة/اللقطة.
+              arkkanPinRefNum(live.id, identity, refNum);
               savedCount++;
             } else if (saveOk === false) {
               failCount++;
@@ -2162,12 +3014,15 @@ async function arkkanBulkRefNumSelected() {
             failMsgs.push(`${c.name}: تم الجلب لكن تعذّر الحفظ (${String(e.message).slice(0, 50)})`);
           }
         } else {
+          arkkanPinRefNum(live.id, identity, refNum);
           savedCount++;
         }
         okCount++;
       } else {
         failCount++;
-        failMsgs.push(`${c.name}: لا يوجد رقم مرجعي لهذه الهوية`);
+        failMsgs.push(`${c.name}: ` + ((res && (res.confirmed === true || res.notFound === true))
+          ? 'لا يوجد رقم مرجعي لهذه الهوية في المنصة'
+          : 'لم تصل نتيجة من المنصة — أعد المحاولة (بحث لم يكتمل)'));
       }
     } catch (err) {
       failCount++;
@@ -2192,101 +3047,6 @@ async function arkkanBulkRefNumSelected() {
   }
   const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
   showToast(`انتهى: ✅ ${okCount} جلب${savedCount ? ` (${savedCount} محفوظ)` : ''} · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
-}
-
-/* ══════════════════════════════════════════════
-   8.7) تحميل إيصالات الدورة والحقيبة للمحددين في شيت العملاء
-   ── زر مستقل في شريط التحديد الجماعي: يجلب إيصالات (دورة + حقيبة) كل
-      عميل محدد من الوكيل وتنزيلها PDF على الجهاز — بلا فتح كرت العميل. ──
-   ══════════════════════════════════════════════ */
-let _bulkReceiptsRunning = false;
-let _bulkReceiptsStop = false;
-
-async function arkkanBulkReceiptsSelected() {
-  const ids = [...selectedClientIds].filter(id => clients.some(c => c.id === id));
-  if (!ids.length) { showToast('لا يوجد عملاء محددين', 'info'); return; }
-  if (_bulkReceiptsRunning) return;
-  if (!ARKKAN_IS_DESKTOP) { showToast('تحميل الإيصالات متاح فقط من تطبيق سطح المكتب', 'info'); return; }
-  await arkkanEnsureAgentReady();
-
-  _bulkReceiptsRunning = true;
-  _bulkReceiptsStop = false;
-
-  const btn = document.getElementById('btn-bulk-arkkan-receipts');
-  const stopBtn = document.getElementById('btn-bulk-arkkan-receipts-stop');
-  const statusEl = document.getElementById('bulk-arkkan-receipts-status');
-  if (btn) btn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = '';
-  if (statusEl) { statusEl.style.display = ''; statusEl.textContent = '⏳ جاري تحميل الإيصالات...'; }
-
-  let okCount = 0, failCount = 0, noCount = 0, existingCount = 0, done = 0, cacheCount = 0;
-  const failMsgs = [];
-  await arkkanReceiptsLogLoad();
-  const forceRefresh = !!(document.getElementById('chk-arkkan-cache-refresh') || {}).checked;
-
-  for (const id of ids) {
-    if (!_bulkReceiptsRunning || _bulkReceiptsStop) break;
-    const c = clients.find(x => x.id === id);
-    if (!c) continue;
-    if (!c.clientId) { failCount++; failMsgs.push(`${c.name}: لا يوجد رقم هوية`); done++; continue; }
-
-    // العميل الذي اكتمل تحميل إصالاته مسبقاً (سجل البرنامج) → تخطٍّ صامت، ينتقل فوراً للتالي
-    if (arkkanReceiptsClientDone(c.clientId)) {
-      existingCount++;
-      done++;
-      continue;
-    }
-
-    try {
-      const data = await arkkanReceiptsFetchOne(c.clientId, c.referNum || '', forceRefresh);
-      if (data.servedFromCache) cacheCount++;
-      const list = Array.isArray(data.receipts) ? data.receipts : [];
-      let n = 0, cExists = 0;
-      // منع التكرار الصامت: الإيصال المسجَّل في سجل البرنامج يُتخطى ولا يُنزَّل
-      for (const rc of list) {
-        if (!rc || !rc.base64) continue;
-        if (arkkanReceiptsLogHas(rc.fileName)) {
-          cExists++;
-          continue;
-        }
-        if (arkkanDownloadBase64(rc.base64, rc.mime, rc.fileName)) {
-          arkkanReceiptsLogMark(rc.fileName);
-          n++;
-        }
-      }
-      if (n || cExists) {
-        arkkanReceiptsMarkClientDone(c.clientId);
-        okCount++;
-        // رسالة نجاح لكل عميل تم تنزيل إيصالاته
-        showToast(`✅ تم تنزيل إيصالات ${c.name} (${n} إيصال)${data.servedFromCache ? ' 📁 من الكاش' : ''}`, 'success');
-      } else {
-        noCount++;
-      }
-    } catch (err) {
-      failCount++;
-      failMsgs.push(`${c.name}: ${String(err.message).slice(0, 80)}`);
-    }
-    done++;
-    if (statusEl) statusEl.textContent = `⏳ ${done}/${ids.length} ... ✅ ${okCount} · ❌ ${failCount}`;
-  }
-
-  // حفظ فوري للسجل بعد نهاية القائمة حتى يلتقطه الجهاز الآخر/الفتحة القادمة
-  await arkkanReceiptsLogFlushNow();
-
-  if (statusEl) statusEl.style.display = 'none';
-  if (btn) btn.style.display = '';
-  if (stopBtn) stopBtn.style.display = 'none';
-
-  _bulkReceiptsRunning = false;
-  if (failMsgs.length) console.warn('أركان إيصالات — تفاصيل:', failMsgs);
-  if (statusEl && failMsgs.length) {
-    statusEl.style.display = '';
-    statusEl.innerHTML = `<span style="color:var(--danger,red);">❌ ${failCount} فشل</span>`;
-    statusEl.title = failMsgs.join('\n');
-    setTimeout(() => { statusEl.style.display = 'none'; }, 8000);
-  }
-  const detail = failCount ? ` — فشل: ${failMsgs.slice(0, 3).map(m => m.split(':')[0]).join(', ')}${failMsgs.length > 3 ? ` + ${failMsgs.length - 3}` : ''}` : '';
-  showToast(`انتهى تحميل الإيصالات: ✅ ${okCount} نجح${cacheCount ? ` (منها ${cacheCount} من الكاش 📁)` : ''} · ⛔ ${noCount} بلا إيصالات · 📁 ${existingCount} مسجّل مسبقاً (تخطّي) · ❌ ${failCount} فشل${detail}`, failCount ? 'error' : 'success');
 }
 
 /* ─────────── سجل تحميل الإيصالات المخفي — داخل بيانات البرنامج (كل البيئات) ───────────
@@ -2363,10 +3123,10 @@ initArkkanReceiptsLogUI();
         const r = await api.getReceiptsFolder();
         const folder = r && r.folder ? String(r.folder) : '';
         if (folder) {
-          status.innerHTML = `📂 <b dir="ltr">${folder}</b> <span style="color:var(--gold, #FFB84C);">← الدورات «الدورات» · الحقائب «الحقائب»</span>`;
+          status.innerHTML = `📂 <b dir="ltr">${folder}</b> <span style="color:var(--gold, #FFB84C);">← مجلد الإيصالات المخصص</span>`;
           btnReset.style.display = '';
         } else {
-          status.textContent = 'بدون مجلد مخصص حالياً — تُحفظ الإيصالات في مجلد التنزيلات الافتراضي';
+          status.textContent = 'بدون مجلد مخصص حالياً — تُحفظ الإيصالات داخل مجلد بيانات البرنامج على هذا الجهاز';
           btnReset.style.display = 'none';
         }
       } catch (e) {
@@ -2392,7 +3152,7 @@ initArkkanReceiptsLogUI();
       try {
         const r = await api.clearReceiptsFolder();
         if (r && r.ok) {
-          showToast('تمت العودة لمجلد التنزيلات الافتراضي', 'success');
+          showToast('تمت العودة للمجلد الافتراضي', 'success');
           refresh();
         }
       } catch (err) {

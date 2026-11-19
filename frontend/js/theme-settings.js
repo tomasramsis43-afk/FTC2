@@ -16,6 +16,13 @@ const DEFAULT_SETTINGS = {
   bagPrice: 456.55,
   priceSaudi: 293.45,
   priceNonSaudi: 573.45,
+  // عروض خصم متعددة: كل عرض يظهر كخانة اختيار مستقلة في نموذج تسجيل/تعديل العميل.
+  // يُخصم من قيمة التدريب (سعر الدورة) فقط، ولا يغيّر سعر الحقيبة إطلاقاً.
+  // القيم المفردة القديمة (offerName/offerDiscountType/offerDiscountValue) تبقى للترحيل التلقائي فقط.
+  offers: [],
+  offerName: 'عرض الخصم',
+  offerDiscountType: 'amount', // amount = مبلغ ثابت، percent = نسبة من قيمة التدريب
+  offerDiscountValue: 0,
   expenseCategories: ['رواتب','إيجار','كهرباء','مياه','انترنت','مستلزمات مكتب','مصاريف انتقال','صيانة','مسحوبات شركاء','مشتريات','أخرى'],
   centerInfo: {
     name: 'مركز فهد للتدريب',
@@ -39,12 +46,6 @@ const DEFAULT_SETTINGS = {
   monthlyReportWhatsapp: '',
   monthlyPdfReportsWhatsappNumbers: '',
   vatPdfReportWhatsappNumbers: '',
-  // بريد استلام التقارير الموحّد — يُستخدم تلقائياً من كل أزرار "إرسال بالإيميل" فى شاشة
-  // التقارير (وأي مكان آخر يرسل تقارير مستقبلاً) بدل سؤال المستخدم عن الإيميل فى كل مرة.
-  // reportEmailTo: المستلم الرئيسي (إيميل واحد). reportEmailCC: نسخة إلى — مجموعة إيميلات
-  // إضافية مفصولة بفاصلة تستقبل نفس الرسالة.
-  reportEmailTo: '',
-  reportEmailCC: '',
   lastMonthlyReportPromptMonth: null,
   nextVaultSeq: 1,
   // عداد تسلسلي منفصل ومستقل لكل حساب/وجهة (الخزنة كاش / البنك / الشبكة / أخرى) — كل حساب له
@@ -52,7 +53,6 @@ const DEFAULT_SETTINGS = {
   nextVaultSeqByDest: { vault:1, bank:1, network:1, network2:1, other:1 },
   vaultLockedThrough: '',
   bagFinanceLinkEnabled: true,
-  powerAutomate: { webhookUrl: '', notifyNewClient: true, notifyCourseNumber: true },
   pinLock: { enabled:false, pin:'', autoLockMinutes:5 },
   // ملحوظة معمارية: هذه القيم لم تعد المصدر الحقيقي لصلاحيات الأدوار (كانت سابقاً تتحكم فقط
   // بإخفاء/إظهار التبويب فى الواجهة دون أي أثر فعلي على الـ API، بخلاف ROLE_PERMISSIONS الثابتة
@@ -74,6 +74,10 @@ const DEFAULT_SETTINGS = {
   receptionEditDeleteWindowHours: 5,
   receptionAllowEdit: true,
   receptionAllowDelete: true,
+  // تفعيل/إيقاف ميزة إيصالات أركان (جلب/طباعة/تحميل من أركان)
+  // عند الإيقاف لا يُحمل أي كود إضافي للميزة ولا تظهر القائمة المنسدلة
+  // تفعيل/إيقاف الجلب التلقائي من أركان فقط (القائمة اليدوية تظل تعمل دائماً)
+  arkkanAutoFetchEnabled: true,
 };
 /* كل الأقسام (التبويبات) المتاحة في البرنامج، وأسماؤها المعروضة — تُستخدم في بناء
    جدول صلاحيات الأدوار في الإعدادات، وكمرجع كامل للأقسام الموجودة فعلياً. */
@@ -322,7 +326,7 @@ const I18N = {
     thInvoice:'رقم الفاتورة', thRegDate:'تاريخ التسجيل', thTotal:'الإجمالي', thPaid:'إجمالي المدفوع', thRemaining:'المتبقي', thBag:'الحقيبة', thChannel:'طريقة الدفع',
     noRecords:'لا توجد سجلات مطابقة — جرّب تعديل البحث أو أضف عميلاً جديداً',
     edit:'تعديل', delete:'حذف', save:'حفظ', cancel:'إلغاء', invoiceBtn:'فاتورة', print:'طباعة',
-    editCourse:'تعديل الدورة', printAttendance:'طباعة كشف الحضور', markAbsent:'تحديد غياب', clearAbsent:'إلغاء الغياب',
+    editCourse:'تعديل الدورة', printAttendance:'طباعة كشف الحضور', printCourseReceipts:'إيصالات الدورة', markAbsent:'تحديد غياب', clearAbsent:'إلغاء الغياب',
     compTitle:'تحويلات الشركات',
     compIntro:'تُستخدم هذه الشاشة عندما تدفع شركة دفعة واحدة تغطي عدة متدربين (مثال: 1000 ريال لمتدربين، كل متدرب 500 ريال) — حوالة بنكية أو نقدي أو بطاقة، حسب طريقة الدفع التي تُحدَّد لكل حوالة عند إضافتها. تُوزَّع قيمة الحوالة على المتدربين برقم الهوية، ويُرحَّل إجمالي المدفوع لكل فرد (قيمة الدورة + قيمة الحقيبة) تلقائياً لشيت "الحركات المالية" إلى الحساب المرتبط بطريقة الدفع المختارة لهذه الحوالة (الخزنة (كاش) / البنك / الشبكة) — إلا إذا كان هذا المتدرب مسجّلاً بالفعل ومدفوعاً عنه في شيت "العملاء"، فلا يُرحَّل مرة أخرى لتجنّب تكرار الأرقام.',
     compAgreedTitle:'الشركات المتفق معها',
@@ -380,7 +384,6 @@ const I18N = {
     selectedNowPrefix:'محدد حالياً:', clientWord:'عميل',
     selectAllFilteredPrefix:'تحديد كل النتائج المطابقة للفلتر',
     clearSelection:'إلغاء التحديد',
-    sendWhatsappSelected:'📨 إرسال رسالة واتساب للمحدد',
     deleteSelected:'🗑 حذف المحدد',
     titleSelectAllPage:'تحديد/إلغاء تحديد كل الصفحة الحالية',
     showingOfTotal:'عرض', ofWord:'من', pageWord:'صفحة',
@@ -395,7 +398,6 @@ const I18N = {
     titleEditLocked:'انتهت مهلة التعديل (5 ساعات من التسجيل) — للأدمن فقط الآن',
     unsuspendBtn:'إلغاء الإيقاف', titleUnsuspend:'إعادة العميل ليظهر في شيت الدورات ومخزون الحقائب',
     titleSuspend:'إيقاف العميل مؤقتاً — يبقى في شيت العملاء لكن يختفي من شيت الدورات ومخزون الحقائب',
-    titleWhatsapp:'مراسلة العميل عبر واتساب',
     bagOwn:'خاصته', bagFromStock:'من المخزون', bagPurchased:'تم الشراء', bagNeedPurchase:'مطلوب شراء',
     titleCancelBag:'إلغاء الحقيبة المسجّلة لهذا العميل وإعادته لحالة مطلوب شراء', cancelBagBtn:'إلغاء الحقيبة',
     titleBuyBagNow:'اضغط لتسليم الحقيبة الآن من المخزون', buyWord:'شراء',
@@ -521,7 +523,7 @@ const I18N = {
     thInvoice:'Invoice No.', thRegDate:'Registration Date', thTotal:'Total', thPaid:'Total Paid', thRemaining:'Remaining', thBag:'Bag', thChannel:'Payment Method',
     noRecords:'No matching records — try adjusting your search or add a new client',
     edit:'Edit', delete:'Delete', save:'Save', cancel:'Cancel', invoiceBtn:'Invoice', print:'Print',
-    editCourse:'Edit course', printAttendance:'Print attendance sheet', markAbsent:'Mark absent', clearAbsent:'Clear absence',
+    editCourse:'Edit course', printAttendance:'Print attendance sheet', printCourseReceipts:'Course receipts', markAbsent:'Mark absent', clearAbsent:'Clear absence',
     compTitle:'Company Transfers',
     compIntro:'This screen is used when a company makes one payment covering several trainees (e.g. SAR 1000 for two trainees, SAR 500 each) — bank transfer, cash, or card, depending on the payment method set for each transfer when it is added. The transfer amount is distributed to trainees by ID number, and each person\'s total paid (course fee + bag fee) is automatically posted to the "Financial Transactions" sheet, to the account linked to the payment method chosen for this transfer (Cash Vault / Bank / Network) — unless this trainee is already registered and paid in the "Clients" sheet, in which case it is not posted again to avoid duplicate amounts.',
     compAgreedTitle:'Contracted Companies',
@@ -579,7 +581,6 @@ const I18N = {
     selectedNowPrefix:'Currently selected:', clientWord:'client(s)',
     selectAllFilteredPrefix:'Select all matching results',
     clearSelection:'Clear selection',
-    sendWhatsappSelected:'📨 Send WhatsApp message to selected',
     deleteSelected:'🗑 Delete selected',
     titleSelectAllPage:'Select/deselect all of current page',
     showingOfTotal:'Showing', ofWord:'of', pageWord:'Page',
@@ -594,7 +595,6 @@ const I18N = {
     titleEditLocked:'Edit window expired (5 hours after registration) — admin only now',
     unsuspendBtn:'Unsuspend', titleUnsuspend:'Restore client to appear again in Courses and Bag Inventory sheets',
     titleSuspend:'Temporarily suspend client — stays in Clients sheet but disappears from Courses and Bag Inventory',
-    titleWhatsapp:'Message client via WhatsApp',
     bagOwn:'Own bag', bagFromStock:'From stock', bagPurchased:'Purchased', bagNeedPurchase:'Purchase needed',
     titleCancelBag:"Cancel this client's registered bag and reset to purchase-needed status", cancelBagBtn:'Cancel bag',
     titleBuyBagNow:'Click to hand over the bag now from stock', buyWord:'Buy',
@@ -794,8 +794,7 @@ const SETTINGS_EXPORT_KEYS = [
   'courses','nationalities','channels','bagPrice','priceSaudi','priceNonSaudi','expenseCategories',
   'centerInfo','darkMode','soundEnabled','autoBackupEnabled','autoBackupIntervalDays','lowBalanceThreshold',
   'bagOverdueDays','monthlyReportWhatsapp','monthlyPdfReportsWhatsappNumbers','vatPdfReportWhatsappNumbers',
-  'reportEmailTo','reportEmailCC',
-  'bagFinanceLinkEnabled','powerAutomate'
+  'bagFinanceLinkEnabled'
 ];
 function exportSettingsToFile(){
   const exportObj = {};

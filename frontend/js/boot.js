@@ -119,8 +119,8 @@ $('#btn-logout')?.addEventListener('click', async ()=>{
     var chk = {allSynced:true};
     try{ if(typeof verifyAllDataUploadedBeforeLogout==='function') chk = await verifyAllDataUploadedBeforeLogout(); }catch(e){ chk={allSynced:true}; }
     if(!chk.allSynced){
-      var msg = 'لا تزال هناك بيانات غير مرفوعة للسيرفر';
-      if(chk.offline) msg += ' (أنت في وضع عدم الاتصال)';
+      var msg = 'لا تزال هناك بيانات لم تُحفظ نهائياً';
+      if(chk.offline) msg += ' (تعذّر الوصول لقاعدة البيانات المحلية)';
       else msg += ` (معلّق: kv=${chk.kvPending||0} / سجلات=${chk.recPending||0})`;
       msg += ' — هل تريد تسجيل الخروج الآن على مسؤوليتك؟ قد تُفقد البيانات غير المتزامنة.';
       if(!await customConfirm(msg)) return;

@@ -212,36 +212,68 @@ function cleanupDuplicateCompanyTraineeVaultEntries(){
   });
   return removedCount;
 }
-/* ================= إصلاح تلقائي لمرة واحدة: قيود يومية (journalDE) مُرحَّلة تلقائياً من فواتير
-   الدورات كانت تشير لحسابات (accountId) من جيل قديم لدليل الحسابات (أُعيد إنشاؤه بمعرّفات جديدة
-   أكثر من مرة تاريخياً — chartOfAccounts الحالي لا يحتوي هذه المعرّفات إطلاقاً). النتيجة: هذه
-   القيود رغم كونها متزنة رياضياً بالكامل (مدين = دائن) كانت تختفي بصمت من كشف الحساب العام
-   ومن ميزان المراجعة (لأن كليهما يبحث عن الحساب بمعرّفه الحالي فقط)، فتظهر إيرادات وذمم مدينة
-   أقل من حقيقتها الفعلية بمقدار كل القيود المتأثرة. سطور هذا النوع من القيود تُبنى دائماً بترتيب
-   ثابت لا يتغيّر (سطر1: ذمم مدينة 1100 / سطر2: إيراد 4000 / سطر3 إن وُجد: ضريبة 2100 — راجع
-   buildDELinesForCourseInvoice)، فيُعاد ربط كل سطر بمعرّف الحساب الصحيح الحالي لنفس الرمز حسب
-   ترتيبه، دون أي تغيير في المبالغ (debit/credit) نفسها إطلاقاً — إصلاح مرجع فقط، لا إصلاح مالي. */
-function repairOrphanedCourseInvoiceAccountRefs(){
-  if(settings.accountRefsRepairedV1) return 0;
-  const arAcc = accountByCode('1100'), revAcc = accountByCode('4000'), vatAcc = accountByCode('2100');
-  if(!arAcc || !revAcc || !vatAcc) return 0; // ننتظر دليل حسابات كامل قبل أي إصلاح
+/* ================= إصلاح مراجع الحسابات اليتيمة في القيود اليومية (V2) =================
+   بعض القيود اليومية تشير لمعرّفات حسابات من جيل قديم لدليل الحسابات (أُعيد إنشاؤه
+   بمعرّفات جديدة أكثر من مرة تاريخياً)، فتظهر بسطر «حساب غير موجود» وتختفي بصمت من
+   كشف الحساب العام وميزان المراجعة. هذه الدالة تعيد ربط هذه السطور بالحساب الصحيح
+   حسب ترتيب السطور الثابت في كل نوع ترحيل تلقائي، دون أي تغيير في المبالغ:
+   - فاتورة دورة / مبيعات يدوية: 1100 ثم 4000 ثم 2100 (ضريبة إن وُجدت)
+   - فاتورة شراء: 5000 ثم 2100 (إن وُجدت) ثم 1000 (مدفوعة) أو 2000 (آجلة)
+   - قيد يدوي قديم: حسب نوعه عبر buildAutoDELinesForLegacy
+   أي قيد لا يطابق نمطاً معروفاً (مثل قيد يدوي مباشر) يُترك كما هو ويظهر للمراجعة.
+   تعمل عند كل تحميل (آمنة للتكرار) لأن أي إعادة إنشاء لدليل الحسابات مستقبلاً
+   قد تُنتج مراجع يتيمة جديدة. */
+function repairOrphanedJournalDEAccountRefs(){
+  if(!chartOfAccounts.length || !journalDE.length) return { entries: 0, lines: 0 };
+  const byCode = new Map();
+  chartOfAccounts.forEach(a=>{ if(!byCode.has(String(a.code))) byCode.set(String(a.code), a.id); });
   const knownIds = new Set(chartOfAccounts.map(a=>a.id));
-  const roleAccountIds = [arAcc.id, revAcc.id, vatAcc.id];
-  let fixedCount = 0;
+  const target = code => byCode.get(String(code)) || null;
+  let fixedEntries = 0, fixedLines = 0;
+  const fix = (lines, idx, code)=>{
+    const line = lines[idx];
+    const accId = target(code);
+    if(!line || !accId) return false;
+    if(line.accountId && knownIds.has(line.accountId)) return false;
+    if(line.accountId === accId) return false;
+    line.accountId = accId;
+    return true;
+  };
   journalDE.forEach(e=>{
-    if(!e.sourceClientId) return; // فقط قيود فواتير الدورات المُرحَّلة تلقائياً
-    const lines = e.lines||[];
-    let changed = false;
-    lines.forEach((l,idx)=>{
-      if(l.accountId && !knownIds.has(l.accountId) && roleAccountIds[idx]){
-        l.accountId = roleAccountIds[idx];
-        changed = true;
+    const lines = e.lines || [];
+    if(!lines.some(l=> !l.accountId || !knownIds.has(l.accountId))) return;
+    let changed = 0;
+    if(e.sourceClientId || e.sourceManualSalesId){
+      if(fix(lines, 0, '1100')) changed++;
+      if(fix(lines, 1, '4000')) changed++;
+      if(lines.length >= 3 && fix(lines, 2, '2100')) changed++;
+    } else if(e.sourcePurchaseId){
+      const p = purchases.find(x=>x.id===e.sourcePurchaseId);
+      if(p){
+        const expected = ['5000'];
+        if(num(p.taxAmount) > 0) expected.push('2100');
+        expected.push(p.status === 'paid' ? '1000' : '2000');
+        if(expected.length === lines.length){
+          expected.forEach((code, i)=>{ if(fix(lines, i, code)) changed++; });
+        }
       }
-    });
-    if(changed) fixedCount++;
+    } else if(e.sourceJournalEntryId){
+      const j = journalEntries.find(x=>x.id===e.sourceJournalEntryId);
+      const built = (j && typeof buildAutoDELinesForLegacy==='function') ? buildAutoDELinesForLegacy(j) : null;
+      if(built && built.length === lines.length){
+        built.forEach((bl, i)=>{
+          const acc = chartOfAccounts.find(a=>a.id===bl.accountId);
+          if(acc && fix(lines, i, acc.code)) changed++;
+        });
+      }
+    }
+    if(changed){ fixedEntries++; fixedLines += changed; }
   });
-  settings.accountRefsRepairedV1 = true;
-  return fixedCount;
+  return { entries: fixedEntries, lines: fixedLines };
+}
+/* اسم قديم محفوظ للتوافق مع نداءات سابقة — يُرجع عدد القيود المُصلَحة */
+function repairOrphanedCourseInvoiceAccountRefs(){
+  return repairOrphanedJournalDEAccountRefs().entries;
 }
 async function saveJournalEntries(){
   try{ await _syncVersionsBeforeSave('journalEntries'); await saveCollectionGeneric('journalEntries', journalEntries); }catch(e){ showToast('تعذر حفظ القيود اليدوية'); }

@@ -203,6 +203,13 @@ async function startApp(){
   $('#app-wrap').style.display = 'block';
   try{ await renderAllViewsAfterLoad(); }catch(e){ console.error('startApp: فشلت خطوة "renderAllViewsAfterLoad"', e); }
   autoSignInLocalUser();
+  // علامة جاهزية البيانات — يستخدمها مراقب النسخ التلقائي المجدول (gdrive-backup.js)
+  // حتى لا يأخذ نسخة قبل اكتمال تحميل كل بيانات البرنامج في الذاكرة.
+  try{ window.__ftc2DataReady = true; }catch(e){}
+  // إيصالات أركان: تحميل فهرس النسخ المحفوظة ثم فحص الفواتير الجديدة — بعد اكتمال كل
+  // بيانات العملاء في الذاكرة، حتى لا يُبنى «الأرشيف القديم» من قائمة ناقصة.
+  try{ if(typeof receiptsAutoInit === 'function') receiptsAutoInit(); }
+  catch(e){ console.error('startApp: فشلت تهيئة إيصالات أركان', e); }
   // تشغيل النسخ الاحتياطي التلقائي في الخلفية — لا ننتظره لأنه قد يستغرق وقتاً طويلاً
   // (تنزيل وتشفير ورفع كل بيانات البرنامج) ولا يجب أن يعرقل ظهور الواجهة أو تفاعلها.
   maybeRunAutoBackup().catch(e => console.error('startApp: فشلت خطوة "maybeRunAutoBackup"', e));
@@ -233,32 +240,6 @@ function showLicenseScreen(errorMsg){
 }
 
 async function ensureServerLoginThenStart(){
-  // دخول تلقائي عبر رابط بالإيميل (Magic Link) لو الرابط الحالي يحتوي على معطيات الرابط
-  // (?magicToken=...&u=...) — يُفحص هذا أولاً وقبل أي جلسة محفوظة، لأن ضغط رابط جديد من الإيميل
-  // يجب أن يأخذ الأولوية دائماً. نُزيل المعطيات من شريط العنوان فوراً بغض النظر عن النتيجة، حتى
-  // لا يُعاد استخدام نفس الرابط بالخطأ (تحديث الصفحة مثلاً) — الرابط أصلاً صالح لمرة واحدة فقط.
-  try{
-    const params = new URLSearchParams(window.location.search);
-    const magicToken = params.get('magicToken');
-    const magicUser = params.get('u');
-    if(magicToken && magicUser){
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
-      try{
-        const loginData = await magicLinkVerify(magicUser, magicToken);
-        $('#server-login-screen').style.display = 'none';
-        await startApp();
-        checkPendingQrLoginApproval();
-        const displayName = (loginData && loginData.user && loginData.user.displayName) || magicUser;
-        showToast(`${arabicTimeGreeting()} يا ${displayName} 👋`);
-        return;
-      }catch(e){
-        console.error('[MagicLink] فشل الدخول عبر الرابط:', e);
-        showServerLoginScreen('تعذّر الدخول عبر هذا الرابط: ' + (e.message || 'رابط غير صالح أو منتهي الصلاحية') + ' — جرّب الدخول العادي أو اطلب رابطاً جديداً');
-        return;
-      }
-    }
-  }catch(e){ console.error('[MagicLink] خطأ أثناء فحص رابط الدخول:', e); }
-
   const saved = (()=>{ try{ return sessionStorage.getItem('serverAuthToken'); }catch(e){ return null; } })();
   if(saved){
     SERVER_AUTH_TOKEN = saved;
@@ -462,26 +443,6 @@ async function checkPendingQrLoginApproval(){
     else showToast('تعذّر الرد على طلب الدخول (انتهت صلاحية الكود على الأرجح)');
   }catch(e){ console.error('[QR Login] فشل الرد على طلب الدخول:', e); }
 }
-
-// طلب رابط دخول بالإيميل — يحتاج فقط اسم المستخدم المكتوب فى الحقل (نفس منطق زر البصمة أعلاه).
-(function(){
-  const magicBtn = $('#btn-magic-link-request');
-  if(!magicBtn) return;
-  magicBtn.addEventListener('click', async ()=>{
-    const uname = $('#server-login-user').value.trim();
-    if(!uname){ $('#server-login-user').focus(); showToast('اكتب اسم المستخدم أولاً'); return; }
-    magicBtn.disabled = true;
-    try{
-      const result = await magicLinkRequest(uname);
-      showToast(result.message || 'لو الحساب موجود وعنده إيميل مسجَّل، هيوصله رابط دخول خلال دقائق');
-    }catch(e){
-      console.error('[MagicLink] فشل طلب رابط الدخول:', e);
-      showToast('تعذّر إرسال الرابط، حاول لاحقاً');
-    }finally{
-      magicBtn.disabled = false;
-    }
-  });
-})();
 
 // إظهار/إخفاء كلمة المرور في شاشة الدخول (لا تُخزَّن أي بيانات، مجرد تبديل نوع الحقل)
 (function(){

@@ -161,51 +161,6 @@ function askTotpCode(message){
   });
 }
 
-/* ---------------- الدخول عبر رابط بالإيميل (Magic Link) ---------------- */
-
-/* طلب رابط دخول جديد يُرسَل على الإيميل المسجَّل لهذا الحساب (لو موجود) — الرد دائماً برسالة
-   عامة واحدة سواء كان الحساب/الإيميل موجوداً أم لا، حماية لخصوصية المستخدمين (نفس منطق
-   السيرفر — راجع server/routes/magic-link.js). */
-async function magicLinkRequest(username){
-  const res = await fetch(API_BASE + '/api/auth/magic-link/request', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username }),
-  });
-  const data = await res.json();
-  if(!res.ok) throw new Error(data.error || 'تعذّر إرسال الرابط');
-  return data;
-}
-
-/* التحقق من رابط دخول تم الضغط عليه من الإيميل، وإتمام الدخول تلقائياً عند النجاح — يُرجع نفس
-   شكل بيانات serverLogin() عند النجاح. لو الحساب محمي بمصادقة ثنائية، الخادم يُرجع requires2FA
-   ويُبقي الرابط حيّاً، فنعرض حوار إدخال الكود ونعيد الإرسال بنفس الرابط (حتى 3 محاولات). */
-async function magicLinkVerify(username, token){
-  const post = body => fetch(API_BASE + '/api/auth/magic-link/verify', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body),
-  }).then(r => r.json().then(d => ({ ok: r.ok, d })));
-  let res = await post({ username, token });
-  if(res.ok && res.d.requires2FA){
-    for(let attempt = 0; attempt < 3; attempt++){
-      const code = await askTotpCode('هذا الحساب محمي بمصادقة ثنائية — أدخل كود التحقق لإتمام الدخول عبر الرابط');
-      if(!code) throw new Error('أُلغي إدخال كود المصادقة الثنائية');
-      res = await post({ username, token, totpCode: code, backupCode: code });
-      if(res.ok && !res.d.requires2FA) break;
-      if(!res.ok && !(res.d.error || '').includes('كود التحقق')) throw new Error(res.d.error || 'تعذّر الدخول عبر الرابط');
-    }
-    if(!res.ok || res.d.requires2FA) throw new Error('كود التحقق غير صحيح — اطلب رابطاً جديداً وحاول مجدداً');
-  }
-  if(!res.ok) throw new Error(res.d.error || 'تعذّر الدخول عبر الرابط');
-  const data = res.d;
-  SERVER_AUTH_TOKEN = data.token;
-  SERVER_AUTH_USERNAME = data.username || username;
-  SERVER_AUTH_ROLE = normalizeRole(data.role);
-  try{
-    sessionStorage.setItem('serverAuthToken', data.token);
-    sessionStorage.setItem('serverAuthUsername', SERVER_AUTH_USERNAME);
-    sessionStorage.setItem('serverAuthRole', SERVER_AUTH_ROLE);
-  }catch(e){ console.error('[Auth] Failed to store session token:', e); }
-  return data;
-}
-
 /* ---------------- شاشة الدخول على الخادم المركزي (منفصلة عن نظام المستخدمين الداخلي للبرنامج) ---------------- */
 function showServerLoginScreen(errorMsg){
   const el = document.getElementById('server-login-screen');

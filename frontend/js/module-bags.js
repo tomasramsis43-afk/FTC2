@@ -125,54 +125,6 @@ $('#btn-toggle-bagfinancelink')?.addEventListener('click', async ()=>{
 
   });});
 
-/* ---------------- ربط Power Automate (Webhooks) ----------------
-   إرسال أحداث تلقائياً (POST بصيغة JSON) لرابط HTTP Trigger من Power Automate عند حدوث أحداث معيّنة.
-   الإرسال يتم بطريقة "fire-and-forget" (mode:'no-cors') لتفادي مشاكل CORS الشائعة مع روابط Power Automate،
-   وبالتالي لا يمكن للبرنامج معرفة نجاح الإرسال من عدمه — يُنصح بمراجعة سجل تشغيل الـ Flow للتأكد. */
-async function sendPowerAutomateEvent(eventType, payload){
-  const cfg = settings.powerAutomate;
-  if(!cfg || !cfg.webhookUrl) return;
-  if(eventType==='new_client' && cfg.notifyNewClient===false) return;
-  if(eventType==='course_number_updated' && cfg.notifyCourseNumber===false) return;
-  try{
-    await fetch(cfg.webhookUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify({event: eventType, timestamp: new Date().toISOString(), data: payload})
-    });
-  }catch(err){
-    console.warn('تعذّر إرسال حدث Power Automate:', err);
-  }
-}
-$('#btn-save-pa-webhook')?.addEventListener('click', async ()=>{
-  await withBtnLoading($('#btn-save-pa-webhook'), async ()=>{
-  settings.powerAutomate = {
-    webhookUrl: $('#set-pa-webhook-url').value.trim(),
-    notifyNewClient: $('#set-pa-notify-newclient').checked,
-    notifyCourseNumber: $('#set-pa-notify-coursenum').checked
-  };
-  await saveSettings();
-  await logAudit('edit','الإعدادات', 'تم تحديث إعدادات ربط Power Automate');
-  showToast('تم حفظ إعدادات Power Automate');
-
-  });});
-$('#btn-test-pa-webhook')?.addEventListener('click', async ()=>{
-  const url = $('#set-pa-webhook-url').value.trim();
-  if(!url){ showToast('أدخل رابط Webhook أولاً'); return; }
-  try{
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify({event:'test', timestamp: new Date().toISOString(), data:{message:'رسالة اختبار من برنامج المركز'}})
-    });
-    showToast('تم إرسال طلب الاختبار — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام');
-  }catch(err){
-    showToast('تعذّر إرسال طلب الاختبار — تأكد من صحة الرابط');
-  }
-});
-
 function renderBags(){
   $('#set-bagprice').value = settings.bagPrice;
   renderBagFinanceLinkToggle();
@@ -334,9 +286,19 @@ function renderOwnBagClients(){
       <td data-label="الجنسية">${escapeHtml(c.nationality||'—')}</td>
       <td class="mono" data-label="رقم الهاتف">${escapeHtml(c.phone||'—')}</td>
       <td data-label="الدورة">${escapeHtml(c.courseType||'—')}</td>
-      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${c.invoice
+        ? `<span class="invoice-cell">
+            ${typeof receiptsIndicatorHtml === 'function' ? receiptsIndicatorHtml(c.invoice, c) : ''}
+            <button type="button" class="invoice-toggle" data-invoice-toggle="${c.id}" data-invoice="${escapeHtml(c.invoice)}" title="عرض إيصال أركان — معاينة وطباعة (يُحمّل تلقائياً إن لم يكن محفوظاً)">${escapeHtml(c.invoice)}</button>
+          </span>`
+        : '—'}</td>
       <td class="mono" data-label="تاريخ التسجيل">${formatDateDisplay(c.date)||'—'}</td>
-      <td class="mono" data-label="فاتورة الحقيبة الخاصة">${escapeHtml(c.bagInvoice||'—')}</td>
+      <td class="mono" data-label="فاتورة الحقيبة الخاصة">${c.bagInvoice
+        ? `<span class="invoice-cell">
+            ${typeof receiptsIndicatorHtml === 'function' ? receiptsIndicatorHtml(c.bagInvoice, { clientId: c.clientId, invoice: c.bagInvoice, courseNumber: '' }) : ''}
+            <button type="button" class="invoice-toggle" data-invoice-toggle="${c.id}" data-invoice="${escapeHtml(c.bagInvoice)}" data-invoice-kind="bag" title="عرض إيصال الحقيبة — معاينة وطباعة (يُحمّل تلقائياً إن لم يكن محفوظاً)">${escapeHtml(c.bagInvoice)}</button>
+          </span>`
+        : '—'}</td>
       <td class="mono" data-label="تاريخ الحقيبة الخاصة">${formatDateDisplay(c.bagOwnDate || c.bagPurchaseDate)||'—'}</td>
     </tr>`).join('') : `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:20px;">لا يوجد عملاء وفّروا حقيبتهم الخاصة</td></tr>`;
 }
@@ -408,7 +370,11 @@ function renderClientBagPurchases(){
       <td class="mono">${escapeHtml(c.clientId||'—')}</td>
       <td>${escapeHtml(c.nationality||'—')}</td>
       <td class="mono">${escapeHtml(c.phone||'—')}</td>
-      <td class="mono"><input type="text" class="cbp-invoice-input" data-invoice-id="${c.id}" value="${escapeHtml(c.bagInvoice||'')}" placeholder="رقم الفاتورة" style="width:120px;"></td>
+      <td class="mono"><span class="invoice-cell">
+        ${c.bagInvoice && typeof receiptsIndicatorHtml === 'function' ? receiptsIndicatorHtml(c.bagInvoice, { clientId: c.clientId, invoice: c.bagInvoice, courseNumber: '' }) : ''}
+        <input type="text" class="cbp-invoice-input" data-invoice-id="${c.id}" value="${escapeHtml(c.bagInvoice||'')}" placeholder="رقم الفاتورة" style="width:120px;">
+        ${c.bagInvoice ? `<button type="button" class="invoice-toggle" data-invoice-toggle="${c.id}" data-invoice="${escapeHtml(c.bagInvoice)}" data-invoice-kind="bag" title="عرض إيصال الحقيبة — معاينة وطباعة (يُحمّل تلقائياً إن لم يكن محفوظاً)">📄</button>` : ''}
+      </span></td>
       <td class="mono">${escapeHtml(purchaseDate||'—')}</td>
       <td><span class="stamp ${c.bagSource==='stock' ? 'teal':'paid'}">${c.bagSource==='stock' ? 'من المخزون' : 'شراء مباشر'}</span></td>
     </tr>`).join('') : `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد عمليات شراء حقائب مكتملة بعد</td></tr>`;
@@ -457,6 +423,10 @@ $('#client-bag-purchases-body')?.addEventListener('change', async e=>{
   }
   await logAudit('edit','سجل شراء الحقائب', `تم تحديث رقم فاتورة الحقيبة للعميل ${clients[idx].name} إلى "${newVal||'—'}"`);
   showToast(invoiceSaved==='queued' ? 'حُفظ رقم الفاتورة على هذا الجهاز فقط — سيرفع للسيرفر عند اتصال الشبكة' : 'تم حفظ رقم الفاتورة');
+  // رقم فاتورة حقيبة جديد/مُعدَّل → إيصالها يلتحق تلقائياً بطابور الإيصالات (واحداً وراء الآخر).
+  // إعادة الرسم مؤجلة قليلاً حتى لا يضيع نقر زر الإيصال لو ضغطه المستخدم بعد تعديل الرقم مباشرة.
+  setTimeout(() => { if (typeof renderClientBagPurchases === 'function') renderClientBagPurchases(); }, 350);
+  if (newVal && typeof receiptsAutoScanSchedule === 'function') receiptsAutoScanSchedule('bag-invoice-saved', 700);
 });
 $('#bst-date-from')?.addEventListener('input', renderBags);
 $('#bst-date-to')?.addEventListener('input', renderBags);
@@ -976,6 +946,10 @@ $('#btn-baginv-bulk-save')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','مخزون الحقائب', `تسجيل أرقام فواتير/تواريخ شراء الحقائب من جدول داخل البرنامج: تحديث ${updated} عميل${skipped?`، وتخطي ${skipped} صف (رقم هوية غير موجود)`:''}`);
   renderTable(); renderBags();
+  // أرقام فواتير حقائب جديدة/مُحدَّثة → إيصالاتها تلتحق تلقائياً بطابور الإيصالات (واحداً وراء الآخر).
+  if (updated && typeof receiptsAutoScanSchedule === 'function') {
+    receiptsAutoScanSchedule('bag-invoices-bulk', 800);
+  }
   closeBaginvBulkModal();
   if(invCombined === 'queued'){
     showToast(`تم تحديث ${updated} عميل على هذا الجهاز فقط — سترفع للسيرفر تلقائياً عند اتصال الشبكة${skipped?`، ${skipped} تم تخطيه`:''}`);

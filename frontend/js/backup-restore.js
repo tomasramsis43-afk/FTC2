@@ -30,13 +30,22 @@ async function maybeRunAutoBackup(){
   if(Date.now() - last < intervalMs) return;
   downloadFullBackup(true);
   const uploaded = await uploadBackupToServer('auto');
+  let uploadedDrive = false, driveSkipped = false;
+  try{
+    if(settings.gdriveAutoBackupEnabled && typeof uploadFullBackupToGDrive === 'function'){
+      const gres = await uploadFullBackupToGDrive('auto');
+      uploadedDrive = !!(gres && gres.ok && !gres.skipped);
+      driveSkipped = !!(gres && gres.ok && gres.skipped);
+    }
+  }catch(e){ console.error('maybeRunAutoBackup: GDrive auto backup failed', e); }
   // لا نُقدّم وقت آخر نسخة احتياطية إلا بعد نجاح الرفع الفعلي للسيرفر — لو فشل الرفع
   // (انقطاع/403/سقف حجم)، تبقى آخر نسخة احتياطية كما هي حتى تتم المحاولة عند التشغيل
   // القادم بدل تأجيل أسبوع كامل بلا نسخة سيرفر.
   if(uploaded){
     settings.lastAutoBackupAt = new Date().toISOString();
     await saveSettings();
-    showToast('تم إنشاء نسخة احتياطية تلقائية (محلياً + على السيرفر)');
+    showToast('تم إنشاء نسخة احتياطية تلقائية (محلياً + على السيرفر)' +
+      (uploadedDrive ? ' وعلى Google Drive' : (driveSkipped ? ' — ولا تغيير يستدعي رفع نسخة جديدة على Google Drive' : '')));
   }else{
     showToast('تم إنشاء نسخة احتياطية محلية، لكن تعذّر رفعها للسيرفر — ستُعاد المحاولة في التشغيل القادم');
   }

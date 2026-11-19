@@ -11,6 +11,7 @@ function initCollapsiblePanels(root){
   scope.querySelectorAll('.panel').forEach((panel, idx)=>{
     if(panel.dataset.collapseInit) return; // مضاف قبل كده — منعاً للتكرار
     if(panel.classList.contains('no-collapse')) return; // مخصص للاستبعاد الصريح لو احتجنا
+    if(panel.classList.contains('page-head')){ panel.classList.remove('panel-collapsed'); return; } // رأس الصفحة لا يُطوى
     const first = panel.firstElementChild;
     if(!first) return;
     const isHeadingTag = /^H[1-4]$/.test(first.tagName);

@@ -463,7 +463,6 @@ async function loadData(cacheOnly){
     if(!settings.nextVaultSeq) settings.nextVaultSeq = DEFAULT_SETTINGS.nextVaultSeq;
     if(!settings.nextVaultSeqByDest || typeof settings.nextVaultSeqByDest!=='object') settings.nextVaultSeqByDest = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.nextVaultSeqByDest));
     else ['vault','bank','network','network2','other'].forEach(d=>{ if(!settings.nextVaultSeqByDest[d]) settings.nextVaultSeqByDest[d] = 1; });
-    if(!settings.powerAutomate) settings.powerAutomate = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.powerAutomate));
     if(settings.vaultLockedThrough===undefined) settings.vaultLockedThrough = DEFAULT_SETTINGS.vaultLockedThrough;
     if(settings.channels && typeof settings.channels[0]==='string'){
       settings.channels = settings.channels.map(n=>({name:n, dest:guessDest(n)}));
@@ -484,8 +483,6 @@ async function loadData(cacheOnly){
     if(settings.monthlyReportWhatsapp===undefined) settings.monthlyReportWhatsapp = '';
     if(settings.monthlyPdfReportsWhatsappNumbers===undefined) settings.monthlyPdfReportsWhatsappNumbers = '';
     if(settings.vatPdfReportWhatsappNumbers===undefined) settings.vatPdfReportWhatsappNumbers = '';
-    if(settings.reportEmailTo===undefined) settings.reportEmailTo = '';
-    if(settings.reportEmailCC===undefined) settings.reportEmailCC = '';
     if(settings.lastMonthlyReportPromptMonth===undefined) settings.lastMonthlyReportPromptMonth = null;
     if(!settings.autoBackupIntervalDays) settings.autoBackupIntervalDays = 7;
     if(settings.lastAutoBackupAt===undefined) settings.lastAutoBackupAt = null;
@@ -678,11 +675,13 @@ async function loadData(cacheOnly){
     // مباشرة، وقبل الترحيل التلقائي الشامل أدناه حتى تُحتسب هذه القيود المُصلَحة بشكل صحيح في
     // أي تقرير يُبنى لاحقاً في نفس التحميل.
     try{
-      const accFixedCount = typeof repairOrphanedCourseInvoiceAccountRefs==='function' ? repairOrphanedCourseInvoiceAccountRefs() : 0;
+      const accFixed = typeof repairOrphanedJournalDEAccountRefs==='function'
+        ? repairOrphanedJournalDEAccountRefs()
+        : null;
+      const accFixedCount = accFixed ? accFixed.entries : 0;
       if(accFixedCount>0){
         await saveJournalDE();
-        await saveSettings();
-        await logAudit('edit','المحاسبة', `إصلاح تلقائي: تم تصحيح مرجع الحساب في ${accFixedCount} قيد يومية لفواتير دورات كانت تشير لحسابات من جيل قديم لدليل الحسابات (لا تغيير في أي مبلغ، فقط إعادة ربط بالحساب الصحيح الحالي)`);
+        await logAudit('edit','المحاسبة', `إصلاح تلقائي: تم تصحيح مرجع الحساب في ${accFixedCount} قيد يومية (${accFixed.lines} سطراً) كانت تشير لحسابات من جيل قديم لدليل الحسابات — لا تغيير في أي مبلغ، فقط إعادة ربط بالحساب الصحيح الحالي`);
       }
     }catch(e){ console.error('فشل إصلاح مراجع الحسابات اليتيمة', e); }
   }
@@ -710,29 +709,24 @@ async function saveAuditLog(){
   try{ await saveCollectionGeneric('auditLog', auditLog); }catch(e){ /* silent */ }
 }
 async function logAudit(action, section, description){
-  auditLog.push({
+  const entry = {
     id: uid(),
     ts: Date.now(),
     user: currentUser || 'غير معروف',
     action, // add | edit | delete
     section, // اسم الشيت
     description
-  });
+  };
+  auditLog.push(entry);
+  // تغذية طابور "ملخّص التعديلات اليومي بالإيميل" (يعمل فقط إذا كان الإرسال مفعّلاً)
+  try{
+    if(typeof activityDigestEnqueue === 'function'){
+      activityDigestEnqueue({ ts: entry.ts, user: entry.user, action: entry.action, section: entry.section, description: entry.description });
+    }
+  }catch(e){ /* silent */ }
   await saveAuditLog();
 }
 
-// يرسل تنبيه إيميل فوري للإدارة (ADMIN_ALERT_EMAILS على السيرفر)، مقتصر على 3 أحداث فقط: إضافة
-// عميل جديد، حذف عميل، تعديل قيمة مدفوعات عميل. المستلمون مُعرَّفون على السيرفر وليس هنا — نفس
-// قائمة تنبيهات الأمان. best-effort بالكامل: لا يوقف العمل ولا يُظهر أخطاءً لو فشل الإرسال.
-async function notifyAdminAlert(subject, bodyHtml){
-  try{
-    const res = await serverFetch('/api/email/admin-alert', {
-      method:'POST',
-      body: JSON.stringify({ subject, bodyHtml }),
-    });
-    if(!res.ok) console.error('فشل تنبيه الإدارة بالإيميل:', await res.json().catch(()=>({})));
-  }catch(e){ console.error('فشل تنبيه الإدارة بالإيميل:', e); }
-}
 // allowDrop=true تُستخدم فقط عند حذف عملاء دفعة واحدة عن قصد (بعد تأكيد المستخدم صراحة عبر
 // customConfirm)، لتخطّي حماية "رفض الحذف المفاجئ الكبير" على السيرفر (راجع PUT /api/storage/:key)
 // التي هدفها منع فقدان بيانات بسبب جهاز يحفظ نسخة قديمة من المصفوفة فوق نسخة السيرفر الحالية.

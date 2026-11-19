@@ -639,21 +639,21 @@ $('#btn-export-report')?.addEventListener('click', ()=>{
   a.click();
 });
 
-// يبني مستلمي التقارير (To أساسي + CC) من الإعداد الموحّد فى شاشة الإعدادات بدل سؤال
-// المستخدم فى كل مرة. يرجع {to, cc} أو null (مع toast توجيهي) لو لم يُضبط بريد رئيسي بعد.
+// يبني مستلمي التقارير من الإعداد الموحّد في لوحة «ملخّص التعديلات اليومي بالإيميل»
+// (settings.activityDigestTo) بدل سؤال المستخدم في كل مرة. يرجع {to, cc, all} أو null (مع toast توجيهي).
 function reportEmailRecipients(){
-  const to = (settings.reportEmailTo||'').trim();
-  if(!to){
-    showToast('لم يتم ضبط بريد استلام التقارير بعد — اضبطه من الإعدادات ← إرسال التقارير بالإيميل');
+  const raw = (typeof settings !== 'undefined' && settings) ? String(settings.activityDigestTo || '') : '';
+  const list = raw.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!list.length){
+    showToast('لم يتم ضبط بريد المستلمين بعد — اضبطه من الإعدادات ← «ملخّص التعديلات اليومي بالإيميل»');
     return null;
   }
-  const cc = (settings.reportEmailCC||'').split(',').map(s=>s.trim()).filter(Boolean);
-  return { to, cc, all: [to, ...cc] };
+  return { to: list, cc: [], all: list };
 }
 
 // إرسال أي تقرير CSV بالإيميل — دالة عامة تُستخدم لكل أزرار "إرسال بالإيميل" فى شاشة التقارير.
-// المستلمون (To + CC) يُقرأون تلقائياً من إعداد "إرسال التقارير بالإيميل" الموحّد فى شاشة
-// الإعدادات (settings.reportEmailTo / reportEmailCC) بدل سؤال المستخدم فى كل مرة.
+// المستلمون يُقرأون تلقائياً من إعداد «ملخّص التعديلات اليومي بالإيميل» (settings.activityDigestTo)
+// بدل سؤال المستخدم فى كل مرة.
 // تحوّل النص إلى base64 وتبعته للسيرفر كمرفق CSV مع سطر ملخص فى متن الرسالة.
 async function emailCsvReport(filename, csv, subject, summaryLines){
   const recipients = reportEmailRecipients();
@@ -664,20 +664,18 @@ async function emailCsvReport(filename, csv, subject, summaryLines){
     ${summaryLines ? `<ul>${summaryLines.map(l=>`<li>${escapeHtml(l)}</li>`).join('')}</ul>` : ''}
   </div>`;
   try{
-    const res = await serverFetch('/api/email/report', {
-      method:'POST',
-      body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml, attachmentBase64, attachmentName: filename, attachmentType: 'text/csv' }),
+    await window.sendAppEmail({
+      to: recipients.to,
+      cc: recipients.cc,
+      subject,
+      html: bodyHtml,
+      attachments: [{ name: filename, type: 'text/csv', base64: attachmentBase64 }],
     });
-    if(res.ok){
-      showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
-      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
-    }else{
-      const data = await res.json().catch(()=>({}));
-      showToast(`تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
-    }
+    showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+    await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
   }catch(e){
     console.error('فشل إرسال إيميل التقرير:', e);
-    showToast('تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+    showToast(`تعذّر إرسال التقرير بالإيميل: ${(e && e.message) || 'تحقق من الاتصال'}`);
   }
 }
 $('#btn-email-report')?.addEventListener('click', ()=>{
@@ -1446,20 +1444,18 @@ async function emailPdfReport(subject, bodyHtml, filename){
   const attachmentBase64 = await fileToBase64(pdfFile);
   const emailBodyHtml = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9;"><p>مرفق التقرير المطلوب: <b>${escapeHtml(subject)}</b></p></div>`;
   try{
-    const res = await serverFetch('/api/email/report', {
-      method:'POST',
-      body: JSON.stringify({ to: [recipients.to], cc: recipients.cc, subject, bodyHtml: emailBodyHtml, attachmentBase64, attachmentName: pdfFile.name, attachmentType: 'application/pdf' }),
+    await window.sendAppEmail({
+      to: recipients.to,
+      cc: recipients.cc,
+      subject,
+      html: emailBodyHtml,
+      attachments: [{ name: pdfFile.name, type: 'application/pdf', base64: attachmentBase64 }],
     });
-    if(res.ok){
-      showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
-      await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
-    }else{
-      const data = await res.json().catch(()=>({}));
-      showToast(`تعذّر إرسال التقرير بالإيميل: ${data.error || 'خطأ غير معروف'}`);
-    }
+    showToast(`تم إرسال التقرير بالإيميل إلى ${recipients.all.join(', ')}`);
+    await logAudit('edit','التقارير', `تم إرسال تقرير "${subject}" بالإيميل إلى ${recipients.all.join(', ')}`);
   }catch(e){
     console.error('فشل إرسال إيميل التقرير:', e);
-    showToast('تعذّر إرسال التقرير بالإيميل — تحقق من الاتصال');
+    showToast(`تعذّر إرسال التقرير بالإيميل: ${(e && e.message) || 'تحقق من الاتصال'}`);
   }
 }
 

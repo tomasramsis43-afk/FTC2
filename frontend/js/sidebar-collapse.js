@@ -14,13 +14,16 @@
   function applyCollapsed(isCollapsed){
     nav.classList.toggle('collapsed', !!isCollapsed);
     // الأيقونات ثابتة — لا نخفيها أبداً، فقط النص
-    // إضافة تلميح عند الطي
+    // التلميح أصبح من مسؤولية sidebar-pro.js (تلميح عائم بموضع ثابت)،
+    // لذلك نمنع تلميح المتصفح الافتراضي من الظهور فوقه.
     nav.querySelectorAll('button[data-view]').forEach(b=>{
       const label = b.querySelector('span')?.textContent?.trim();
-      if(isCollapsed && label) b.setAttribute('title', label);
-      else b.removeAttribute('title');
+      if(isCollapsed && label) b.setAttribute('data-nav-tip', label);
+      else b.removeAttribute('data-nav-tip');
+      b.removeAttribute('title');
     });
     try{ localStorage.setItem(STORAGE_KEY, isCollapsed ? '1' : '0'); }catch(e){}
+    window.dispatchEvent(new CustomEvent('ftc2:sidebar-toggled', { detail:{ collapsed: !!isCollapsed } }));
   }
 
   // حالة أولية

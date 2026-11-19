@@ -204,7 +204,6 @@ const KB_OVERLAY_CANCEL = {
   'overlay': 'btn-cancel',
   'bulk-add-overlay': 'btn-bulk-add-cancel',
   'bulk-update-overlay': 'btn-bulk-update-cancel',
-  'bulk-message-overlay': 'btn-bulk-message-cancel',
   'bulk-delete-overlay': 'btn-bulk-delete-cancel',
   'cs-bulk-overlay': 'cs-bulk-cancel',
   'refnum-bulk-overlay': 'refnum-bulk-cancel',
@@ -468,6 +467,62 @@ function vaultReturnTxIndex(){
   return map;
 }
 function bagAmount(c){ return c.bagSource==='own' ? 0 : num(c.bagPrice); }
+/* قيمة خصم العرض المحسوبة من إعداداته: مبلغ ثابت أو نسبة من قيمة التدريب.
+   تُستخدم في نموذج العميل وفي الإعدادات، ولا علاقة لها بسعر الحقيبة إطلاقاً.
+   السقف هو قيمة التدريب نفسها (لا يصبح الخصم أكبر من السعر). */
+function offerDiscountAmountFor(price, type, value){
+  const p = Math.max(0, num(price));
+  const v = Math.max(0, num(value));
+  const amt = String(type||'amount')==='percent' ? (p * v / 100) : v;
+  return Math.min(p, Math.round(amt * 100) / 100);
+}
+/* فصل الخصم المحفوظ على العميل إلى: جزء يدوي + جزء عرض (بلا تغيير في الإجمالي). */
+function splitClientDiscount(totalDiscount, offerAmount){
+  const total = Math.max(0, num(totalDiscount));
+  const offer = Math.min(total, Math.max(0, num(offerAmount)));
+  return {
+    total: Math.round(total * 100) / 100,
+    offer: Math.round(offer * 100) / 100,
+    manual: Math.round((total - offer) * 100) / 100,
+  };
+}
+/* دمج الخصم اليدوي مع خصم العرض في إجمالي واحد لا يتجاوز قيمة التدريب. */
+function combineClientDiscount(price, manualDiscount, offerAmount){
+  const p = Math.max(0, num(price));
+  const sum = Math.max(0, num(manualDiscount)) + Math.max(0, num(offerAmount));
+  return Math.min(p, Math.round(sum * 100) / 100);
+}
+/* قائمة عروض الخصم المعرّفة في الإعدادات، مع ترحيل العرض المفرد القديم تلقائياً. */
+function settingsOffers(){
+  if(typeof settings === 'undefined' || !settings) return [];
+  if(!Array.isArray(settings.offers)) settings.offers = [];
+  if(!settings.offers.length && num(settings.offerDiscountValue) > 0){
+    settings.offers.push({
+      id: 'offer-legacy-1',
+      name: settings.offerName || 'عرض الخصم',
+      type: settings.offerDiscountType === 'percent' ? 'percent' : 'amount',
+      value: num(settings.offerDiscountValue),
+      active: true,
+    });
+  }
+  return settings.offers;
+}
+/* العروض المطبَّقة فعلاً على عميل (مع دعم بيانات العرض المفرد القديمة). */
+function appliedOffersOf(c){
+  if(c && Array.isArray(c.appliedOffers) && c.appliedOffers.length){
+    return c.appliedOffers.filter(o => o && num(o.amount) > 0);
+  }
+  if(c && c.offerApplied && num(c.offerDiscountAmount) > 0){
+    return [{
+      id: 'offer-legacy',
+      name: c.offerNameSnapshot || 'عرض الخصم',
+      type: c.offerDiscountType || 'amount',
+      value: num(c.offerDiscountValue),
+      amount: num(c.offerDiscountAmount),
+    }];
+  }
+  return [];
+}
 function centerIncome(c){ return num(c.coursePrice) - num(c.discount); }
 function total(c){ return centerIncome(c) + bagAmount(c); }
 function paidTotal(c){

@@ -309,12 +309,30 @@ function validateFetched(result) {
     try {
       await pg.goto(ARKKAN_URL, { waitUntil: 'domcontentloaded' });
       await wait(2500);
-      await pg.evaluate(() => {
-        const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
-        if (a) a.click();
-      });
-      await pg.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-      await wait(3500);
+      // انتظار إطار تفاصيل المتدرب (يفتح تلقائياً عبر ARKKAN_URL على الموقع الحالي)
+      let detailsReady = null;
+      {
+        const t = Date.now();
+        while (Date.now() - t < 10000) {
+          detailsReady = pg.frames().find(ff => DETAILS_FRAME_PATTERN.test(ff.url()));
+          if (detailsReady) break;
+          await wait(200);
+        }
+      }
+      if (!detailsReady) {
+        // احتياطي فقط: الضغط على "تفاصيل متدرب" لو الإطار ما فتحش تلقائياً
+        await pg.evaluate(() => {
+          const a = [...document.querySelectorAll('a')].find(x => (x.textContent || '').trim() === 'تفاصيل متدرب');
+          if (a) a.click();
+        });
+        const t2 = Date.now();
+        while (Date.now() - t2 < 15000) {
+          detailsReady = pg.frames().find(ff => DETAILS_FRAME_PATTERN.test(ff.url()));
+          if (detailsReady) break;
+          await wait(200);
+        }
+      }
+      await wait(1500);
 
       // Sequential Processing: عميل واحد في كل مرة
       for (let i = 0; i < missing.length; i++) {

@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0d12">
+<meta name="theme-color" content="#0b1736">
 <title>نظام إدارة عملاء وكورسات المركز</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -10,15 +10,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FTC">
 <link rel="icon" href="/icons/icon-192.png">
+<script src="js/offline-boot.js"></script>
 <script defer src="sw-register.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Cairo:wght@600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="styles.css">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js" integrity="sha512-pUhApVQtLbnpLtJn6DuzDD5o2xtmLJnJ7oBoMsBnzOkVkpqofGLGPaBJ6ayD2zQe3lCgCibhJBi4cj5wAxwVKA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<link rel="stylesheet" href="design-v35.css">
+<script defer src="vendor/xlsx.full.min.js"></script>
+<script defer src="vendor/qrious.min.js"></script>
+<script defer src="vendor/html2canvas.min.js"></script>
+<script defer src="vendor/jspdf.umd.min.js"></script>
 </head>
 <body>
 <!-- خلفية هندسية بسيطة (SVG واحد يُعاد استخدامه: خلفية التطبيق + شاشتي الترخيص والدخول) — تنسيقها فى styles.css (.geo-bg) -->
@@ -76,35 +76,12 @@
           <input type="text" id="server-login-2fa" inputmode="numeric" autocomplete="one-time-code" placeholder="123456">
         </div>
         <button type="submit" class="btn btn-primary">دخول</button>
-        <button type="button" id="btn-webauthn-login" class="login-webauthn-btn" style="display:none;" title="اضغط وسجّل بصمتك أو Face ID مباشرة — بدون كتابة اسم مستخدم أو كلمة مرور (لازم تكون سجّلت هذا الجهاز من قبل)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0-3 2-5 5-5"></path><path d="M12 11a5 5 0 0 0-9 3"></path><path d="M12 11v7"></path><path d="M8.5 21c-1-2-1.5-4-1.5-6"></path><path d="M15.5 21c1-2 1.5-4 1.5-6"></path><circle cx="12" cy="6" r="3"></circle></svg>
-          <span>دخول بالبصمة</span>
-        </button>
-        <button type="button" id="btn-magic-link-request" class="login-magic-link-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>
-          <span>دخول عبر رابط بالإيميل</span>
-        </button>
-        <button type="button" id="btn-qr-login-open" class="login-magic-link-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z"></path></svg>
-          <span>دخول بمسح الكود من موبايلك</span>
-        </button>
         <button id="btn-install-app-login" type="button" class="login-install-btn" style="display:none;" title="تثبيت البرنامج كتطبيق مستقل على هذا الجهاز — يعمل بأيقونة خاصة به وبدون اتصال بالإنترنت">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg>
           <span>تثبيت البرنامج على هذا الجهاز</span>
         </button>
         <div class="login-error" id="server-login-error" style="display:none;"></div>
       </form>
-    </div>
-  </div>
-  <div id="qr-login-modal" style="display:none; position:fixed; inset:0; z-index:220; align-items:center; justify-content:center; background:rgba(10,12,20,0.55); backdrop-filter:blur(4px);">
-    <div style="background:var(--auth-panel, #fff); border:1px solid var(--auth-border); border-radius:18px; padding:24px; max-width:320px; width:92%; text-align:center;">
-      <h3 style="margin:0 0 6px; font-size:16px;">دخول بمسح الكود</h3>
-      <p style="font-size:12.5px; color:var(--auth-text-dim); margin:0 0 14px;">افتح البرنامج على موبايلك وأنت مسجّل دخول بالفعل، وامسح الكود بكاميرا الموبايل العادية (زي أي كود QR)</p>
-      <div id="qr-login-canvas-wrap" style="display:flex; align-items:center; justify-content:center; min-height:220px;">
-        <canvas id="qr-login-canvas"></canvas>
-      </div>
-      <div id="qr-login-status" style="font-size:12.5px; color:var(--auth-text-dim); margin-top:10px;">جارٍ توليد الكود...</div>
-      <button type="button" id="btn-qr-login-close" class="btn" style="margin-top:14px; width:100%;">إلغاء والرجوع لتسجيل الدخول العادي</button>
     </div>
   </div>
 </div>
@@ -126,7 +103,7 @@
       </div>
     </div>
     <div class="topbar-user">
-      <div id="offline-status-indicator" style="display:none; align-items:center; gap:6px; border-radius:6px; padding:5px 10px; font-size:12.5px; color:#fff; white-space:nowrap;"></div>
+      <div id="offline-status-indicator" style="display:none; align-items:center; gap:6px; white-space:nowrap;"></div>
       <button id="btn-install-app" type="button" class="icon-btn" title="تثبيت البرنامج كتطبيق مستقل على هذا الجهاز — يعمل بأيقونة خاصة به وبدون اتصال بالإنترنت" style="display:none;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg><span>تثبيت البرنامج</span></button>
       <button id="btn-undo" type="button" class="icon-btn" title="تراجع عن: إلغاء (حذف منطقي) حركة مالية بمبلغ 20" style="opacity: 1;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5"></path><path d="M4 12h11a5 5 0 0 1 0 10h-1"></path></svg><span>تراجع</span></button>
       <button id="btn-redo" type="button" class="icon-btn" title="لا توجد عملية للتقدم إليها" disabled="" style="opacity:.5;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5"></path><path d="M20 12H9a5 5 0 0 0 0 10h1"></path></svg><span>تقدم</span></button>
@@ -187,6 +164,11 @@
     <button data-view="reports" class=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M4 20h16"></path></svg><span data-i18n="navReports">التقارير</span></button>
     <button data-view="audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"></rect><path d="M9 3.5h6a1 1 0 0 1 1 1V6H8V4.5a1 1 0 0 1 1-1z"></path><path d="M8.5 13.5l2 2 4-4.5"></path></svg><span data-i18n="navAudit">سجل المراجعة</span></button>
     <button data-view="arkkan-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/><path d="M18 2v4h4"/></svg><span>مزامنة أركان</span></button>
+    <div class="nav-dock" role="group" aria-label="أدوات سريعة">
+      <button type="button" class="nav-dock-btn" data-view="settings" title="الإعدادات" aria-label="الإعدادات"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2.4-1.4L14 3h-4l-.16 2.2a7 7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .5.05.95.14 1.4l-2 1.5 2 3.4 2.3-.9c.7.6 1.5 1.1 2.4 1.4L10 21h4l.16-2.2c.9-.3 1.7-.8 2.4-1.4l2.3.9 2-3.4-2-1.5c.09-.45.14-.9.14-1.4z"></path></svg><span>الإعدادات</span></button>
+      <button type="button" class="nav-dock-btn" id="btn-dock-theme" title="تبديل المظهر الفاتح/الداكن" aria-label="تبديل المظهر الفاتح/الداكن"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg><span>المظهر</span></button>
+      <div class="nav-dock-status" id="nav-dock-status" title="حالة الاتصال"><i aria-hidden="true"></i><span>متصل</span></div>
+    </div>
   </nav>
 
   <main class="main-content">
@@ -216,10 +198,13 @@
         </div>
       </div>
     </div>
+    <div id="dash-pro-hero"></div>
+    <div id="dash-pro-brief"></div>
     <div class="dash2-kpis" id="dash2-kpis"></div>
     <div id="smart-alerts-panel"></div>
     <div id="pending-approvals-panel"></div>
     <div class="dash2-grid" id="dash2-grid"></div>
+    <div id="dash-pro-insights"></div>
     <div id="followups-panel" style="margin-top:14px;"></div>
     <div class="panel" id="reports-email-panel" style="margin-top:14px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
@@ -239,6 +224,15 @@
 
   <!-- CLIENTS -->
   <section class="view" id="view-clients">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>العملاء</h2>
+        <p class="page-head-sub">ملفات العملاء، حالتهم المالية، وحقائبهم — بحث وفلترة لحظية.</p>
+      </div>
+      <div class="page-head-actions">
+        <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
+      </div>
+    </div>
     <div id="approval-notices-banner"></div>
     <div class="toolbar toolbar-card">
       <input type="text" id="search" placeholder="بحث بالاسم / الجوال / رقم الهوية / رقم الفاتورة" data-i18n-placeholder="searchPlaceholder">
@@ -254,6 +248,7 @@
           <hr>
           <button class="btn btn-ghost btn-sm" id="btn-export" data-i18n="exportCsv">تصدير حسب الفلتر</button>
           <button class="btn btn-ghost btn-sm" id="btn-bulk-update" data-i18n="bulkUpdateImport">📋 تحديث/استيراد بيانات العملاء (جدول)</button>
+          <button class="btn btn-ghost btn-sm" id="btn-import-clients-excel" data-i18n="importClientsExcel">📥 استيراد عملاء من شيت Excel</button>
           <button class="btn btn-ghost btn-sm" id="btn-refnum-bulk" data-i18n="refNumBulkImport">📋 استيراد الرقم المرجعي (جدول)</button>
           <button class="btn btn-ghost btn-sm" id="btn-compworkers-bulk" data-i18n="compWorkersBulkImport">📋 استيراد عمال الشركات (جدول)</button>
           <button class="btn btn-ghost btn-sm" id="btn-bulk-add" data-i18n="bulkAddClients">+ إضافة عدة عملاء</button>
@@ -263,8 +258,8 @@
           <button class="btn btn-danger btn-sm" id="btn-bulk-delete-table" data-i18n="bulkDeleteTable">🗑 حذف عملاء (جدول)</button>
         </div>
       </div>
-      <button class="btn btn-gold" id="btn-add" data-i18n="newClient">+ عميل جديد</button>
     </div>
+    <input type="file" id="import-clients-excel-input" accept=".xlsx,.xls,.csv" style="display:none;">
     <div class="toolbar advanced-filters-panel" id="advanced-filters-panel" style="display:none;">
       <select id="filter-nat" data-multi-filter><option value="" data-i18n="allNats">كل الجنسيات</option><option value="Saudi">Saudi</option><option value="Yemeni">Yemeni</option><option value="Egyption">Egyption</option><option value="Sudanese">Sudanese</option><option value="Türkiye">Türkiye</option><option value="Syria">Syria</option><option value="Tunisia">Tunisia</option><option value="Afghanistan">Afghanistan</option><option value="Ethiopia">Ethiopia</option><option value="Morocco">Morocco</option><option value="Palestine">Palestine</option><option value="Jordan">Jordan</option><option value="Bangladesh">Bangladesh</option><option value="Hindi">Hindi</option><option value="Pakistani">Pakistani</option><option value="Nepali">Nepali</option><option value="Indonesia">Indonesia</option><option value="Filipino">Filipino</option><option value="SriLanka">SriLanka</option><option value="Tanzanian">Tanzanian</option><option value="Ghanaian">Ghanaian</option><option value="Ugandan">Ugandan</option><option value="Lebanon">Lebanon</option></select>
       <select id="filter-company" data-multi-filter><option value="" data-i18n="allCompanies">كل الشركات</option></select>
@@ -298,28 +293,62 @@
       </div>
       <div class="client-stats" id="course-stat-cards"></div>
     </div>
-    <div class="toolbar" id="bulk-actions-bar" style="display:none; background:rgba(180,72,58,.08); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
-      <span><span data-i18n="selectedNowPrefix">محدد حالياً:</span> <b id="bulk-selected-count" class="mono">0</b> <span data-i18n="clientWord">عميل</span></span>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-select-all-filtered"><span data-i18n="selectAllFilteredPrefix">تحديد كل النتائج المطابقة للفلتر</span> (<span id="bulk-filtered-total">766</span>)</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-selection" data-i18n="clearSelection">إلغاء التحديد</button>
+    <div class="toolbar" id="receipts-toolbar" style="background:rgba(52,175,163,.08); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
+      <span style="font-size:12.5px; font-weight:700;">📥 إيصالات أركان</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-receipts-backlog" title="تحميل إيصالات الفواتير القديمة غير المحفوظة على هذا الجهاز — واحداً وراء الآخر بدون أي تحميل متوازٍ">📥 تحميل الإيصالات القديمة</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-receipts-missing-clients" title="قائمة بأسماء العملاء الذين ليس لهم إيصالات محفوظة على هذا الجهاز — مع بحث وتحميل مباشر">👥 بلا إيصالات</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-receipts-toggle" title="إيقاف/تشغيل الجلب التلقائي والطابور — الطلب الحالي يكتمل ثم يتوقف">⏸️ إيقاف الجلب</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-send-message" data-i18n="sendWhatsappSelected">📨 إرسال رسالة واتساب للمحدد</button>
-      <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;" title="تفادي إعادة رفع من سُجّل رفعه بنجاح مسبقاً — ألغِ تفشيكه لتشملهم">
-        <input type="checkbox" id="chk-arkkan-skip-submitted" checked> تخطّي المرفوع مسبقاً
-      </label>
-<button type="button" class="btn btn-gold btn-sm" id="btn-bulk-arkkan-submit" title="رفع طلب متدرب لكل عميل محدد إلى بوابة الحقيبة — واحد وراء واحد، وتُحفظ نتيجة كل عميل فوراً">⬆️ رفع لأركان للمحدد</button>
-      <button type="button" class="btn btn-gold btn-sm" id="btn-bulk-arkkan-stop" style="display:none;">⏹ إيقاف الرفع</button>
-      <span id="bulk-arkkan-status" class="mono" style="display:none;color:var(--gold);"></span>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-arkkan-refnum" title="جلب الرقم المرجعي لكل عميل محدد من منصة إدارة النظام (بحث برقم الهوية فقط) وملء حقل الرقم المرجعي له — واحد وراء واحد">🔖 أرقام مرجعية للمحدد</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-arkkan-refnum-stop" style="display:none;">⏹ إيقاف</button>
-      <span id="bulk-arkkan-refnum-status" class="mono" style="display:none;color:var(--gold);"></span>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-arkkan-receipts" title="تحميل إيصال الدورة + الحقيبة لكل عميل محدد من أركان وتنزيلها على الجهاز — واحد وراء واحد">📥 إيصالات للمحدد</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-arkkan-receipts-stop" style="display:none;">⏹ إيقاف</button>
-      <label style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-muted); cursor:pointer;" title="افتراضياً تُقرأ إيصالات العملاء المحمَّلة مسبقاً من الكاش المحلي فوراً (أقل من ثانية). فعِّل هذا لفرض الرجوع إلى الموقع وتحديث الإيصالاتك من جديد.">
-        <input type="checkbox" id="chk-arkkan-cache-refresh" style="width:14px;height:14px;">🔄 تحديث من الموقع (تجاوز الكاش)
-      </label>
-      <span id="bulk-arkkan-receipts-status" class="mono" style="display:none;color:var(--gold);"></span>
-      <button type="button" class="btn btn-danger btn-sm" id="btn-bulk-delete-selected" data-i18n="deleteSelected">🗑 حذف المحدد</button>
+      <span id="receipts-queue-status" class="mono" style="display:none; font-size:12px; color:var(--gold);"></span>
+    </div>
+    <!-- شريط الإجراءات الجماعية: بطاقة منظمة بدل صف طويل مزدحم -->
+    <div class="bulk-bar" id="bulk-actions-bar" style="display:none;" role="region" aria-label="إجراءات التحديد">
+      <div class="bulk-bar-head">
+        <div class="bulk-sel">
+          <span class="bulk-sel-num mono" id="bulk-selected-count">0</span>
+          <div class="bulk-sel-txt">
+            <b><span data-i18n="selectedNowPrefix">محدد حالياً:</span></b>
+            <small><span data-i18n="clientWord">عميل</span> من نتائج الفلتر الحالي</small>
+          </div>
+        </div>
+        <div class="bulk-sel-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-select-all-filtered"><span data-i18n="selectAllFilteredPrefix">تحديد كل النتائج المطابقة للفلتر</span> (<span id="bulk-filtered-total" class="mono">766</span>)</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-selection" data-i18n="clearSelection">إلغاء التحديد</button>
+        </div>
+        <div class="bulk-opts">
+          <label class="bulk-chk" title="تفادي إعادة رفع من سُجّل رفعه بنجاح مسبقاً — ألغِ تفشيكه لتشملهم">
+            <input type="checkbox" id="chk-arkkan-skip-submitted" checked>
+            <span>تخطّي المرفوع مسبقاً</span>
+          </label>
+          <label class="bulk-chk" title="افتراضياً تُقرأ إيصالات العملاء المحمَّلة مسبقاً من الكاش المحلي فوراً (أقل من ثانية). فعِّل هذا لفرض الرجوع إلى الموقع وتحديث الإيصالات من جديد.">
+            <input type="checkbox" id="chk-arkkan-cache-refresh">
+            <span>🔄 تحديث من الموقع (تجاوز الكاش)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="bulk-bar-actions">
+        <div class="bulk-act">
+          <button type="button" class="btn btn-gold btn-sm bulk-btn" id="btn-bulk-arkkan-submit" title="رفع طلب متدرب لكل عميل محدد إلى بوابة الحقيبة — واحد وراء واحد، وتُحفظ نتيجة كل عميل فوراً">⬆️ رفع لأركان للمحدد</button>
+          <div class="bulk-act-meta">
+            <button type="button" class="btn btn-ghost btn-sm bulk-stop" id="btn-bulk-arkkan-stop" style="display:none;">⏹ إيقاف الرفع</button>
+            <span id="bulk-arkkan-status" class="bulk-status mono" style="display:none;"></span>
+          </div>
+        </div>
+        <div class="bulk-act">
+          <button type="button" class="btn btn-ghost btn-sm bulk-btn" id="btn-bulk-arkkan-refnum" title="جلب الرقم المرجعي لكل عميل محدد من منصة إدارة النظام (بحث برقم الهوية فقط) وملء حقل الرقم المرجعي له — واحد وراء واحد">🔖 أرقام مرجعية للمحدد</button>
+          <div class="bulk-act-meta">
+            <button type="button" class="btn btn-ghost btn-sm bulk-stop" id="btn-bulk-arkkan-refnum-stop" style="display:none;">⏹ إيقاف</button>
+            <span id="bulk-arkkan-refnum-status" class="bulk-status mono" style="display:none;"></span>
+          </div>
+        </div>
+        <div class="bulk-act">
+          <button type="button" class="btn btn-gold btn-sm bulk-btn" id="btn-bulk-receipts-print" title="طباعة إيصال الدورة + إيصال الحقيبة لكل عميل محدد — تختار الطابعة مرة واحدة ثم تُطبع كلها تباعاً">🖨️ طباعة إيصالات المحدد</button>
+        </div>
+        <div class="bulk-act bulk-act-danger">
+          <button type="button" class="btn btn-danger btn-sm bulk-btn" id="btn-bulk-delete-selected" data-i18n="deleteSelected">🗑 حذف المحدد</button>
+        </div>
+      </div>
     </div>
     <div class="panel" style="padding:0;">
       <div class="table-scroll cards-mobile">
@@ -427,8 +456,9 @@
 
   <!-- COMPANY TRANSFERS -->
   <section class="view" id="view-companies">
-    <div class="panel" style="border-right:4px solid var(--navy);">
+    <div class="panel page-head" style="border-right:4px solid var(--navy);">
       <h3 style="margin:0 0 4px;" data-i18n="compTitle">تحويلات الشركات</h3>
+      <p class="page-head-sub">أرصدة الشركات، التحويلات، والأشخاص التابعون لها — مع متابعة التسوية.</p>
       <p style="font-size:13px; color:var(--text-muted); margin:0; display:none;" data-i18n="compIntro">تُستخدم هذه الشاشة عندما تدفع شركة دفعة واحدة تغطي عدة متدربين (مثال: 1000 ريال لمتدربين، كل متدرب 500 ريال) — حوالة بنكية أو نقدي أو بطاقة، حسب طريقة الدفع التي تُحدَّد لكل حوالة عند إضافتها. تُوزَّع قيمة الحوالة على المتدربين برقم الهوية، ويُرحَّل إجمالي المدفوع لكل فرد (قيمة الدورة + قيمة الحقيبة) تلقائياً لشيت "الحركات المالية" إلى الحساب المرتبط بطريقة الدفع المختارة لهذه الحوالة (الخزنة (كاش) / البنك / الشبكة) — إلا إذا كان هذا المتدرب مسجّلاً بالفعل ومدفوعاً عنه في شيت "العملاء"، فلا يُرحَّل مرة أخرى لتجنّب تكرار الأرقام.</p>
     </div>
 
@@ -573,9 +603,15 @@
 
   <!-- COURSES -->
   <section class="view" id="view-courses">
-    <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+    <div class="panel page-head" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+      <div class="page-head-text">
       <h3 style="margin:0 0 4px;" data-i18n="coursesSheetTitle">شيت الدورات</h3>
+      <p class="page-head-sub">جدول الدورات، المواعيد، والمنضمّون لكل دورة.</p>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;" data-i18n="coursesSheetHint">كل دورة لها رقم خاص، تاريخ، لغة، وسعة معيّنة. الأسماء المنضمّة تُسحب تلقائياً من شيت العملاء حسب "رقم الدورة" المسجّل لكل عميل. ملاحظة: دورة السلامة الغذائية (Food Safety) تستغرق يومي تدريب، وباقي الدورات يوم واحد فقط. يمكنك أيضاً تحديد تاريخ الدورة مسبقاً من نموذج تسجيل العميل (حقل "تاريخ الدورة (مسبقاً)")، وستظهر هنا تلقائياً — استخدم زر "الدورات القادمة" أو فلتر "من/إلى تاريخ" لعرضها.</p>
+      </div>
+      <div class="page-head-actions">
+        <button class="btn btn-gold" id="btn-add-session" data-i18n="newSessionBtn">+ دورة جديدة</button>
+      </div>
     </div>
     <div class="toolbar">
       <input type="date" id="cs-filter-from" title="من تاريخ" data-i18n-title="fromDateTitle">
@@ -596,7 +632,6 @@
         </div>
       </div>
       <input type="file" id="import-coursenum-input" accept=".xlsx,.xls,.csv" style="display:none;">
-      <button class="btn btn-gold" id="btn-add-session" data-i18n="newSessionBtn">+ دورة جديدة</button>
     </div>
     <div class="hint hint-info" data-i18n="importCourseNumbersHint">استيراد أرقام الدورات يتم بالربط برقم الهوية/الإقامة فقط: ملف Excel بعمودين "رقم الهوية" و"رقم الدورة"، ويتم تحديث شيت العملاء تلقائياً لكل الأرقام المطابقة دفعة واحدة. إن كان رقم الهوية غير موجود إطلاقاً في شيت العملاء (أو في أي مكان آخر بالبرنامج)، يُضاف تلقائياً كعميل جديد بالحد الأدنى من البيانات (رقم الهوية ورقم الدورة فقط) بدل تجاهله أو رفضه — ويبقى محفوظاً بشكل دائم حتى لو لم تُستكمل بقية بياناته (كالاسم والجوال) لاحقاً، ولا يُحذف تلقائياً لعدم اكتمالها. يمكن أيضاً إضافة عمود "تاريخ الدورة" (اختياري)، ليتم تحديث تاريخ الدورة في شيت الدورات تلقائياً، أو إنشاء دورة جديدة بهذا التاريخ إذا لم تكن موجودة. أو استخدم زر "تحديث/استيراد أرقام الدورات والفواتير (جدول)" لإدخال/لصق البيانات مباشرة من داخل البرنامج دون الحاجة لملف Excel — يشمل رقم الفاتورة أيضاً، وبنفس سلوك إضافة العميل تلقائياً إن لم يكن موجوداً.</div>
 
@@ -757,9 +792,10 @@
 
   <!-- COURSE INVOICES (مطابقة فواتير الدورات) -->
   <section class="view" id="view-courseinvoices">
-    <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+    <div class="panel page-head" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">شيت فواتير الدورات</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">شيت مخصص فقط لأرقام فواتير الدورات: أدخل القيمة الفعلية الموجودة في الإيصال وتاريخ صدور الفاتورة لكل عميل، ويستخرج النظام تلقائياً ضريبة القيمة المضافة (15% مضمّنة ضمن القيمة) ويقارنها بقيمة الدورة المسجّلة في النظام (سعر الدورة بعد الخصم) ويُظهر الفرق بينهما. تُعرض هنا فقط سجلات العملاء الذين لديهم "رقم فاتورة" مسجّل في شيت العملاء.</p>
+      <p class="page-head-sub">مطابقة فواتير الدورات مع المدفوعات والفروقات.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">شيت مخصص فقط لأرقام فواتير الدورات: أدخل القيمة الفعلية الموجودة في الإيصال وتاريخ صدور الفاتورة لكل عميل، ويستخرج النظام تلقائياً ضريبة القيمة المضافة (15% مضمّنة ضمن القيمة) ويقارنها بقيمة الدورة المسجّلة في النظام (سعر الدورة بعد الخصم) ويُظهر الفرق بينهما. تُعرض هنا فقط سجلات العملاء الذين لديهم "رقم فاتورة" مسجّل في شيت العملاء. <b>رقم الفاتورة قابل للنقر</b> لفتح إيصال أركان المحفوظ أو تحميله تلقائياً للعرض والطباعة — ويُحمَّل تلقائياً أيضاً بمجرد ظهور رقم فاتورة جديد.</p>
     </div>
     <div class="toolbar">
       <input type="text" id="ci-search" placeholder="بحث بالاسم / رقم الهوية / رقم الفاتورة">
@@ -826,14 +862,15 @@
 
   <!-- VAULT / BANK / NETWORK -->
   <section class="view" id="view-vault">
-    <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
+    <div class="panel page-head" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;">الخزنة (كاش) · البنك · الشبكة</h3>
+      <p class="page-head-sub">حركات الخزنة والبنك والشبكة، مع الأرصدة والتصنيف التلقائي.</p>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">عند تسجيل عميل ودفعه لمبلغ عبر طريقة دفع معيّنة، يُرحَّل المبلغ تلقائياً إلى الحساب المرتبط بها (حسب إعداد "طرق الدفع" في الإعدادات). استخدم فلتر "الوجهة" أدناه لعرض حركات حساب واحد فقط كأنه شيت مستقل.</p>
     </div>
 
     <div class="panel" style="border-right:4px solid var(--gold); margin-bottom:14px;">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-5 4V5z"></path><path d="M8 9h8M8 12.5h5"></path></svg></span> إدخال سريع بالعربي الطبيعي</h3>
-      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتب الحركة بجملة عادية وسيحاول البرنامج استخراج المبلغ وطريقة الدفع تلقائياً، ثم يفتح لك نموذج "حركة صادر جديدة" معبّأً مسبقاً مع اقتراح تصنيف بالذكاء الاصطناعي — تراجعه وتؤكد الحفظ بنفسك دائماً. مثال: "دفعت 500 كهرباء نقدي" أو "صرفت 1200 صيانة تكييف شبكة".</p>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:0 0 10px;">اكتب الحركة بجملة عادية وسيحاول البرنامج استخراج المبلغ وطريقة الدفع تلقائياً، ثم يفتح لك نموذج "حركة صادر جديدة" معبّأً مسبقاً — تراجعه وتؤكد الحفظ بنفسك دائماً. مثال: "دفعت 500 كهرباء نقدي" أو "صرفت 1200 صيانة تكييف شبكة".</p>
       <div class="toolbar">
         <input type="text" id="nl-expense-input" placeholder="مثال: دفعت 500 كهرباء نقدي" style="flex:1; min-width:240px;">
         <button type="button" class="btn btn-gold" id="btn-nl-expense">تحليل وفتح النموذج</button>
@@ -1077,6 +1114,12 @@
 
   <!-- BAGS / INVENTORY -->
   <section class="view" id="view-bags">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>مخزون الحقائب</h2>
+        <p class="page-head-sub">رصيد الحقائب، حركات الإيداع والسحب، وربط الحقائب بالعملاء.</p>
+      </div>
+    </div>
     <div class="panel">
       <h3>تمويل مخزون الحقائب (إيداع / سحب من البنك)</h3>
       <div class="hint hint-info">قيمة الحقيبة ثابتة حسب الإعدادات. عند الإيداع يُضاف المبلغ لرصيد الحساب، وكل مرة يكتمل فيها مبلغ حقيبة كاملة تُضاف حقيبة تلقائياً للمخزون ويبقى الباقي رصيداً لحين اكتمال الحقيبة التالية. وعند السحب يُخصم المبلغ من نفس الرصيد، فإن لم يكفِ الرصيد المتبقي يُخصم من عدد الحقائب في المخزون تلقائياً. <b>إن كنت تعرف العدد الفعلي الحقيقي للحقائب في هذه العملية (مثلاً فاتورة شراء بعدد محدد)، أدخله في حقل "عدد الحقائب الفعلي" أدناه — عندها يُعتمد هذا الرقم كما هو ولا يُعاد حسابه تلقائياً من المبلغ والسعر، فيبقى "المخزون الحالي" مطابقاً دائماً لما اشتريته فعلياً بغض النظر عن أي تغيير لاحق في سعر الحقيبة بالإعدادات.</b></div>
@@ -1145,6 +1188,7 @@
 
     <div class="panel">
       <h3>استيراد أرقام فواتير الحقائب وتواريخ الشراء</h3>
+      <p class="hint-info" style="font-size:12.5px; color:var(--text-muted); margin:6px 0 10px;">رقم فاتورة الحقيبة في جدول «سجل عمليات شراء الحقائب المكتملة» وفي جدول «عملاء اشتروا حقائبهم الخاصة» قابل للنقر: يفتح إيصال الحقيبة المحفوظ أو يحمّله من أركان للعرض والطباعة — ويُحمَّل تلقائياً بمجرد إدخال/استيراد رقم فاتورة حقيبة جديد.</p>
       <button class="btn btn-primary btn-sm" id="btn-open-baginv-bulk">📋 تسجيل دفعة أرقام فواتير (جدول داخل البرنامج)</button>
       <button class="btn btn-ghost btn-sm" id="btn-template-bag-invoices">تحميل نموذج فارغ (Excel)</button>
       <button class="btn btn-ghost btn-sm" id="btn-import-bag-invoices">استيراد من ملف Excel</button>
@@ -1283,6 +1327,12 @@
 
   <!-- REPORTS -->
   <section class="view" id="view-purchases">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>المشتريات</h2>
+        <p class="page-head-sub">الموردون، فواتير الشراء، والمصروفات المرتبطة بها.</p>
+      </div>
+    </div>
     <div class="grid-cards" id="purchase-cards">
     <div class="card"><div class="k">مشتريات هذا الشهر</div><div class="v">195.5 ﷼</div></div>
     <div class="card"><div class="k">إجمالي المشتريات (كل الفترات)</div><div class="v">965.35 ﷼</div></div>
@@ -1366,7 +1416,7 @@
       </div>
 
       <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-check-agent">🔄 فحص الاتصال</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-sync-check-agent">🔄 فحص الاتصال</button>
         <button type="button" class="btn btn-gold" id="btn-arkkan-bulk-start" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           بدء المزامنة الكاملة
@@ -1374,6 +1424,14 @@
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-bulk-stop" style="display:none;">⏹ إيقاف</button>
         <span class="spacer"></span>
         <span id="arkkan-bulk-counter" style="font-size:13px; color:var(--text-muted);"></span>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">سنة التسجيل
+          <select id="arkkan-sync-filter-year" style="max-width:120px;"><option value="">كل السنوات</option></select>
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-sync-filter-clear">✕ مسح الفلتر</button>
+        <span style="font-size:12px;color:var(--text-muted);">الجلب (الكامل) يُطبَّق على الصفوف المطابقة للفلتر الحالي.</span>
       </div>
 
       <div id="arkkan-progress-bar-wrap" style="display:none; margin-bottom:12px;">
@@ -1398,7 +1456,6 @@
               <th>تاريخ الحقيبة</th>
               <th>الناقص</th>
               <th>جلب</th>
-              <th style="width:52px; text-align:center;" title="تحميل إيصال الدورة + إيصال الحقيبة كملف PDF">إيصال</th>
               <th>الحالة</th>
             </tr>
           </thead>
@@ -1407,7 +1464,46 @@
       </div>
     </div>
 
-    <div class="panel" style="border-right:4px solid var(--gold);">
+    <!-- لوحة مؤشرات أركان + تبويبات الصناديق (البنية الجديدة) -->
+    <div class="arkkan-kpis" id="arkkan-exams-kpis">
+      <div class="arkkan-kpi arkkan-kpi-total" style="--kpi-color:#6366f1;">
+        <div class="kpi-ico">👥</div>
+        <div><div class="kpi-val" id="arkkan-kpi-total">0</div><div class="kpi-lbl">مؤهلون للمزامنة</div></div>
+      </div>
+      <div class="arkkan-kpi is-active" data-arkkan-tab="noresult" style="--kpi-color:#64748b;" role="tab" tabindex="0">
+        <div class="kpi-ico">🗂</div>
+        <div><div class="kpi-val" id="arkkan-kpi-noresult">0</div><div class="kpi-lbl">بلا نتيجة</div></div>
+      </div>
+      <div class="arkkan-kpi" data-arkkan-tab="needing" style="--kpi-color:#e67e22;" role="tab" tabindex="0">
+        <div class="kpi-ico">🕘</div>
+        <div><div class="kpi-val" id="arkkan-kpi-needing">0</div><div class="kpi-lbl">يحتاج إلى اختبار</div></div>
+      </div>
+      <div class="arkkan-kpi" data-arkkan-tab="passed" style="--kpi-color:#047857;" role="tab" tabindex="0">
+        <div class="kpi-ico">✅</div>
+        <div><div class="kpi-val" id="arkkan-kpi-passed">0</div><div class="kpi-lbl">ناجح</div></div>
+      </div>
+      <div class="arkkan-kpi" data-arkkan-tab="failed" style="--kpi-color:#be123c;" role="tab" tabindex="0">
+        <div class="kpi-ico">↺</div>
+        <div><div class="kpi-val" id="arkkan-kpi-failed">0</div><div class="kpi-lbl">راسب</div></div>
+      </div>
+    </div>
+
+    <div class="arkkan-tabs" id="arkkan-exams-tabs" role="tablist" aria-label="صناديق نتائج الاختبارات">
+      <button type="button" class="arkkan-tab is-active" data-arkkan-tab="noresult" role="tab">بلا نتيجة <span class="tab-count" id="arkkan-tab-count-noresult">0</span></button>
+      <button type="button" class="arkkan-tab" data-arkkan-tab="needing" role="tab">يحتاج إلى اختبار <span class="tab-count" id="arkkan-tab-count-needing">0</span></button>
+      <button type="button" class="arkkan-tab" data-arkkan-tab="passed" role="tab">النجاح <span class="tab-count" id="arkkan-tab-count-passed">0</span></button>
+      <button type="button" class="arkkan-tab" data-arkkan-tab="failed" role="tab">الراسبون <span class="tab-count" id="arkkan-tab-count-failed">0</span></button>
+    </div>
+
+    <!-- شريط حالة ثابت: يعرض العملية الجارية في أي صندوق مهما بدّلت التبويبات،
+         مع زر إيقاف يعمل من أي مكان. يظهر فقط أثناء التشغيل. -->
+    <div class="arkkan-runbar" id="arkkan-runbar" style="display:none;" role="status" aria-live="polite">
+      <span class="arkkan-runbar-dot" aria-hidden="true"></span>
+      <span class="arkkan-runbar-text" id="arkkan-runbar-text">جارٍ التشغيل…</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-runbar-stop" title="إيقاف العملية الجارية في أركان">⏹ إيقاف</button>
+    </div>
+
+    <div class="panel arkkan-box is-active" id="arkkan-box-noresult" style="border-right:4px solid var(--gold);">
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--gold);flex:none;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
         <div>
@@ -1435,6 +1531,7 @@
         <select id="arkkan-exams-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
         <select id="arkkan-exams-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-filter-date-from"></label>
+        <select id="arkkan-exams-filter-year" style="max-width:120px;"><option value="">كل السنوات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-filter-date-to"></label>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-filter-clear">✕ مسح الفلاتر</button>
       </div>
@@ -1468,7 +1565,7 @@
       </div>
     </div>
 
-    <div class="panel" style="border-right:4px solid #e67e22;">
+    <div class="panel arkkan-box" id="arkkan-box-needing" style="border-right:4px solid #e67e22;">
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:#e67e22;flex:none;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         <div>
@@ -1494,6 +1591,7 @@
         <select id="arkkan-exams-needing-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
         <select id="arkkan-exams-needing-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-needing-filter-date-from"></label>
+        <select id="arkkan-exams-needing-filter-year" style="max-width:120px;"><option value="">كل السنوات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-needing-filter-date-to"></label>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-needing-filter-clear">✕ مسح الفلاتر</button>
       </div>
@@ -1525,7 +1623,7 @@
       </div>
     </div>
 
-    <div class="panel" style="border-right:4px solid var(--success, green);">
+    <div class="panel arkkan-box" id="arkkan-box-passed" style="border-right:4px solid var(--success, green);">
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--success, green);flex:none;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
         <div>
@@ -1547,6 +1645,7 @@
         <select id="arkkan-exams-passed-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
         <select id="arkkan-exams-passed-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-passed-filter-date-from"></label>
+        <select id="arkkan-exams-passed-filter-year" style="max-width:120px;"><option value="">كل السنوات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-passed-filter-date-to"></label>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-passed-filter-clear">✕ مسح الفلاتر</button>
       </div>
@@ -1577,7 +1676,7 @@
       </div>
     </div>
 
-    <div class="panel" style="border-right:4px solid var(--danger, red);">
+    <div class="panel arkkan-box" id="arkkan-box-failed" style="border-right:4px solid var(--danger, red);">
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;color:var(--danger, red);flex:none;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         <div>
@@ -1603,6 +1702,7 @@
         <select id="arkkan-exams-failed-filter-course" style="max-width:150px;"><option value="">كل الدورات</option></select>
         <select id="arkkan-exams-failed-filter-company" style="max-width:150px;"><option value="">كل الشركات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">من <input type="date" id="arkkan-exams-failed-filter-date-from"></label>
+        <select id="arkkan-exams-failed-filter-year" style="max-width:120px;"><option value="">كل السنوات</option></select>
         <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;">إلى <input type="date" id="arkkan-exams-failed-filter-date-to"></label>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-arkkan-exams-failed-filter-clear">✕ مسح الفلاتر</button>
       </div>
@@ -1636,6 +1736,12 @@
   </section>
 
   <section class="view" id="view-reports">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>التقارير</h2>
+        <p class="page-head-sub">تقارير مالية وتشغيلية جاهزة للتصدير والطباعة.</p>
+      </div>
+    </div>
     <div id="report-studio"></div>
     <div class="panel" style="border-right:4px solid var(--navy);">
       <h3>الميزانية العامة</h3>
@@ -1815,8 +1921,9 @@
 
   <!-- ACCOUNTING -->
   <section class="view" id="view-accounting">
-    <div class="panel" style="border-right:4px solid var(--navy);">
+    <div class="panel page-head" style="border-right:4px solid var(--navy);">
       <h3>المحاسبة — القوائم المالية وفق أساس الاستحقاق</h3>
+      <p class="page-head-sub">القوائم المالية، القيود اليدوية، وتصدير التقارير المحاسبية.</p>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 4px;">تُبنى هذه القوائم تلقائياً من بيانات العملاء والحركات المالية ومخزون الحقائب على أساس الاستحقاق المحاسبي (لا الأساس النقدي فقط)، بتصنيف يتوافق مع عرض المعايير الدولية (IFRS): الأصول المتداولة وغير المتداولة، الخصوم، حقوق الملكية، الإيرادات، والمصروفات. يمكنك إضافة قيود تسوية يدوية (إهلاك، مستحقات، ذمم دائنة) من قسم "القيود اليدوية" أدناه.</p>
     </div>
 
@@ -2018,12 +2125,20 @@
 
   <!-- LEDGER / DOUBLE-ENTRY (دليل الحسابات، القيود اليومية، دفتر الأستاذ، ميزان المراجعة) -->
   <section class="view" id="view-ledger">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>دليل الحسابات والقيود اليومية</h2>
+        <p class="page-head-sub">شجرة الحسابات، القيود اليومية، وأدوات الترحيل المحاسبي.</p>
+      </div>
+    </div>
     <!-- ============ دليل الحسابات والقيود اليومية بنظام القيد المزدوج (وحدة إضافية مستقلة) ============ -->
     <div class="panel" style="border-right:4px solid var(--navy);">
-      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h11a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2v-16a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6"></path></svg></span> دليل الحسابات والقيود اليومية (محاسبة مزدوجة)</h3>
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h11a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2v-16a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6"></path></svg></span> أدوات الترحيل والدليل المحاسبي</h3>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-legacy" style="margin-bottom:6px;">🔗 ترحيل القيود اليدوية القديمة غير المرحّلة تلقائياً</button>
       <button class="btn btn-ghost btn-sm" id="btn-migrate-sales-purchases" style="margin-bottom:6px;">🔗 ترحيل فواتير المبيعات والمشتريات غير المرحّلة تلقائياً</button>
       <button class="btn btn-ghost btn-sm" id="btn-diagnose-unposted" style="margin-bottom:6px;">🔍 تشخيص فواتير الدورات غير المُرحّلة (تقرير Excel بالسبب)</button>
+      <button class="btn btn-gold btn-sm" id="btn-full-audit" style="margin-bottom:6px;">🧮 تدقيق محاسبي شامل (غير المُرحّل + المكرر + فروقات القوائم)</button>
+      <div class="hint hint-info" style="margin:6px 0;">🔁 الترحيل التلقائي يشمل الآن: فواتير المشتريات، فواتير المبيعات اليدوية، فواتير الدورات، وحركات الخزنة/البنك (إيراد/مصروف/قبض/صرف/مردود). تُستثنى حركات دفع فواتير الشراء (مُرحَّلة عبر الفاتورة نفسها) والوجهة "أخرى".</div>
 
       <h4 style="margin:16px 0 8px; color:var(--navy);">دليل الحسابات</h4>
       <div class="formgrid" style="margin-bottom:10px;">
@@ -2065,27 +2180,54 @@
       <button class="btn btn-primary btn-sm" id="btn-de-save" style="margin-top:10px;">حفظ القيد</button>
 
       <h4 style="margin:22px 0 8px; color:var(--navy);">سجل القيود اليومية</h4>
-      <div class="toolbar" style="margin-bottom:10px;">
-        <input type="text" id="de-filter-search" placeholder="بحث بالبيان">
+      <div class="de-kpis" id="de-kpis"></div>
+      <div class="toolbar de-toolbar">
+        <input type="text" id="de-filter-search" placeholder="بحث بالبيان أو رقم القيد">
         <input type="date" id="de-filter-from" title="من تاريخ">
         <input type="date" id="de-filter-to" title="إلى تاريخ">
+        <select id="de-filter-account" title="الحساب"><option value="">كل الحسابات</option></select>
         <select id="de-filter-type" data-multi-filter>
           <option value="">كل القيود</option>
           <option value="auto">تلقائي فقط</option>
           <option value="manual">يدوي فقط</option>
         </select>
+        <label class="de-toggle"><input type="checkbox" id="de-filter-unbalanced"> غير المتوازنة فقط</label>
         <span class="spacer"></span>
+        <div class="de-quick">
+          <button type="button" class="btn btn-ghost btn-sm" data-de-quick="month">هذا الشهر</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-de-quick="quarter">هذا الربع</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-de-quick="year">هذه السنة</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-de-dedupe">🧹 القيود المكررة</button>
+        <button class="btn btn-ghost btn-sm" id="btn-de-export">⬇️ تصدير</button>
+        <button class="btn btn-ghost btn-sm" id="btn-de-print">🖨️ طباعة</button>
         <button class="btn btn-ghost btn-sm" id="btn-de-filter-clear">مسح الفلتر</button>
       </div>
-      <div class="table-scroll table-scroll-compact">
-        <table>
-          <thead><tr><th>التاريخ</th><th>البيان</th><th>إجمالي مدين</th><th>إجمالي دائن</th><th></th></tr></thead>
+      <div class="de-scroll">
+        <table class="de-table">
+          <thead><tr>
+            <th class="de-c-exp"></th>
+            <th>رقم القيد</th>
+            <th>التاريخ</th>
+            <th class="de-c-desc">البيان</th>
+            <th>المصدر</th>
+            <th class="de-c-num">مدين</th>
+            <th class="de-c-num">دائن</th>
+            <th class="de-c-act"></th>
+          </tr></thead>
           <tbody id="de-entries-body"></tbody>
+          <tfoot><tr class="de-totals">
+            <td colspan="5"><span id="de-totals-label">إجمالي النتائج</span></td>
+            <td class="de-c-num" id="de-total-debit">0</td>
+            <td class="de-c-num" id="de-total-credit">0</td>
+            <td></td>
+          </tr></tfoot>
         </table>
       </div>
+      <div class="de-pager" id="de-pagination"></div>
       <div class="empty-state" id="de-entries-empty" style="display:none;">
         <div class="big">📒</div>
-        لا توجد قيود يومية مطابقة للفلتر الحالي
+        <span class="de-empty-msg">لا توجد قيود يومية مطابقة للفلتر الحالي</span>
       </div>
 
       <h4 style="margin:22px 0 8px; color:var(--navy);">دفتر الأستاذ العام</h4>
@@ -2118,8 +2260,9 @@
 
   <!-- AUDIT LOG -->
   <section class="view" id="view-audit">
-    <div class="panel" style="border-right:4px solid var(--gold);">
+    <div class="panel page-head" style="border-right:4px solid var(--gold);">
       <h3>سجل المراجعة (التعديلات والحذف)</h3>
+      <p class="page-head-sub">سجل كامل لكل إضافة أو تعديل أو حذف — بالتاريخ والمستخدم.</p>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">يسجّل هذا السجل تلقائياً كل عملية إضافة أو تعديل أو حذف تتم في أي شيت بالبرنامج، مع التاريخ والوقت واسم المستخدم الذي قام بها، للرجوع إليها عند المراجعة.</p>
     </div>
     <div class="toolbar">
@@ -2171,11 +2314,17 @@
 
   <!-- ID SEARCH (البحث برقم الإقامة/الهوية) -->
   <section class="view" id="view-idsearch">
-    <div class="panel" style="border-right:4px solid var(--gold);">
+    <div class="panel page-head" style="border-right:4px solid var(--gold);">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span> البحث برقم الإقامة (رقم الهوية)</h3>
+      <p class="page-head-sub">بحث فردي أو جماعي برقم الإقامة، مع كشف التكرار.</p>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0;">اكتب رقم إقامة واحداً، أو الصق عدة أرقام دفعة واحدة (انسخ عمود أرقام من إكسل — كل رقم في سطر). اضغط «بحث» لعرض بيانات كل رقم: الموجود في النظام يظهر ببياناته كاملة، وغير الموجود يظهر برسالة «هذا الشخص غير موجود بالنظام». كل رقم الإقامة = رقم الهوية الوطني للعميل، والمطلوب 10 أرقام.</p>
     </div>
     <div class="panel">
+      <div class="idsearch-ak-bulk-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-gold" id="btn-idsearch-ak-bulk" title="جلب كل الأرقام غير الموجودة بالنظام من أركان (بالترتيب، واحداً تلو الآخر)">🪝 جلب كل غير الموجودين من أركان</button>
+        <button type="button" class="btn btn-ghost" id="btn-idsearch-ak-bulk-stop" style="display:none;" title="إيقاف الجلب الجماعي بعد الانتهاء من الرقم الجاري">⏹ إيقاف</button>
+        <span class="hint" id="idsearch-ak-bulk-status" style="display:none;font-size:12px;"></span>
+      </div>
       <div class="idsearch-input-wrap">
         <textarea id="idsearch-input" rows="4" placeholder="اكتب رقم إقامة — أو الصق أرقاماً متعددة هنا (كل رقم في سطر)&#10;مثال:&#10;1234567890&#10;9876543210" class="idsearch-textarea" dir="ltr"></textarea>
       </div>
@@ -2185,6 +2334,17 @@
         <span class="spacer"></span>
         <span class="hint" id="idsearch-count-hint"></span>
       </div>
+    </div>
+    <div class="panel" id="idsearch-hist-panel" style="padding:12px;margin-top:14px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+        <b>🗂 سجل البحث (عرض فقط)</b>
+        <span class="hint" id="idsearch-hist-count" style="font-size:12px;color:var(--text-muted);"></span>
+        <span style="font-size:12px;color:var(--text-muted);">آخر ما جُلب من أركان — لا يُسجَّل في النظام · 10 صفوف كحد أقصى (مرّر داخل الصندوق للباقي)</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-idsearch-hist-refresh" title="تحديث القائمة">🔄 تحديث</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-idsearch-hist-clear" title="مسح كل السجل من هذا الجهاز">🗑 مسح السجل</button>
+      </div>
+      <div id="idsearch-hist-list" class="idsearch-hist-scroll"></div>
     </div>
     <div class="panel" id="idsearch-results-panel" style="padding:0;">
       <div class="empty-state" id="idsearch-empty">
@@ -2224,20 +2384,32 @@
 
   <!-- SETTINGS -->
   <section class="view" id="view-settings">
+    <div class="page-head">
+      <div class="page-head-text">
+        <h2>الإعدادات</h2>
+        <p class="page-head-sub">التحكم في الهوية البصرية، المزامنة، والمستخدمين.</p>
+      </div>
+    </div>
     <div class="panel">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.14-1.4l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2.4-1.4L14 3h-4l-.16 2.2a7 7 0 0 0-2.4 1.4l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .5.05.95.14 1.4l-2 1.5 2 3.4 2.3-.9c.7.6 1.5 1.1 2.4 1.4L10 21h4l.16-2.2c.9-.3 1.7-.8 2.4-1.4l2.3.9 2-3.4-2-1.5c.09-.45.14-.9.14-1.4z"></path></svg></span> مظهر الواجهة</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">الواجهة تستخدم هوية بصرية واحدة موحّدة: "نبض" — كانفس داكن عميق + كهرماني دافئ (أساسي) + فيروزي (ثانوي وحالات إيجابية)، مع وضع ليلي/نهاري حقيقي لنفس الهوية. يمكنك التبديل بين الوضع الفاتح (النهاري) والوضع الغامق (الليلي) من زر القمر/الشمس بجانب اسم المستخدم.</p>
-      <div style="display:flex; gap:14px; align-items:center;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#FF6A47;"></div>
-        <div style="color:var(--text-muted); font-size:12px;">كهرماني دافئ (أساسي)</div>
-      </div>
-      <div style="display:flex; gap:14px; align-items:center; margin-top:10px;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#4FD1C5;"></div>
-        <div style="color:var(--text-muted); font-size:12px;">فيروزي (ثانوي وحالات إيجابية)</div>
-      </div>
-      <div style="display:flex; gap:14px; align-items:center; margin-top:10px;">
-        <div style="width:28px; height:28px; border-radius:50%; background:#0B0D12;"></div>
-        <div style="color:var(--text-muted); font-size:12px;">كانفس داكن عميق (خلفية)</div>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">الواجهة تعتمد هوية بصرية حديثة موحّدة: كانفس فاتح ليلكي + أزرق احترافي للإجراءات الأساسية + شريط جانبي كحلي داكن، مع وضع ليلي كحلي متناسق. يمكنك التبديل بين الوضع الفاتح (النهاري) والوضع الغامق (الليلي) من زر القمر/الشمس بجانب اسم المستخدم.</p>
+      <div class="theme-legend">
+        <div class="theme-swatch">
+          <span class="swatch" style="background:var(--brand-primary);"></span>
+          <div><b>أزرق احترافي</b><small>الإجراءات الأساسية</small></div>
+        </div>
+        <div class="theme-swatch">
+          <span class="swatch" style="background:var(--brand-secondary);"></span>
+          <div><b>بنفسجي ليلي</b><small>التمييز واللمسات الثانوية</small></div>
+        </div>
+        <div class="theme-swatch">
+          <span class="swatch" style="background:#f5f7fd; border:1px solid var(--border);"></span>
+          <div><b>كانفس ليلي فاتح</b><small>الخلفية النهارية</small></div>
+        </div>
+        <div class="theme-swatch">
+          <span class="swatch" style="background:#0b1736;"></span>
+          <div><b>كحلي داكن</b><small>القائمة الجانبية والوضع الليلي</small></div>
+        </div>
       </div>
     </div>
     <div class="panel" id="panel-app-update" >
@@ -2251,7 +2423,7 @@
     <div class="panel" id="panel-arkkan-creds">
       <h3 style="margin:0 0 4px;">بيانات اعتماد أركان</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">مستخدمة في تبويب "مزامنة أركان" — لرفع طلبات المتدربين وجلب الأرقام المرجعية عبر الوكيل المحلي.</p>
-      <div style="margin-bottom:12px; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
+      <div class="cred-box" style="margin-bottom:12px;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
           <strong style="font-size:13px;">⬆️ رفع "طلب متدرب" إلى بوابة الحقيبة التثقيفية</strong>
           <span style="font-size:11.5px; color:var(--text-muted);">الزرار موجود في شاشة كل عميل: <b>⬆️ رفع لأركان</b> (بجانب "جلب من أركان")</span>
@@ -2270,7 +2442,7 @@
         </div>
         <div class="hint" style="margin:8px 0 0;">يُرفع الرفع فقط لحساب مُدخل. تُحفظ البيانات في إعدادات البرنامج على جهازك ولا تُعرض في أي سجل، وبديل أفضل أمنياً: وضع <code class="mono">ARKKAN_USER</code> و <code class="mono">ARKKAN_PASS</code> كمتغيرات بيئة أو في ملف <code class="mono">.env</code> بجانب الوكيل (عندئذٍ لا تُحفظ هنا). يُنصح بتغيير كلمة المرور دورياً.</div>
       </div>
-      <div style="margin-bottom:0; padding:10px 12px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--gold) 6%, transparent); border:1px solid color-mix(in srgb, var(--gold) 22%, transparent);">
+      <div class="cred-box">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
           <strong style="font-size:13px;">🔖 جلب الرقم المرجعي من منصة إدارة النظام</strong>
           <span style="font-size:11.5px; color:var(--text-muted);">يُبحث برقم الهوية فقط خلال أي جلب من أركان، فيُملأ الرقم المرجعي تلقائياً للعملاء الناقصين</span>
@@ -2292,10 +2464,10 @@
     </div>
     <div class="panel" id="panel-arkkan-receipts-folder" style="display:none;">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span> مجلد حفظ إيصالات أركان</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر مجلداً على هذا الجهاز، وسيُحفظ إيصال الدورة تلقائياً داخل مجلد فرعي <b>«الدورات»</b> وإيصال الحقيبة داخل مجلد فرعي <b>«الحقائب»</b> في ذلك المجلد — كلٌّ منهما في مكان مستقل. هذا الخيار متاح في تطبيق سطح المكتب فقط؛ في المتصفح العادي تُحفظ الإيصالات في مجلد التنزيلات.</p>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">اختر مجلداً على هذا الجهاز، وستُحفظ فيه نسخة دائمة من كل إيصال داخل مجلدات منظمة: <b class="mono" dir="ltr">الدورات/&lt;السنة&gt;/&lt;الشهر&gt;</b> و<b class="mono" dir="ltr">الحقائب/&lt;السنة&gt;/&lt;الشهر&gt;</b>، واسم الملف يحمل رقم هوية العميل ورقم الفاتورة للربط المباشر. بدون اختيار يُستخدم مجلد بيانات البرنامج على الجهاز تلقائياً. متاح في تطبيق سطح المكتب فقط.</p>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <button type="button" class="btn btn-gold btn-sm" id="btn-choose-receipts-folder">📁 اختيار مجلد الإيصالات</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-receipts-folder">↩️ العودة لمجلد التنزيلات</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-receipts-folder">↩️ العودة للمجلد الافتراضي</button>
         <span id="receipts-folder-status" style="font-size:12px; color:var(--text-muted);"></span>
       </div>
     </div>
@@ -2337,6 +2509,109 @@
         <div id="server-backups-list"><div class="hint hint-info">اضغط "تحديث" لعرض النسخ المحفوظة على السيرفر</div></div>
       </div>
     </div>
+    <div class="panel" id="arkkan-receipts-panel" style="border-right:4px solid var(--brand-secondary, #34afa3);">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg></span> إيصالات أركان (جلب وطباعة وتحميل)</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">الميزة تعمل دائماً: القائمة المنسدلة على أرقام الفواتير تتيح الطباعة والمعاينة والتحميل والتحديث اليدوي. الزر أدناه يتحكم في <b>الجلب التلقائي/الجماعي</b> فقط (عند المزامنة أو البحث الجماعي) لتوفير الموارد — القائمة اليدوية تظل متاحة في كل الأحوال.</p>
+      <div class="formgrid" style="align-items:end; margin-bottom:10px;">
+        <div class="field" style="max-width:400px;">
+          <label style="font-weight:600; font-size:14px;">
+            <input type="checkbox" id="set-arkkan-autofetch-enabled" style="width:auto; margin-left:8px; transform:scale(1.2);" checked>
+            تفعيل الجلب التلقائي/الجماعي من أركان (عند المزامنة والبحث الجماعي)
+          </label>
+        </div>
+        <button class="btn btn-gold btn-sm" id="btn-save-arkkan-autofetch">حفظ</button>
+      </div>
+      <div class="hint hint-info" id="arkkan-autofetch-status" style="margin-top:6px;"></div>
+      <div style="margin-top:10px; padding:10px; background:var(--surface-alt); border-radius:8px; font-size:12.5px; line-height:1.8;">
+        <b>عند تفعيل الجلب التلقائي:</b> يتم جلب الإيصالات تلقائياً أثناء المزامنة مع أركان والبحث الجماعي.<br>
+        <b>عند إيقاف الجلب التلقائي:</b> لا تُرسل طلبات تلقائية لأركان — لكن الضغط على رقم الفاتورة يظل يعمل للطباعة والمعاينة والتحميل والتحديث اليدوي.<br>
+        <b>دائماً متاح:</b> 🖨️ طباعة، 📄 معاينة، 📥 تحميل، 📂 فتح المجلد، 🔄 تحديث يدوي.
+      </div>
+      <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+        <b style="font-size:13px;">طابور تحميل الإيصالات (واحد وراء الآخر)</b>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" class="btn btn-gold btn-sm" id="btn-receipts-backlog-settings" title="تحميل كل الإيصالات القديمة غير المحفوظة — واحداً وراء الآخر">📥 تحميل الإيصالات القديمة</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-receipts-pause-settings" title="إيقاف الجلب بعد انتهاء الإيصال الحالي">⏸️ إيقاف الجلب</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-receipts-resume-settings" title="استئناف طابور الجلب">▶️ تشغيل الجلب</button>
+          <button type="button" class="btn btn-danger btn-sm" id="btn-receipts-stop-backlog-settings" title="إلغاء طلبات الإيصالات القديمة المنتظرة — الجديد يظل يعمل تلقائياً">⏹ إيقاف القديم</button>
+        </div>
+        <div id="arkkan-receipts-queue-status" class="hint hint-info" style="margin-top:8px;">جارٍ تهيئة فهرس الإيصالات...</div>
+      </div>
+    </div>
+    <div class="panel" id="gdrive-panel" style="border-right:4px solid #4285F4;">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 15.5 4.2 8.2A2 2 0 0 1 5.9 5h12.2a2 2 0 0 1 1.7 3.2l-4.3 7.3"></path><path d="M8.5 15.5h7L12 8.2z"></path></svg></span> النسخ الاحتياطي على Google Drive</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">ارفع نسخة احتياطية كاملة (كل بيانات البرنامج) إلى حسابك في Google Drive واستعدها في أي وقت ومن أي جهاز. يحتاج هذا القسم اتصالاً بالإنترنت فقط، ولا يتطلب أي إعداد سيرفر.</p>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+        <span id="gdrive-status-badge" class="hint hint-info" style="margin:0;">🔒 جارٍ التحقق من حالة الربط...</span>
+        <button class="btn btn-gold btn-sm" id="btn-gdrive-connect" style="display:none;">🔗 ربط الحساب</button>
+        <button class="btn btn-ghost btn-sm" id="btn-gdrive-disconnect" style="display:none;">⛔ قطع الربط</button>
+      </div>
+
+      <details id="gdrive-setup-details" style="margin-top:10px; border:1px solid var(--border); border-radius:8px; padding:8px 10px;">
+        <summary style="cursor:pointer; font-size:13px; font-weight:600;">⚙️ إعداد بيانات اعتماد Google Cloud (للمرة الأولى فقط)</summary>
+        <div class="hint hint-info" style="margin-top:8px; line-height:1.9;">
+          لتفعيل الربط مرة واحدة: افتح <b>Google Cloud Console</b> ← أنشئ مشروعاً ← فعّل <b>Google Drive API</b> ← أنشئ
+          <b>OAuth Client ID</b> من نوع <b>Desktop app</b> ← انسخ <b>Client ID</b> و <b>Client Secret</b> والصقهما هنا.
+          <br>عنوان إعادة التوجيه المستخدم (أضفه في الشاشة إن طُلب): <code id="gdrive-redirect-uri" dir="ltr" style="user-select:all;">http://127.0.0.1:17532/gdrive/callback</code>
+        </div>
+        <div class="formgrid" style="margin-top:8px; align-items:end;">
+          <div class="field"><label>Client ID</label><input type="text" id="gdrive-client-id" dir="ltr" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off"></div>
+          <div class="field"><label>Client Secret</label><input type="password" id="gdrive-client-secret" dir="ltr" placeholder="Client Secret" autocomplete="off"></div>
+          <button class="btn btn-ghost btn-sm" id="btn-gdrive-save-config">حفظ إعدادات الاعتماد</button>
+        </div>
+      </details>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn btn-gold btn-sm" id="btn-gdrive-backup-now" disabled>☁️ نسخ احتياطي على Google Drive الآن</button>
+        <button class="btn btn-ghost btn-sm" id="btn-gdrive-refresh">🔄 تحديث القائمة</button>
+      </div>
+      <div style="margin-top:10px;">
+        <label style="font-size:13px;"><input type="checkbox" id="set-gdrive-autobackup-enabled" style="width:auto; margin-left:6px;">رفع نسخة إلى Google Drive تلقائياً مع كل نسخة احتياطية تلقائية</label>
+      </div>
+      <div style="margin-top:14px; border:1px solid var(--border); border-radius:8px; padding:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <b style="font-size:13.5px;">⏰ نسخ احتياطي تلقائي مجدول على Google Drive</b>
+          <label style="font-size:13px;"><input type="checkbox" id="gdrive-schedule-enabled" style="width:auto; margin-left:6px;">تفعيل</label>
+        </div>
+        <p class="hint hint-info" style="font-size:12.5px; margin:8px 0;">يأخذ البرنامج نسخة كاملة ويرفعها تلقائياً إلى Google Drive في الأوقات المحددة أدناه (يمكنك إضافة/تعديل/حذف الأوقات بحرية). يعمل ما دام البرنامج مفتوحاً.</p>
+        <div id="gdrive-schedule-times" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          <button class="btn btn-ghost btn-sm" id="btn-gdrive-add-time" type="button">➕ إضافة وقت</button>
+          <button class="btn btn-ghost btn-sm" id="btn-gdrive-save-schedule" type="button">حفظ الجدول</button>
+        </div>
+        <div class="hint hint-info" id="gdrive-schedule-status" style="margin-top:10px;">لم يُشغَّل أي نسخ مجدول بعد</div>
+      </div>
+      <div style="margin-top:14px;">
+        <b style="font-size:13.5px;">النسخ المحفوظة على Google Drive</b>
+        <div id="gdrive-backups-list" style="margin-top:8px;"><div class="hint hint-info">اربط الحساب ثم اضغط "تحديث القائمة" لعرض النسخ المحفوظة</div></div>
+      </div>
+    </div>
+    <div class="panel" id="activity-digest-panel" style="border-right:4px solid #EA4335;">
+      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v9A2.5 2.5 0 0 1 18.5 18h-13A2.5 2.5 0 0 1 3 15.5z"></path><path d="m4 6 8 6 8-6"></path></svg></span> ملخّص التعديلات اليومي بالإيميل</h3>
+      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
+        ده المكان الوحيد لإعدادات الإيميل الآن: البريد اللي تدخله هنا هو <b>نفسه</b> اللي تُرسَل إليه كل تقارير البرنامج (اليومي/الشهري/الحقائب/الإقرار الضريبي…).
+        ويجمع البرنامج كل عمليات الإضافة/التعديل/الحذف (مَن عدّل وماذا ومتى) ثم يرسل <b>إيميلاً واحداً ملخّصاً يومياً</b> في الوقت المحدد (لو الخيار مفعّل).
+        الإرسال يتم من نفس حساب Google المربوط في قسم النسخ الاحتياطي أعلاه، ويعمل ما دام البرنامج مفتوحاً.
+      </p>
+      <div style="margin-top:6px;">
+        <label style="font-size:13px;"><input type="checkbox" id="activity-digest-enabled" style="width:auto; margin-left:6px;">تفعيل ملخّص التعديلات اليومي</label>
+      </div>
+      <div class="formgrid" style="align-items:end; margin-top:10px;">
+        <div class="field full"><label>بريد المستلمين (التقارير + الملخّص) — أو أكثر، افصل بينها بفاصلة</label><input type="text" id="activity-digest-to" placeholder="owner@example.com, manager@mail.com" dir="ltr"></div>
+        <div class="field" style="max-width:180px;"><label>وقت الإرسال اليومي</label><input type="time" id="activity-digest-time" value="20:00"></div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" id="btn-activity-digest-save" type="button">حفظ الإعدادات</button>
+        <button class="btn btn-gold btn-sm" id="btn-activity-digest-send-now" type="button">📤 إرسال الملخّص الآن</button>
+        <button class="btn btn-ghost btn-sm" id="btn-activity-digest-clear" type="button">🗑️ تفريغ الطابور</button>
+      </div>
+      <div class="hint hint-info" id="activity-digest-status" style="margin-top:10px;">جارٍ التحقق...</div>
+      <div id="activity-digest-mail-hint" style="display:none; margin-top:10px; border:1px solid #f5c2c0; background:#fff5f4; border-radius:8px; padding:10px;">
+        <div style="font-size:13px; color:#a3251c; margin-bottom:8px;">⚠️ لإرسال الإيميلات لازم نمنح حساب Google المربوط صلاحية الإرسال. اضغط الزر التالي لتسجيل الدخول والموافقة مرة واحدة فقط.</div>
+        <button class="btn btn-gold btn-sm" id="btn-activity-digest-connect" type="button">🔗 تفعيل إرسال الإيميل (ربط الحساب)</button>
+      </div>
+    </div>
     <div class="panel" >
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg></span> إعدادات التنبيهات الذكية</h3>
       <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">تظهر هذه التنبيهات أعلى لوحة التحكم عند تحقق أي من الشروط التالية.</p>
@@ -2370,44 +2645,6 @@
       </div>
       <div class="formgrid" style="align-items:end; margin-top:4px;">
         <button class="btn btn-ghost btn-sm" id="btn-save-vat-wa-numbers">حفظ هذه الأرقام</button>
-      </div>
-    </div>
-    <div class="panel" style="border-right:4px solid var(--brand-secondary);">
-      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="m4 6 8 7 8-7"></path></svg></span> إرسال التقارير بالإيميل</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">
-        اضبط الإيميل هنا مرة واحدة — كل أزرار "إرسال بالإيميل" فى شاشة التقارير ستستخدمه تلقائياً بدون سؤالك فى كل مرة. تقدر تغيّره وقتما تحب من هنا فقط. حقل CC اختياري لإرسال نفس الرسالة لمجموعة (افصل بينهم بفاصلة).
-      </p>
-      <div class="formgrid" style="align-items:end;">
-        <div class="field full"><label>البريد الرئيسي (To)</label><input type="text" id="set-report-email-to" placeholder="admin@mail.com" dir="ltr"></div>
-      </div>
-      <div class="formgrid" style="align-items:end; margin-top:4px;">
-        <div class="field full"><label>نسخة إلى — CC (اختياري، إيميلات مفصولة بفاصلة)</label><input type="text" id="set-report-email-cc" placeholder="a@mail.com, b@mail.com" dir="ltr"></div>
-      </div>
-      <div class="formgrid" style="align-items:end; margin-top:4px;">
-        <button class="btn btn-ghost btn-sm" id="btn-save-report-email">حفظ إعدادات الإيميل</button>
-      </div>
-    </div>
-    <div class="panel" >
-      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.5 0l3-3a4 4 0 0 0-5.5-5.5l-1.2 1.2"></path><path d="M14 10a4 4 0 0 0-5.5 0l-3 3a4 4 0 0 0 5.5 5.5l1.2-1.2"></path></svg></span> ربط Power Automate (Webhooks)</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">أنشئ Flow في Power Automate يبدأ بمشغّل "When an HTTP request is received"، وانسخ رابط الـ HTTP POST URL الخاص به هنا. عند حدوث الأحداث المفعّلة أدناه، يرسل البرنامج تلقائياً طلب POST لهذا الرابط ببيانات JSON عن الحدث (رقم الهوية، الاسم، رقم الدورة، نوع الحدث، التاريخ والوقت)، ليكمل الـ Flow من عنده (واتساب، بريد، Excel Online، Teams...). ملاحظة: الإرسال يتم بصيغة "fire-and-forget" فلا يظهر للبرنامج تأكيد نجاح أو فشل الإرسال — تحقّق من سجل تشغيل الـ Flow في Power Automate للتأكد من الاستلام.</p>
-      <div class="formgrid" style="margin-bottom:10px;">
-        <div class="field full"><label>رابط Webhook (HTTP POST URL من Power Automate)</label><input type="text" id="set-pa-webhook-url" placeholder="https://prod-00.westus.logic.azure.com/workflows/..."></div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-        <label><input type="checkbox" id="set-pa-notify-newclient" style="width:auto; margin-left:6px;">إرسال عند تسجيل عميل جديد</label>
-        <label><input type="checkbox" id="set-pa-notify-coursenum" style="width:auto; margin-left:6px;">إرسال عند تحديث/إضافة رقم دورة للعميل</label>
-      </div>
-      <div style="display:flex; gap:10px;">
-        <button class="btn btn-primary btn-sm" id="btn-save-pa-webhook">حفظ الإعداد</button>
-        <button class="btn btn-ghost btn-sm" id="btn-test-pa-webhook">🧪 إرسال اختبار</button>
-      </div>
-    </div>
-    <div class="panel" id="panel-server-sync" >
-      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5v6M15 2.5v6"></path><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0v-3z"></path><path d="M12 17v4.5"></path></svg></span> الاتصال بالسيرفر (استيراد وتصدير البيانات)</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">افتراضياً يتصل البرنامج بالسيرفر تلقائياً لجلب وحفظ كل البيانات لحظياً. لو أوقفت الاتصال، سيعمل البرنامج فقط بالنسخة المحفوظة على هذا الجهاز، وأي تعديل تُجريه يُحفظ محلياً بدون رفعه للسيرفر. لما تُعيد تفعيل الاتصال، يبدأ البرنامج تلقائياً برفع كل التعديلات التي تراكمت أثناء الإيقاف.</p>
-      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-        <span id="server-sync-status-label" style="font-weight:700;"></span>
-        <button class="btn btn-sm" id="btn-toggle-server-sync"></button>
       </div>
     </div>
     <div class="panel" id="panel-app-reset" >
@@ -2450,6 +2687,21 @@
         <div class="field"><label>سعر غير السعودي (مقيم)</label><input type="number" step="0.01" min="0" id="set-price-nonsaudi"></div>
       </div>
       <button class="btn btn-primary btn-sm" id="btn-save-nat-prices">حفظ</button>
+    </div>
+    <div class="panel">
+      <h3>عروض الخصم</h3>
+      <div class="hint hint-info">يمكنك تعريف أكثر من عرض (مثال: عرض رمضان، عرض الطلاب...). يظهر كل عرض مفعّل كخانة اختيار مستقلة في نموذج تسجيل/تعديل العميل، ويمكن اختيار أكثر من عرض لنفس العميل. الخصم يُطرح من قيمة التدريب فقط، ولا يغيّر سعر الحقيبة إطلاقاً، ويُحفظ على العميل لحظة التسجيل فلا يتأثر بتغيير العروض لاحقاً.</div>
+      <div class="table-scroll" style="max-height:320px;">
+        <table>
+          <thead><tr><th style="width:70px;">مفعّل</th><th>اسم العرض</th><th>النوع</th><th>القيمة</th><th style="width:50px;"></th></tr></thead>
+          <tbody id="offers-list-body"></tbody>
+        </table>
+      </div>
+      <div class="addrow" style="margin-top:10px; align-items:center;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-offer">＋ إضافة عرض</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-offers">حفظ كل العروض</button>
+      </div>
+      <div class="hint hint-info" id="set-offer-preview" style="margin-top:8px;"></div>
     </div>
     <div class="panel">
       <h3>أنواع الدورات وأسعارها الافتراضية</h3>
@@ -2500,7 +2752,7 @@
       <div class="formgrid" style="margin-bottom:10px;">
         <div class="field"><label>اسم مستخدم جديد</label><input type="text" id="new-user-name"></div>
         <div class="field"><label>كلمة المرور</label><input type="text" id="new-user-pass"></div>
-        <div class="field"><label>الإيميل (اختياري — لتفعيل الدخول عبر رابط بالإيميل)</label><input type="email" id="new-user-email" placeholder="example@email.com"></div>
+        <div class="field"><label>الإيميل (اختياري)</label><input type="email" id="new-user-email" placeholder="example@email.com"></div>
         <div class="field"><label>الصلاحية</label>
           <select id="new-user-role">
             <option value="staff">موظف عام (صلاحيات محدودة)</option>
@@ -2552,14 +2804,6 @@
       </div>
       <div id="tfa-controls" style="margin-top:10px;"></div>
     </div>
-    <div class="panel" id="panel-webauthn">
-      <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0-3 2-5 5-5"></path><path d="M12 11a5 5 0 0 0-9 3"></path><path d="M12 11v7"></path><path d="M8.5 21c-1-2-1.5-4-1.5-6"></path><path d="M15.5 21c1-2 1.5-4 1.5-6"></path><circle cx="12" cy="6" r="3"></circle></svg></span> الدخول بالبصمة / Face ID</h3>
-      <p class="hint-info" style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">سجّل هذا الجهاز مرة واحدة لتقدر تدخل لاحقاً ببصمتك أو ببصمة الوجه بدل كتابة كلمة المرور كل مرة. التسجيل خاص بكل جهاز على حدة، والبصمة نفسها لا تُرسَل أو تُخزَّن على السيرفر إطلاقاً — تبقى محلية داخل جهازك فقط.</p>
-      <div id="webauthn-controls">
-        <button class="btn btn-primary btn-sm" id="btn-webauthn-register">➕ تسجيل هذا الجهاز</button>
-      </div>
-      <div id="webauthn-devices-list" style="margin-top:12px;"></div>
-    </div>
     <div class="panel" id="panel-prune-records">
       <h3 style="margin:0 0 4px;"><span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3 4.5 12.5"></path><path d="M13 8l5.5 5.5-3 3-2.3-1"></path><path d="M9.5 15.5 4 21l1.5-5.5"></path></svg></span> تنظيف السجلات القديمة (سجل المراجعة والمحذوفات)</h3>
       <div id="prune-records-rows"></div>
@@ -2606,11 +2850,12 @@
     <div id="client-duplicate-warning" style="display:none; margin:0 0 14px; padding:10px 14px; border-radius:var(--radius-sm); background:color-mix(in srgb, var(--warning) 12%, transparent); border:1px solid color-mix(in srgb, var(--warning) 35%, transparent); color:var(--text-primary); font-size:13px;"></div>
     <form id="client-form">
       <div class="formgrid">
+        <div class="form-section full"><span>البيانات الأساسية</span></div>
         <div class="field"><label>رقم الهوية / الإقامة *</label><input required="" id="f-id" type="text" inputmode="numeric" maxlength="10" placeholder="10 أرقام بالضبط"></div>
         <div class="field"><label>الاسم *</label><input required="" id="f-name" type="text"></div>
         <div class="field"><label>رقم المرجع</label><input id="f-refer" type="text"></div>
         <div class="field"><label>رقم الجوال</label><input id="f-phone" type="text"></div>
-        <div class="field"><label>الإيميل (لإرسال الفاتورة تلقائياً)</label><input id="f-email" type="email" placeholder="example@mail.com"></div>
+        <div class="field"><label>الإيميل</label><input id="f-email" type="email" placeholder="example@mail.com"></div>
         <div class="field"><label>الجنسية</label><select id="f-nat"></select></div>
         <div class="field"><label>نوع العميل</label>
           <select id="f-clienttype">
@@ -2622,6 +2867,7 @@
         <div class="field full" id="wrap-f-company-hint" style="display:none;"><div class="hint hint-info" id="f-company-hint" style="margin:0;"></div></div>
         <div class="field" id="wrap-f-ajal"><label>الأجل (عدد الأيام)</label><input id="f-ajal" type="number" min="0" placeholder="مثال: 30"></div>
         <div class="field"><label>الرقم الضريبي للعميل (إن وجد)</label><input id="f-clienttax" type="text"></div>
+        <div class="form-section full"><span>الدورة والحقيبة</span></div>
         <div class="field"><label>نوع الدورة</label><select id="f-course"></select></div>
         <div class="field"><label>رقم الدورة</label><input id="f-coursenum" type="text" placeholder="مثال: FS-2026-014"></div>
         <div class="field full" id="wrap-f-coursestatus" style="display:none;">
@@ -2642,7 +2888,18 @@
         <div class="field" id="wrap-bagprice"><label>قيمة الحقيبة</label><input id="f-bagprice" type="number" step="0.01" min="0"></div>
         <div class="field" id="wrap-baginvoice"><label>رقم فاتورة الحقيبة</label><input id="f-baginvoice" type="text"></div>
         <div class="field" id="wrap-bagowndate" style="display:none;"><label>تاريخ الحقيبة الخاصة</label><input id="f-bagowndate" type="date"></div>
-        <div class="field"><label>الخصم</label><input id="f-discount" type="number" step="0.01" min="0" value="0"></div>
+        <div class="form-section full"><span>الدفع والملاحظات</span></div>
+        <div class="field"><label>خصم إضافي (يدوي)</label><input id="f-discount" type="number" step="0.01" min="0" value="0"></div>
+        <div class="field full" style="padding:6px 0 0;">
+          <label style="font-size:13px; color:var(--text); margin:0 0 6px; display:block; font-weight:700;">عروض الخصم المطبَّقة على هذا العميل (يمكن اختيار أكثر من عرض)</label>
+          <div class="addrow" style="align-items:center; gap:8px; margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" id="f-offers-all">تحديد كل العروض</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="f-offers-none">إلغاء التحديد</button>
+            <span class="hint" id="f-offers-count" style="margin:0;"></span>
+          </div>
+          <div id="f-offers-list" style="display:flex; flex-wrap:wrap; gap:8px 18px;"></div>
+          <div class="hint hint-info" id="f-offer-hint" style="margin:6px 0 0;"></div>
+        </div>
         <div class="field">
           <label>المبلغ المدفوع عند التسجيل / هذه الدفعة</label>
           <input id="f-paid" type="number" step="0.01" min="0" value="0">
@@ -2671,6 +2928,10 @@
           <span>دخل المركز (الدورة): <b id="calc-income">0</b> ﷼</span>
           <span>الحقيبة (تمريري): <b id="calc-bag">0</b> ﷼</span>
         </div>
+        <div class="full computed" id="calc-offer-row" style="display:none;">
+          <span>خصم العرض: <b id="calc-offer">0</b> ﷼</span>
+          <span>إجمالي الخصم: <b id="calc-discount-total">0</b> ﷼</span>
+        </div>
         <div class="full computed">
           <span>الإجمالي المستحق: <b id="calc-total">0</b> ﷼</span>
           <span>المتبقي: <b id="calc-remaining">0</b> ﷼</span>
@@ -2679,7 +2940,7 @@
           <label style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
             <span>سجل كل الدفعات المرتبطة بهذا العميل (من الحركات المالية) — للعرض فقط</span>
           </label>
-          <div class="hint hint-info" style="margin:4px 0 8px;">هذا سجل للعرض فقط. أي إضافة أو تعديل أو حذف لدفعات هذا العميل يتم حصرياً من تبويب "الحركات المالية" (وليس من هنا)، وينعكس تلقائياً في هذه القائمة.</div>
+          <div class="hint hint-info" style="margin:4px 0 8px;">هذا سجل للعرض فقط. إضافة دفعة جديدة تتم من تبويب "الحركات المالية". دفعتا التسجيل يمكن تعديلهما من هنا (حقول المبلغ المدفوع/طريقة الدفع) أو من "الحركات المالية" مباشرة، والتغيير ينعكس تلقائياً في المكانين.</div>
           <div id="client-payments-list"></div>
         </div>
         <div class="field full" id="wrap-client-timeline" style="border-top:1px dashed var(--border); padding-top:10px; display:none;">
@@ -2701,7 +2962,7 @@
 <div class="overlay drawer-overlay" id="bulk-add-overlay">
   <div class="modal" style="max-width:1400px;">
     <h2>إضافة عدة عملاء دفعة واحدة</h2>
-    <div class="hint hint-info" style="margin:0 0 10px;">أدخل بيانات كل عميل في صف مستقل ثم اضغط "حفظ الكل". الحقول المميزة بـ * إلزامية (رقم الهوية 10 خانات بالضبط، ويجب ألا يكون مكرراً). يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. العملاء المُضافون هنا يُسجَّلون كـ"عميل مركز" افتراضياً بإعدادات الحقيبة الافتراضية — لأي بيانات إضافية (شركات، حقيبة خاصة، دفعة مقسّمة...) استخدم "تعديل" على العميل بعد الحفظ.</div>
+    <div class="hint hint-info" style="margin:0 0 10px;">أدخل بيانات كل عميل في صف مستقل ثم اضغط "حفظ الكل". الحقول المميزة بـ * إلزامية (رقم الهوية 10 خانات بالضبط، ويجب ألا يكون مكرراً). يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. العملاء المُضافون هنا يُسجَّلون كـ"عميل مركز" افتراضياً بإعدادات الحقيبة الافتراضية — لأي بيانات إضافية (شركات، حقيبة خاصة، دفعة مقسّمة...) استخدم "تعديل" على العميل بعد الحفظ. كل الخانات تقبل اللصق — بما فيها التاريخ (16/11/2026 أو 2026-11-16) والأرقام (تُتجاهل الفواصل ورموز العملة) والقوائم — ويمكنك نسخ قيمة أي خلية بزر Ctrl+C.</div>
     <div class="table-scroll" style="max-height:52vh;">
       <table>
         <thead>
@@ -2765,7 +3026,7 @@
 <div class="overlay drawer-overlay" id="bulk-update-overlay">
   <div class="modal" style="max-width:98vw;">
     <h2>تحديث/استيراد بيانات العملاء دفعة واحدة</h2>
-    <div class="hint hint-info" style="margin:0 0 10px;">أدخل رقم الهوية في كل صف (إلزامي). إن كان رقم الهوية موجوداً بالفعل يتم تحديث الأعمدة التي أدخلت لها قيمة فقط في هذا الصف (اترك أي عمود فارغاً ليبقى كما هو في النظام دون تغيير)، وإن لم يكن موجوداً يُضاف كعميل جديد بشرط إدخال الاسم أيضاً. يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة.</div>
+    <div class="hint hint-info" style="margin:0 0 10px;">أدخل رقم الهوية في كل صف (إلزامي). إن كان رقم الهوية موجوداً بالفعل يتم تحديث الأعمدة التي أدخلت لها قيمة فقط في هذا الصف (اترك أي عمود فارغاً ليبقى كما هو في النظام دون تغيير)، وإن لم يكن موجوداً يُضاف كعميل جديد بشرط إدخال الاسم أيضاً. يمكنك نسخ عمود (أو عدة أعمدة/صفوف) من إكسل ولصقه مباشرة داخل أي خلية — سيتوزّع تلقائياً على الصفوف بدءاً من تلك الخلية، وتُضاف صفوف جديدة تلقائياً عند الحاجة. كل الخانات تقبل اللصق — بما فيها التاريخ (16/11/2026 أو 2026-11-16) والأرقام (تُتجاهل الفواصل ورموز العملة) والقوائم — ويمكنك نسخ قيمة أي خلية بزر Ctrl+C.</div>
     <div class="table-scroll" style="max-height:52vh;">
       <table>
         <thead>
@@ -2802,48 +3063,13 @@
       </table>
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-update-row">+ إضافة صف</button>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-update-template" title="ملف Excel جاهز بنفس ترتيب أعمدة هذا الجدول + ورقة تعليمات وقوائم القيم المقبولة">⬇️ تنزيل قالب Excel</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-update-row">+ إضافة صف</button>
+      </div>
       <div style="display:flex; gap:10px;">
         <button type="button" class="btn btn-ghost" id="btn-bulk-update-cancel">إلغاء</button>
         <button type="button" class="btn btn-primary" id="btn-bulk-update-save">حفظ الكل</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="bulk-message-overlay">
-  <div class="modal" style="max-width:640px;">
-    <h2>📨 إرسال رسالة واتساب للعملاء المحددين</h2>
-    <div id="bulk-msg-setup-view">
-      <div class="hint hint-info" style="margin:0 0 10px;">يفتح البرنامج محادثة واتساب (wa.me) لكل عميل بالترتيب مع الرسالة جاهزة، وأنت تضغط زر الإرسال داخل واتساب يدوياً لكل عميل، ثم تنتقل للعميل التالي من هنا. استخدم <b class="mono">{name}</b> داخل النص ليتم استبدالها تلقائياً باسم كل عميل.</div>
-      <div class="computed" style="margin-bottom:10px;">العدد الإجمالي المحدد: <b id="bulk-msg-recipient-count" class="mono">0</b> عميل. <span id="bulk-msg-no-phone-warning" style="color:var(--danger,#be123c); display:none;"> — تنبيه: <b id="bulk-msg-no-phone-count">0</b> منهم بدون رقم جوال مسجّل وسيتم تخطيهم.</span></div>
-      <div class="field full">
-        <label>نص الرسالة</label>
-        <textarea id="bulk-msg-text" rows="6" placeholder="اكتب نص الرسالة هنا... مثال: مرحباً {name}، نود تذكيركم بموعد الدورة..."></textarea>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="btn-bulk-message-cancel">إلغاء</button>
-        <button type="button" class="btn btn-primary" id="btn-bulk-message-start">بدء الإرسال</button>
-      </div>
-    </div>
-    <div id="bulk-msg-send-view" style="display:none;">
-      <div class="computed" style="margin-bottom:10px;">العميل <b id="bulk-msg-current-index" class="mono">1</b> من <b id="bulk-msg-total-count" class="mono">1</b></div>
-      <div class="field full">
-        <label>الاسم</label>
-        <div id="bulk-msg-current-name" class="mono" style="padding:8px 0; font-size:15px;"></div>
-      </div>
-      <div class="field full">
-        <label>الجوال</label>
-        <div id="bulk-msg-current-phone" class="mono" style="padding:4px 0;"></div>
-      </div>
-      <div class="hint hint-info" id="bulk-msg-skip-hint" style="display:none; color:var(--danger,#be123c);">لا يوجد رقم جوال لهذا العميل — تم تخطيه تلقائياً.</div>
-      <div class="modal-actions" style="justify-content:space-between; margin-top:14px;">
-        <button type="button" class="btn btn-ghost" id="btn-bulk-message-close">إنهاء</button>
-        <div style="display:flex; gap:10px;">
-          <button type="button" class="btn btn-ghost" id="btn-bulk-message-prev">◀ السابق</button>
-          <button type="button" class="btn btn-gold" id="btn-bulk-message-open-wa">فتح واتساب لهذا العميل</button>
-          <button type="button" class="btn btn-primary" id="btn-bulk-message-next">التالي ▶</button>
-        </div>
       </div>
     </div>
   </div>
@@ -3086,6 +3312,10 @@
   <div class="modal">
     <h2 id="vault-modal-title">حركة خزنة جديدة</h2>
     <form id="vault-form">
+      <div class="hint hint-info" id="vf-auto-hint" style="display:none; margin:0 0 10px;">
+        🔗 هذه <b>دفعة تسجيل مُرحَّلة تلقائياً من شيت العملاء</b>. تعديل المبلغ أو طريقة الدفع أو رقم فاتورة الشبكة هنا يُحدِّث بيانات العميل فوراً، وتعديل الدفعة من شيت العملاء ينعكس هنا تلقائياً. التاريخ هنا تاريخ مالي مستقل ولا يغيّر تاريخ تسجيل العميل.<br>
+        <b>لتغيير رقم الهوية:</b> اكتب رقم هوية عميل مسجّل آخر — تُنقل الدفعة بالكامل (تُصفَّر من العميل الحالي وتُضاف لمدفوعات العميل الجديد)، مع الاحتفاظ بتاريخها المالي ورقمها التسلسلي.
+      </div>
       <div class="formgrid">
         <div class="field full">
           <label>نوع الحركة</label>
@@ -3111,7 +3341,7 @@
           <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text);">
             <input type="checkbox" id="vf-linked" checked="" style="width:auto;"> ربط بعميل مسجّل (بحث برقم الهوية / الإقامة)
           </label>
-          <div class="hint hint-info" style="margin:4px 0 0;">إضافة وتعديل وحذف دفعات العملاء تتم من هنا حصرياً (تبويب "الحركات المالية")، وتنعكس تلقائياً في شيت العملاء كسجل للعرض فقط. الاستثناء الوحيد: دفعتا التسجيل الأساسيتان (المبلغ المدفوع الأول/الثاني) تبقى تُعدَّل من شيت العملاء نفسه لارتباطهما المباشر ببيانات تسجيله.</div>
+          <div class="hint hint-info" style="margin:4px 0 0;">إضافة وتعديل وحذف دفعات العملاء تتم من هنا، وتنعكس تلقائياً في شيت العملاء. دفعتا التسجيل الأساسيتان (المبلغ المدفوع الأول/الثاني) يمكن تعديلهما الآن من هنا مباشرة أو من شيت العملاء — وفي الحالتين يبقى المبلغ وطريقة الدفع متطابقين في المكانين.</div>
         </div>
         <div class="field" id="wrap-clientid" style="display: none;">
           <label>رقم الهوية / الإقامة</label>
@@ -3123,12 +3353,8 @@
         <div class="field full" id="wrap-manual" style="display: none;"><label>البيان / الجهة</label><input id="vf-manual" type="text" placeholder="مثال: شركاء، قرض، إيداع رأس مال..."></div>
 
         <div class="field" id="wrap-category" style="">
-          <label style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-            <span>تصنيف المصروف</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="btn-ai-classify" style="font-size:11px; padding:2px 8px;">🤖 اقتراح تصنيف بالذكاء الاصطناعي</button>
-          </label>
+          <label>تصنيف المصروف</label>
           <select id="vf-category"><option value="رواتب">رواتب</option><option value="إيجار">إيجار</option><option value="انترنت">انترنت</option><option value="مستلزمات مكتب">مستلزمات مكتب</option><option value="مصاريف انتقال">مصاريف انتقال</option><option value="صيانة">صيانة</option><option value="مسحوبات شركاء">مسحوبات شركاء</option><option value="شراء أصل ثابت">شراء أصل ثابت</option><option value="أخرى">أخرى</option><option value="كهرباء">كهرباء</option><option value="مياه">مياه</option><option value="حقائب">حقائب</option><option value="مشتريات">مشتريات</option></select>
-          <div class="hint hint-info" id="ai-classify-status" style="margin:4px 0 0; display:none;"></div>
         </div>
         <div class="field" id="wrap-recipient" style=""><label>اسم مستلم المبلغ *</label><input id="vf-recipient" type="text" placeholder="اسم الشخص الذي استلم المبلغ فعلياً"></div>
         <div class="field"><label data-i18n="thChannel">طريقة الدفع</label><select id="vf-method"><option value="نقدي">نقدي</option><option value="بطاقة / شبكة (مدى)">بطاقة / شبكة (مدى)</option><option value="تحويل بنكي">تحويل بنكي</option></select></div>
@@ -3394,6 +3620,130 @@
   </div>
 </div>
 
+<!-- نافذة عرض وطباعة إيصال أركان: تعرض النسخة المحفوظة على الجهاز عبر /receipts-file -->
+<div class="overlay" id="receipt-viewer-overlay" style="z-index:190;">
+  <div class="modal receipt-viewer-modal">
+    <div class="receipt-viewer-head">
+      <h2 id="receipt-viewer-title" style="margin:0;">إيصال أركان</h2>
+      <button type="button" class="receipt-viewer-close" id="receipt-viewer-close" data-receipt-close title="إغلاق (Esc)">✕</button>
+    </div>
+    <div id="receipt-viewer-meta" class="receipt-viewer-meta"></div>
+    <div id="receipt-viewer-status" class="receipt-viewer-status" style="display:none;"></div>
+    <div class="receipt-viewer-body">
+      <iframe id="receipt-viewer-frame" title="معاينة إيصال أركان"></iframe>
+      <img id="receipt-viewer-image" alt="معاينة إيصال أركان" style="display:none;">
+    </div>
+    <div class="modal-actions receipt-viewer-actions">
+      <button type="button" class="btn btn-gold btn-sm" id="receipt-viewer-print" disabled>🖨️ طباعة</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="receipt-viewer-export" disabled>📥 حفظ نسخة</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="receipt-viewer-folder" disabled>📂 فتح المجلد</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="receipt-viewer-redownload" disabled>🔄 إعادة التحميل</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" data-receipt-close>إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="receipt-batch-print-overlay" style="z-index:195;">
+  <div class="modal receipt-batch-modal">
+    <div class="receipt-viewer-head">
+      <h2 id="receipt-batch-title" style="margin:0;">🖨️ طباعة إيصالات المحدد</h2>
+      <button type="button" class="receipt-viewer-close" data-batch-print-close title="إغلاق (Esc)">✕</button>
+    </div>
+    <div class="receipt-batch-body">
+      <div id="receipt-batch-summary" class="receipt-batch-summary"></div>
+
+      <div class="receipt-batch-row">
+        <span class="receipt-batch-label">نوع الإيصالات</span>
+        <label class="receipt-batch-check"><input type="checkbox" id="receipt-batch-kind-course" checked> إيصال الدورة</label>
+        <label class="receipt-batch-check"><input type="checkbox" id="receipt-batch-kind-bag" checked> إيصال الحقيبة</label>
+      </div>
+
+      <div class="receipt-batch-row">
+        <label class="receipt-batch-label" for="receipt-batch-printer">الطابعة</label>
+        <select id="receipt-batch-printer" class="receipt-batch-select"></select>
+        <button type="button" class="btn btn-ghost btn-sm" id="receipt-batch-refresh-printers" title="تحديث قائمة الطابعات">🔄</button>
+      </div>
+
+      <div class="receipt-batch-row">
+        <label class="receipt-batch-label" for="receipt-batch-copies">عدد النسخ لكل إيصال</label>
+        <input type="number" id="receipt-batch-copies" class="receipt-batch-copies" min="1" max="20" step="1" value="1">
+      </div>
+
+      <div class="receipt-batch-row">
+        <label class="receipt-batch-label" for="receipt-batch-paper">مقاس الورق</label>
+        <select id="receipt-batch-paper" class="receipt-batch-select receipt-batch-select-sm">
+          <option value="A4" selected>A4 (210 × 297 مم)</option>
+          <option value="A5">A5 (148 × 210 مم)</option>
+          <option value="Letter">Letter (216 × 279 مم)</option>
+          <option value="Legal">Legal (216 × 356 مم)</option>
+        </select>
+        <label class="receipt-batch-label receipt-batch-label-inline" for="receipt-batch-margin">هامش الأمان</label>
+        <select id="receipt-batch-margin" class="receipt-batch-select receipt-batch-select-sm">
+          <option value="4">4 مم</option>
+          <option value="6" selected>6 مم</option>
+          <option value="8">8 مم</option>
+          <option value="10">10 مم</option>
+          <option value="12">12 مم</option>
+          <option value="15">15 مم</option>
+        </select>
+      </div>
+
+      <div class="receipt-batch-row receipt-batch-row-scale">
+        <label class="receipt-batch-label" for="receipt-batch-scale">حجم الطباعة</label>
+        <input type="range" id="receipt-batch-scale" class="receipt-batch-range" min="60" max="100" step="1" value="100">
+        <span id="receipt-batch-scale-value" class="receipt-batch-scale-value">100%</span>
+        <span class="receipt-batch-hint">100% = أكبر حجم ممكن بحيث يظهر الإيصال كاملاً بلا قصّ</span>
+      </div>
+
+      <div id="receipt-batch-note" class="receipt-batch-note"></div>
+      <div id="receipt-batch-progress" class="receipt-batch-progress" style="display:none;">
+        <div class="receipt-batch-bar"><span id="receipt-batch-bar-fill"></span></div>
+        <div id="receipt-batch-progress-text" class="receipt-batch-progress-text"></div>
+      </div>
+      <div id="receipt-batch-result" class="receipt-batch-result" style="display:none;"></div>
+    </div>
+    <div class="modal-actions receipt-viewer-actions">
+      <button type="button" class="btn btn-ghost btn-sm" id="receipt-batch-preview" title="يفتح نسخة الطباعة النهائية لأول إيصال لترى بالضبط كيف ستظهر على الورق">👁️ معاينة على الورق</button>
+      <button type="button" class="btn btn-whatsapp btn-sm" id="receipt-batch-whatsapp" disabled title="حفظ إيصالات الدورة/الحقيبة PDF في مجلد وفتح محادثة واتساب لكل عميل">📲 إرسال واتساب</button>
+      <button type="button" class="btn btn-gold btn-sm" id="receipt-batch-start">🖨️ طباعة</button>
+      <button type="button" class="btn btn-danger btn-sm" id="receipt-batch-stop" style="display:none;">⏹ إيقاف الطباعة</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" data-batch-print-close>إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- قائمة العملاء الذين ليس لهم إيصالات محفوظة على هذا الجهاز -->
+<div class="overlay" id="receipts-missing-overlay" style="z-index:192;">
+  <div class="modal receipts-missing-modal">
+    <div class="receipt-viewer-head">
+      <h2 id="receipts-missing-title" style="margin:0;">👥 عملاء ناقص إيصالاتهم</h2>
+      <button type="button" class="receipt-viewer-close" data-receipts-missing-close title="إغلاق (Esc)">✕</button>
+    </div>
+    <div class="receipts-missing-body">
+      <div id="receipts-missing-summary" class="receipt-batch-summary">جارٍ تجهيز القائمة...</div>
+      <div class="receipt-batch-row" style="margin-top:10px;">
+        <input type="search" id="receipts-missing-search" placeholder="بحث بالاسم أو رقم الهوية أو الهاتف أو رقم الفاتورة..." style="flex:1 1 260px; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font-size:12.5px;">
+        <label class="receipt-batch-check" title="عند التحديد تُعرض فقط الحالات التي لا يوجد لها أي إيصال محفوظ، ويُستبعد من لديه إيصال واحد وينقصه الآخر">
+          <input type="checkbox" id="receipts-missing-only-none"> الذين ليس لهم أي إيصال محفوظ فقط
+        </label>
+        <select id="receipts-missing-sort" title="ترتيب القائمة" style="padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font-size:12.5px;">
+          <option value="date-desc">الأحدث أولاً</option>
+          <option value="date-asc">الأقدم أولاً</option>
+          <option value="name">بالاسم</option>
+        </select>
+      </div>
+      <div id="receipts-missing-list" class="receipts-missing-list"></div>
+    </div>
+    <div class="modal-actions receipt-viewer-actions">
+      <button type="button" class="btn btn-gold btn-sm" id="receipts-missing-download" title="إضافة إيصالات كل من في القائمة الحالية إلى طابور التحميل — واحداً وراء الآخر">📥 تحميل إيصالات القائمة المعروضة</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-ghost btn-sm" data-receipts-missing-close>إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
 <!-- نافذة تأكيد/إدخال مخصصة (بديل عن confirm()/prompt() الأصليتين في المتصفح، واللتين قد لا تعملان داخل بيئات معينة مثل معاينة الـ Artifacts) -->
@@ -3451,6 +3801,8 @@
 <script defer src="js/permissions-sound.js"></script>
 <script defer src="js/accounting-core.js"></script>
 <script defer src="js/backup-restore.js"></script>
+<script defer src="js/gdrive-backup.js"></script>
+<script defer src="js/activity-digest.js"></script>
 <script defer src="js/undo-redo.js"></script>
 <script defer src="js/clients-alerts-overview.js"></script>
 <script defer src="js/clients-cfo-dashboard.js"></script>
@@ -3469,17 +3821,21 @@
 <script defer src="js/module-idsearch.js"></script>
 <script defer src="js/cockpit-pulse.js"></script>
 <script defer src="js/dashboard-v2.js"></script>
+<script defer src="js/dashboard-pro.js"></script>
 <script defer src="js/notification-center.js"></script>
 <script defer src="js/module-followups.js"></script>
 <script defer src="js/client-workspace.js"></script>
 <script defer src="js/vault-workspace.js"></script>
 <script defer src="js/report-studio.js"></script>
 <script defer src="js/arkkan-sync-ui.js"></script>
+<script defer src="js/receipts-auto-sync.js"></script>
 <script defer src="js/grid-enhancements.js"></script>
 <script defer src="js/panel-collapse.js"></script>
 <script defer src="js/onboarding.js"></script>
 <script defer src="js/app-boot.js"></script>
 <script defer src="js/boot.js"></script>
+<script defer src="js/page-heads.js"></script>
+<script defer src="js/sidebar-pro.js"></script>
 
 
 
@@ -3559,4 +3915,5 @@
     </div>
   </div>
 </div>
+<script defer src="js/design-v35.js"></script>
 </body></html>

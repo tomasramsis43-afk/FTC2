@@ -191,9 +191,13 @@ function syncClientLedgerEntry(client){
   // نحافظ أيضاً على حالة "تسوية الاستقبال" (settled) القديمة، حتى لا يفقد المسؤول عن الخزنة
   // تأكيده السابق لاستلام النقدية فعلياً لمجرد تعديل بسيط في بيانات العميل لاحقاً
   const prevSettle = {};
+  // نحافظ أيضاً على أي تعديل يدوي أجراه المستخدم على دفعة التسجيل من تبويب "الحركات المالية":
+  // تاريخ مالي مخصّص أو ملاحظة مخصّصة — حتى لا يُفقد عند أي حفظ لاحق لبيانات العميل.
+  const prevMeta = {};
   vaultTx.filter(t=>t.autoClientId===client.id).forEach(t=>{
     prevSeqs[t.id] = t.seq;
     prevSettle[t.id] = { settled: !!t.settled, settledBy: t.settledBy||'', settledAt: t.settledAt||null };
+    prevMeta[t.id] = { date: t.date, dateCustom: !!t.dateCustom, notes: t.notes||'', notesCustom: !!t.notesCustom };
   });
   removeClientLedgerEntries(client.id);
   // عميل مُرحَّلة قيمته من حوالة شركة (companyTransferAllocated): المبلغ مُرحَّل بالفعل مرة واحدة ضمن
@@ -202,13 +206,14 @@ function syncClientLedgerEntry(client){
   if(num(client.paid)>0 && !client.companyTransferAllocated){
     const chan = settings.channels.find(c=>c.name===client.channel);
     const dest = chan ? chan.dest : 'other';
+    const meta1 = prevMeta['auto_'+client.id] || {};
     // ملاحظة: يتم ترحيل الدفعة دائماً (حتى لو كانت طريقة الدفع "أخرى" مثل طبي/المركز) حتى تُحتسب
     // ضمن "إجمالي المدفوع" لبيانات العميل — لكنها لا تدخل ضمن أرصدة الخزنة/البنك/الشبكة (balanceOf يتجاهل "أخرى").
     vaultTx.push({
       id:'auto_'+client.id,
       seq: prevSeqs['auto_'+client.id] || allocVaultSeq(dest),
       type:'in',
-      date: client.date || todayISO(),
+      date: meta1.dateCustom ? meta1.date : (client.date || todayISO()),
       amount: num(client.paid),
       destination: dest,
       clientId: client.clientId,
@@ -217,7 +222,9 @@ function syncClientLedgerEntry(client){
       category:'',
       manual:'',
       networkInvoice: (dest==='network'||dest==='network2') ? (client.networkInvoice||'') : '',
-      notes: dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : ''),
+      notes: meta1.notesCustom ? meta1.notes : (dest==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل' + (num(client.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : '')),
+      dateCustom: meta1.dateCustom || undefined,
+      notesCustom: meta1.notesCustom || undefined,
       autoClientId: client.id,
       createdAt: Date.now(),
       settled: dest==='vault' ? (prevSettle['auto_'+client.id] ? prevSettle['auto_'+client.id].settled : true) : true,
@@ -231,11 +238,12 @@ function syncClientLedgerEntry(client){
   if(num(client.paid2)>0 && !client.companyTransferAllocated){
     const chan2 = settings.channels.find(c=>c.name===client.channel2);
     const dest2 = chan2 ? chan2.dest : 'other';
+    const meta2 = prevMeta['auto2_'+client.id] || {};
     vaultTx.push({
       id:'auto2_'+client.id,
       seq: prevSeqs['auto2_'+client.id] || allocVaultSeq(dest2),
       type:'in',
-      date: client.date || todayISO(),
+      date: meta2.dateCustom ? meta2.date : (client.date || todayISO()),
       amount: num(client.paid2),
       destination: dest2,
       clientId: client.clientId,
@@ -244,7 +252,9 @@ function syncClientLedgerEntry(client){
       category:'',
       manual:'',
       networkInvoice: (dest2==='network'||dest2==='network2') ? (client.networkInvoice2||'') : '',
-      notes: dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين',
+      notes: meta2.notesCustom ? meta2.notes : (dest2==='other' ? 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)' : 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين'),
+      dateCustom: meta2.dateCustom || undefined,
+      notesCustom: meta2.notesCustom || undefined,
       autoClientId: client.id,
       createdAt: Date.now(),
       settled: dest2==='vault' ? (prevSettle['auto2_'+client.id] ? prevSettle['auto2_'+client.id].settled : true) : true,
@@ -429,12 +439,13 @@ document.querySelectorAll('#view-vault thead th.sortable').forEach(th=>{
 /* دفعة نقدية معلّقة (سُجّلت من الاستقبال ولم يؤكد المسؤول عن الخزنة استلامها فعلياً بعد)
    لا تُحتسب ضمن رصيد الخزنة الفعلي حتى تتم تسويتها من "صندوق تسويات الاستقبال" */
 /* ---------------- تعديل مباشر سريع (Inline Edit) للمبلغ والملاحظات ----------------
-   متاح فقط للحركات العادية (ليست دفعة تسجيل تلقائية autoClientId، وليست قيد حوالة شركة موحّد
-   companyTransferId لأنه يمثّل مجموع عدة متدربين) وغير واقعة ضمن فترة مقفلة. الهدف تسريع تصحيح
-   خطأ بسيط في مبلغ أو ملاحظة دون فتح المودال الكامل، مع الحفاظ الكامل على نفس قواعد القفل
-   المحاسبي والتراجع (Undo) والتدقيق (Audit Log) المستخدمة في مسار التعديل العادي. */
+   متاح للحركات العادية ولدفعات التسجيل المُرحَّلة من شيت العملاء (autoClientId — مع مزامنة
+   تلقائية للمبلغ مع بيانات العميل)، وغير متاح لقيد حوالة شركة موحّد companyTransferId لأنه
+   يمثّل مجموع عدة متدربين، ولا للحركات الواقعة ضمن فترة مقفلة. الهدف تسريع تصحيح خطأ بسيط في
+   مبلغ أو ملاحظة دون فتح المودال الكامل، مع الحفاظ الكامل على نفس قواعد القفل المحاسبي والتراجع
+   (Undo) والتدقيق (Audit Log) المستخدمة في مسار التعديل العادي. */
 function vaultInlineEditable(t){
-  return !t.autoClientId && !t.companyTransferId && !isDateLocked(t.date);
+  return !t.companyTransferId && !isDateLocked(t.date);
 }
 let _vaultInlineEditingCell = null;
 // حالة التعديل المباشر الحالي (td/input/commit) — تُستخدم لإنقاذ القيمة إذا أُعيد بناء الجدول
@@ -488,6 +499,9 @@ function startVaultInlineEdit(td){
       if(newAmount<=0){ showToast('أدخل مبلغاً صحيحاً أكبر من صفر'); renderVault(); return; }
       if(!target) { renderVault(); return; }
       if(newAmount===num(target.amount)){ renderVault(); return; }
+      const prevAmount = num(target.amount);
+      const autoClient = target.autoClientId ? clients.find(c=>c.id===target.autoClientId) : null;
+      const autoIsSecond = !!(target.autoClientId && String(target.id).startsWith('auto2_'));
       snapshotState('تعديل سريع لمبلغ حركة مالية');
       const { history: _h, ...before } = target;
       target.amount = newAmount;
@@ -495,14 +509,24 @@ function startVaultInlineEdit(td){
       pushVaultTxHistory(target, before, after);
       bumpVaultVersion();
       const savedOk = await saveVaultTx();
+      const amountPersisted = (savedOk === true || savedOk === 'queued');
       if(savedOk === true){
         showToast('تم تحديث المبلغ');
       }else if(savedOk === 'queued'){
         showToast('حُفظ التعديل على هذا الجهاز فقط — سيرفع للسيرفر تلقائيًا عند اتصال الشبكة');
       }else{
+        target.amount = prevAmount; // لا نُبقي على الشاشة رقماً لم يُحفظ فعلاً
         showToast('تعذّر حفظ التعديل على السيرفر: تم تجاهله (تعارض أو رفض) — راجع الرسائل السابقة وحدّث الصفحة إن لزم');
       }
-      await logAudit('edit','الحركات المالية', `تعديل سريع للمبلغ في حركة رقم تسلسلي #${target.seq||'—'} إلى ${fmt(newAmount)}`);
+      if(amountPersisted){
+        if(autoClient){
+          // مزامنة فورية مع شيت العملاء: المبلغ المدفوع في سجل العميل هو مصدر هذه الحركة
+          if(autoIsSecond) autoClient.paid2 = newAmount; else autoClient.paid = newAmount;
+          await saveClients();
+          await logAudit('edit','العملاء', `تم تحديث ${autoIsSecond?'المبلغ المدفوع الثاني':'المبلغ المدفوع الأول'} للعميل "${autoClient.name}" تلقائياً بعد تعديل سريع لمبلغ حركته المالية المرتبطة (رقم تسلسلي #${target.seq||'—'}) إلى ${fmt(newAmount)}`);
+        }
+        await logAudit('edit','الحركات المالية', `تعديل سريع للمبلغ في حركة رقم تسلسلي #${target.seq||'—'} إلى ${fmt(newAmount)}`);
+      }
     }else{
       const newNotes = rawVal.trim();
       if(!target) { renderVault(); return; }
@@ -520,6 +544,11 @@ function startVaultInlineEdit(td){
         showToast('حُفظ التعديل على هذا الجهاز فقط — سيرفع للسيرفر تلقائيًا عند اتصال الشبكة');
       }else{
         showToast('تعذّر حفظ التعديل على السيرفر: تم تجاهله (تعارض أو رفض) — راجع الرسائل السابقة وحدّث الصفحة إن لزم');
+      }
+      if((savedOkNotes === true || savedOkNotes === 'queued') && target.autoClientId){
+        // ملاحظة مخصّصة على دفعة تسجيل: نحتفظ بها حتى لا يعيد توليدها أي حفظ لاحق لبيانات العميل
+        target.notesCustom = true;
+        await saveVaultTx();
       }
       await logAudit('edit','الحركات المالية', `تعديل سريع لملاحظة حركة رقم تسلسلي #${target.seq||'—'}`);
     }
@@ -1040,7 +1069,7 @@ function renderVault(){
     return `
     <tr>
       <td class="sticky-col sticky-col-1" data-label=""><input type="checkbox" class="row-select-vault" data-id="${t.id}" ${selectedVaultIds.has(t.id)?'checked':''}></td>
-      <td class="sticky-col sticky-col-2" data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}</td>
+      <td class="sticky-col sticky-col-2" data-label="العميل / البيان">${escapeHtml((t.type==='in' || t.isReturn) ? (t.clientName || t.manual || '—') : (t.category||'—'))}${(t.clientId) ? ` <span class="mono" style="font-size:11px; color:var(--text-muted);">(${escapeHtml(t.clientId)})</span>` : ''}</td>
       <td class="mono" style="font-weight:700;" data-label="الرقم التسلسلي">#${t.seq||'—'}</td>
       <td class="mono" data-label="التاريخ">${t.date||'—'}</td>
       <td data-label="الحساب"><span class="stamp paid">${destLabel(t.destination||'vault')}</span></td>
@@ -1052,7 +1081,17 @@ function renderVault(){
       <td class="mono${vaultInlineEditable(t)?' editable-cell':''}" data-label="المبلغ"${vaultInlineEditable(t)?` data-inline-field="amount" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${fmt(num(t.amount))}${!vaultTxCountsTowardBalance(t) ? ` <span class="stamp owe" title="لم تُسوَّ بعد — لا تُحتسب ضمن رصيد الخزنة حتى تُسوَّى من صندوق تسويات الاستقبال">معلّق</span>` : ''}${isVPending ? ` <span class="stamp owe" title="سجّلها الاستقبال — بانتظار اعتماد الأدمن، لا تدخل رصيد/حسابات/تقارير الأدوار الأخرى حتى الاعتماد">⏳ قيد الاعتماد</span>` : ''}${isAnomaly ? ` <span class="stamp owe" title="مبلغ غير معتاد إحصائياً مقارنة بمتوسط هذا التصنيف — يستحق المراجعة">⚠️ غير معتاد</span>` : ''}</td>
       <td class="${vaultInlineEditable(t)?'editable-cell':''}" data-label="ملاحظات"${vaultInlineEditable(t)?` data-inline-field="notes" data-inline-id="${t.id}" title="انقر مرتين للتعديل السريع"`:''}>${truncateNotesHtml(t.notes||'')}</td>
       <td class="card-full" data-label="" style="white-space:nowrap;">
-        ${(t.type==='in' && t.autoClientId) ? `${((t.destination||'vault')==='vault') ? `<button class="btn btn-gold btn-sm" data-vreceipt="${t.id}" title="طباعة سند قبض">🧾 سند قبض</button>` : ''}${vApproveBtns}` : (t.type==='in' && t.companyTransferId) ? `
+        ${(t.type==='in' && t.autoClientId) ? `
+        <div class="row-menu">
+          <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="row-menu-panel" role="menu">
+            <button class="btn btn-ghost btn-sm" data-vws="${t.id}" title="فتح تفاصيل الحركة الكاملة">📂 التفاصيل</button>
+            <button class="btn btn-ghost btn-sm" data-vedit="${t.id}" title="تعديل دفعة التسجيل — ينعكس تلقائياً على شيت العملاء">✏️ ${tr('edit')}</button>
+            ${((t.destination||'vault')==='vault') ? `<button class="btn btn-gold btn-sm" data-vreceipt="${t.id}" title="طباعة سند قبض">🧾 سند قبض</button>` : ''}
+            ${vApproveBtns}
+            <button class="btn btn-danger btn-sm" data-vdel="${t.id}">${tr('delete')}</button>
+          </div>
+        </div>` : (t.type==='in' && t.companyTransferId) ? `
         <button type="button" class="btn btn-gold btn-sm" data-viewcompanytransfer="${t.companyTransferId}">👥 تفاصيل المتدربين</button> ${((t.destination||'vault')==='vault') ? `<button class="btn btn-gold btn-sm" data-vreceipt="${t.id}" title="طباعة سند قبض">🧾 سند قبض</button>` : ''}` : `
         <div class="row-menu">
           <button type="button" class="btn btn-ghost btn-sm row-menu-toggle" title="إجراءات" aria-haspopup="true" aria-expanded="false">⋮</button>
@@ -1442,66 +1481,6 @@ $('#vf-linked')?.addEventListener('change', toggleVaultFields);
 $('#vf-destination')?.addEventListener('change', toggleVaultFields);
 $('#vf-category')?.addEventListener('change', toggleVaultFields);
 
-/* ---------------- تصنيف تلقائي للمصروفات بالذكاء الاصطناعي ----------------
-   يقرأ اسم مستلم المبلغ + الملاحظات + المبلغ، ويقترح أنسب تصنيف
-   من قائمة التصنيفات المعرَّفة في الإعدادات (أو تصنيف جديد مختصر إن لم يوجد مناسب). */
-async function aiClassifyExpense(){
-  const btn = $('#btn-ai-classify');
-  const statusEl = $('#ai-classify-status');
-  const recipient = $('#vf-recipient').value.trim();
-  const notes = $('#vf-notes').value.trim();
-  const amount = $('#vf-amount').value;
-  if(!recipient && !notes){
-    showToast('أدخل اسم مستلم المبلغ أو ملاحظة أولاً حتى يقدر الذكاء الاصطناعي يقترح تصنيفاً مناسباً');
-    return;
-  }
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
-  btn.textContent = '⏳ جارِ التصنيف...';
-  statusEl.style.display = 'none';
-  try{
-    const payload = {
-      recipientName: recipient || null,
-      notes: notes || null,
-      amount: amount || null,
-      availableCategories: settings.expenseCategories
-    };
-    const response = await serverFetch('/api/ai/classify-expense', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    if(!response.ok){
-      const errData = await response.json().catch(()=>({}));
-      throw new Error(errData.error || `HTTP ${response.status}`);
-    }
-    const data = await response.json();
-    const suggestedCategory = String(data.category||'').trim();
-    if(!suggestedCategory) throw new Error('لم يصل تصنيف صالح');
-    const isNew = !!data.isNew;
-    const reason = data.reason || '';
-    if(isNew && !settings.expenseCategories.includes(suggestedCategory)){
-      settings.expenseCategories.push(suggestedCategory);
-      await saveSettings();
-      populateSelect($('#vf-category'), settings.expenseCategories, false);
-    }
-    if(!settings.expenseCategories.includes(suggestedCategory)){
-      // احتياط: لو رجع تصنيف غير موجود ولم يُعلَّم isNew، أضفه بأمان حتى لا تُفقَد الاقتراح
-      settings.expenseCategories.push(suggestedCategory);
-      await saveSettings();
-      populateSelect($('#vf-category'), settings.expenseCategories, false);
-    }
-    $('#vf-category').value = suggestedCategory;
-    statusEl.textContent = `✅ التصنيف المقترح: "${suggestedCategory}"${reason ? ' — ' + reason : ''} (يمكنك تغييره تدوياً لو غير مناسب)`;
-    statusEl.style.display = '';
-  }catch(err){
-    showToast('تعذر الحصول على اقتراح تصنيف — تأكد من اتصالك بالإنترنت، أو أضف تصنيفاً يدوياً');
-  }finally{
-    btn.disabled = false;
-    btn.textContent = originalLabel;
-  }
-}
-$('#btn-ai-classify')?.addEventListener('click', aiClassifyExpense);
-
 $('#vf-clientid')?.addEventListener('input', ()=>{
   const c = clients.find(x=>x.clientId===$('#vf-clientid').value.trim());
   $('#vf-clientname').value = c ? c.name : '';
@@ -1516,8 +1495,7 @@ $('#vf-clientid')?.addEventListener('input', ()=>{
 /* ---------------- تحليل جملة عربية بسيطة لاستخراج مبلغ وطريقة دفع ----------------
    استخراج بسيط بالكلمات المفتاحية (وليس ذكاءً اصطناعياً) — يلتقط أول رقم في الجملة كمبلغ،
    ويحاول تخمين طريقة الدفع من كلمات شائعة (نقدي/كاش، شبكة/مدى/بطاقة، بنك/تحويل)، والباقي من
-   النص (بعد إزالة الرقم وكلمات الدفع والأفعال الشائعة) يُستخدم كاسم مستلم/بيان تُمرَّر بعدها
-   لاقتراح التصنيف بالذكاء الاصطناعي الموجود أصلاً (aiClassifyExpense) — فلا يوجد تكرار منطق. */
+   النص (بعد إزالة الرقم وكلمات الدفع والأفعال الشائعة) يُستخدم كاسم مستلم/بيان. */
 function parseNaturalLanguageExpense(text){
   const t = String(text||'').trim();
   const amountMatch = t.match(/\d+(?:[.,]\d+)?/);
@@ -1555,24 +1533,37 @@ $('#btn-nl-expense')?.addEventListener('click', ()=>{
   if(parsed.method) $('#vf-method').value = parsed.method;
   $('#vf-recipient').value = parsed.rest || raw.trim();
   $('#vf-notes').value = raw.trim();
-  showToast('راجع الحقول المعبّأة تلقائياً ثم اضغط "اقتراح تصنيف بالذكاء الاصطناعي" وتأكد قبل الحفظ');
+  showToast('راجع الحقول المعبّأة تلقائياً واختر التصنيف ثم تأكد قبل الحفظ');
   $('#nl-expense-input').value = '';
 });
 $('#btn-add-vault')?.addEventListener('click', ()=>openVaultModal(null));
 // زرار عائم متاح من أي شاشة في البرنامج لفتح مودال "حركة خزنة جديدة" مباشرة بدون الحاجة للانتقال لشيت الحركات المالية أولاً
 $('#btn-fab-quickadd')?.addEventListener('click', ()=>openVaultModal(null));
+/* يُضيف خياراً مؤقتاً لقائمة منسدلة عند الحاجة (طريقة دفع قديمة أو وجهة "أخرى" غير موجودة
+   ضمن الخيارات الثابتة) — تُزال الخيارات المؤقتة تلقائياً عند فتح المودال من جديد. */
+function ensureSelectOption(sel, value, label){
+  if(!sel || !value) return;
+  const v = String(value);
+  if([...sel.options].some(o=>o.value===v)) return;
+  const o = document.createElement('option');
+  o.value = v;
+  o.textContent = label || v;
+  o.dataset.tempOption = '1';
+  sel.appendChild(o);
+}
+function clearTempSelectOptions(){
+  document.querySelectorAll('option[data-temp-option="1"]').forEach(o=>o.remove());
+}
+let editingAutoTx = null; // دفعة تسجيل مُرحَّلة من شيت العملاء (auto_/auto2_) الجاري تعديلها — null لأي حركة أخرى
 function openVaultModal(id){
-  if(id){
-    const lockedTx = vaultTx.find(x=>x.id===id);
-    if(lockedTx && lockedTx.type==='in' && lockedTx.autoClientId){
-      showToast('هذه دفعة تسجيل تلقائية — عدّلها من شيت العملاء (حقلا "المبلغ المدفوع"/"طريقة الدفع")');
-      return;
-    }
-  }
   if(id && isDateLocked(vaultTx.find(x=>x.id===id)?.date)){ vaultLockToast(); return; }
   editingVaultId = id || null;
-  $('#vault-modal-title').textContent = id ? 'تعديل حركة خزنة' : 'حركة خزنة جديدة';
   const t = id ? vaultTx.find(x=>x.id===id) : null;
+  editingAutoTx = (t && t.type==='in' && t.autoClientId) ? t : null;
+  clearTempSelectOptions();
+  $('#vault-modal-title').textContent = editingAutoTx
+    ? (String(id).startsWith('auto2_') ? 'تعديل الدفعة الثانية — دفعة تسجيل عميل' : 'تعديل دفعة التسجيل — مرتبطة بشيت العملاء')
+    : (id ? 'تعديل حركة خزنة' : 'حركة خزنة جديدة');
   $('#vf-type').value = t ? (t.isReturn ? 'return' : t.type) : 'in';
   $('#vf-date').value = t?.date || todayISO();
   $('#vf-amount').value = t?.amount ?? '';
@@ -1587,17 +1578,49 @@ function openVaultModal(id){
   populateSelect($('#vf-method'), settings.channels.map(c=>c.name), false);
   {
     const vfMethodVal = t?.method || '';
-    if(settings.channels.some(c=>c.name===vfMethodVal)) $('#vf-method').value = vfMethodVal;
-    else { const vaultCh = settings.channels.find(c=>c.dest==='vault'); $('#vf-method').value = vaultCh ? vaultCh.name : settings.channels[0]?.name || ''; }
+    if(vfMethodVal){
+      // قد تكون طريقة دفع قديمة/محذوفة من الإعدادات — نعرضها كما هي بدل استبدالها صامتاً بالخزنة
+      ensureSelectOption($('#vf-method'), vfMethodVal, vfMethodVal);
+      $('#vf-method').value = vfMethodVal;
+    }else{
+      const vaultCh = settings.channels.find(c=>c.dest==='vault');
+      $('#vf-method').value = vaultCh ? vaultCh.name : settings.channels[0]?.name || '';
+    }
   }
   $('#vf-notes').value = t?.notes || '';
+  ensureSelectOption($('#vf-destination'), t?.destination, destLabel(t?.destination || ''));
   $('#vf-destination').value = t?.destination || 'vault';
   $('#vf-netinvoice').value = t?.networkInvoice || '';
+  // دفعة تسجيل: الربط بالعميل والاتجاه ثابتان، والحساب يتبع طريقة الدفع المختارة
+  const autoHint = $('#vf-auto-hint');
+  if(autoHint) autoHint.style.display = editingAutoTx ? '' : 'none';
+  const typeSel = $('#vf-type');
+  if(typeSel) typeSel.disabled = !!editingAutoTx;
+  const linkedBox = $('#vf-linked');
+  if(linkedBox) linkedBox.disabled = !!editingAutoTx;
+  const cidInput = $('#vf-clientid');
+  if(cidInput){
+    // رقم الهوية قابل للتعديل دائماً — في دفعة التسجيل، تغييره يعني نقل الدفعة لعميل مسجّل آخر
+    cidInput.readOnly = false;
+    cidInput.title = editingAutoTx ? 'اكتب رقم هوية عميل مسجّل آخر لنقل الدفعة إليه (تُصفَّر من هذا العميل وتُضاف لمدفوعات العميل الجديد)' : '';
+  }
+  const destSel = $('#vf-destination');
+  if(destSel) destSel.disabled = !!editingAutoTx;
   toggleVaultFields();
   $('#vault-overlay').classList.add('show'); SoundFX.open();
 }
-$('#vf-cancel')?.addEventListener('click', ()=>{ $('#vault-overlay').classList.remove('show'); editingVaultId=null; });
-$('#vault-overlay')?.addEventListener('click', e=>{ if(e.target.id==='vault-overlay'){ $('#vault-overlay').classList.remove('show'); editingVaultId=null; } });
+$('#vf-method')?.addEventListener('change', ()=>{
+  if(editingAutoTx){
+    const ch = settings.channels.find(c=>c.name===$('#vf-method').value);
+    if(ch){
+      ensureSelectOption($('#vf-destination'), ch.dest, destLabel(ch.dest));
+      $('#vf-destination').value = ch.dest;
+    }
+  }
+  toggleVaultFields();
+});
+$('#vf-cancel')?.addEventListener('click', ()=>{ $('#vault-overlay').classList.remove('show'); editingVaultId=null; editingAutoTx=null; });
+$('#vault-overlay')?.addEventListener('click', e=>{ if(e.target.id==='vault-overlay'){ $('#vault-overlay').classList.remove('show'); editingVaultId=null; editingAutoTx=null; } });
 
 let _vaultFormBusy = false;
 $('#vault-form')?.addEventListener('submit', async e=>{
@@ -1623,7 +1646,7 @@ $('#vault-form')?.addEventListener('submit', async e=>{
   }
   if(isIn && !linked && !$('#vf-manual').value.trim()){ showToast('يجب إدخال البيان / الجهة لهذه الحركة الواردة'); return; }
   if(isIn && linked && !$('#vf-clientid').value.trim()){ showToast('يجب إدخال رقم الهوية للعميل المرتبط بالحركة'); return; }
-  if(isIn && linked && !clients.find(x=>x.clientId===$('#vf-clientid').value.trim())){ showToast('لا يوجد عميل مسجّل بهذا الرقم — تحقق من رقم الهوية/الإقامة'); return; }
+  if(isIn && linked && !(editingVaultId && vaultTx.find(x=>x.id===editingVaultId)?.autoClientId) && !clients.find(x=>x.clientId===$('#vf-clientid').value.trim())){ showToast('لا يوجد عميل مسجّل بهذا الرقم — تحقق من رقم الهوية/الإقامة'); return; }
   // قفل الفترات المحاسبية: منع أي إضافة أو تعديل يقع تاريخها ضمن فترة أُقفلت بعد اعتماد قوائمها
   if(isDateLocked(date)){ vaultLockToast(); return; }
   if(editingVaultId){
@@ -1645,23 +1668,205 @@ $('#vault-form')?.addEventListener('submit', async e=>{
     destination: $('#vf-destination').value,
     networkInvoice: ($('#vf-destination').value==='network' || $('#vf-destination').value==='network2') ? $('#vf-netinvoice').value.trim() : ''
   };
+  /* دفعة تسجيل مُرحَّلة من شيت العملاء (auto_/auto2_): الاتجاه وارد والربط بالعميل ثابتان.
+     الحساب/الوجهة يتبعان طريقة الدفع المختارة، وأي تعديل للمبلغ/الطريقة/فاتورة الشبكة
+     يُكتب فوراً في سجل العميل حتى يبقى المصدران متطابقين. تغيير رقم الهوية = نقل الدفعة
+     بالكامل إلى عميل مسجّل آخر (تُصفَّر من الأول وتُضاف لمدفوعات الثاني). */
+  const autoEditTx = editingVaultId ? vaultTx.find(x=>x.id===editingVaultId && x.autoClientId) : null;
+  const autoEditIsSecond = !!(autoEditTx && String(autoEditTx.id).startsWith('auto2_'));
+  const autoEditClient = autoEditTx ? clients.find(c=>c.id===autoEditTx.autoClientId) : null;
+  let autoTransferTarget = null;   // العميل الهدف عند تغيير رقم الهوية (null = لا نقل)
+  let autoTransferSlot = 0;        // خانة الدفعة عند الهدف: 1 = مدفوع أول، 2 = مدفوع ثانٍ
+  let autoTransferMerge = false;   // true = لا توجد خانة فارغة، فتُدمج القيمة مع دفعة موجودة بنفس الطريقة
+  if(autoEditTx){
+    data.type = 'in';
+    data.isReturn = false;
+    // الوجهة تُشتق دائماً من طريقة الدفع المختارة (وليس من العميل المكتوب رقمه)
+    const ch = settings.channels.find(c=>c.name===data.method);
+    data.destination = ch ? (ch.dest || 'vault') : (autoEditTx.destination || 'vault');
+    data.networkInvoice = (data.destination==='network' || data.destination==='network2') ? data.networkInvoice : '';
+    const requestedClientId = String($('#vf-clientid').value || '').trim();
+    if(autoEditClient && requestedClientId && requestedClientId !== String(autoEditClient.clientId || '').trim()){
+      // نقل الدفعة إلى عميل مسجّل آخر — لا يُنشأ عميل جديد ولا يُصحَّح رقم العميل الحالي
+      const destClient = clients.find(c=>String(c.clientId||'').trim()===requestedClientId) || null;
+      if(!destClient){
+        showToast('لا يوجد عميل مسجّل بهذا الرقم — نقل الدفعة يحتاج رقم هوية عميل موجود بالفعل');
+        return;
+      }
+      if(destClient.id === autoEditClient.id){
+        showToast('هذا هو نفس العميل الحالي — لم يتغيّر شيء');
+        return;
+      }
+      if(destClient.companyTransferAllocated){
+        showToast('هذا العميل مسجّل ضمن حوالة شركة — مبلغه مُرحَّل داخل الحوالة الموحّدة ولا يمكن أن يستقبل دفعة تسجيل فردية. اختر عميلاً آخر أو عدّل تخصيصه من شاشة حوالات الشركات.');
+        return;
+      }
+      if(destClient.cancelled || destClient.suspended){
+        if(!await customConfirm(`العميل الهدف "${destClient.name}" حالته ملغى/موقوف. هل تريد نقل الدفعة إليه رغم ذلك؟`)) return;
+      }
+      autoTransferTarget = destClient;
+      // اختيار خانة الدفعة عند العميل الهدف: نفس خانة المصدر أولاً ثم الخانة الأخرى.
+      const srcSlot = autoEditIsSecond ? 2 : 1;
+      const order = srcSlot === 1 ? [1,2] : [2,1];
+      const slotAmount = s => s===1 ? num(destClient.paid) : num(destClient.paid2);
+      const slotChannel = s => s===1 ? destClient.channel : destClient.channel2;
+      const slotInvoice = s => s===1 ? destClient.networkInvoice : destClient.networkInvoice2;
+      const freeSlot = order.find(s=>slotAmount(s)<=0);
+      if(freeSlot){
+        autoTransferSlot = freeSlot;
+      }else{
+        // كل الخانات مشغولة: مسموح بالدمج فقط لو نفس طريقة الدفع ونفس الوجهة
+        const destOfChannel = name => {
+          const chn = settings.channels.find(c=>c.name===name);
+          return chn ? (chn.dest || 'vault') : 'other';
+        };
+        const compatible = s => {
+          if(String(slotChannel(s)||'') !== String(data.method||'')) return false;
+          const ddest = destOfChannel(slotChannel(s));
+          if(ddest !== data.destination) return false;
+          if(ddest==='network' || ddest==='network2'){
+            const inv = String(slotInvoice(s)||'').trim();
+            if(inv && data.networkInvoice && inv !== String(data.networkInvoice).trim()) return false;
+          }
+          return true;
+        };
+        const mergeSlot = order.find(compatible);
+        if(mergeSlot){ autoTransferSlot = mergeSlot; autoTransferMerge = true; }
+      }
+      if(!autoTransferSlot){
+        showToast('العميل الهدف لديه دفعتان مسجلتان بالفعل بطريقتَي دفع مختلفتين — لا توجد خانة متاحة لنقل الدفعة. عدّل إحدى دفعاته أولاً أو سجّل المبلغ كحركة مالية عادية.');
+        return;
+      }
+      data.clientId = destClient.clientId;
+      data.clientName = destClient.name;
+    }else if(autoEditClient){
+      data.clientId = autoEditClient.clientId;
+      data.clientName = autoEditClient.name;
+    }
+  }
+  let autoTransferApplied = false;
+  let autoTransferUndo = null;
   const wasVaultEdit = !!editingVaultId;
   let originalTxRef = null;
   let prevLinkedClientId = '';
   snapshotState(wasVaultEdit ? 'تعديل حركة مالية' : 'إضافة حركة مالية');
   let savedTx;
   if(editingVaultId){
-const idx = vaultTx.findIndex(x=>x.id===editingVaultId);
+    let idx = vaultTx.findIndex(x=>x.id===editingVaultId);
     originalTxRef = vaultTx[idx];
     // إصلاح: نسخة "قبل" يجب أن تُستثنى منها history (وإلا يبقى إشارة لنفس مصفوفة السجل الأصلية،
     // فيتكوّن مرجع دائري عند أول عملية push لاحقة ويفشل JSON.stringify عند أي حفظ أو نسخة احتياطية لاحقاً)
     const { history: _prevHistory, ...before } = vaultTx[idx];
     prevLinkedClientId = before.clientId || '';
-    vaultTx[idx] = {...vaultTx[idx], ...data};
-    const { history: _afterHistory, ...afterSnap } = vaultTx[idx];
-    pushVaultTxHistory(vaultTx[idx], before, afterSnap);
-    savedTx = vaultTx[idx];
-    bumpVaultVersion();
+    if(autoEditTx && autoTransferTarget && autoEditClient){
+      /* ================= نقل دفعة التسجيل إلى عميل آخر مسجّل =================
+         تُصفَّر الخانة المقابلة (الأولى/الثانية) في العميل المصدر، وتُضاف القيمة لخانة مناسبة
+         في العميل الهدف. الحركة نفسها تنتقل للعميل الهدف بنفس رقمها التسلسلي وتاريخها المالي،
+         ويُعاد تعيين معرّفها ليطابق الخانة الجديدة (auto_/auto2_) حتى لا تتكرر عند أي مزامنة
+         لاحقة. لو الخانتان مشغولتان بنفس طريقة الدفع والوجهة تُدمج القيمة مع الدفعة الموجودة. */
+      const srcSlot = autoEditIsSecond ? 2 : 1;
+      const newId = (autoTransferSlot===2 ? 'auto2_' : 'auto_') + autoTransferTarget.id;
+      const netInvoice = (data.destination==='network'||data.destination==='network2') ? data.networkInvoice : '';
+      autoTransferUndo = {
+        source: { paid: autoEditClient.paid, paid2: autoEditClient.paid2, channel: autoEditClient.channel, channel2: autoEditClient.channel2, networkInvoice: autoEditClient.networkInvoice, networkInvoice2: autoEditClient.networkInvoice2 },
+        target: { paid: autoTransferTarget.paid, paid2: autoTransferTarget.paid2, channel: autoTransferTarget.channel, channel2: autoTransferTarget.channel2, networkInvoice: autoTransferTarget.networkInvoice, networkInvoice2: autoTransferTarget.networkInvoice2 },
+        collision: null, collisionDeleted: null, targetEntry: null, removedMoved: null
+      };
+      // 1) تصفير الدفعة في العميل المصدر
+      if(srcSlot===2){ autoEditClient.paid2 = 0; autoEditClient.channel2 = ''; autoEditClient.networkInvoice2 = ''; }
+      else { autoEditClient.paid = 0; autoEditClient.channel = ''; autoEditClient.networkInvoice = ''; }
+      if(autoTransferMerge){
+        // 2أ) دمج القيمة مع دفعة موجودة عند العميل الهدف (نفس طريقة الدفع والوجهة)
+        const merged = (autoTransferSlot===2 ? num(autoTransferTarget.paid2) : num(autoTransferTarget.paid)) + amount;
+        if(autoTransferSlot===2){
+          autoTransferTarget.paid2 = merged;
+          if(!String(autoTransferTarget.networkInvoice2||'').trim()) autoTransferTarget.networkInvoice2 = netInvoice;
+        }else{
+          autoTransferTarget.paid = merged;
+          if(!String(autoTransferTarget.networkInvoice||'').trim()) autoTransferTarget.networkInvoice = netInvoice;
+        }
+        const targetEntry = vaultTx.find(t=>t.id===newId && t!==originalTxRef);
+        if(targetEntry){
+          autoTransferUndo.targetEntry = { ref: targetEntry, amount: num(targetEntry.amount) };
+          targetEntry.amount = merged;
+          const tDest = settings.channels.find(c=>c.name===(autoTransferSlot===2 ? autoTransferTarget.channel2 : autoTransferTarget.channel));
+          targetEntry.destination = tDest ? (tDest.dest || 'vault') : targetEntry.destination;
+          targetEntry.networkInvoice = autoTransferSlot===2 ? (autoTransferTarget.networkInvoice2||'') : (autoTransferTarget.networkInvoice||'');
+          bumpVaultVersion();
+        }
+        // الحركة المنقولة لم تعد مستقلة — تُلغى منطقياً وتُدمج قيمتها في قيد العميل الهدف
+        autoTransferUndo.removedMoved = softDeleteVaultTx(editingVaultId, `نقل دفعة تسجيل إلى العميل "${autoTransferTarget.name}" (${autoTransferTarget.clientId}) — دُمجت مع دفعته الموجودة بنفس طريقة الدفع`);
+        savedTx = targetEntry || originalTxRef;
+        bumpVaultVersion();
+      }else{
+        // 2ب) الخانة المختارة فارغة — ننقل الحركة نفسها إليها
+        const collide = vaultTx.find((t,i)=> i!==idx && t.id===newId);
+        if(collide){
+          const ci = vaultTx.indexOf(collide);
+          if(ci!==-1){
+            vaultTx.splice(ci,1);
+            const delCopy = {...collide, deletedAt: Date.now(), deletedBy: currentUser||'غير معروف', deletedReason: 'قيد قديم معلّق في خانة الدفعة — أُزيل تلقائياً أثناء نقل دفعة تسجيل'};
+            deletedVaultTx.push(delCopy);
+            autoTransferUndo.collision = collide;
+            autoTransferUndo.collisionDeleted = delCopy;
+          }
+          idx = vaultTx.indexOf(originalTxRef);
+        }
+        const wasNotesCustom = !!autoEditTx.notesCustom;
+        const notesChanged = String(data.notes||'') !== String(autoEditTx.notes||'');
+        vaultTx[idx] = {
+          ...vaultTx[idx], ...data,
+          id: newId,
+          autoClientId: autoTransferTarget.id,
+          clientId: autoTransferTarget.clientId,
+          clientName: autoTransferTarget.name,
+          dateCustom: true, // تاريخ الدفعة المالي يبقى كما هو ولا يتحوّل لتاريخ تسجيل العميل الهدف
+        };
+        if(notesChanged){
+          vaultTx[idx].notesCustom = true;
+        }else if(!wasNotesCustom){
+          // نص الملاحظة التلقائي يتحدّث حسب الخانة الجديدة عند العميل الهدف
+          vaultTx[idx].notesCustom = undefined;
+          if(data.destination==='other'){
+            vaultTx[idx].notes = 'ترحيل تلقائي من سجل العميل (تسوية خارج حسابات الخزنة/البنك/الشبكة)';
+          }else if(autoTransferSlot===2){
+            vaultTx[idx].notes = 'ترحيل تلقائي من سجل العميل — الدفعة الثانية من دفعتين';
+          }else{
+            vaultTx[idx].notes = 'ترحيل تلقائي من سجل العميل' + (num(autoTransferTarget.paid2)>0 ? ' — الدفعة الأولى من دفعتين' : '');
+          }
+        }
+        // 3) إضافة القيمة لخانة العميل الهدف
+        if(autoTransferSlot===2){
+          autoTransferTarget.paid2 = amount;
+          autoTransferTarget.channel2 = data.method;
+          autoTransferTarget.networkInvoice2 = netInvoice;
+        }else{
+          autoTransferTarget.paid = amount;
+          autoTransferTarget.channel = data.method;
+          autoTransferTarget.networkInvoice = netInvoice;
+        }
+        const { history: _mh, ...mBefore } = originalTxRef;
+        const { history: _mh2, ...mAfter } = vaultTx[idx];
+        pushVaultTxHistory(vaultTx[idx], mBefore, mAfter);
+        savedTx = vaultTx[idx];
+        editingVaultId = newId;
+        bumpVaultVersion();
+      }
+      autoTransferApplied = true;
+    }else{
+      vaultTx[idx] = {...vaultTx[idx], ...data};
+      if(autoEditTx){
+        // التاريخ المالي المخصّص لدفعة التسجيل مستقل عن تاريخ تسجيل العميل — نحتفظ به ولا نغيّر سجل العميل
+        const dateVal = String(data.date||'');
+        if(dateVal === String(autoEditClient?.date||'')) delete vaultTx[idx].dateCustom;
+        else if(dateVal !== String(autoEditTx.date||'')) vaultTx[idx].dateCustom = true;
+        if(String(data.notes||'') !== String(autoEditTx.notes||'')) vaultTx[idx].notesCustom = true;
+      }
+      const { history: _afterHistory, ...afterSnap } = vaultTx[idx];
+      pushVaultTxHistory(vaultTx[idx], before, afterSnap);
+      savedTx = vaultTx[idx];
+      bumpVaultVersion();
+    }
   }else{
     savedTx = {id:uid(), seq: allocVaultSeq(data.destination), createdAt:Date.now(), ...data};
     vaultTx.push(savedTx); bumpVaultVersion();
@@ -1680,22 +1885,86 @@ const idx = vaultTx.findIndex(x=>x.id===editingVaultId);
   const vaultPersistedOk = (vaultSavedOk === true || vaultSavedOk === 'queued');
   if(!vaultPersistedOk){
     if(wasVaultEdit){
-      const restoreIdx = vaultTx.findIndex(x=>x.id===editingVaultId);
-      if(restoreIdx!==-1){
-        // نحتفظ بأثر التعديل الفاشل كسجل تاريخي (ال bothering لاحقاً لا يتراكم إن فشل الحفظ)
-        if(!originalTxRef.history) originalTxRef.history=[];
-        originalTxRef.history.push({at:Date.now(), user:currentUser||'غير معروف', before:null, after:null, note:'محاولة تعديل فاشلة — الحفظ على السيرفر رُفض'});
-        vaultTx[restoreIdx] = originalTxRef;
+      if(autoTransferApplied && autoTransferUndo){
+        // فشل حفظ نقل الدفعة: نُعيد الحركة وبيانات العميلين بالكامل كما كانت قبل المحاولة
+        if(autoTransferUndo.removedMoved){
+          deletedVaultTx = deletedVaultTx.filter(t=>t!==autoTransferUndo.removedMoved);
+          const { deletedAt, deletedBy, deletedReason, ...orig } = autoTransferUndo.removedMoved;
+          vaultTx.push(orig);
+        }else{
+          const restoreIdx = vaultTx.findIndex(x=>x.id===editingVaultId);
+          if(restoreIdx!==-1) vaultTx[restoreIdx] = originalTxRef;
+          else vaultTx.push(originalTxRef);
+        }
+        if(autoTransferUndo.targetEntry && autoTransferUndo.targetEntry.ref){
+          autoTransferUndo.targetEntry.ref.amount = autoTransferUndo.targetEntry.amount;
+        }
+        if(autoTransferUndo.collisionDeleted){
+          deletedVaultTx = deletedVaultTx.filter(t=>t!==autoTransferUndo.collisionDeleted);
+        }
+        if(autoTransferUndo.collision){ vaultTx.push(autoTransferUndo.collision); }
+        if(autoEditClient && autoTransferUndo.source) Object.assign(autoEditClient, autoTransferUndo.source);
+        if(autoTransferTarget && autoTransferUndo.target) Object.assign(autoTransferTarget, autoTransferUndo.target);
+      }else{
+        const restoreIdx = vaultTx.findIndex(x=>x.id===editingVaultId);
+        if(restoreIdx!==-1){
+          // نحتفظ بأثر التعديل الفاشل كسجل تاريخي (لا يتراكم إن فشل الحفظ)
+          if(!originalTxRef.history) originalTxRef.history=[];
+          originalTxRef.history.push({at:Date.now(), user:currentUser||'غير معروف', before:null, after:null, note:'محاولة تعديل فاشلة — الحفظ على السيرفر رُفض'});
+          vaultTx[restoreIdx] = originalTxRef;
+        }
       }
     }else{
       vaultTx = vaultTx.filter(x=>x.id!==savedTx.id);
     }
     bumpVaultVersion();
+  }else if(autoTransferApplied && autoTransferUndo && (autoTransferUndo.removedMoved || autoTransferUndo.collisionDeleted)){
+    // حفظ سجل الحركات الملغاة الناتجة عن الدمج/إزالة قيد قديم أثناء نقل الدفعة
+    if(typeof saveDeletedVaultTx==='function') await saveDeletedVaultTx();
+  }
+  // مزامنة عكسية: دفعة تسجيل عُدِّلت من شيت الحركات المالية → نحدّث المبلغ/طريقة الدفع/فاتورة الشبكة
+  // في سجل العميل نفسه (نفس الحقول التي يقرأها نموذج تعديل العميل ويُعيد توليد الحركة منها لاحقاً).
+  if(vaultPersistedOk && autoTransferApplied && autoEditClient && autoTransferTarget){
+    // نقل دفعة: بيانات العميلين حُدِّثت قبل الحفظ — نحفظها الآن ونوثّق النقل في الطرفين
+    const movedSeq = originalTxRef?.seq || savedTx?.seq || '—';
+    const autoClientSaved = await saveClients();
+    await logAudit('edit','الحركات المالية', `تم ${autoTransferMerge?'دمج':'نقل'} دفعة التسجيل رقم تسلسلي #${movedSeq} من العميل "${autoEditClient.name}" (${autoEditClient.clientId}) إلى العميل "${autoTransferTarget.name}" (${autoTransferTarget.clientId}) — المبلغ ${fmt(amount)} · ${data.method||'—'}`);
+    await logAudit('edit','العملاء', `تم ${autoTransferMerge?'دمج':'نقل'} دفعة تسجيل بقيمة ${fmt(amount)} ${autoTransferMerge?'مع مدفوعات':'إلى مدفوعات'} العميل "${autoTransferTarget.name}" (${autoTransferTarget.clientId})، وتصفيرها من العميل "${autoEditClient.name}" (${autoEditClient.clientId}) — دفعة ${autoTransferSlot===2?'ثانية':'أولى'} · ${data.method||'—'}`);
+    if(autoClientSaved === false || autoClientSaved === 'rejected'){
+      showToast('تم نقل الدفعة في الحركات المالية، لكن تعذّر حفظ تعديل بيانات العميلين على السيرفر — سيُعاد الرفع تلقائياً');
+    }else{
+      showToast((autoTransferMerge ? 'تم دمج الدفعة مع مدفوعات العميل الجديد' : 'تم نقل الدفعة إلى العميل الجديد') + ' — وتم تصفيرها من العميل السابق');
+    }
+  }else if(vaultPersistedOk && autoEditTx && autoEditClient){
+    if(autoEditIsSecond){
+      autoEditClient.paid2 = amount;
+      autoEditClient.channel2 = data.method;
+      autoEditClient.networkInvoice2 = (data.destination==='network'||data.destination==='network2') ? data.networkInvoice : '';
+    }else{
+      autoEditClient.paid = amount;
+      autoEditClient.channel = data.method;
+      autoEditClient.networkInvoice = (data.destination==='network'||data.destination==='network2') ? data.networkInvoice : '';
+    }
+    const autoClientSaved = await saveClients();
+    await logAudit('edit','العملاء', `تم تحديث ${autoEditIsSecond?'المبلغ المدفوع الثاني وطريقة دفعه':'المبلغ المدفوع الأول وطريقة دفعه'} للعميل "${autoEditClient.name}" تلقائياً بعد تعديل دفعة التسجيل من تبويب الحركات المالية (رقم تسلسلي #${savedTx.seq||'—'}) — المبلغ ${fmt(amount)} · ${data.method||'—'}`);
+    if(autoClientSaved === false || autoClientSaved === 'rejected'){
+      showToast('تم تحديث الحركة المالية، لكن تعذّر حفظ تعديل بيانات العميل على السيرفر — سيُعاد الرفع تلقائياً');
+    }
   }
   const txLabel = isReturn ? 'مردود مبيعات' : (savedTx.type==='in'?'وارد':'صادر');
   const txDesc = `${txLabel} بمبلغ ${fmt(num(savedTx.amount))} (${destLabel(savedTx.destination||'vault')}) - ${savedTx.clientName||savedTx.manual||savedTx.category||''}`;
   if(vaultPersistedOk){
     await logAudit(wasVaultEdit ? 'edit' : 'add', 'الحركات المالية', `${wasVaultEdit ? 'تم تعديل حركة' : 'تمت إضافة حركة'} رقم تسلسلي #${savedTx.seq||'—'}: ${txDesc}`);
+  }
+  // مزامنة القيد المزدوج: إعادة بناء قيد الحركة (إضافة/تعديل) ليعكس المبلغ/التاريخ/الحساب الجديد
+  if(vaultPersistedOk && typeof syncVaultTxDoubleEntries==='function'){
+    try{
+      const deSync = syncVaultTxDoubleEntries();
+      if(deSync.changed){
+        await Promise.all([saveJournalDE(), saveVaultTx()]);
+        if(deSync.accounts) await saveChartOfAccounts();
+      }
+    }catch(err){ console.error('تعذر مزامنة الحركة المالية مع القيد المزدوج', err); }
   }
   // ملحوظة: أُلغي تنبيه الإيميل عند تسجيل مصروف عمداً — راجع الملحوظة في module-purchases.js لنطاق تنبيهات الإيميل الحالي.
 
@@ -1714,32 +1983,63 @@ const idx = vaultTx.findIndex(x=>x.id===editingVaultId);
 
   // إذا كان تصنيف المصروف "حقائب"، يُضاف المبلغ لرصيد حساب الحقائب تلقائياً (بلا حاجة لخانة تفعيل يدوية)
   // ويُحتسب عدد الحقائب المضافة تلقائياً حسب السعر الثابت للحقيبة (نفس منطق تمويل المخزون).
-  // يعمل فقط عند الإضافة (!wasVaultEdit) وليس عند التعديل، لتفادي تكرار الإيداع في مخزون الحقائب
-  // كل مرة تُعدَّل فيها نفس الحركة المحفوظة أصلاً بتصنيف "حقائب".
-  if(vaultPersistedOk && isOut && !wasVaultEdit && $('#vf-category').value==='حقائب'){
-    snapshotState(`إيداع في حساب الحقائب عبر حركة مصروف: ${fmt(amount)}`);
-    bagStock.push({
-      id: uid(), createdBy: currentUser,
-      createdAt: Date.now(),
-      type: 'deposit',
-      date: data.date,
-      amount,
-      method: data.method,
-      notes: `مرتبط تلقائياً بحركة مالية (${data.category||'مصروف'})${data.notes ? ' — '+data.notes : ''}`
-    });
-    recalcBagFundLedger();
-    await saveBagStock();
-    await saveSettings();
-    const addedEntry = bagStock[bagStock.length-1];
-    if(addedEntry.qty>0){
-      await logAudit('add','مخزون الحقائب', `تمت إضافة ${addedEntry.qty} حقيبة للمخزون تلقائياً من حركة إيداع مالية بقيمة ${fmt(amount)} (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
-    }else{
-      await logAudit('add','مخزون الحقائب', `تم تسجيل إيداع ${fmt(amount)} ﷼ في حساب الحقائب من حركة مالية — لم يكتمل بعد لشراء حقيبة كاملة (الرصيد الحالي: ${fmt(settings.bagFundBalance)})`);
+  // يعمل عند الإضافة، وكذلك عند تعديل حركة قديمة وتغيير تصنيفها إلى "حقائب" — لتُرحَّل فوراً لشيت الحقائب.
+  // يُربط كل إيداع بالحركة المالية عبر vaultTxId حتى لا يتكرر الإيداع عند إعادة التعديل أو يتضاعف.
+  if(vaultPersistedOk && isOut){
+    const prevCategory = wasVaultEdit ? String(originalTxRef?.category||'') : '';
+    const newCategory = $('#vf-category').value;
+    const linkedBagEntry = bagStock.find(b=>b.vaultTxId===savedTx.id);
+    const bagNote = `مرتبط تلقائياً بحركة مالية (${data.category||'مصروف'})${data.notes ? ' — '+data.notes : ''}`;
+    if(newCategory==='حقائب'){
+      if(linkedBagEntry){
+        // حركة سبق ربطها بإيداع حقائب (أُنشئت بهذا المنطق) — نحدّث الإيداع بدل تكراره
+        linkedBagEntry.date = data.date;
+        linkedBagEntry.amount = amount;
+        linkedBagEntry.method = data.method;
+        linkedBagEntry.notes = bagNote;
+        recalcBagFundLedger();
+        await saveBagStock();
+        await saveSettings();
+        await logAudit('edit','مخزون الحقائب', `تم تحديث إيداع حساب الحقائب المرتبط بحركة مالية بقيمة ${fmt(amount)} (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
+        renderBags();
+      }else if(!wasVaultEdit || prevCategory!=='حقائب'){
+        // إضافة جديدة، أو تعديل حركة قديمة كان تصنيفها مختلفاً — هنا يتم الترحيل التلقائي المطلوب
+        snapshotState(`إيداع في حساب الحقائب عبر حركة مصروف: ${fmt(amount)}`);
+        bagStock.push({
+          id: uid(), createdBy: currentUser,
+          createdAt: Date.now(),
+          vaultTxId: savedTx.id,
+          type: 'deposit',
+          date: data.date,
+          amount,
+          method: data.method,
+          notes: bagNote
+        });
+        recalcBagFundLedger();
+        await saveBagStock();
+        await saveSettings();
+        const addedEntry = bagStock[bagStock.length-1];
+        const editPrefix = wasVaultEdit ? 'بعد تغيير تصنيف حركة مالية قديمة إلى "حقائب"' : 'من حركة إيداع مالية';
+        if(addedEntry.qty>0){
+          await logAudit('add','مخزون الحقائب', `تمت إضافة ${addedEntry.qty} حقيبة للمخزون تلقائياً ${editPrefix} بقيمة ${fmt(amount)} (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
+        }else{
+          await logAudit('add','مخزون الحقائب', `تم تسجيل إيداع ${fmt(amount)} ﷼ في حساب الحقائب ${editPrefix} — لم يكتمل بعد لشراء حقيبة كاملة (الرصيد الحالي: ${fmt(settings.bagFundBalance)})`);
+        }
+        renderBags();
+      }
+    }else if(linkedBagEntry){
+      // غيّر المستخدم تصنيف حركة كانت "حقائب" إلى تصنيف آخر — نزيل الإيداع المرتبط بها حتى لا يبقى أثر مزدوج
+      snapshotState(`إزالة إيداع حساب الحقائب المرتبط بحركة مالية: ${fmt(num(linkedBagEntry.amount))}`);
+      bagStock = bagStock.filter(b=>b.id!==linkedBagEntry.id);
+      recalcBagFundLedger();
+      await saveBagStock();
+      await saveSettings();
+      await logAudit('delete','مخزون الحقائب', `تم حذف إيداع ${fmt(num(linkedBagEntry.amount))} ﷼ من حساب الحقائب تلقائياً لأن تصنيف الحركة المالية المرتبطة تغيّر من "حقائب" إلى "${newCategory||'—'}" (الرصيد المتبقي: ${fmt(settings.bagFundBalance)})`);
+      renderBags();
     }
-    renderBags();
   }
 
-  $('#vault-overlay').classList.remove('show'); editingVaultId=null;
+  $('#vault-overlay').classList.remove('show'); editingVaultId=null; editingAutoTx=null;
   if(!wasVaultEdit && isReturn){
     refreshEverything();
   }else{
@@ -1856,6 +2156,13 @@ document.addEventListener('click', async e=>{
       }
     }
     renderVault();
+    // القيد المزدوج: حذف قيد الحركة الملغاة (أو المعلّقة) فوراً بدل انتظار إعادة التحميل
+    if(typeof syncVaultTxDoubleEntries==='function'){
+      try{
+        const deSync = syncVaultTxDoubleEntries();
+        if(deSync.changed) await Promise.all([saveJournalDE(), saveVaultTx()]);
+      }catch(err){ console.error('تعذر حذف قيد الحركة الملغاة من القيد المزدوج', err); }
+    }
     // المبلغ المدفوع والمتبقي في شيت العملاء يُحسبان مباشرة من الحركات المالية المرتبطة بالعميل،
     // فأي إلغاء لحركة مرتبطة بعميل (حتى لو لم تكن دفعة تسجيل تلقائية) يجب أن ينعكس فوراً هناك
     if(removed && removed.clientId && !removed.autoClientId){
@@ -1945,7 +2252,7 @@ $('#btn-extract-nomethod')?.addEventListener('click', ()=>{
 $('#btn-export-vault')?.addEventListener('click', ()=>{
   const rows = vaultFilteredRows();
   const headers = ['الرقم التسلسلي الرسمي','التاريخ','الحساب','النوع','رقم الهوية','العميل/البيان','التصنيف','مستلم المبلغ (للمصروفات)','طريقة الدفع','رقم فاتورة الشبكة','المبلغ','ملاحظات'];
-  const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, (t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category), t.category, t.recipientName||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
+  const data = rows.map(t=>[t.seq||'', t.date, destLabel(t.destination||'vault'), t.isReturn?'مردود مبيعات':(t.type==='in'?'وارد':'صادر'), t.clientId, ((t.type==='in'||t.isReturn)?(t.clientName||t.manual):(t.category)) + (t.clientId ? ' ('+t.clientId+')' : ''), t.category, t.recipientName||'', t.method, t.networkInvoice||'', t.amount, t.notes]);
   const csv = '\uFEFF'+[headers, ...data].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');

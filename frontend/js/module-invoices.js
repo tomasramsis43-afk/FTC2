@@ -116,7 +116,12 @@ function renderCourseInvoices(){
       <td class="sticky-col sticky-col-2" data-label="العميل">${escapeHtml(c.name||'')}${c.cancelled ? ' <span class="cw-badge danger">ملغي</span>' : (c.suspended ? ' <span class="cw-badge muted">موقوف</span>' : '')}</td>
       <td class="mono" data-label="رقم الهوية">${escapeHtml(c.clientId||'—')}</td>
       <td data-label="الدورة">${escapeHtml(c.courseType||'')}</td>
-      <td class="mono" data-label="رقم الفاتورة">${escapeHtml(c.invoice||'—')}</td>
+      <td class="mono" data-label="رقم الفاتورة">${c.invoice
+        ? `<span class="invoice-cell">
+            ${typeof receiptsIndicatorHtml === 'function' ? receiptsIndicatorHtml(c.invoice, c) : ''}
+            <button type="button" class="invoice-toggle" data-invoice-toggle="${c.id}" data-invoice="${escapeHtml(c.invoice)}" title="عرض إيصال أركان — معاينة وطباعة (يُحمّل تلقائياً إن لم يكن محفوظاً)">${escapeHtml(c.invoice)}</button>
+          </span>`
+        : '—'}</td>
       <td data-label="تاريخ الصدور"><input type="date" class="mono" data-ci-date="${c.id}" value="${c.receiptIssueDate||''}" style="min-width:140px;"></td>
       <td data-label="القيمة الفعلية"><input type="number" step="0.01" class="mono" data-ci-value="${c.id}" value="${c.receiptActualValue!==undefined && c.receiptActualValue!==null && c.receiptActualValue!=='' ? c.receiptActualValue : ''}" placeholder="القيمة من الإيصال" style="min-width:130px;"></td>
       <td class="mono" data-label="الضريبة">${hasValue ? fmt(vat) : '—'}</td>
@@ -238,6 +243,10 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
       });
     }
     await saveClients();
+    // رقم فاتورة جديد/مُحدَّث في شيت فواتير الدورات → يلتحق تلقائياً بطابور الإيصالات (واحداً وراء الآخر).
+    if (invoiceChanged && typeof receiptsAutoScanSchedule === 'function') {
+      receiptsAutoScanSchedule('course-invoice-import', 800);
+    }
     if(postedCount>0) await saveJournalDE();
     await logAudit('edit','فواتير الدورات', `استيراد فواتير الدورات من Excel: تحديث ${updated} سجل${skipped?`، وتخطي ${skipped} صف بدون تطابق`:''}${invoiceChanged?` (تم ترحيل ${invoiceChanged} رقم فاتورة تلقائياً إلى شيت العملاء وربطها بجميع الشيتات)`:''}${postedCount?` — ورُحّلت ${postedCount} فاتورة تلقائياً للقيد المزدوج`:''}`);
     if(invoiceChanged && typeof refreshEverything==='function'){
@@ -256,7 +265,7 @@ $('#ci-import-input')?.addEventListener('change', async e=>{
 });
 
 // تحويل File إلى base64 (بدون بادئة data:...) — دالة عامة يستخدمها رفع الفواتير بالذكاء
-// الاصطناعي أدناه، وإرفاق الفاتورة بالإيميل، وmodule-reports.js أيضاً.
+// الاصطناعي أدناه، وmodule-reports.js أيضاً.
 function fileToBase64(file){
   return new Promise((resolve, reject)=>{
     const r = new FileReader();
@@ -392,28 +401,22 @@ async function printInvoice(id){
   const vat = vatFromGross(totalInclVat);
   const grand = totalInclVat - vat; // القيمة الفعلية بدون الضريبة
 
-  // جسم الفاتورة (نفس قالب الطباعة) — يُستخدم للطباعة ولرفقه كملف PDF في الإيميل.
+  // جسم الفاتورة (نفس قالب الطباعة) — يُستخدم للطباعة.
   const invoiceBodyHtml = buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand});
 
   const win = openPrintTarget();
   win.document.write(`${printDocHead(invNoLabel, {accent: PRINT_PALETTE.gold, borderColor: PRINT_PALETTE.navy})}<body>${invoiceBodyHtml}${printDocFooterButton()}</body></html>`);
   finishPrintDoc(win);
   renderTable();
-  // إرسال تلقائي فور إصدار الفاتورة لو للعميل إيميل محفوظ — best-effort بالكامل (فشل الإرسال
-  // لا يوقف الطباعة، ولا يُظهر خطأً مزعجاً؛ تنبيه بسيط فقط عبر showToast لو فشل).
-  if(c.email){
-    sendInvoiceEmailNow(c, invNoLabel, {grand, vat, paid, rem}, {silent:true});
-  }
 }
 
-/* يبني جسم (body) فاتورة العميل بنفس قالب الطباعة — يُستخدم للطباعة ولرفقه كملف PDF
-   في الإيميل بدل إرسال البيانات كنص داخل جسم الرسالة. */
+/* يبني جسم (body) فاتورة العميل بنفس قالب الطباعة للطباعة. */
 function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand}){
   const ci = settings.centerInfo || DEFAULT_SETTINGS.centerInfo;
   const today = new Date().toLocaleDateString('ar-SA-u-nu-latn');
   const rowsHtml = `
     <tr><td>رسوم الدورة التدريبية${c.courseType ? ' — '+escapeHtml(c.courseType) : ''}</td><td class="num">${fmt(num(c.coursePrice))}</td></tr>
-    ${num(c.discount)>0 ? `<tr><td>الخصم</td><td class="num">-${fmt(num(c.discount))}</td></tr>` : ''}
+    ${num(c.discount)>0 ? `<tr><td>الخصم${(c.offerApplied && num(c.offerDiscountAmount)>0) ? ` — منها ${escapeHtml(c.offerNameSnapshot || settings.offerName || 'عرض الخصم')} ${fmt(num(c.offerDiscountAmount))}` : ''}</td><td class="num">-${fmt(num(c.discount))}</td></tr>` : ''}
     ${bagShown ? `<tr><td>قيمة الحقيبة التدريبية</td><td class="num">${fmt(bag)}</td></tr>` : ''}
   `;
   return `
@@ -473,95 +476,6 @@ function buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, 
     <div style="margin:14px 0 22px; padding:12px 14px; border:1px solid #DDE3EA; border-radius:8px; background:#F7F9FB; font-size:12.5px; text-align:center;">
       <b>المبلغ كتابةً:</b> ${escapeHtml(numberToArabicWords(grand+vat))}
     </div>`;
-}
-
-// إرسال الفاتورة بالإيميل فعلياً عبر السيرفر. جسم الإيميل بسيط (تحية + إشارة للمرفق) لضمان
-// توافقه مع عملاء البريد المختلفة، والفاتورة نفسها تُرفق كملف PDF (نفس قالب الطباعة) بدل
-// إرسال البيانات كنص داخل جسم الرسالة. silent=true تُستخدم للإرسال التلقائي بعد الطباعة مباشرة
-// (رسالة نجاح خفيفة فقط، بدون إزعاج فى حال الفشل). إن فشل توليد الـ PDF نُرسل الإيميل بدونه.
-async function sendInvoiceEmailNow(c, invNoLabel, totals, {silent=false}={}){
-  // تم تعطيل إرسال الفواتير بالإيميل بالكامل (تلقائي + يدوي) بناءً على طلب صريح — يبقى
-  // الإيميل فقط على إضافة عميل جديد + الحركات المالية + التقارير. لم يُحذف أي كود تحت هذا
-  // الحارس، فقط لا يُنفَّذ حالياً؛ لإعادة التفعيل احذف السطرين التاليين.
-  if(!silent) showToast('إرسال الفواتير بالإيميل معطّل حالياً');
-  return;
-  const {grand, vat, paid, rem} = totals;
-  // إعادة حساب نفس قيم الفاتورة المطبوعة لبناء جسمها (نفس القالب) في الإيميل.
-  const income = centerIncome(c);
-  const bag = bagAmount(c);
-  const bagShown = bag>0 && paid >= (income + bag);
-  const totalInclVat = income + (bagShown ? bag : 0);
-  const invoiceBodyHtml = buildInvoiceBodyHtml(c, invNoLabel, {income, bag, bagShown, paid, rem, totalInclVat, vat, grand});
-  // توليد ملف PDF للفاتورة (نفس قالب الطباعة) لرفقه بالمرفقات بدل إرسال البيانات كنص فقط.
-  let attachment = null;
-  try{
-    const pdfFile = await htmlBodyToPdfFile(invoiceBodyHtml, {
-      title: 'فاتورة ' + invNoLabel,
-      filename: 'فاتورة_' + invNoLabel.replace(/[^\w\u0600-\u06FF-]+/g,'_') + '.pdf',
-      variant: 'full',
-      accent: PRINT_PALETTE.gold,
-      borderColor: PRINT_PALETTE.navy,
-    });
-    attachment = { b64: await fileToBase64(pdfFile), name: pdfFile.name, type: pdfFile.type };
-  }catch(e){
-    console.error('تعذّر توليد PDF الفاتورة للإيميل:', e);
-  }
-  const bodyHtml = `
-    <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif; line-height:1.9; color:#222;">
-      <p>مرحباً ${escapeHtml(c.name)}،</p>
-      ${attachment
-        ? `<p>مرفق فاتورتكم رقم <b>${invNoLabel}</b> كملف PDF في هذا البريد.</p>`
-        : `<p>إليكم بيانات فاتورتكم رقم <b>${invNoLabel}</b>:</p>
-           <table style="border-collapse:collapse; width:100%; max-width:420px;">
-             <tr><td style="padding:6px 0;">القيمة (بدون ضريبة)</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand)}</b> ﷼</td></tr>
-             <tr><td style="padding:6px 0;">ضريبة القيمة المضافة</td><td style="padding:6px 0; text-align:left;"><b>${fmt(vat)}</b> ﷼</td></tr>
-             <tr style="border-top:1px solid #ddd;"><td style="padding:6px 0;">الإجمالي</td><td style="padding:6px 0; text-align:left;"><b>${fmt(grand+vat)}</b> ﷼</td></tr>
-             <tr><td style="padding:6px 0;">المدفوع</td><td style="padding:6px 0; text-align:left;">${fmt(paid)} ﷼</td></tr>
-             <tr><td style="padding:6px 0;">المتبقي</td><td style="padding:6px 0; text-align:left;">${fmt(rem)} ﷼</td></tr>
-           </table>`}
-      <p style="color:#888; font-size:13px; margin-top:16px;">شكراً لتعاملكم معنا.</p>
-    </div>`;
-  const payload = { to: c.email, clientName: c.name, invoiceNo: invNoLabel, bodyHtml };
-  if(attachment) Object.assign(payload, { attachmentBase64: attachment.b64, attachmentName: attachment.name, attachmentType: attachment.type });
-  try{
-    const res = await serverFetch('/api/email/invoice', {
-      method:'POST',
-      body: JSON.stringify(payload),
-    });
-    if(res.ok){
-      showToast(`تم إرسال الفاتورة بالإيميل إلى ${c.email}${attachment ? ' (مع مرفق PDF)' : ''}`);
-      await logAudit('edit','العملاء', `تم إرسال فاتورة رقم ${invNoLabel} بالإيميل للعميل: ${c.name} (${c.email})${attachment ? ' مع مرفق PDF' : ''}`);
-    }else{
-      const data = await res.json().catch(()=>({}));
-      if(!silent) showToast(`تعذّر إرسال الفاتورة بالإيميل: ${data.error || 'خطأ غير معروف'}`);
-    }
-  }catch(e){
-    console.error('فشل إرسال إيميل الفاتورة:', e);
-    if(!silent) showToast('تعذّر إرسال الفاتورة بالإيميل — تحقق من الاتصال');
-  }
-}
-
-// زرار الإرسال اليدوي: لو العميل معندوش إيميل محفوظ، نطلبه مرة واحدة (بدون حفظه فى بيانات
-// العميل — ده يتم فقط من فورم تعديل العميل نفسه)، وإلا نُرسل مباشرة على الإيميل المحفوظ.
-async function sendInvoiceEmailManual(c){
-  if(!c.taxInvoiceNo){ showToast('لا توجد فاتورة صادرة لهذا العميل بعد'); return; }
-  let email = c.email;
-  if(!email){
-    email = await customPrompt(`لا يوجد إيميل محفوظ للعميل "${c.name}". اكتب الإيميل لإرسال الفاتورة إليه (لحفظه بشكل دائم، عدّل بيانات العميل):`, {title:'إرسال الفاتورة بالإيميل', required:true, placeholder:'example@mail.com'});
-    if(!email) return;
-    email = email.trim();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showToast('صيغة الإيميل غير صحيحة'); return; }
-  }
-  const invNoLabel = formatInvoiceNo(c.taxInvoiceNo);
-  const income = centerIncome(c);
-  const bag = bagAmount(c);
-  const paid = paidTotal(c);
-  const rem = remaining(c);
-  const bagShown = bag>0 && paid >= (income + bag);
-  const totalInclVat = income + (bagShown ? bag : 0);
-  const vat = vatFromGross(totalInclVat);
-  const grand = totalInclVat - vat;
-  await sendInvoiceEmailNow({...c, email}, invNoLabel, {grand, vat, paid, rem}, {silent:false});
 }
 
 /* ---------------- Return Invoice (مردودات المبيعات) ---------------- */
@@ -858,18 +772,127 @@ $('#btn-export')?.addEventListener('click', ()=>{
   a.click();
 });
 
-/* ---------------- Settings ---------------- */
+/* ---------------- Settings: عروض خصم متعددة ---------------- */
+function _offerRowHtml(o, idx){
+  const id = escapeHtml(String(o.id || ('offer-' + idx)));
+  const name = escapeHtml(o.name || '');
+  const type = o.type === 'percent' ? 'percent' : 'amount';
+  return `<tr data-offer-id="${id}">
+    <td style="text-align:center;"><input type="checkbox" class="offer-active" style="width:auto;" ${o.active !== false ? 'checked' : ''}></td>
+    <td><input type="text" class="offer-name" value="${name}" placeholder="اسم العرض" style="min-width:150px;"></td>
+    <td><select class="offer-type">
+      <option value="amount"${type==='amount'?' selected':''}>مبلغ ثابت (﷼)</option>
+      <option value="percent"${type==='percent'?' selected':''}>نسبة (%)</option>
+    </select></td>
+    <td><input type="number" class="offer-value" step="0.01" min="0" value="${num(o.value)}" style="min-width:110px;"></td>
+    <td><button type="button" class="btn btn-danger btn-sm offer-delete" title="حذف العرض">✕</button></td>
+  </tr>`;
+}
+function renderOffersSettings(){
+  const body = $('#offers-list-body');
+  if(!body) return;
+  const offers = settingsOffers();
+  body.innerHTML = offers.length
+    ? offers.map(_offerRowHtml).join('')
+    : '<tr><td colspan="5" class="hint" style="text-align:center; padding:14px;">لا توجد عروض معرّفة بعد — اضغط «＋ إضافة عرض».</td></tr>';
+  renderOfferSettingsPreview();
+}
+function _readOfferRowsRaw(){
+  const body = $('#offers-list-body');
+  if(!body) return [];
+  return Array.from(body.querySelectorAll('tr[data-offer-id]')).map((tr, idx)=>{
+    const rawName = (tr.querySelector('.offer-name')?.value || '').trim();
+    const value = Math.max(0, num(tr.querySelector('.offer-value')?.value));
+    const type = tr.querySelector('.offer-type')?.value === 'percent' ? 'percent' : 'amount';
+    const active = !!tr.querySelector('.offer-active')?.checked;
+    return { id: tr.dataset.offerId || ('offer-' + Date.now() + '-' + idx), name: rawName, type, value, active };
+  });
+}
+function readOffersFromSettingsTable(){
+  return _readOfferRowsRaw()
+    .map((o, idx)=> ({ ...o, name: o.name || (o.value > 0 ? ('عرض ' + (idx + 1)) : '') }))
+    .filter(o=> o.name || o.value > 0);
+}
+function renderOfferSettingsPreview(){
+  const el = $('#set-offer-preview');
+  if(!el) return;
+  const body = $('#offers-list-body');
+  const rows = (body && body.querySelector('tr[data-offer-id]')) ? _readOfferRowsRaw() : settingsOffers();
+  const active = rows.filter(o=> o.active !== false && num(o.value) > 0);
+  const zero = rows.filter(o=> o.active !== false && num(o.value) <= 0 && o.name);
+  const samplePrice = num(settings.priceNonSaudi) || 573.45;
+  let text;
+  if(!active.length){
+    text = 'لا يوجد عرض فعّال بقيمة حالياً — أضف عرضاً بقيمة وفعّله ليظهر في نموذج العميل.';
+  }else{
+    const parts = active.map(o=>{
+      const amt = typeof offerDiscountAmountFor === 'function'
+        ? offerDiscountAmountFor(samplePrice, o.type, o.value)
+        : num(o.value);
+      return `«${escapeHtml(o.name || 'عرض')}» ${o.type==='percent' ? fmt(num(o.value))+'%' : fmt(num(o.value))+' ﷼'} (خصم ${fmt(amt)} ﷼ على سعر ${fmt(samplePrice)})`;
+    });
+    text = `${active.length} عرض فعّال: ${parts.join(' · ')}.`;
+  }
+  if(zero.length){
+    text += ` تنبيه: ${zero.map(o=>`«${escapeHtml(o.name)}»`).join('، ')} قيمته صفر ولن يظهر كخيار قابل للاختيار.`;
+  }
+  el.textContent = text + ' سعر الحقيبة لا يتغير.';
+}
+$('#btn-add-offer')?.addEventListener('click', ()=>{
+  const body = $('#offers-list-body');
+  // نقرأ الصفوف الظاهرة أولاً (بما فيها أي تعديلات لم تُحفظ بعد) حتى لا تضيع عند إضافة صف جديد.
+  const current = (body && body.querySelector('tr[data-offer-id]'))
+    ? _readOfferRowsRaw()
+    : settingsOffers().map(o=> ({ id: o.id, name: o.name || '', type: o.type, value: num(o.value), active: o.active !== false }));
+  current.push({ id: 'offer-' + Date.now() + '-' + Math.random().toString(36).slice(2,6), name: '', type: 'amount', value: 0, active: true });
+  settings.offers = current;
+  renderOffersSettings();
+  const last = body && body.querySelector('tr[data-offer-id]:last-child .offer-name');
+  if(last) last.focus();
+});
+$('#offers-list-body')?.addEventListener('input', renderOfferSettingsPreview);
+$('#offers-list-body')?.addEventListener('change', renderOfferSettingsPreview);
+$('#offers-list-body')?.addEventListener('click', e=>{
+  const btn = e.target.closest('.offer-delete');
+  if(!btn) return;
+  const tr = btn.closest('tr[data-offer-id]');
+  if(!tr) return;
+  tr.remove();
+  renderOfferSettingsPreview();
+});
+$('#btn-save-offers')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-offers'), async ()=>{
+    const before = (settings.offers || []).map(o=>`${o.name||'عرض'}:${num(o.value)}`).join(' | ') || 'لا يوجد';
+    settings.offers = readOffersFromSettingsTable();
+    // مزامنة القيم المفردة القديمة مع أول عرض فعّال، لتبقى أي نسخة قديمة من الكود متوافقة.
+    const first = settings.offers.find(o=> o.active !== false && num(o.value) > 0) || settings.offers[0];
+    if(first){
+      settings.offerName = first.name;
+      settings.offerDiscountType = first.type;
+      settings.offerDiscountValue = num(first.value);
+    }else{
+      settings.offerName = 'عرض الخصم';
+      settings.offerDiscountType = 'amount';
+      settings.offerDiscountValue = 0;
+    }
+    await saveSettings();
+    renderOffersSettings();
+    const zeroCount = settings.offers.filter(o=> o.active !== false && num(o.value) <= 0).length;
+    await logAudit('edit','الإعدادات', `تم حفظ عروض الخصم (${settings.offers.length} عرض): ${settings.offers.map(o=>`${o.name||'عرض'}${o.active===false?' [موقوف]':''} = ${o.type==='percent' ? fmt(num(o.value))+'%' : fmt(num(o.value))+' ﷼'}`).join(' · ') || 'لا يوجد'} — قبل: ${before}`);
+    showToast(zeroCount
+      ? `تم حفظ ${settings.offers.length} عرض — تنبيه: ${zeroCount} عرض بدون قيمة ولن يظهر للاختيار`
+      : `تم حفظ ${settings.offers.length} عرض للخصم`);
+  });
+});
 function renderSettings(){
   $('#set-center-name').value = settings.centerInfo?.name || '';
   $('#set-center-tax').value = settings.centerInfo?.taxNumber || '';
   $('#set-center-phone').value = settings.centerInfo?.phone || '';
   renderBagFinanceLinkToggle();
-  $('#set-pa-webhook-url').value = settings.powerAutomate?.webhookUrl || '';
-  $('#set-pa-notify-newclient').checked = settings.powerAutomate?.notifyNewClient !== false;
-  $('#set-pa-notify-coursenum').checked = settings.powerAutomate?.notifyCourseNumber !== false;
   $('#next-invoice-no').textContent = formatInvoiceNo(settings.nextInvoiceNo || 1);
   $('#set-price-saudi').value = settings.priceSaudi;
   $('#set-price-nonsaudi').value = settings.priceNonSaudi;
+  renderOffersSettings();
   $('#courses-list').innerHTML = settings.courses.map((c,i)=>`
     <div class="tag" style="border-radius:8px; justify-content:space-between; width:100%; margin-bottom:6px;">
       <span>${escapeHtml(c.name)} — <span class="mono">${fmt(c.price)}</span> ﷼</span>
@@ -885,8 +908,14 @@ function renderSettings(){
   if($('#set-monthly-wa-number')) $('#set-monthly-wa-number').value = settings.monthlyReportWhatsapp || '';
   if($('#wa3-numbers')) $('#wa3-numbers').value = settings.monthlyPdfReportsWhatsappNumbers || '';
   if($('#vat-wa-numbers')) $('#vat-wa-numbers').value = settings.vatPdfReportWhatsappNumbers || '';
-  if($('#set-report-email-to')) $('#set-report-email-to').value = settings.reportEmailTo || '';
-  if($('#set-report-email-cc')) $('#set-report-email-cc').value = settings.reportEmailCC || '';
+  $('#set-arkkan-autofetch-enabled').checked = !!settings.arkkanAutoFetchEnabled;
+  const arkkanStatus = $('#arkkan-autofetch-status');
+  if (arkkanStatus) {
+    arkkanStatus.textContent = settings.arkkanAutoFetchEnabled
+      ? '✅ الجلب التلقائي/الجماعي مفعل — يتم جلب الإيصالات تلقائياً عند المزامنة والبحث الجماعي'
+      : '⏸️ الجلب التلقائي/الجماعي معطل — القائمة اليدوية على رقم الفاتورة تظل تعمل للطباعة والتحميل والتحديث';
+    arkkanStatus.style.color = settings.arkkanAutoFetchEnabled ? 'var(--success)' : 'var(--warning)';
+  }
   $('#last-autobackup-hint').textContent = settings.lastAutoBackupAt
     ? `آخر نسخة احتياطية تلقائية: ${new Date(settings.lastAutoBackupAt).toLocaleString('ar-SA-u-nu-latn')}`
     : 'لم يتم إنشاء أي نسخة احتياطية تلقائية بعد.';
@@ -899,6 +928,8 @@ function renderSettings(){
   renderPruneRecordsPanel();
   renderTfaPanel();
   loadWebauthnDevicesList();
+  if(typeof window.gdriveRenderPanel === 'function') window.gdriveRenderPanel();
+  if(typeof window.activityDigestRenderPanel === 'function') window.activityDigestRenderPanel();
 }
 const SERVER_ROLE_LABELS = { admin:'مدير', accountant:'محاسب', reception:'استقبال', staff:'موظف عام' };
 async function renderUsersList(){
@@ -1521,6 +1552,21 @@ $('#btn-save-autobackup')?.addEventListener('click', async ()=>{
   showToast('تم حفظ إعداد النسخ الاحتياطي');
 
   });});
+$('#btn-save-arkkan-autofetch')?.addEventListener('click', async ()=>{
+  await withBtnLoading($('#btn-save-arkkan-autofetch'), async ()=>{
+  settings.arkkanAutoFetchEnabled = $('#set-arkkan-autofetch-enabled').checked;
+  await saveSettings();
+  await logAudit('edit','الإعدادات', `تحديث الجلب التلقائي/الجماعي لأركان: ${settings.arkkanAutoFetchEnabled?'مفعّل':'معطّل'}`);
+  showToast(settings.arkkanAutoFetchEnabled ? '✅ تم تفعيل الجلب التلقائي/الجماعي من أركان' : '⏸️ تم إيقاف الجلب التلقائي/الجماعي من أركان — القائمة اليدوية تظل تعمل');
+  // تحديث حالة العرض
+  const statusEl = $('#arkkan-autofetch-status');
+  if (statusEl) {
+    statusEl.textContent = settings.arkkanAutoFetchEnabled 
+      ? '✅ الجلب التلقائي/الجماعي مفعل — يتم جلب الإيصالات تلقائياً عند المزامنة والبحث الجماعي'
+      : '⏸️ الجلب التلقائي/الجماعي معطل — القائمة اليدوية على رقم الفاتورة تظل تعمل للطباعة والتحميل والتحديث';
+    statusEl.style.color = settings.arkkanAutoFetchEnabled ? 'var(--success)' : 'var(--warning)';
+  }
+  });});
 $('#btn-save-alert-settings')?.addEventListener('click', async ()=>{
   await withBtnLoading($('#btn-save-alert-settings'), async ()=>{
   settings.lowBalanceThreshold = Math.max(0, Number($('#set-low-balance').value)||0);
@@ -1560,23 +1606,6 @@ $('#btn-save-vat-wa-numbers')?.addEventListener('click', async ()=>{
   await saveSettings();
   await logAudit('edit','الإعدادات', `تحديث أرقام واتساب مستلمي الإقرار الضريبي (${cleaned.length} رقم)`);
   showToast(cleaned.length ? `تم حفظ ${cleaned.length} رقم` : 'تم مسح الأرقام المحفوظة');
-
-  });});
-$('#btn-save-report-email')?.addEventListener('click', async ()=>{
-  await withBtnLoading($('#btn-save-report-email'), async ()=>{
-  const to = ($('#set-report-email-to').value||'').trim();
-  const ccRaw = ($('#set-report-email-cc').value||'');
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if(to && !EMAIL_RE.test(to)){ showToast('صيغة البريد الرئيسي غير صحيحة'); return; }
-  const ccList = ccRaw.split(',').map(s=>s.trim()).filter(Boolean);
-  if(ccList.some(e=>!EMAIL_RE.test(e))){ showToast('صيغة أحد إيميلات CC غير صحيحة'); return; }
-  settings.reportEmailTo = to;
-  settings.reportEmailCC = ccList.join(', ');
-  if($('#set-report-email-to')) $('#set-report-email-to').value = settings.reportEmailTo;
-  if($('#set-report-email-cc')) $('#set-report-email-cc').value = settings.reportEmailCC;
-  await saveSettings();
-  await logAudit('edit','الإعدادات', `تحديث إعدادات إيميل التقارير: To=${to||'—'}${ccList.length ? `, CC=${ccList.join(', ')}` : ''}`);
-  showToast('تم حفظ إعدادات الإيميل');
 
   });});
 $('#btn-backup-now')?.addEventListener('click', ()=>{
